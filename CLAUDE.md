@@ -437,6 +437,31 @@ Written up with a plan in `docs/plan.md`:
   360° in one direction and returning to its initial bearing. `Segment.net_rotation` is
   already computed and is the better starting point. This feeds the ≥2-turn wind filter,
   so it changes which climbs are trusted.
+- **Fix the controls in the full-screen 3D view.** Reported broken. Not yet diagnosed, so
+  these are suspects to measure rather than a cause — and the first one is a regression I
+  may have introduced with the WebGL backend:
+  **The two canvases are sized by different mechanisms when maximised.**
+  `applyMaximisedSize()` sets the 2D canvas to an explicit
+  `document.documentElement.clientWidth/clientHeight` in pixels, while the GL canvas
+  underneath it is sized purely by CSS (`position: absolute; inset: 0`). Everywhere else
+  those agree because both fill the panel; in the maximised state they are two different
+  measurements of "the viewport", and `clientWidth` excludes the scrollbar where a fixed
+  `inset: 0` box need not. If they disagree the track overlay sits offset from the
+  terrain, and anything anchored to the panel's right edge — which is the control row —
+  lands in the wrong place.
+  **`--scrollbar` may be stale.** It is measured once and only re-measured on a *width*
+  change; entering full screen removes the page scrollbar, and the panel's width is
+  `calc(100vw - var(--scrollbar))`. The CSS already warns that anything anchored to the
+  right edge gets clipped when that is wrong.
+  **There are two full-screen paths and only one is exercised.** `toggleMaximise()`
+  deliberately avoids the Fullscreen API in favour of an in-page `.is-maximised`, because
+  an iframe may not be granted real full screen — but `:fullscreen` rules exist in the
+  stylesheet too, and the two set width/height differently. **On GitLab Pages the real
+  Fullscreen API is available**, so this is worth revisiting rather than patching: see the
+  Pages item above.
+  Measure it with `__view3d.metrics()` before and after the toggle — it already reports
+  the box against the backing store, and it is what caught the last sizing bug of this
+  shape (713 px box against a 508 px backing store).
 - **Use `uv`** for the environment, and commit a lockfile with it. Two concrete problems
   it fixes here, both already bitten:
   **Nothing is pinned.** Every dependency floats with no ceiling (`numpy>=1.26`,
