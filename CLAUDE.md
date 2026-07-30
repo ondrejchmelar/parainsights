@@ -437,6 +437,23 @@ Written up with a plan in `docs/plan.md`:
   360° in one direction and returning to its initial bearing. `Segment.net_rotation` is
   already computed and is the better starting point. This feeds the ≥2-turn wind filter,
   so it changes which climbs are trusted.
+- **Use `uv`** for the environment, and commit a lockfile with it. Two concrete problems
+  it fixes here, both already bitten:
+  **Nothing is pinned.** Every dependency floats with no ceiling (`numpy>=1.26`,
+  `timezonefinder>=6`, `pytest>=8`, `pillow>=10`) and there is no lockfile, so an
+  upstream release can turn CI red with no change in this repository and no way to tell
+  the two apart. `uv sync` against a committed `uv.lock` makes the installed set a fact
+  rather than a coincidence — which is the same class of fault as the Pillow failure,
+  where the environment and the declaration disagreed and only CI noticed.
+  **It is the mechanism for the 3.14 move below.** `uv python install 3.14` and
+  `uv venv --python 3.14` manage the interpreter itself, and uv refuses to build a venv
+  that violates `requires-python` — exactly the drift recorded there, a 3.11.6 venv
+  under a `>=3.12` floor.
+  Also worth having: it would largely retire the pip cache added to `.gitlab-ci.yml`
+  (`timezonefinder` is not a quick install), and `uv run` removes the `.venv/bin/python`
+  prefix from every command in this file.
+  The honest cost: a toolchain dependency where today the repo needs nothing but
+  `python3 -m venv`, and a lockfile is worse than none if it is allowed to go stale.
 - **Move to Python 3.14** — and fix the version drift it exposed on the way. Three
   Pythons are in play right now and no two agree: the working venv is **3.11.6**,
   `requires-python` says **>=3.12**, and CI runs **3.12-slim**. The venv is below the
