@@ -11,3 +11,7 @@ dist/
 *.kml
 report.html
 .cache/
+
+# flight data stays out of the repo
+*.igc
+public/*.igc

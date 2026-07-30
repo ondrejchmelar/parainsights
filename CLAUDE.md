@@ -166,6 +166,13 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   for `_condense` to bridge. On the Dolomites flight this takes every per-thermal wind
   into 0.7–9.7 km/h with no outliers, at the cost of 18 climbs becoming 13 — the ones
   dropped were 1–2 turn straight-ish bumps that were never really thermals.
+- **A tow can legitimately contain a 180.** The reference tow on `2020-07-12` is a
+  *two-stage* launch — a pull, a 180° turn, then a second pull — which is why the climb
+  carries 2.9 turns and why judging the launch on a turny fragment of itself gets it
+  wrong. This is the case `TOW_MAX_TURNS_PER_MINUTE` has to survive: over the whole 138 s
+  it reads 1.26 turns/min against the 1.5 limit, but over the 60 s circling fragment
+  inside it, 2.8. Any change to tow detection has to keep a deliberate 180 (and a
+  two-stage launch) on the tow side of the line.
 - **A tow is built separately, over the whole launch climb, and replaces what it
   overlaps.** It is the one straight climb that *is* a phase, so it cannot come from the
   rule above — `_launch_climb()` constructs it from `climb > TOW_MIN_CLIMB` instead.

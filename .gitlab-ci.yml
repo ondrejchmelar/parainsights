@@ -1,0 +1,38 @@
+# GitLab Pages. The job publishes whatever is in `public/` — it does not build the
+# report, and that is deliberate: building needs the IGC files, and flight tracks stay
+# out of this repository. Reports are built locally and committed as output.
+#
+#   .venv/bin/python -m tracklog_viewer.cli FLIGHT.igc --terrain --meteo --online \
+#       --html public/index.html
+#
+# `--online` matters here and is the reason for moving off a published artifact: a page
+# on Pages can reach the network, so imagery is fetched at view time at zoom 12–13
+# (10–20 m/px against the ~45 an embedded JPEG can afford) instead of being baked in.
+# The file is roughly a sixth of the size and sharper.
+
+stages: [test, deploy]
+
+tests:
+  stage: test
+  image: python:3.12-slim
+  before_script:
+    - python -m venv .venv
+    - .venv/bin/pip install --quiet -e '.[dev]'
+  script:
+    # Chrome is not installed here, so the browser-driven 3D tests skip themselves
+    # rather than fail. Everything else runs.
+    - .venv/bin/python -m pytest -c pyproject.toml
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+pages:
+  stage: deploy
+  image: alpine:latest
+  script:
+    - test -f public/index.html || (echo "no public/index.html to publish" && exit 1)
+    - echo "publishing $(du -h public/index.html | cut -f1)"
+  artifacts:
+    paths: [public]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

@@ -976,3 +976,10 @@ are load-bearing, each found by a failing test rather than by design:
   breaks on any discontinuity in the track, because the 20 s window straddles it.
 
 The reference tow reads `138 s, +390 m, release 870 m`, exactly as before.
+
+And it is a **two-stage launch** — a pull, a 180° turn, then a second pull — confirmed by
+the pilot. That is the source of its 2.9 turns and the reason the overlap rule matters
+rather than being a convenience: the 180 in the middle is detected as a short turny
+thermal, and a tow that contains a deliberate reversal must still read as a tow. Over the
+whole 138 s it is 1.26 turns/min against a 1.5 limit; over the 60 s fragment, 2.8. Any
+future change to tow detection has to keep a two-stage launch on the tow side of that.
