@@ -8,7 +8,7 @@ parainsights/
 ├── CLAUDE.md              this file
 ├── pyproject.toml         one project, one venv, one test suite
 ├── tracklog_viewer/       the tool: IGC/KML/KMZ → analysis → HTML, KMZ, 3D map
-├── tests/                 pytest, 113 tests, no network
+├── tests/                 pytest, 122 tests, no network
 └── docs/
     ├── formats.md         IGC and KML/KMZ format research, measured on real files
     └── plan.md            scope, decisions and status
@@ -22,7 +22,7 @@ rather than importing across tools.
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
-.venv/bin/python -m pytest -c pyproject.toml        # 113 tests, ~60 s, no network
+.venv/bin/python -m pytest -c pyproject.toml        # 122 tests, ~70 s, no network
 ```
 
 `-c pyproject.toml` matters when the repo sits inside another project — pytest otherwise
@@ -99,11 +99,25 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
 - **Charts are rendered locally.** igc2kmz's Google Image Charts URLs died in 2019, so
   every graph in its output is a broken image. Don't reintroduce a network dependency
   into a chart.
+- **KML colours are `aabbggrr`, and every colour in `render_kmz.py` goes through
+  `kml_colour()`.** Writing `#eb6834` directly yields blue. That bug painted an entire
+  track solid blue on Google Earth mobile, because the solid-colour folder drew last.
+- **Assume a viewer ignores `Region`, `visibility` and `radioFolder`.** Google Earth
+  mobile does. So: one detail level rather than three stacked ones, and the colourings
+  ordered with climb *last* so the fallback when everything draws is the useful one.
+- **A Document description is shown verbatim on mobile.** HTML tables go on a Placemark
+  (`Flight summary`, at the launch point); the Document gets plain text.
+- **Icons are generated, never hand-typed.** `_png()` writes them with `zlib` and
+  `struct`. A hand-written base64 constant passed the PNG signature check, had a corrupt
+  IDAT, and Earth drew a red X on every placemark.
 - **The KMZ batches geometry, igc2kmz does not.** One `LineString` per colour run and
   three `Region`/`Lod` detail levels, against one placemark per fix: 125 KB and 2 534
   placemarks where igc2kmz produces 612 KB and 11 373 for the same flight. Watch the
   integer division when sampling — floor division gave one animation placemark per fix
   on short flights, which is the very thing this avoids.
+- **Test the KMZ against a real viewer.** Structure tests pass on files that look wrong
+  in Earth: the colour inversion, the corrupt icon and the raw-HTML description all
+  survived a green suite. There are now regression tests for each.
 - **Two 3D views on purpose.** `render_map.py` is better but needs network at view time;
   `view3d.py` gives up the basemap library to be embeddable. Both share the climb ramp.
 - **XContest flight pages cannot be scraped.** The page is a JavaScript shell behind

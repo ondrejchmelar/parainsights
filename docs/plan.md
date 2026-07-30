@@ -384,10 +384,29 @@ scored XC route; altitude marks from `salient()`; time marks every five minutes;
 `TimeSpan` animation for the time slider; and a locally rendered barogram as a
 `ScreenOverlay`.
 
-Measured against igc2kmz on the reference flight: **125 KB / 2 534 placemarks against
-612 KB / 11 373**. The savings come from three `Region`/`Lod` detail levels, one
-`LineString` per colour run rather than per segment, five-decimal coordinates, and a
-sampled animation.
+Measured against igc2kmz on the reference flight: **105 KB / 1 816 placemarks against
+612 KB / 11 373**. The savings come from one `LineString` per colour run rather than per
+segment, five-decimal coordinates, and a sampled animation.
+
+### What Google Earth mobile taught us
+
+The first version passed every structural test and looked wrong on a phone. Four faults,
+all of them things a KML validator cannot see:
+
+- **Colours were byte-reversed.** KML is `aabbggrr`; `#eb6834` written directly is blue.
+  The solid-colour folder drew last, so the entire track appeared solid blue. Every
+  colour now goes through `kml_colour()` from familiar rrggbb.
+- **The icon was a corrupt PNG.** Hand-typed base64 that passed the signature check and
+  failed on the IDAT checksum: Earth drew a red X on every placemark. Icons are now
+  generated with `zlib` and `struct`, and a test decodes each one.
+- **`Region`, `visibility` and `radioFolder` are all ignored on mobile.** Three stacked
+  detail levels became three tracks drawn over each other. Now one level, with the
+  colourings ordered so climb is last and therefore wins the overdraw.
+- **A Document description is printed verbatim**, markup included. The HTML table moved
+  to a `Flight summary` placemark; the Document keeps a plain-text line.
+
+Labels are also off on the climb and glide icons: eleven names at once overlapped into an
+unreadable mat, and the name is already the balloon's heading.
 
 `salient()` — the altitude-mark selector — is *not* a port of igc2kmz's recursive
 largest-drop split. That port produced four marks for a flight with eleven climbs, so it

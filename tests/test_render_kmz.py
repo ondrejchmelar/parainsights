@@ -45,19 +45,15 @@ class TestStructure:
         assert {"Track", "Shadow", "Climbs", "Glides", "Altitude marks", "Time marks",
                 "Animation"} <= names
 
-    def test_three_level_of_detail_regions(self, root):
-        regions = list(root.iter(NS + "Region"))
-        assert len(regions) == 3
-        pixels = sorted(
-            int(region.find(f"{NS}Lod/{NS}minLodPixels").text) for region in regions
-        )
-        assert pixels[0] < pixels[1] < pixels[2]
+    def test_the_track_is_a_single_detail_level(self, root):
+        """Region/Lod is ignored on mobile Earth, where stacked levels draw on top of
+        one another — including a three-point coarse one."""
+        assert not list(root.iter(NS + "Region"))
 
     def test_the_document_carries_a_summary(self, root):
         description = root.find(f"{NS}Document/{NS}description")
         assert description is not None
-        assert "Distance flown" in description.text
-        assert "Maximum climb" in description.text
+        assert "km flown" in description.text
 
 
 class TestGeometry:
@@ -124,6 +120,92 @@ class TestAnimation:
         assert len(spans) <= render_kmz.ANIMATION_POINTS + 1
 
 
+class TestColours:
+    """KML colours are aabbggrr. Writing them as rrggbb silently inverts them, which is
+    how the whole track ended up drawn in blue."""
+
+    def test_conversion_reverses_the_bytes(self):
+        assert render_kmz.kml_colour("eb6834") == "ff3468eb"
+        assert render_kmz.kml_colour("ffffff", 176) == "b0ffffff"
+
+    def test_climb_ramp_runs_cool_to_warm(self):
+        def rgb(colour):
+            return (int(colour[6:8], 16), int(colour[4:6], 16), int(colour[2:4], 16))
+
+        sink = rgb(render_kmz.CLIMB_BANDS[0][1])
+        lift = rgb(render_kmz.CLIMB_BANDS[-1][1])
+        assert sink[2] > sink[0], "the sink end must be blue, not red"
+        assert lift[0] > lift[2], "the climb end must be warm, not blue"
+
+    def test_the_solid_track_is_the_report_orange(self):
+        document = render_kmz.document
+        colour = render_kmz.kml_colour("eb6834")
+        assert (int(colour[6:8], 16), int(colour[4:6], 16), int(colour[2:4], 16)) == (235, 104, 52)
+
+    def test_climb_colouring_is_drawn_last(self, root):
+        """A viewer that ignores per-folder visibility draws them all, and the last one
+        wins where they overlap — so it has to be the useful one."""
+        track = next(
+            folder for folder in root.iter(NS + "Folder")
+            if folder.findtext(NS + "name") == "Track"
+        )
+        names = [
+            child.findtext(NS + "name") for child in track
+            if child.tag == NS + "Folder"
+        ]
+        assert names[-1] == "Coloured by climb"
+
+
+class TestIcons:
+    def test_every_packaged_icon_is_a_real_png(self, flight_analysis, tmp_path):
+        path = render_kmz.write(flight_analysis, tmp_path / "out.kmz")
+        with zipfile.ZipFile(path) as archive:
+            icons = [n for n in archive.namelist() if n.endswith(".png")]
+            assert icons
+            for name in icons:
+                data = archive.read(name)
+                assert data[:8] == b"\x89PNG\r\n\x1a\n", f"{name} is not a PNG"
+                # A hand-typed base64 constant once passed the signature check and still
+                # had a corrupt IDAT, which Earth drew as a red X. Decode it properly.
+                png = __import__("PIL.Image", fromlist=["Image"])
+                png.open(__import__("io").BytesIO(data)).verify()
+
+    def test_every_referenced_icon_is_packaged(self, flight_analysis, tmp_path):
+        import re
+
+        path = render_kmz.write(flight_analysis, tmp_path / "out.kmz")
+        with zipfile.ZipFile(path) as archive:
+            document = archive.read("doc.kml").decode("utf-8")
+            packaged = set(archive.namelist())
+        referenced = set(re.findall(r"<href>([^<]+)</href>", document))
+        assert referenced, "no icons referenced at all"
+        assert referenced <= packaged, f"missing from the archive: {referenced - packaged}"
+
+
+class TestDescriptions:
+    def test_document_description_is_plain_text(self, root):
+        """Google Earth on mobile prints a Document description verbatim, so markup
+        there shows up as markup."""
+        description = root.find(f"{NS}Document/{NS}description").text
+        assert "<" not in description
+
+    def test_the_table_lives_on_a_placemark(self, root):
+        summary = next(
+            placemark for placemark in root.iter(NS + "Placemark")
+            if placemark.findtext(NS + "name") == "Flight summary"
+        )
+        assert "<table" in summary.findtext(NS + "description")
+
+    def test_crowded_folders_do_not_draw_labels(self, document):
+        import re
+
+        for style in ("thermal-balloon", "tow-balloon", "glide-balloon"):
+            match = re.search(
+                rf'id="{style}".*?<LabelStyle><scale>([\d.]+)', document, re.S
+            )
+            assert match and float(match.group(1)) == 0, f"{style} would label every mark"
+
+
 class TestSelfContained:
     def test_no_external_references(self, document):
         # The namespace URL is not a fetch; anything else would be.
@@ -136,8 +218,6 @@ class TestSelfContained:
         with zipfile.ZipFile(path) as archive:
             names = archive.namelist()
             assert names[0] == "doc.kml", "Earth opens the first .kml in the archive"
-            referenced = {"images/glider.png"}
-            assert referenced <= set(names)
 
     def test_kmz_is_a_readable_zip(self, flight_analysis, tmp_path):
         path = render_kmz.write(flight_analysis, tmp_path / "out.kmz")

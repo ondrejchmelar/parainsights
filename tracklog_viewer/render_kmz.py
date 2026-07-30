@@ -18,9 +18,10 @@ charts here are rendered to PNG locally, and simply omitted if Pillow is unavail
 
 from __future__ import annotations
 
-import base64
 import io
+import struct
 import zipfile
+import zlib
 from pathlib import Path
 
 import numpy as np
@@ -28,34 +29,92 @@ import numpy as np
 from .analysis import Analysis, Phase, salient
 from .charts import decimate
 
-# Colour bands for the track, as KML aabbggrr. Same breakpoints and hues as the report's
-# diverging climb ramp, so the two views read as one tool.
+def kml_colour(rgb: str, alpha: int = 255) -> str:
+    """Convert a familiar #rrggbb to KML's aabbggrr.
+
+    Every colour in this module is written in rrggbb and converted here, because KML's
+    reversed byte order is a trap: `ffeb6834` looks like the report's orange and is in
+    fact blue, and the solid track drew last, so on any viewer that ignores per-folder
+    visibility it painted the whole flight that colour.
+    """
+    rgb = rgb.lstrip("#")
+    return f"{alpha:02x}{rgb[4:6]}{rgb[2:4]}{rgb[0:2]}"
+
+
+# Same breakpoints and hues as the report's diverging climb ramp, so the two views read
+# as one tool. Written rrggbb; converted above.
 CLIMB_BANDS = [
-    (-4.0, "ff8f5017"),
-    (-2.0, "ffd6782a"),
-    (-0.7, "ffe6b68f"),
-    (0.7, "ff9aa4a9"),
-    (2.0, "ff7aa0f0"),
-    (4.0, "ff3468eb"),
-    (float("inf"), "ff1a43c8"),
+    (-4.0, kml_colour("17508f")),
+    (-2.0, kml_colour("2a78d6")),
+    (-0.7, kml_colour("8fb6e6")),
+    (0.7, kml_colour("a9a49a")),
+    (2.0, kml_colour("f0a07a")),
+    (4.0, kml_colour("eb6834")),
+    (float("inf"), kml_colour("c8431a")),
 ]
 ALTITUDE_BANDS = 8
 SPEED_BANDS = 8
 TRACK_WIDTH = 3
-SHADOW_COLOUR = "80303030"
 TIME_MARK_STEP = 300  # seconds
 ALTITUDE_MARK_THRESHOLD = 150.0  # metres of swing worth a label
 ANIMATION_POINTS = 900
 TIME_POINTS = 400
 
-# A 12×12 arrow, drawn once and embedded rather than fetched: a KMZ that reaches for an
-# icon on the network is a KMZ that breaks when that host goes away.
-GLIDER_ICON_PNG = base64.b64decode(
-    "iVBORw0KGgoAAAANSUhEUgAAAAwAAAAMCAYAAABWdVznAAAAg0lEQVR4AYWQMQ6CQBBF/xJqCwsL"
-    "CwsLCwsLCwsLCwsLCwsLCwsLCwsLCxMTEwsLCwsLCwsLCwsLCwsLCwsLCwsL9yUkm2Uy5s3Lzs"
-    "7MW2AkImIiZmJKzMzMxMxERMxERMxERMzMzMTMxERMxERMzMTMxERMxERMzMTMxERMxERMzMTMx"
-    "ERMxEQMA0Y4CgQ8zk0AAAAASUVORK5CYII="
-)
+def _png(pixels: list[list[tuple[int, int, int, int]]]) -> bytes:
+    """Encode RGBA rows as a PNG using only the standard library.
+
+    Written rather than embedded as base64: a hand-typed constant is unverifiable, and
+    the first attempt at one was a corrupt file that Google Earth drew as a red X on
+    every placemark. zlib and struct are enough, and Pillow stays optional.
+    """
+    height = len(pixels)
+    width = len(pixels[0])
+    raw = bytearray()
+    for row in pixels:
+        raw.append(0)   # filter type 0: no filtering
+        for r, g, b, a in row:
+            raw += bytes((r, g, b, a))
+
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        return (
+            struct.pack(">I", len(payload)) + kind + payload
+            + struct.pack(">I", zlib.crc32(kind + payload) & 0xFFFFFFFF)
+        )
+
+    header = struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", header)
+        + chunk(b"IDAT", zlib.compress(bytes(raw), 9))
+        + chunk(b"IEND", b"")
+    )
+
+
+def _marker_icon(rgb: str, size: int = 16) -> bytes:
+    """A filled disc with a soft edge, in the given rrggbb."""
+    r, g, b = (int(rgb[i:i + 2], 16) for i in (0, 2, 4))
+    centre = (size - 1) / 2
+    radius = size / 2 - 1
+    rows = []
+    for y in range(size):
+        row = []
+        for x in range(size):
+            distance = ((x - centre) ** 2 + (y - centre) ** 2) ** 0.5
+            if distance <= radius - 1:
+                row.append((r, g, b, 255))
+            elif distance <= radius:
+                # One-pixel feather, so the disc does not look jagged when scaled.
+                row.append((r, g, b, int(255 * (radius - distance))))
+            else:
+                row.append((0, 0, 0, 0))
+        rows.append(row)
+    return _png(rows)
+
+
+GLIDER_ICON_PNG = _marker_icon("eb6834")
+TOW_ICON_PNG = _marker_icon("1baf7a")
+GLIDE_ICON_PNG = _marker_icon("2a78d6")
+MARK_ICON_PNG = _marker_icon("f2f1ed")
 
 
 def _escape(text) -> str:
@@ -115,14 +174,14 @@ def _linear_bands(low: float, high: float, count: int, palette) -> list:
     ]
 
 
-ALTITUDE_PALETTE = [
-    "ff9a3c00", "ffd06a00", "ffe0a020", "ffb8c840",
-    "ff70d880", "ff40c8d0", "ff3080e8", "ff2040c0",
-]
-SPEED_PALETTE = [
-    "ffb0b0b0", "ffc0d0a0", "ffa0d878", "ff60c8b0",
-    "ff40a8e0", "ff3070ea", "ff2848d8", "ff2020b0",
-]
+# Low to high: warm ground colours through to cold heights.
+ALTITUDE_PALETTE = [kml_colour(c) for c in (
+    "9a3c00", "d06a00", "e0a020", "b8c840", "70d880", "40c8d0", "3080e8", "2040c0",
+)]
+# Slow to fast.
+SPEED_PALETTE = [kml_colour(c) for c in (
+    "b0b0b0", "c0d0a0", "a0d878", "60c8b0", "40a8e0", "3070ea", "2848d8", "2020b0",
+)]
 
 
 def _style(identifier: str, colour: str, width: int = TRACK_WIDTH) -> str:
@@ -165,6 +224,41 @@ def _coloured_folder(name: str, analysis: Analysis, values, bands, keep, *,
         f"<Folder><name>{_escape(name)}</name>"
         f"<visibility>{1 if visible else 0}</visibility>"
         f'<styleUrl>#hide-children</styleUrl>{"".join(placemarks)}</Folder>'
+    )
+
+
+def _summary_text(analysis: Analysis, route=None) -> str:
+    """A plain-text summary for the Document description.
+
+    Google Earth on mobile shows a Document's description verbatim, markup and all, so
+    the HTML version goes on a placemark instead — where it is rendered everywhere.
+    """
+    summary = analysis.summary
+    parts = [
+        f"{summary.pilot or 'Unknown pilot'} · {summary.glider or 'unknown glider'}",
+        f"{summary.takeoff_time}–{summary.landing_time} "
+        f"({summary.duration // 3600}h{summary.duration % 3600 // 60:02d})",
+        f"{summary.track_distance / 1000:.1f} km flown",
+    ]
+    if route:
+        parts.append(f"{route.km:.1f} km XC")
+    parts.append(f"{summary.min_altitude:.0f}–{summary.max_altitude:.0f} m")
+    parts.append(f"{len(analysis.thermals)} climbs")
+    if analysis.wind:
+        parts.append(f"wind {analysis.wind.kmh:.0f} km/h from {analysis.wind.cardinal}")
+    return " · ".join(parts)
+
+
+def _summary_placemark(analysis: Analysis, route=None, meteo=None) -> str:
+    """The full statistics table, on a placemark at the launch point."""
+    flight = analysis.flight
+    alt = analysis.series.alt
+    return (
+        "<Placemark><name>Flight summary</name><styleUrl>#summary</styleUrl>"
+        f"<description>{_summary_table(analysis, route, meteo)}</description>"
+        "<Point><altitudeMode>absolute</altitudeMode>"
+        f"<coordinates>{flight.lon[0]:.5f},{flight.lat[0]:.5f},{alt[0]:.0f}"
+        "</coordinates></Point></Placemark>"
     )
 
 
@@ -213,7 +307,7 @@ def _summary_table(analysis: Analysis, route=None, meteo=None) -> str:
     )
 
 
-def _balloon_style(identifier: str, rows: list[tuple[str, str]]) -> str:
+def _balloon_style(identifier: str, rows: list[tuple[str, str]], icon: str) -> str:
     """A BalloonStyle whose text pulls named values out of the placemark's ExtendedData."""
     cells = "".join(
         f'<tr bgcolor="{"#eeeeee" if i % 2 else "#ffffff"}">'
@@ -223,8 +317,10 @@ def _balloon_style(identifier: str, rows: list[tuple[str, str]]) -> str:
     return (
         f'<Style id="{identifier}"><BalloonStyle><text><![CDATA[<h3>$[name]</h3>'
         f"<table cellpadding='2' cellspacing='0'>{cells}</table>]]></text></BalloonStyle>"
-        '<IconStyle><scale>0.8</scale><Icon><href>images/glider.png</href></Icon></IconStyle>'
-        "<LabelStyle><scale>0.75</scale></LabelStyle></Style>"
+        f'<IconStyle><scale>0.9</scale><Icon><href>images/{icon}</href></Icon></IconStyle>'
+        # Labels off: eleven climb names at once overlap into an unreadable mat, and the
+        # name is already the balloon's heading.
+        "<LabelStyle><scale>0</scale></LabelStyle></Style>"
     )
 
 
@@ -475,7 +571,7 @@ def barogram_png(analysis: Analysis, *, width: int = 640, height: int = 260) -> 
     for a, b in zip(keep, keep[1:]):
         band = _band_index(float(series.climb[b]), CLIMB_BANDS)
         colour = CLIMB_BANDS[band][1]
-        # KML colours are aabbggrr; PIL wants rgba.
+        # Back from KML's aabbggrr to PIL's rgba.
         rgba = (int(colour[6:8], 16), int(colour[4:6], 16), int(colour[2:4], 16), 255)
         draw.line([(float(px[a]), float(py[a])), (float(px[b]), float(py[b]))],
                   fill=rgba, width=2)
@@ -494,35 +590,41 @@ def document(analysis: Analysis, *, route=None, meteo=None) -> str:
 
     # Three detail levels, decimated in projected metres. The coarse one is what Earth
     # draws when the track is a thumbnail; the fine one only loads when it fills the view.
-    detail = [
-        ("Coarse", decimate(series.x, series.y, 120.0), 16, 320),
-        ("Medium", decimate(series.x, series.y, 25.0), 320, 1400),
-        ("Detailed", decimate(series.x, series.y, 4.0), 1400, -1),
-    ]
+    # One level, always drawn. Region/Lod is a real saving on desktop Earth but mobile
+    # ignores it, and three stacked levels there means three tracks drawn on top of one
+    # another — the coarse one, three points wide, included.
+    keep_fine = decimate(series.x, series.y, 4.0)
+    # The shadow can be coarser: it is a reference line on the ground, not the data.
+    keep_shadow = decimate(series.x, series.y, 20.0)
+    detail = [("Track", keep_fine, 0, -1)]
 
     styles = [
         '<Style id="hide-children"><ListStyle>'
         "<listItemType>checkHideChildren</listItemType></ListStyle></Style>",
         '<Style id="radio"><ListStyle><listItemType>radioFolder</listItemType></ListStyle></Style>',
-        _style("shadow", SHADOW_COLOUR, 2),
-        _style("solid", "ffeb6834"),
-        _style("xc-leg", "b0ffffff", 2),
+        '<Style id="summary"><IconStyle><scale>1.1</scale>'
+        "<Icon><href>images/mark.png</href></Icon></IconStyle>"
+        "<LabelStyle><scale>0.8</scale></LabelStyle></Style>",
+        _style("shadow", kml_colour("303030", 128), 2),
+        _style("solid", kml_colour("eb6834")),
+        _style("xc-leg", kml_colour("ffffff", 176), 2),
         '<Style id="xc-point"><IconStyle><scale>0.7</scale>'
-        "<Icon><href>images/glider.png</href></Icon></IconStyle></Style>",
-        '<Style id="glider"><IconStyle><scale>1.1</scale>'
-        "<Icon><href>images/glider.png</href></Icon></IconStyle></Style>",
+        "<Icon><href>images/mark.png</href></Icon></IconStyle></Style>",
+        '<Style id="glider"><IconStyle><scale>1.2</scale>'
+        "<Icon><href>images/climb.png</href></Icon></IconStyle>"
+        "<LabelStyle><scale>0</scale></LabelStyle></Style>",
         '<Style id="time-mark"><IconStyle><scale>0.5</scale>'
-        "<Icon><href>images/glider.png</href></Icon></IconStyle>"
+        "<Icon><href>images/mark.png</href></Icon></IconStyle>"
         "<LabelStyle><scale>0.7</scale></LabelStyle></Style>",
         '<Style id="altitude-mark"><IconStyle><scale>0.5</scale>'
-        "<Icon><href>images/glider.png</href></Icon></IconStyle>"
+        "<Icon><href>images/mark.png</href></Icon></IconStyle>"
         "<LabelStyle><scale>0.7</scale></LabelStyle></Style>",
-        _balloon_style("thermal-balloon", THERMAL_ROWS),
-        _balloon_style("tow-balloon", THERMAL_ROWS),
-        _balloon_style("glide-balloon", GLIDE_ROWS),
-        _style("thermal-balloon-line", "ffeb6834", 2),
-        _style("tow-balloon-line", "ff7aaf1b", 2),
-        _style("glide-balloon-line", "ffd6782a", 2),
+        _balloon_style("thermal-balloon", THERMAL_ROWS, "climb.png"),
+        _balloon_style("tow-balloon", THERMAL_ROWS, "tow.png"),
+        _balloon_style("glide-balloon", GLIDE_ROWS, "glide.png"),
+        _style("thermal-balloon-line", kml_colour("eb6834"), 2),
+        _style("tow-balloon-line", kml_colour("1baf7a"), 2),
+        _style("glide-balloon-line", kml_colour("2a78d6"), 2),
     ]
     for index, (_, colour) in enumerate(CLIMB_BANDS):
         styles.append(_style(f"climb{index}", colour))
@@ -538,30 +640,27 @@ def document(analysis: Analysis, *, route=None, meteo=None) -> str:
     # Track folder: one LOD folder per detail level, each holding the colourings.
     lod_folders = []
     for level, (label, keep, min_pixels, max_pixels) in enumerate(detail):
+        # Deliberate order: the alternatives first, climb last. Google Earth on mobile
+        # ignores per-folder visibility inside a radioFolder and draws them all, and the
+        # last one drawn wins where they overlap — so the last one must be the good one.
+        # (This is why the whole track appeared solid blue: "Solid colour" was last.)
         colourings = [
-            _coloured_folder("Coloured by climb", analysis, series.climb, CLIMB_BANDS, keep,
-                             prefix="climb", visible=True),
-            _coloured_folder("Coloured by altitude", analysis, alt, altitude_bands, keep,
-                             prefix="height", visible=False),
-            _coloured_folder("Coloured by ground speed", analysis, series.speed, speed_bands,
-                             keep, prefix="speed", visible=False),
-            _coloured_folder("Coloured by total energy", analysis, series.te_climb, CLIMB_BANDS,
-                             keep, prefix="climb", visible=False),
             f'<Folder><name>Solid colour</name><visibility>0</visibility>'
             f'<styleUrl>#hide-children</styleUrl>'
             f'<Placemark><styleUrl>#solid</styleUrl><LineString>'
             f"<altitudeMode>absolute</altitudeMode>"
             f"<coordinates>{_coords(flight.lat, flight.lon, alt, keep)}</coordinates>"
             f"</LineString></Placemark></Folder>",
+            _coloured_folder("Coloured by ground speed", analysis, series.speed, speed_bands,
+                             keep, prefix="speed", visible=False),
+            _coloured_folder("Coloured by altitude", analysis, alt, altitude_bands, keep,
+                             prefix="height", visible=False),
+            _coloured_folder("Coloured by total energy", analysis, series.te_climb, CLIMB_BANDS,
+                             keep, prefix="climb", visible=False),
+            _coloured_folder("Coloured by climb", analysis, series.climb, CLIMB_BANDS, keep,
+                             prefix="climb", visible=True),
         ]
-        lod_folders.append(
-            f"<Folder><name>{label}</name>"
-            # KML's Feature sequence puts styleUrl before Region. Earth tolerates the
-            # other order; a strict validator does not.
-            f"<styleUrl>#radio</styleUrl>"
-            f"{_region(flight.lat, flight.lon, alt, min_pixels, max_pixels)}"
-            f'{"".join(colourings)}</Folder>'
-        )
+        lod_folders.append("".join(colourings))
 
     shadow = (
         "<Folder><name>Shadow</name><visibility>0</visibility>"
@@ -569,13 +668,13 @@ def document(analysis: Analysis, *, route=None, meteo=None) -> str:
         "<Folder><name>On the ground</name><styleUrl>#hide-children</styleUrl>"
         '<Placemark><styleUrl>#shadow</styleUrl><LineString><tessellate>1</tessellate>'
         "<altitudeMode>clampToGround</altitudeMode>"
-        f"<coordinates>{_coords(flight.lat, flight.lon, indices=detail[1][1])}</coordinates>"
+        f"<coordinates>{_coords(flight.lat, flight.lon, indices=keep_shadow)}</coordinates>"
         "</LineString></Placemark></Folder>"
         "<Folder><name>Curtain</name><visibility>0</visibility>"
         '<styleUrl>#hide-children</styleUrl>'
         '<Placemark><styleUrl>#shadow</styleUrl><LineString><extrude>1</extrude>'
         "<altitudeMode>absolute</altitudeMode>"
-        f"<coordinates>{_coords(flight.lat, flight.lon, alt, detail[1][1])}</coordinates>"
+        f"<coordinates>{_coords(flight.lat, flight.lon, alt, keep_shadow)}</coordinates>"
         "</LineString></Placemark></Folder></Folder>"
     )
 
@@ -607,9 +706,13 @@ def document(analysis: Analysis, *, route=None, meteo=None) -> str:
         '<kml xmlns="http://www.opengis.net/kml/2.2">\n<Document>\n'
         f"<name>{_escape(name)}</name>"
         f"<Snippet>{_escape(snippet)}</Snippet>"
-        f"<description>{_summary_table(analysis, route, meteo)}</description>"
+        f"<description>{_escape(_summary_text(analysis, route))}</description>"
         f'{"".join(styles)}'
-        f'<Folder><name>Track</name><open>1</open>{"".join(lod_folders)}</Folder>'
+        f"{_summary_placemark(analysis, route, meteo)}"
+        # radioFolder on the Track folder: the colourings are alternatives, so a viewer
+        # that honours it shows exactly one.
+        f'<Folder><name>Track</name><open>1</open><styleUrl>#radio</styleUrl>'
+        f'{"".join(lod_folders)}</Folder>'
         f"{shadow}"
         f"<Folder><name>Climbs</name><styleUrl>#hide-children</styleUrl>"
         f'{"".join(climbs)}</Folder>'
@@ -631,7 +734,10 @@ def write(analysis: Analysis, path, *, route=None, meteo=None) -> Path:
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
         # doc.kml first: Google Earth opens the first .kml it finds.
         archive.writestr("doc.kml", kml)
-        archive.writestr("images/glider.png", GLIDER_ICON_PNG)
+        archive.writestr("images/climb.png", GLIDER_ICON_PNG)
+        archive.writestr("images/tow.png", TOW_ICON_PNG)
+        archive.writestr("images/glide.png", GLIDE_ICON_PNG)
+        archive.writestr("images/mark.png", MARK_ICON_PNG)
         chart = barogram_png(analysis)
         if chart:
             archive.writestr("images/barogram.png", chart)
