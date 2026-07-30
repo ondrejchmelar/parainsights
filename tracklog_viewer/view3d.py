@@ -320,6 +320,7 @@ function initView3d(root, cursorTrack) {
     if (width === W && height === H) return false;
     canvas.width = W = width;
     canvas.height = H = height;
+    if (renderer) renderer.resize(W, H);
     return true;
   }
   resize();
@@ -388,6 +389,9 @@ function initView3d(root, cursorTrack) {
   // image. It is painted under each textured cell so the small gaps where a non-planar
   // cell disagrees with its affine fit show ground colour rather than sky.
   function sampleCellColours() {
+    // Only the 2D drape has cells to fill under. A depth-buffered backend draws the
+    // texture once over real geometry, so this would be a getImageData for nothing.
+    if (renderer) { cellColour = null; return; }
     try {
       var steps = texStep();
       cellCols = Math.max(Math.round(cols / steps.c), 1);
@@ -694,6 +698,38 @@ function initView3d(root, cursorTrack) {
     litMid = (lo + hi) / 2;
     litSpread = (hi - lo) / 2;
   })();
+
+  // The heightfield is the only part of this that a depth buffer changes, so it is the
+  // only part a backend may replace. `view3d_gl.py` registers one; with nothing
+  // registered — or on a machine with no WebGL, or after a context loss — the per-cell
+  // 2D drape below runs exactly as it always has.
+  //
+  // Everything else stays here and is shared: one camera, one set of gestures, one tile
+  // stitcher, one set of probes. That is deliberate. The camera in particular has to
+  // invert through groundUnder()/holdGround() for every gesture to anchor, and the
+  // surest way to keep a second renderer bit-compatible with that is for it to read the
+  // same `view` and `fit` objects rather than to own a copy.
+  var renderer = window.__view3dBackend ? window.__view3dBackend({
+    canvas: canvas,
+    dem: dem,
+    cols: cols,
+    rows: rows,
+    nodeX: nodeX,
+    nodeY: nodeY,
+    view: view,          // held by reference: the gestures mutate it in place
+    fit: fit,            // ditto, recomputed by refit() before every frame
+    size: function () { return [W, H]; },
+    shadeFactor: shadeFactor,
+    lit: function () { return { mid: litMid, spread: litSpread }; },
+    // The already-shaded basemap and the geographic box it covers. Both change when the
+    // reader cycles the style or a tile mosaic finishes stitching, and the backend
+    // notices by identity rather than by being told.
+    texture: function () { return basemap; },
+    textureBox: function () { return scene.basemap; },
+    // Hand the heightfield back to the 2D path. Context loss on a phone is real, and a
+    // blank panel is a worse outcome than a slower one.
+    fallback: function () { renderer = null; sampleCellColours(); draw(); }
+  }) : null;
 
   function shadeFactor(r, c) {
     var i = r * cols + c;
@@ -1157,7 +1193,10 @@ function initView3d(root, cursorTrack) {
     ctx.clearRect(0, 0, W, H);
     refit();
     var mapped = view.map && basemap && (basemap.width || basemap.naturalWidth) > 0;
-    drawTerrain(mapped);
+    // With a backend mounted this canvas keeps only the track, the climb markers and the
+    // cursor — a few thousand points and some text, which 2D draws well and which is
+    // already wired to the charts. The heightfield goes underneath it in GL.
+    if (renderer) renderer.terrain(mapped); else drawTerrain(mapped);
     drawTrack();
     drawCursor();
   }
@@ -1537,7 +1576,35 @@ function initView3d(root, cursorTrack) {
       var p = project(point[0], point[1], dem.min);
       return [p[0] / W * box.width, p[1] / H * box.height];
     },
-    stats: function () { return { cells: stats.cells, folded: stats.folded }; },
+    stats: function () {
+      // A folded cell is an artefact of painter's order. Under a depth buffer there is
+      // no such thing — the backend reports its own cell count and a folded count of
+      // zero, and that difference is the whole point of it.
+      return renderer ? renderer.stats() : { cells: stats.cells, folded: stats.folded };
+    },
+    // Exposed for tests: whether the WebGL backend took, and where it puts a world
+    // point. The overlay track is drawn with project() on top of a heightfield drawn
+    // from a matrix, so the two have to agree — any disagreement shows up as the track
+    // floating above or sinking into the ground.
+    gl: function () { return renderer ? renderer.info() : null; },
+    glScreenOf: function (x, y, z) {
+      return renderer ? renderer.screenOf(x, y, z) : null;
+    },
+    glDepthOf: function (x, y, z) {
+      return renderer ? renderer.depthOf(x, y, z) : null;
+    },
+    // project() in canvas pixels for a world point, which is the unit glScreenOf
+    // answers in. screenOf()/nearest() speak CSS pixels and track indices, so neither
+    // can be held against the matrix directly.
+    worldProject: function (x, y, z) { return project(x, y, z); },
+    toMetres: function (lon, lat) { return toMetres(lon, lat); },
+    // Called when the flight this panel belongs to is removed from the document. The
+    // DEM grid and the stitched basemap go with the handle, but a WebGL context does
+    // not: a page gets about sixteen of them, so one has to be handed back explicitly.
+    dispose: function () {
+      if (renderer && renderer.dispose) renderer.dispose();
+      renderer = null;
+    },
     // Exposed for tests: the projection as it currently stands. Zoom anchoring is a
     // claim about these numbers, so the numbers have to be readable.
     projection: function () {

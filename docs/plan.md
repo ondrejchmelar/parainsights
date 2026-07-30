@@ -85,64 +85,81 @@ Parity with igc2kmz, plus the insights it lacks. In order:
 Deferred: photo placement, task/turnpoint handling, multi-flight comparison. XContest's
 scoring multipliers are **done** — see *Matching XContest* below.
 
-### Wanted: WebGL for the 3D view
+### WebGL for the 3D view
 
-The one change that actually fixes the wedge artefacts, and it makes everything else faster.
+**Done.** `view3d_gl.py`. The heightfield is one `drawElements` against a 24-bit depth
+buffer, and the fold artefacts are gone rather than mitigated.
 
-**Why it is the answer.** The artefacts are cells whose projected quad folds inside out, and
-they exist because canvas 2D has no depth buffer — painter's order is the only tool
-available, and no per-cell treatment is correct (the four that were tried, and how each
-failed, are under *Wedges on a zoomed-in view*). A depth buffer removes the problem rather
-than mitigating it: there stops being such a thing as a folded cell, only triangles that
+**Why it was the answer.** The artefacts were cells whose projected quad turns inside out,
+and they existed because canvas 2D has no depth buffer — painter's order was the only tool
+available and no per-cell treatment is correct (the four that were tried, and how each
+failed, are under *Wedges on a zoomed-in view*). A depth buffer removes the problem instead
+of mitigating it: there stops being such a thing as a folded cell, only triangles that
 resolve per pixel.
 
-**Why it is allowed.** WebGL needs no external script — shaders are strings in the document
+**Why it was allowed.** WebGL needs no external script — shaders are strings in the document
 — so it works under the content-security policy that rules out MapLibre and deck.gl. That
 policy is the single constraint behind every decision in `view3d.py`, and it does not apply
-here. Confirmed in this environment: `webgl2`, `depthBits=24`, `MAX_TEXTURE_SIZE=8192`.
+here. Confirmed in the browser: `webgl2`, `depthBits=24`, `MAX_TEXTURE_SIZE=8192`.
 
-**What it buys, in numbers we already have.** One draw call for the whole heightfield instead
-of ~5 200 `drawImage` calls: the settled frame goes from 113 ms to roughly 1 ms. That
-retires the coarse-while-dragging mesh (`FINE_BUDGET`/`COARSE_BUDGET`, `moving()`), the
-per-cell overdraw arithmetic, `sampleCellColours`, `convex`/`fillHull`/`texturedTriangle`,
-and the depth sort — and leaves room to raise the DEM well past 26 000 nodes.
+**It is a backend, not a second viewer.** The plan called for a parallel module exporting
+its own `data()`/`panel()`/`SCRIPT`. Built that way it would have duplicated ~1 100 lines of
+JavaScript — the gestures, the tile stitcher, the basemap cycling, the maximise logic, every
+probe — for the sake of one function. So `view3d.py` gained a seam instead: it builds a host
+object and calls `window.__view3dBackend`, and with nothing registered the per-cell 2D drape
+runs exactly as before. Three things fall out of that which the parallel design would have
+had to earn:
 
-**Plan.**
+- **The camera is not reimplemented, it is read.** `view` and `fit` are held by reference and
+  the matrix is derived from them each frame, so `groundUnder()`/`holdGround()` keep
+  inverting the same projection every gesture anchors through. Step 3 of the original plan
+  asked for bit-compatibility here; this makes it identity. Measured: the matrix and
+  `project()` agree to **1.1 × 10⁻⁵ px** on a real DEM and 9.5 × 10⁻⁷ px on a flat plane.
+- **The track overlay was already there.** The canvas in the markup keeps the track, the
+  climb markers and the cursor in 2D and keeps every pointer handler; the GL canvas is
+  inserted *behind* it and the sky gradient moves with it. No second canvas to build, and
+  `initFlight`'s chart linking never learns any of this happened.
+- **Falling back is one line.** `renderer = null` and the 2D drape resumes — which is what
+  runs after a `webglcontextlost`, not only on a browser without WebGL.
 
-1. **New module `view3d_gl.py`**, exporting the same `data()`, `panel()` and `SCRIPT`
-   surface as `view3d.py`. The payload does not change: same DEM grid, same track, same
-   embedded basemaps and tile templates.
-2. **Geometry.** One vertex buffer of `rows × cols` positions in the existing local metric
-   frame (x east, y north, z metres) plus a UV per vertex from the basemap's box, and one
-   index buffer of triangle strips. Both built once; only the camera changes per frame.
-3. **Camera.** Keep the current model exactly — yaw, pitch, zoom, panX/panY, `view.vertical`
-   — and express it as a matrix rather than the hand-rolled `world()`/`project()`. It has to
-   stay bit-compatible enough that `groundUnder()`/`holdGround()` still invert it, because
-   every gesture anchors through those.
-4. **Texture.** Upload the already-shaded basemap canvas (`shadedTexture`) as a GL texture.
-   The relief baking stays in 2D: it is a one-off cost and the reasoning behind it — the
-   basemap raster and the DEM are both axis-aligned in lon/lat — is unaffected.
-   Alternatively move the hillshade into the fragment shader later, which would also make
-   solar shading (below) a one-line change.
-5. **Track, climbs, cursor: a transparent 2D canvas layered over the GL one.** The track is
-   a few thousand points, the markers are text, and the hover cursor already shares indices
-   with every chart. Redrawing that overlay in 2D keeps `initFlight`'s linking code and the
-   charts untouched, which is most of the risk avoided for very little cost. It needs the
-   same projection, hence step 3.
-6. **Fallback.** If `getContext('webgl2') || getContext('webgl')` returns null, mount the
-   existing canvas renderer. Keep `view3d.py` as-is for that path; do not delete it.
-7. **Verification, on the same flights and the same measurements.** The existing probes
-   already cover this: `__view3d.stats()` (folded cells → must become irrelevant),
-   `redraw()` timing at both mesh budgets, `nearest()`/`screenOf()` for zoom anchoring to
-   0.1 px, `ground()`/`screenOfGround()` for gesture anchoring to 0 px, `basemap()` for the
-   satellite/map cycle with every host blocked, and a screenshot at zoom 7 / pitch 0.30 —
-   the camera in the phone report — which must come out clean. Do not ship it until it beats
-   the canvas renderer on all of them.
+**What it bought, measured on the Blatná flight (161×161 DEM), Chrome under swiftshader —
+so a real GPU is faster still.** `redraw()` is synchronous, so these are frames and not
+scheduled callbacks:
 
-**Watch out for.** `preserveDrawingBuffer` is off by default, so a screenshot taken outside
-the draw call comes back blank — the headless screenshot probes will need a redraw on
-demand. And context loss is real on mobile: handle `webglcontextlost` by falling back rather
-than leaving a blank panel.
+| camera | canvas 2D | WebGL |
+|---|---|---|
+| default (zoom 1, pitch 0.46) | 99 ms, 6 400 cells | **1.9 ms, 25 600 cells** |
+| zoom 4, pitch 0.20, settled | 33 ms | **3.0 ms** |
+| zoom 4, pitch 0.20, dragging | 8.8 ms (coarse mesh) | **3.0 ms** |
+
+Two things in that table matter as much as the numbers. The GL column draws **four times as
+many cells** — the whole DEM the report already carries, where the 2D renderer spends its
+`FINE_BUDGET` on a quarter of it. And the settled and dragging rows are the same, which
+retires `FINE_BUDGET`/`COARSE_BUDGET`/`moving()` as a concept: there is nothing left to
+trade.
+
+**Artefacts, swept rather than spot-checked.** 105 cameras (7 pitches × 5 zooms × 3 yaws).
+On the Blatná flight the 2D renderer folds cells at 27 of them, 395 in total; on the ridged
+test fixture, 16 432. WebGL folds at **none of the 105**, on either. `stats().folded` is
+still the probe — it now answers from the backend, and its answer is structurally zero.
+
+**Also fixed on the way past.** Bare relief is shaded per *vertex* and interpolated by the
+rasteriser, so the facets the 2D version showed on a coarse mesh are gone for free; and the
+imagery is mipmapped, which is visible as sharpness rather than as a number.
+
+**What was watched out for, and what it cost.** `preserveDrawingBuffer` is on: it is off by
+default, and a screenshot taken outside the draw call then comes back blank — which would
+have made "render it and look at it" impossible for the one view that most needs it. Context
+loss is handled by falling back rather than by fighting it. And a page gets only about
+sixteen WebGL contexts while flights *accumulate*, so removing a flight calls
+`handle.dispose()` and hands its context back; without that, adding and removing a few
+flights would silently downgrade the whole document to 2D.
+
+**Not retired, deliberately.** `drawTerrain`, `fillHull`, `texturedTriangle`, `convex` and
+the depth sort all stay in `view3d.py`. They are no longer the common path but they are a
+live one — after a context loss they are what the reader gets — and there is a test that
+says so.
+
 
 ### Wanted: the sun during the flight
 
@@ -308,7 +325,7 @@ the columns are blank rather than printing a number that is wrong.
 
 ## Status
 
-Done and tested (126 tests):
+Done and tested (155 tests):
 
 - `igc.py` — parser + fix cleanup. All 61 sample files parse, no failures, no warnings,
   timezone resolved 61/61.
@@ -622,7 +639,10 @@ view of anything and folds everywhere. Cells are additionally sorted by true cam
 correct but changed nothing visible, and it is worth knowing it was not the cause.
 
 Some artefacts remain at extreme zoom and shallow pitch. A depth buffer is the real answer
-and canvas 2D does not have one.
+and canvas 2D does not have one — so the terrain moved to WebGL, where it does. See *WebGL
+for the 3D view*. Everything described above is still in `view3d.py` and still runs: it is
+the fallback for a browser without WebGL and for a lost context, which is why the fold
+handling was fixed rather than left broken before the depth buffer arrived.
 
 ### Terrain resolution, and paying for it in the right currency
 
@@ -636,6 +656,11 @@ cell, and is now budgeted in cells rather than derived from the grid: `FINE_BUDG
 settles in ~130 ms, `COARSE_BUDGET` 1 800 keeps a drag near 45 fps, and the fine mesh
 returns 180 ms after the last gesture. Measured with `__view3d.setInteracting()` and
 `redraw()` in a headless browser, on the Dolomites flight at 188×138 nodes.
+
+Both budgets are now a property of the **fallback** only. The WebGL backend draws every cell
+of the grid in one call at the same cost whether the camera is moving or not, so on that
+path the grid is the only budget there is — and it could go well past 26 000 nodes before
+frames, rather than bytes, became the reason not to.
 
 ### Shading gentle terrain
 

@@ -8,7 +8,7 @@ parainsights/
 ├── CLAUDE.md              this file
 ├── pyproject.toml         one project, one venv, one test suite
 ├── tracklog_viewer/       the tool: IGC/KML/KMZ → analysis → HTML, KMZ, 3D map
-├── tests/                 pytest, 126 tests, no network
+├── tests/                 pytest, 155 tests, no network
 └── docs/
     ├── formats.md         IGC and KML/KMZ format research, measured on real files
     └── plan.md            scope, decisions and status
@@ -22,7 +22,7 @@ rather than importing across tools.
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
-.venv/bin/python -m pytest -c pyproject.toml        # 126 tests, ~70 s, no network
+.venv/bin/python -m pytest -c pyproject.toml        # 155 tests, ~100 s, no network
 ```
 
 `-c pyproject.toml` matters when the repo sits inside another project — pytest otherwise
@@ -97,7 +97,8 @@ geometry in a renderer, no rendering in the analysis.
 | `basemap.py` | Satellite (Esri) or OSM tiles stitched to one embedded JPEG |
 | `meteo.py` | The day's vertical profile (Open-Meteo) |
 | `charts.py` | All SVG charts, rendered locally |
-| `view3d.py` | Canvas 3D view that works inside a published page |
+| `view3d.py` | The 3D view: camera, gestures, tiles, track overlay — and a canvas 2D heightfield as the fallback |
+| `view3d_gl.py` | WebGL heightfield, registered as a backend for `view3d.py` |
 | `render_kmz.py` | Google Earth KMZ: LOD folders, balloons, animation, local charts |
 | `render_map.py` | Richer 3D map (MapLibre + deck.gl); needs network at view time |
 | `render_html.py` | The report; `quicklook.py` is its in-browser sibling |
@@ -188,7 +189,28 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   reaches zoom 12 (~22 m/px) on a cross-country box; the runtime path allows 120 because
   it pays in requests rather than bytes. A single-flight report embeds both styles at
   zoom 12 (~550 KB); a multi-flight document pays that per flight, so it takes zoom 11.
-- **Painter's order has no depth buffer, so cells fold.** A cell whose projected quad turns
+- **The heightfield is WebGL; everything else about the 3D view is not.** `view3d_gl.py`
+  registers a backend and `view3d.py` calls it in place of its per-cell drape. It is a
+  seam, not a second viewer: one camera, one set of gestures, one tile stitcher, one set
+  of probes. The backend *reads* `view` and `fit` by reference rather than owning a copy,
+  which is what keeps `groundUnder()`/`holdGround()` inverting the same projection every
+  gesture anchors through — measured agreement between the matrix and `project()` is
+  1.1e-05 px. Consequences: the track, markers and cursor stay in 2D on the canvas that
+  was already there (the GL canvas goes *behind* it, and the sky gradient moves with it);
+  falling back is `renderer = null`; and `preserveDrawingBuffer` is on, without which a
+  headless screenshot of the one view that most needs looking at comes back blank.
+- **A depth buffer is the fix for folded cells, and the 2D path is still live.** One
+  `drawElements` at 1.9 ms where the drape took 99 ms, drawing 25 600 cells against
+  6 400 — and across a 105-camera sweep the 2D renderer folds cells at 27 of them and
+  WebGL at none. But `drawTerrain`/`fillHull`/`texturedTriangle` are not dead code: they
+  run on a browser without WebGL *and* after a `webglcontextlost`, so they are kept whole
+  and there is a test that says so. The paragraph below is what that path still does.
+- **A WebGL context is scarcer than memory.** A page gets about sixteen, and flights
+  accumulate — so removing a flight calls `handle.dispose()`, which deletes the buffers
+  and forces `WEBGL_lose_context`. Without it, adding and removing a few tracks exhausts
+  the contexts and every panel silently drops to 2D. Context loss from any other cause
+  falls back the same way rather than leaving a blank panel.
+- **Painter's order has no depth buffer, so cells fold.** (The fallback path.) A cell whose projected quad turns
   inside out (a slope steeper than the pitch angle) cannot be drawn as a quad: textured
   affinely it smears into a wedge, filled as one path it renders as a bowtie — also a wedge
   — and skipped it leaves the sky showing, because nothing was painted behind it. It gets a
@@ -210,10 +232,11 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   lines up with its neighbour's and every boundary becomes a visible step. Grow the source
   rect and the destination by the same fraction about the same centre. This, not the
   shading, was the lattice that survived three attempts to fix it.
-- **The drape mesh is a cell budget, and coarse while the camera moves.** Each cell costs a
-  `drawImage`, so a mesh fine enough to hide its own quadrilaterals cannot run on every
-  frame of a drag: `FINE_BUDGET` 5 200 cells settles in ~130 ms, `COARSE_BUDGET` 1 800
-  keeps a drag near 45 fps, and a 180 ms timer after the last gesture swaps back.
+- **The drape mesh is a cell budget, and coarse while the camera moves.** (The fallback
+  path — WebGL draws the whole grid every frame at the same cost either way.) Each cell
+  costs a `drawImage`, so a mesh fine enough to hide its own quadrilaterals cannot run on
+  every frame of a drag: `FINE_BUDGET` 5 200 cells settles in ~130 ms, `COARSE_BUDGET`
+  1 800 keeps a drag near 45 fps, and a 180 ms timer after the last gesture swaps back.
 - **Hillshade is stretched to the terrain's own lit range.** A fixed shading curve assumes
   alpine relief; over the 390–761 m of ground a Czech flight crosses, `lit` stays within a
   few hundredths of flat-ground illumination and the overlay does nothing, which is how a
@@ -314,6 +337,16 @@ The numbers are checkable, so check them:
     --screenshot=shot.png --virtual-time-budget=10000 page.html
   ```
   For the 3D canvas add `--enable-unsafe-swiftshader --use-gl=angle --use-angle=swiftshader`.
+- **The 3D view is tested in a browser, because none of its claims are visible from
+  Python.** `tests/test_view3d_gl.py` renders a panel over a synthetic DEM, runs a probe
+  in it and reads the numbers back out of the DOM — Chrome cannot be asked for the value
+  of an expression, so the probe writes into an element and the DOM is dumped. It skips
+  when there is no Chrome, and it touches no network. Two habits from it:
+  **the fixture is ridged on purpose** — a gentle DEM folds no cells and would let a
+  do-nothing renderer pass, so there is a control test asserting the 2D path *does* fold
+  on it; and **timing is not asserted there**, because `--virtual-time-budget` does not
+  advance the clock during synchronous work and every duration comes back zero. Frame
+  costs were measured over the DevTools protocol instead and written into `docs/plan.md`.
 - **Don't pipe a command whose exit code you care about** — `cmd | tail` reports tail's
   status, which once hid a `NameError` for two runs.
 
@@ -332,13 +365,13 @@ published artifact runs under a policy that blocks every external host.
 
 ## Wanted next
 
-Both written up with a plan in `docs/plan.md`:
+Written up with a plan in `docs/plan.md`:
 
-- **WebGL for the 3D view** — the fix for the fold artefacts rather than a mitigation, and
-  it retires most of the per-cell drawing code. WebGL needs no external script, so the CSP
-  that rules out MapLibre does not rule this out; `depthBits=24` is available.
 - **The sun during the flight** — which slopes were lit and when they switched off. Cheap to
-  compute and it answers questions a pilot actually has.
+  compute and it answers questions a pilot actually has. Now cheaper than when it was
+  written: with the heightfield in WebGL the illumination belongs in the fragment shader,
+  which makes the time of day a slider rather than a rebuild. The hillshade still lights
+  from the north-west, which is never where the sun is in the northern hemisphere.
 
 ## Known gaps
 

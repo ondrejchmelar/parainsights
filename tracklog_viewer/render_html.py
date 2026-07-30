@@ -16,7 +16,7 @@ import json
 import math
 from pathlib import Path
 
-from . import charts, quicklook, terrain as terrain_module, view3d
+from . import charts, quicklook, terrain as terrain_module, view3d, view3d_gl
 from numpy import median as np_median
 from .analysis import TURN_RESOLUTION_LIMIT, Analysis, Phase
 
@@ -714,8 +714,12 @@ var flightTabs = (function () {
     if (report) {
       // Drop the 3D handles this article owned: each holds a DEM grid and a stitched
       // basemap image, so leaving them in the registry keeps a removed flight's memory.
+      // A WebGL context is scarcer still — a page gets about sixteen — so it is handed
+      // back rather than left for the collector.
       if (window.__view3dAll) {
         report.querySelectorAll('canvas.view3d').forEach(function (canvas) {
+          var handle = window.__view3dAll[canvas.id];
+          if (handle && handle.dispose) handle.dispose();
           delete window.__view3dAll[canvas.id];
         });
       }
@@ -1386,7 +1390,7 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
 def _page(title: str, bodies: list[str], tabs: str = "") -> str:
     """Wrap one or more flight bodies into a complete document."""
     return f"""<title>{charts.escape(title)}</title>
-<style>{_font_face()}{STYLE}{view3d.STYLE}{quicklook.STYLE}</style>
+<style>{_font_face()}{STYLE}{view3d.STYLE}{view3d_gl.STYLE}{quicklook.STYLE}</style>
 <div class="wrap">
 {tabs}
 {"".join(bodies)}
@@ -1394,6 +1398,7 @@ def _page(title: str, bodies: list[str], tabs: str = "") -> str:
 </div>
 <div class="tooltip" id="tip" role="status" aria-live="polite"></div>
 <script>{view3d.SCRIPT}
+{view3d_gl.SCRIPT}
 {SCRIPT}</script>
 <script>{quicklook.SCRIPT}</script>
 """
