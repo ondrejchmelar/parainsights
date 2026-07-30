@@ -8,7 +8,7 @@ parainsights/
 ├── CLAUDE.md              this file
 ├── pyproject.toml         one project, one venv, one test suite
 ├── tracklog_viewer/       the tool: IGC/KML/KMZ → analysis → HTML, KMZ, 3D map
-├── tests/                 pytest, 179 tests, no network
+├── tests/                 pytest, 181 tests, no network
 └── docs/
     ├── formats.md         IGC and KML/KMZ format research, measured on real files
     └── plan.md            scope, decisions and status
@@ -25,7 +25,7 @@ as the packages, so there is nothing to line up by hand:
 
 ```bash
 uv sync --extra dev          # creates .venv on the pinned Python, from uv.lock
-uv run pytest -c pyproject.toml     # 179 tests, ~110 s, no network
+uv run pytest -c pyproject.toml     # 181 tests, ~110 s, no network
 ```
 
 `-c pyproject.toml` matters when the repo sits inside another project — pytest otherwise

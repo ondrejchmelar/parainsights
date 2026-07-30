@@ -167,6 +167,62 @@ return new Promise(function (resolve) {
 """
 
 
+# A drag, measured against a fixed world point, in whichever state the parameter asks
+# for. Panning moves the ground by exactly the pointer delta, so this is the one gesture
+# with an answer that can be stated in advance — and it is the gesture that goes wrong
+# when the canvas box and its backing store disagree, which is what full screen used to
+# do. `pointermove` goes to the canvas, not the window: the handler owns the element.
+_DRAG = """
+var h = window.__handle;
+var canvas = document.querySelector('canvas.view3d');
+var panel = canvas.closest('.view3d-panel');
+function send(type, x, y, buttons) {
+  canvas.dispatchEvent(new PointerEvent(type, {
+    pointerId: 1, clientX: x, clientY: y, button: 0,
+    buttons: buttons === undefined ? 1 : buttons,
+    bubbles: true, cancelable: true, pointerType: 'mouse', isPrimary: true
+  }));
+}
+function drag(dx, dy) {
+  h.view.panX = 0; h.view.panY = 0; h.redraw();
+  var before = h.worldProject(0, 0, 0);
+  var box = canvas.getBoundingClientRect();
+  var x = box.left + box.width / 2, y = box.top + box.height / 2;
+  send('pointerdown', x, y);
+  for (var i = 1; i <= 10; i++) send('pointermove', x + dx * i / 10, y + dy * i / 10);
+  send('pointerup', x + dx, y + dy, 0);
+  h.redraw();
+  var after = h.worldProject(0, 0, 0);
+  return { dx: after[0] - before[0], dy: after[1] - before[1] };
+}
+
+if (MAXIMISE) panel.querySelector('[data-view3d-act="fullscreen"]').click();
+return new Promise(function (resolve) {
+  setTimeout(function () {
+    resolve({ maximised: panel.classList.contains('is-maximised'),
+              moved: drag(80, 40),
+              metrics: h.metrics() });
+  }, MAXIMISE ? 900 : 0);
+});
+"""
+
+
+@needs_chrome
+class TestDraggingStillWorks:
+    """The gesture, not the button. Pointer positions are client coordinates and the
+    projection is in backing-store pixels; full screen changes both at once."""
+
+    @pytest.mark.parametrize("maximise", [False, True], ids=["inline", "maximised"])
+    def test_a_drag_moves_the_ground_by_the_pointer_delta(self, maximise):
+        answer = _probe(_scene(), ("var MAXIMISE = %s;" % ("true" if maximise else "false"))
+                        + _DRAG, page_extra=TALL)
+        assert answer["maximised"] is maximise
+        assert answer["moved"]["dx"] == pytest.approx(80, abs=1.5)
+        assert answer["moved"]["dy"] == pytest.approx(40, abs=1.5)
+        assert answer["metrics"]["W"] == round(answer["metrics"]["boxW"]
+                                               * answer["metrics"]["ratio"])
+
+
 @needs_chrome
 class TestTheFullscreenApiIsPreferred:
     def test_it_asks_the_browser_rather_than_faking_it(self):
