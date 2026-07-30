@@ -437,6 +437,19 @@ Written up with a plan in `docs/plan.md`:
   360° in one direction and returning to its initial bearing. `Segment.net_rotation` is
   already computed and is the better starting point. This feeds the ≥2-turn wind filter,
   so it changes which climbs are trusted.
+- **Move to Python 3.14** — and fix the version drift it exposed on the way. Three
+  Pythons are in play right now and no two agree: the working venv is **3.11.6**,
+  `requires-python` says **>=3.12**, and CI runs **3.12-slim**. The venv is below the
+  project's own declared floor, which means anything 3.12-only would pass CI and fail on
+  the machine it was written on — that is worth fixing before the 3.14 bump, not after.
+  What 3.14 actually buys here: PEP 649/749 makes deferred annotation evaluation the
+  default, so the `from __future__ import annotations` line at the top of **27 files**
+  becomes dead; the interpreter is faster on the numpy-light glue around the analysis;
+  and the error messages are better. Free-threading is *not* a draw — there is no
+  threading in the codebase, and the tile fetches that could use it are in the browser.
+  Order: bring the venv up to the declared floor, bump `requires-python` and the CI
+  image together, run the suite, then drop the `__future__` imports as a separate change
+  so a regression is attributable.
 - **The sun during the flight** — which slopes were lit and when they switched off. Cheap to
   compute and it answers questions a pilot actually has. Now cheaper than when it was
   written: with the heightfield in WebGL the illumination belongs in the fragment shader,
