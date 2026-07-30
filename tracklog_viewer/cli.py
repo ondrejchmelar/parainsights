@@ -57,9 +57,9 @@ def main(argv: list[str] | None = None) -> int:
              "otherwise use --kmz to write one on demand",
     )
     parser.add_argument(
-        "--embed-basemap", action="store_true",
-        help="bake the map imagery into the report (about 300 KB) instead of fetching "
-             "tiles when it is opened; needed only for a genuinely offline report",
+        "--no-basemap", action="store_true",
+        help="with --terrain, leave the map imagery out of the report (saves about "
+             "340 KB per flight, and the 3D view then shows hillshade only)",
     )
     parser.add_argument(
         "--terrain", action="store_true",
@@ -86,7 +86,7 @@ def main(argv: list[str] | None = None) -> int:
             render_html.write(
                 reports[0]["analysis"], args.html,
                 meteo=reports[0]["meteo"], route=reports[0]["route"],
-                terrain=reports[0]["terrain"], basemap=reports[0]["basemap"],
+                terrain=reports[0]["terrain"], basemaps=reports[0]["basemaps"],
                 kmz=reports[0]["kmz"],
             )
         else:
@@ -153,17 +153,18 @@ def _one(source: str, args, index: int = 0) -> dict:
         ground = terrain_module.for_flight(analysis, max_points=budget)
         if ground is None:
             print(f"warning: no terrain data for {label}", file=sys.stderr)
-        elif args.embed_basemap:
-            # Place names are what make the 3D view navigable.
-            # Satellite imagery is photographic and costs more than a map raster, so a
-            # shared document gets a smaller, harder-compressed one per flight.
+        elif not args.no_basemap:
+            # Place names are what make the 3D view navigable, and both styles are
+            # embedded so the button works in a page that cannot fetch anything. A
+            # shared document pays that twice per flight, so it gets smaller, harder
+            # compressed images.
             single = len(args.flight) == 1
-            tiles = basemap_module.for_terrain(
+            tiles = basemap_module.for_view(
                 ground,
-                max_width=2200 if single else 1100,
-                quality=72 if single else 55,
+                max_width=1600 if single else 1000,
+                quality=62 if single else 50,
             )
-            if tiles is None:
+            if not tiles:
                 print(f"warning: no basemap tiles for {label}", file=sys.stderr)
 
     # The KMZ is embedded in the report as a download, so the Earth file travels with it.
@@ -248,7 +249,7 @@ def _one(source: str, args, index: int = 0) -> dict:
         "route": route,
         "payload": payload,
         "terrain": ground,
-        "basemap": tiles if args.terrain and args.embed_basemap else None,
+        "basemaps": tiles if args.terrain and not args.no_basemap else None,
         "kmz": earth,
         "shape": shape_of(route, analysis),
         "file": label,

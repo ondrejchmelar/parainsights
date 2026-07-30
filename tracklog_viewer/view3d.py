@@ -56,7 +56,7 @@ TILE_SOURCES = {
 
 
 def data(analysis: Analysis, terrain, *, tolerance: float | None = None,
-         basemap=None) -> dict:
+         basemaps: dict | None = None) -> dict:
     """Terrain grid, track and climbs, in the compact form the renderer wants."""
     flight = analysis.flight
     series = analysis.series
@@ -103,15 +103,15 @@ def data(analysis: Analysis, terrain, *, tolerance: float | None = None,
         "track": track,
         "climbs": climbs,
         "palette": [list(colour) for _, colour in RAMP_RGB],
-        # Either a baked image (offline, embedded) or tile templates fetched when the
-        # page is opened. Embedding costs 300 KB and fixes the zoom at build time; tiles
-        # cost a network at view time, which a published artifact does not have.
-        "basemap": basemap.to_dict() if basemap is not None else None,
-        # An embedded image is the offline case, so it must not be joined by tile
-        # templates: the toggle would try to fetch, fail behind a content-security
-        # policy, and throw away the picture that was already there.
-        "basemapEmbedded": basemap is not None,
-        "tiles": None if basemap is not None else TILE_SOURCES,
+        # Imagery baked into the document, keyed by the style the button names. A
+        # published artifact cannot fetch anything, so a style that is not in here has no
+        # way to appear there — which is why both are embedded by default and the tile
+        # templates below are only an upgrade for a page that does have a network.
+        "basemaps": {name: image.to_dict() for name, image in (basemaps or {}).items()},
+        "tiles": {
+            name: source for name, source in TILE_SOURCES.items()
+            if name not in (basemaps or {})
+        } or None,
         "landing": {
             "lon": round(float(flight.lon[-1]), 5),
             "lat": round(float(flight.lat[-1]), 5),
@@ -158,15 +158,12 @@ def panel(payload: dict, uid: str, *, kmz_uri: str | None = None,
             f'title="Download the KMZ and open it in Google Earth">'
             f'{GLOBE_ICON}<span>Open in Earth</span></a>'
         )
-    attribution = payload.get("basemap", {}) or {}
-    credit = attribution.get("attribution", "")
-    # The button names what is on screen, not what comes next: with three states
-    # (satellite → map → off) "Map" as a fixed label says nothing about where you are.
-    tiles = payload.get("tiles") or {}
-    initial_style = "satellite" if "satellite" in tiles else next(iter(tiles), "")
-    basemap_label = (tiles.get(initial_style) or {}).get("label") or (
-        "Satellite" if "Esri" in credit else "Map"
-    )
+    # The button names what is on screen, not what comes next: cycling through several
+    # styles, a fixed "Map" label says nothing about where you are.
+    available = {**(payload.get("tiles") or {}), **(payload.get("basemaps") or {})}
+    initial_style = "satellite" if "satellite" in available else next(iter(available), "")
+    basemap_label = TILE_SOURCES.get(initial_style, {}).get("label", "Map")
+    credit = (available.get(initial_style) or {}).get("attribution", "")
     return f"""
     <div class="panel view3d-panel">
       <canvas class="view3d" id="view3d-{uid}"
@@ -364,17 +361,15 @@ function initView3d(root, cursorTrack) {
     }
   }
 
-  // Where the imagery comes from. A baked image if one was embedded; otherwise tiles
-  // stitched at view time, which also makes the satellite/map switch meaningful because
-  // each style can be fetched on demand.
-  var style = scene.basemap ? null : 'satellite';
+  // Which imagery the reader is looking at. Styles baked into the document are used as
+  // they are; anything else is stitched from tiles when it is first selected, which only
+  // works where the page can reach the network.
+  var embedded = scene.basemaps || {};
+  var order = ['satellite', 'map'].filter(function (name) {
+    return embedded[name] || (scene.tiles && scene.tiles[name]);
+  });
+  var style = order[0] || null;
   var loading = false;
-
-  if (scene.basemap) {
-    basemap = new Image();
-    basemap.onload = function () { sampleCellColours(); draw(); };
-    basemap.src = scene.basemap.uri;
-  }
 
   function tileNumbers(lon, lat, zoom) {
     var n = Math.pow(2, zoom);
@@ -397,29 +392,33 @@ function initView3d(root, cursorTrack) {
     return 6;
   }
 
-  // Mosaics already stitched, keyed by style, so cycling back is instant.
-  var stitched = {};
+  // Images ready to drape, keyed by style: the embedded ones from the start, a stitched
+  // mosaic once it has been fetched. Switching back to one is then instant.
+  var ready = {};
+
+  function labelFor(name) {
+    if (name === 'off') return 'Basemap';
+    var source = (scene.tiles && scene.tiles[name]) || {};
+    return source.label || (name === 'satellite' ? 'Satellite' : 'Map');
+  }
 
   function basemapButtons() {
     return root.querySelectorAll('[data-view3d-act="basemap"]');
   }
 
   function setBasemapStyle(next) {
-    var label = next === 'off'
-      ? 'Basemap'
-      : (scene.tiles[next] || {label: 'Basemap'}).label;
     basemapButtons().forEach(function (button) {
-      button.textContent = label;
+      button.textContent = labelFor(next);
       button.classList.toggle('is-on', next !== 'off');
     });
     if (next === 'off') { view.map = false; draw(); return; }
     view.map = true;
     style = next;
-    if (stitched[next]) {
-      basemap = stitched[next].image;
-      scene.basemap = stitched[next].box;
+    if (ready[next]) {
+      basemap = ready[next].image;
+      scene.basemap = ready[next].box;
       sampleCellColours();
-      showCredit(stitched[next].box.attribution);
+      showCredit(ready[next].box.attribution);
       draw();
       return;
     }
@@ -428,6 +427,18 @@ function initView3d(root, cursorTrack) {
     draw();
     loadTiles(next);
   }
+
+  // Decode whatever was baked in. Each style is an independent image, so a document that
+  // carries only one still shows that one and falls back to tiles for the other.
+  Object.keys(embedded).forEach(function (name) {
+    var box = embedded[name];
+    var image = new Image();
+    image.onload = function () {
+      ready[name] = { image: image, box: box };
+      if (style === name) setBasemapStyle(name);
+    };
+    image.src = box.uri;
+  });
 
   function showCredit(text) {
     var credit = root.querySelector('.view3d-credit');
@@ -477,9 +488,13 @@ function initView3d(root, cursorTrack) {
     function finish() {
       loading = false;
       if (done === 0) {
-        // No tiles at all: almost certainly a content-security policy. Say so once,
-        // rather than leaving the button looking broken.
-        showCredit('Map tiles unavailable here — hillshade only');
+        // No tiles at all: almost certainly a content-security policy. Skip to the next
+        // style the document can actually show rather than leaving the button dead.
+        var fallback = order.filter(function (name) {
+          return name !== styleName && (ready[name] || embedded[name]);
+        })[0];
+        if (fallback) { setBasemapStyle(fallback); return; }
+        showCredit('Map imagery unavailable here — hillshade only');
         basemapButtons().forEach(function (button) {
           button.classList.remove('is-on');
         });
@@ -490,7 +505,7 @@ function initView3d(root, cursorTrack) {
       layers.forEach(function (layer) { mctx.drawImage(layer, 0, 0); });
       var image = new Image();
       image.onload = function () {
-        stitched[styleName] = {image: image, box: box};
+        ready[styleName] = {image: image, box: box};
         if (style !== styleName) return;    // the reader cycled on while we stitched
         basemap = image;
         scene.basemap = box;
@@ -525,7 +540,8 @@ function initView3d(root, cursorTrack) {
     if (!pending) finish();
   }
 
-  if (!scene.basemap && scene.tiles) loadTiles(style);
+  // Nothing baked in for the opening style: fetch it. An embedded one is already decoding.
+  if (style && !embedded[style]) loadTiles(style);
 
   function world(x, y, z) {
     var cy = Math.cos(view.yaw), sy = Math.sin(view.yaw);
@@ -544,6 +560,10 @@ function initView3d(root, cursorTrack) {
   // exaggerated outline zooms out by exactly the factor the user just asked for, which
   // is why the ×2 button appeared to do nothing at all.
   var fit = { scale: 1, dx: 0, dy: 0 };
+  // Where the fit puts the middle of the scene. zoomAt has to measure the cursor from
+  // this point, not from the canvas corner, so it is named rather than written twice.
+  function anchorX() { return W / 2; }
+  function anchorY() { return H * 0.58; }
   function refit() {
     var wanted = view.vertical;
     view.vertical = 1;
@@ -573,10 +593,10 @@ function initView3d(root, cursorTrack) {
                          H * 1.02 / Math.max(maxY - minY, 1));
     view.vertical = wanted;
     fit.scale = scale * view.zoom;
-    fit.dx = W / 2 - (minX + maxX) / 2 * fit.scale;
+    fit.dx = anchorX() - (minX + maxX) / 2 * fit.scale;
     // Keep the *ground* centred rather than the whole scene: as the exaggeration grows
     // the flight should climb up the canvas, not push the terrain off the bottom.
-    fit.dy = H * 0.58 - (minY + maxY) / 2 * fit.scale;
+    fit.dy = anchorY() - (minY + maxY) / 2 * fit.scale;
   }
 
   function project(x, y, z) {
@@ -598,6 +618,30 @@ function initView3d(root, cursorTrack) {
     }
   }
 
+  // How hard to shade a draped image. Satellite imagery is a photograph and already
+  // shows its own light; a cartographic map is flat fill and needs real relief on top.
+  function reliefBoost() { return style === 'satellite' ? 1.0 : 1.5; }
+
+  // The lit range this particular terrain actually spans, measured once. A fixed
+  // shading curve assumes alpine relief: over the gentle ground most flights happen on,
+  // `lit` stays within a few hundredths of flat-ground illumination and the overlay does
+  // nothing at all — which is how a road map came out looking like a flat sheet. Stretch
+  // the observed range instead, so relief reads at whatever scale the ground has.
+  var litMid = 0.86, litSpread = 0;
+  (function measureLit() {
+    var lo = Infinity, hi = -Infinity;
+    for (var r = 0; r < rows; r += 2) {
+      for (var c = 0; c < cols; c += 2) {
+        var lit = shadeFactor(r, c);
+        if (lit < lo) lo = lit;
+        if (lit > hi) hi = lit;
+      }
+    }
+    if (!isFinite(lo) || hi - lo < 0.01) return;   // genuinely flat: leave it unshaded
+    litMid = (lo + hi) / 2;
+    litSpread = (hi - lo) / 2;
+  })();
+
   function shadeFactor(r, c) {
     var i = r * cols + c;
     var here = dem.z[i];
@@ -612,17 +656,15 @@ function initView3d(root, cursorTrack) {
   }
 
   function shade(r, c) {
-    // Slope shading from the two in-grid gradients, lit from the north-west.
+    // Slope shading from the two in-grid gradients, lit from the north-west, stretched
+    // to this terrain's own lit range for the same reason the draped version is.
     var i = r * cols + c;
     var here = dem.z[i];
-    var right = dem.z[i + (c + 1 < cols ? 1 : 0)];
-    var below = dem.z[i + (r + 1 < rows ? cols : 0)];
-    var cellX = spanX / (cols - 1), cellY = spanY / (rows - 1);
-    var dzdx = (right - here) / cellX, dzdy = (below - here) / cellY;
-    var nx = -dzdx, ny = -dzdy, nz = 1;
-    var len = Math.sqrt(nx * nx + ny * ny + nz * nz);
-    var light = (nx * -0.55 + ny * 0.55 + nz * 0.63) / len;
-    var lit = Math.max(0.25, Math.min(1.15, 0.55 + light * 0.65));
+    var lit = 0.96;
+    if (litSpread > 0) {
+      var t = Math.max(-1, Math.min(1, (shadeFactor(r, c) - litMid) / litSpread));
+      lit = 0.86 + t * 0.30;
+    }
     // Elevation tint: low ground greener, high ground paler and greyer.
     var t = Math.min(1, Math.max(0, (here - dem.min) / Math.max(dem.max - dem.min, 1)));
     var rr = (120 + t * 95) * lit;
@@ -726,11 +768,15 @@ function initView3d(root, cursorTrack) {
             p00[0], p00[1]
           );
           ctx.drawImage(basemap, rect[0], rect[1], rect[2], rect[3], 0, 0, 1.12, 1.12);
-          // Relief on top, so the place names stay readable underneath.
-          var strength = Math.min(Math.abs(lit0 - 0.86) * 0.5, 0.24);
-          ctx.fillStyle = (lit0 >= 0.86 ? 'rgba(255,255,255,' : 'rgba(24,30,38,') +
-            strength.toFixed(3) + ')';
-          ctx.fillRect(0, 0, 1.12, 1.12);
+          // Relief on top, so the place names stay readable underneath. Lit is measured
+          // against this terrain's own range rather than a fixed midpoint.
+          if (litSpread > 0) {
+            var t = (lit0 - litMid) / litSpread;      // −1 in shadow, +1 in full light
+            var strength = Math.min(Math.abs(t), 1) * 0.30 * reliefBoost();
+            ctx.fillStyle = (t >= 0 ? 'rgba(255,252,242,' : 'rgba(18,26,38,') +
+              strength.toFixed(3) + ')';
+            ctx.fillRect(0, 0, 1.12, 1.12);
+          }
           ctx.setTransform(1, 0, 0, 1, 0, 0);
           continue;
         }
@@ -825,24 +871,25 @@ function initView3d(root, cursorTrack) {
     ctx.stroke();
   }
 
+  function paint() {
+    // Match the backing store to the box on every frame. Relying on a ResizeObserver
+    // or a post-toggle callback to do this was fragile: entering the maximised state
+    // changed the box, the observer's timing did not line up with it, and the canvas
+    // kept its old height while its CSS box was already full screen.
+    resize();
+    ctx.clearRect(0, 0, W, H);
+    refit();
+    var mapped = view.map && basemap && basemap.complete && basemap.naturalWidth > 0;
+    drawTerrain(mapped);
+    drawTrack();
+    drawCursor();
+  }
+
   var pending = false;
   function draw() {
     if (pending) return;
     pending = true;
-    requestAnimationFrame(function () {
-      pending = false;
-      // Match the backing store to the box on every frame. Relying on a ResizeObserver
-      // or a post-toggle callback to do this was fragile: entering the maximised state
-      // changed the box, the observer's timing did not line up with it, and the canvas
-      // kept its old height while its CSS box was already full screen.
-      resize();
-      ctx.clearRect(0, 0, W, H);
-      refit();
-      var mapped = view.map && basemap && basemap.complete && basemap.naturalWidth > 0;
-      drawTerrain(mapped);
-      drawTrack();
-      drawCursor();
-    });
+    requestAnimationFrame(function () { pending = false; paint(); });
   }
 
   // Input model borrowed from Google Earth, because that is what pilots already know:
@@ -875,14 +922,15 @@ function initView3d(root, cursorTrack) {
   // Keep the point under the cursor fixed while zooming, the way every map does.
   function zoomAt(factor, clientX, clientY) {
     var box = canvas.getBoundingClientRect();
-    var vb = canvas.viewBox ? null : null;
-    var sx = (clientX - box.left) / box.width * W;
-    var sy = (clientY - box.top) / box.height * H;
+    // Measured from the fit's anchor, because a point's screen position is
+    // anchor + world*scale*zoom + pan. Measuring from the canvas corner instead drops
+    // the anchor term and biases every zoom by anchor*(ratio-1) — which read as the view
+    // diving towards the bottom-right on both wheel and pinch.
+    var sx = (clientX - box.left) / box.width * W - anchorX();
+    var sy = (clientY - box.top) / box.height * H - anchorY();
     var before = view.zoom;
     view.zoom = Math.max(0.3, Math.min(12, view.zoom * factor));
     var ratio = view.zoom / before;
-    // The fit scales with zoom, so anchoring means moving the pan by the same ratio
-    // about the cursor.
     view.panX = sx - (sx - view.panX) * ratio;
     view.panY = sy - (sy - view.panY) * ratio;
   }
@@ -984,25 +1032,15 @@ function initView3d(root, cursorTrack) {
         button.classList.toggle('is-on', next !== 1);
         button.innerHTML = '&#215;' + next + ' height';
       } else if (act === 'basemap') {
-        // Cycles satellite → map → off → satellite. With a baked image there is only the
-        // one style, so the button degrades to a plain on/off toggle.
-        if (!scene.tiles || scene.basemapEmbedded) {
-          view.map = !view.map;
-          button.classList.toggle('is-on', view.map);
-        } else {
-          var cycle = ['satellite', 'map', 'off'];
-          var at = cycle.indexOf(view.map ? style : 'off');
-          setBasemapStyle(cycle[(at + 1) % cycle.length]);
-        }
+        // Every style the document can show, then bare relief, then round again — so a
+        // document carrying one style degrades to a plain on/off toggle by itself.
+        var cycle = order.concat(['off']);
+        var at = cycle.indexOf(view.map ? style : 'off');
+        setBasemapStyle(cycle[(at + 1) % cycle.length]);
       } else if (act === 'reset') {
         view.yaw = -0.42; view.pitch = 0.46; view.zoom = 1; view.vertical = baseVertical;
         view.panX = 0; view.panY = 0;
-        if (scene.tiles && !scene.basemapEmbedded) {
-          setBasemapStyle('satellite');
-        } else {
-          view.map = true;
-          basemapButtons().forEach(function (b) { b.classList.add('is-on'); });
-        }
+        if (order.length) setBasemapStyle(order[0]);
         root.querySelectorAll('[data-view3d-act="exaggerate"]').forEach(function (b) {
           b.classList.remove('is-on');
           b.innerHTML = '&#215;1 height';
@@ -1081,7 +1119,11 @@ function initView3d(root, cursorTrack) {
     // Exposed for tests: driving the camera from a headless browser is the only way to
     // check that a gesture does what it claims.
     view: view,
-    redraw: function () { resize(); draw(); },
+    // Synchronous on purpose: a headless browser stops servicing requestAnimationFrame
+    // once the page goes idle, so a test that scheduled a frame and then measured the
+    // projection was reading numbers from before its own input. Every measurement of a
+    // gesture was wrong in the same invisible way until this bypassed the scheduler.
+    redraw: function () { paint(); },
     // Exposed for tests: what resize() actually measures, versus what it has stored.
     metrics: function () {
       var rect = canvas.getBoundingClientRect();
@@ -1089,16 +1131,52 @@ function initView3d(root, cursorTrack) {
                ratio: Math.min(window.devicePixelRatio || 1, 2),
                attrW: canvas.width, attrH: canvas.height };
     },
+    // Exposed for tests: the projection as it currently stands. Zoom anchoring is a
+    // claim about these numbers, so the numbers have to be readable.
+    projection: function () {
+      return { dx: fit.dx, dy: fit.dy, scale: fit.scale, W: W, H: H,
+               anchorX: anchorX(), anchorY: anchorY(),
+               panX: view.panX, panY: view.panY, zoom: view.zoom };
+    },
+    // Exposed for tests: the track vertex nearest a screen point, and where a given
+    // vertex is on screen now. Zoom anchoring is the claim that these two agree before
+    // and after a wheel event, which is only checkable by measuring it.
+    nearest: function (clientX, clientY) {
+      var box = canvas.getBoundingClientRect();
+      var sx = (clientX - box.left) / box.width * W;
+      var sy = (clientY - box.top) / box.height * H;
+      var t = scene.track, best = 0, bestD = Infinity;
+      for (var i = 0; i < t.lon.length; i++) {
+        var m = toMetres(t.lon[i], t.lat[i]);
+        var p = project(m[0], m[1], t.alt[i]);
+        var d = (p[0] - sx) * (p[0] - sx) + (p[1] - sy) * (p[1] - sy);
+        if (d < bestD) { bestD = d; best = i; }
+      }
+      return best;
+    },
+    screenOf: function (index) {
+      var box = canvas.getBoundingClientRect();
+      var t = scene.track;
+      var m = toMetres(t.lon[index], t.lat[index]);
+      var p = project(m[0], m[1], t.alt[index]);
+      return [p[0] / W * box.width, p[1] / H * box.height];
+    },
     // Exposed for tests: which basemap the reader is looking at, and whether its tiles
     // actually arrived. A style that is selected but has no image is the failure the
     // toggle must not hide.
     basemap: function () {
       return { style: style, on: view.map, loading: loading,
-               painted: !!basemap, cached: Object.keys(stitched),
+               painted: !!basemap, cached: Object.keys(ready),
                credit: (root.querySelector('.view3d-credit') || {}).textContent };
     }
   };
   window.__view3d = handle;
+  // A multi-flight document initialises one of these per tab, so the bare global is
+  // whichever went last. Keyed by canvas id as well, so a test can address the panel it
+  // is actually clicking on — driving one panel's button while reading another's numbers
+  // produced a convincing false failure.
+  window.__view3dAll = window.__view3dAll || {};
+  window.__view3dAll[canvas.id] = handle;
   return handle;
 }
 """

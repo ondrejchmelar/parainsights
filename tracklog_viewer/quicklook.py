@@ -17,6 +17,7 @@ so rather than quietly presenting a thinner analysis as the whole thing.
 
 from __future__ import annotations
 
+from . import view3d
 from .render_map import RAMP_RGB
 
 
@@ -48,6 +49,16 @@ def panel() -> str:
       <p class="ql-status" id="ql-status" role="status" aria-live="polite"></p>
     </div>
     <div class="stats ql-stats" id="ql-stats"></div>
+    <div id="ql-3d" hidden>
+      <div class="section-head"><h2>The flight in three dimensions</h2>
+        <p>Drag to pan, right-drag or ctrl-drag to rotate and tilt, scroll to zoom. The
+           ground is one flat plane: an elevation model has to be fetched, and a published
+           page is not allowed to. Imagery is tried anyway — it arrives if this page can
+           reach the network. The altitudes are your own, at true vertical scale.</p>
+      </div>
+      {view3d.panel({"tiles": view3d.TILE_SOURCES}, "own")}
+      <p class="caption" id="ql-3d-note"></p>
+    </div>
     <div class="panel hero ql-result" id="ql-result" hidden>
       <p class="chart-title" id="ql-title">&nbsp;</p>
       <p class="chart-title">Side view — altitude against distance flown</p>
@@ -589,6 +600,91 @@ SCRIPT = r"""
       (sub ? '<span class="sub">' + sub + '</span>' : '') + '</div>';
   }
 
+  // The 3D view, driven by the same initView3d the built reports use. What we cannot
+  // supply here is the elevation model — that is a tile fetch, which a published page is
+  // not allowed to make — so the ground is one flat plane at the lowest point of the
+  // flight. The shape of the flight in the air is the part worth seeing anyway, and it
+  // is exact: altitudes are the track's own.
+  var host3d = document.getElementById('ql-3d');
+  var template3d = host3d ? host3d.innerHTML : '';
+  // The tile templates are already in the panel's markup; read them back rather than
+  // repeating the URLs here, so there is one place they can be wrong.
+  var TILES = (function () {
+    try {
+      var node = host3d && host3d.querySelector('.view3d-data');
+      return node ? (JSON.parse(node.textContent).tiles || null) : null;
+    } catch (error) {
+      return null;
+    }
+  })();
+
+  function scene3d(a) {
+    var pad = 0.02;
+    var west = Math.min.apply(null, a.lon) - pad, east = Math.max.apply(null, a.lon) + pad;
+    var south = Math.min.apply(null, a.lat) - pad, north = Math.max.apply(null, a.lat) + pad;
+    // A grid rather than a single quad: the renderer shades and drapes per cell, and a
+    // coarse mesh is all a flat plane needs.
+    var cols = 61, rows = 25;
+    var ground = Math.round(a.altMin - 30);
+    var z = new Array(cols * rows);
+    for (var i = 0; i < z.length; i++) z[i] = ground;
+
+    // Every fixth fix: the view redraws the whole track on each frame of a drag, and
+    // 1 Hz for a five-hour flight is more points than the canvas can resolve anyway.
+    var step = Math.max(Math.round(a.t.length / 1400), 1);
+    var track = { lon: [], lat: [], alt: [], c: [] };
+    for (var k = 0; k < a.t.length; k += step) {
+      track.lon.push(+a.lon[k].toFixed(5));
+      track.lat.push(+a.lat[k].toFixed(5));
+      track.alt.push(Math.round(a.alt[k]));
+      track.c.push(bandIndex(a.climb[k]));
+    }
+
+    var climbs = a.climbs.map(function (climb, index) {
+      var middle = (climb.start + climb.stop) >> 1;
+      return {
+        label: String(index + 1),
+        lon: +a.lon[middle].toFixed(5), lat: +a.lat[middle].toFixed(5),
+        alt: Math.round(a.alt[middle]), tow: false
+      };
+    });
+
+    return {
+      terrain: { west: west, east: east, south: south, north: north,
+                 rows: rows, cols: cols, min: ground, max: ground, z: z },
+      trackTop: Math.round(a.altMax),
+      track: track,
+      climbs: climbs,
+      palette: RAMP.map(function (band) { return band[1]; }),
+      basemaps: {},
+      tiles: TILES,
+      landing: { lon: +a.lon[a.lon.length - 1].toFixed(5),
+                 lat: +a.lat[a.lat.length - 1].toFixed(5),
+                 alt: Math.round(a.alt[a.alt.length - 1]) }
+    };
+  }
+
+  function bandIndex(value) {
+    for (var i = 0; i < RAMP.length; i++) if (value < RAMP[i][0]) return i;
+    return RAMP.length - 1;
+  }
+
+  function show3d(a) {
+    if (!host3d || typeof initView3d !== 'function') return;
+    // Rebuild the panel from its original markup rather than re-initialising the old
+    // one: initView3d attaches its own listeners, and a second set on the same canvas
+    // would move the camera twice per drag.
+    host3d.innerHTML = template3d;
+    var panel = host3d.querySelector('.view3d-panel');
+    panel.querySelector('.view3d-data').textContent = JSON.stringify(scene3d(a));
+    host3d.hidden = false;
+    initView3d(panel, null);
+    document.getElementById('ql-3d-note').textContent =
+      'Ground drawn as a flat plane at ' + Math.round(a.altMin - 30) + ' m — ' +
+      Math.round(a.altMin) + ' m was your lowest point. Heights are ' +
+      (a.useBaro ? 'pressure' : 'GPS') + ' altitude, at true vertical scale.';
+  }
+
   function present(a, name) {
     document.getElementById('ql-heading').textContent = name.replace(/\.[^.]+$/, '');
     document.getElementById('ql-source').textContent = a.kind + ', ' + a.t.length +
@@ -650,6 +746,7 @@ SCRIPT = r"""
     result.hidden = false;
     drawSide(a);
     drawPlan(a);
+    show3d(a);
     showFlight('own');
     window.scrollTo({ top: 0, behavior: 'auto' });
 

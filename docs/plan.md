@@ -330,7 +330,20 @@ Modelled on Google Earth, because that is what pilots already know:
 
 Panning needed a screen-space offset (`view.panX/panY`) applied *after* the fit: the fit
 recentres every frame, so without it the camera was welded to the middle of the flight.
-Zoom anchors on the cursor by moving the pan by the same ratio about that point.
+
+Zoom anchors on the cursor by moving the pan about that point — measured **from the fit's
+anchor**, `(W/2, 0.58H)`, not from the canvas corner. Dropping that term biases every zoom
+by `anchor·(ratio−1)`, which is why the view appeared to dive towards the bottom-right on
+both wheel and pinch. Verified at three cursor positions: the point under the cursor stays
+put to within 0.1 px.
+
+Measuring any of this needs `handle.redraw()`, which paints **synchronously**. `draw()`
+defers to `requestAnimationFrame`, and headless Chrome stops servicing rAF once the page
+goes idle — so a probe that dispatched a wheel event and then read the projection was
+reading it from before its own input. That produced a confident, entirely wrong measurement
+of where the anchor was, and sent me looking for a bug in code that was already fixed. A
+chained rAF loop in probe code hangs outright under `--virtual-time-budget`; use
+`setTimeout`.
 
 `initView3d` returns its `view` object on `window.__view3d` so a headless browser can
 assert what a gesture did — a fingerprint of the canvas is too insensitive to trust, and
@@ -363,6 +376,20 @@ the old size. `applyMaximisedSize()` writes px, and a redraw ladder at 0/80/200/
 catches whatever the browser settles late. Verified:
 `maximised box=1185x713 backing=1185x713 match=true | restored box=1185x508 backing=1185x508`.
 
+### Reverted: tiles at view time
+
+The section below describes fetching tiles when the page is opened. **It was reverted one
+round later**, because it makes the toggle useless in the only place the report is actually
+read: a published artifact blocks every host, so satellite fetched nothing, map fetched
+nothing, and the button cycled between three states that all showed bare hillshade. Both
+styles are embedded again (~340 KB per flight at 1600 px / q62, against 300 KB for the
+single style before), and `tiles` now carries templates only for styles that are *not*
+embedded — which is nothing, in a document built by the CLI, and both styles for the
+uploaded-track view, which has no build step to bake anything into.
+
+The lesson is not about tiles. It is that "smaller report" and "the feature works where the
+report is read" were in conflict, and the size won a round it should have lost.
+
 ### Tiles at view time, and a three-state basemap button
 
 The basemap used to be a JPEG stitched at build time and embedded — about 300 KB, at a
@@ -385,6 +412,36 @@ Two things this cost:
   Basemap. Verified by clicking it in a headless browser:
   `initial btn="Satellite" style=satellite painted=true | click1 btn="Map" style=map
   painted=true | click2 btn="Basemap" on=false | click3 btn="Satellite" cached=[satellite,map]`.
+
+### Shading gentle terrain
+
+The relief overlay on a draped basemap assumed alpine ground. `lit` on flat ground works
+out to 0.96, and over the 390–761 m the reference flight crosses it never leaves a band a
+few hundredths wide, so an overlay keyed to a fixed 0.86 midpoint painted a nearly uniform
+wash. On satellite imagery that goes unnoticed — a photograph carries its own light — but a
+road map is flat fill, and it came out looking like a sheet of paper.
+
+Now `litMid` and `litSpread` are measured once over the grid and the shading is normalised
+against them, so relief reads at whatever scale the ground actually has, with the overlay
+skipped when the range is under 0.01 (a genuinely flat plane, as in the uploaded-track
+view, must not have noise amplified into hills). Measured along a strip across the slab,
+low-pass contrast on the bare hillshade went from sd 8.11 / span 35 to sd 9.85 / span 43.
+
+Worth being honest about the limit: this terrain really is 2 % relief at true vertical
+scale, and no shading makes it a mountain. That is what the ×2/×4 button is for.
+
+### A 3D view for an uploaded track
+
+The same `initView3d`, given a synthetic one-level DEM: 61 × 25 nodes at 30 m below the
+flight's lowest point. The elevation model is a tile fetch and a published page cannot make
+one, so there is no ground shape to show — but the altitudes are the track's own, so the
+*flight* is exact and rotatable, which is most of what the view is for. Imagery is
+attempted through the same tile path and arrives only when the page has a network; without
+it the plane stays bare and the credit says so.
+
+The panel is rebuilt from its original markup on every upload rather than re-initialised:
+`initView3d` attaches its own listeners, and a second set on the same canvas would move
+the camera twice per drag.
 
 ### What travels in the report, and what does not
 

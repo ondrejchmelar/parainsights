@@ -969,7 +969,7 @@ def _meteo_profile(analysis: Analysis, meteo, uid: str, rows: list[str]) -> str:
 
 
 def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
-                 basemap=None, kmz: bytes | None = None, uid: str = "f0",
+                 basemaps=None, kmz: bytes | None = None, uid: str = "f0",
                  hidden: bool = False) -> str:
     """One flight's sections, from masthead to footer.
 
@@ -1066,7 +1066,7 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
     if terrain is not None:
         # A shared document carries several flights, so trade 3D track detail for size.
         payload = view3d.data(
-            analysis, terrain, tolerance=4.0 if uid == "f0" else 12.0, basemap=basemap
+            analysis, terrain, tolerance=4.0 if uid == "f0" else 12.0, basemaps=basemaps
         )
         kmz_uri = None
         if kmz:
@@ -1091,7 +1091,8 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
       above ground can be judged directly — the &#215;1 button cycles to &#215;2 and &#215;4. Lowest
       ground clearance of the flight was {clearance.min():.0f}&nbsp;m, median
       {float(np_median(clearance)):.0f}&nbsp;m.
-      {charts.escape(basemap.attribution) + "." if basemap is not None else ""}
+      {charts.escape("; ".join(sorted({b.attribution for b in (basemaps or {}).values()
+                                       if b.attribution}))) or ""}
       Elevation from the AWS terrarium DEM.</p>
   </section>"""
 
@@ -1312,7 +1313,7 @@ def _page(title: str, bodies: list[str], tabs: str = "") -> str:
 
 
 def render(analysis: Analysis, *, meteo=None, route=None, terrain=None,
-           basemap=None, kmz: bytes | None = None) -> str:
+           basemaps=None, kmz: bytes | None = None) -> str:
     """A report for a single flight, with the own-track picker alongside it."""
     summary = analysis.summary
     title = f"{summary.date} · {summary.site or 'flight'} — flight review"
@@ -1334,7 +1335,7 @@ def render(analysis: Analysis, *, meteo=None, route=None, terrain=None,
         [
             _flight_body(
                 analysis, meteo=meteo, route=route, terrain=terrain,
-                basemap=basemap, kmz=kmz, uid="f0",
+                basemaps=basemaps, kmz=kmz, uid="f0",
             )
         ],
         tabs,
@@ -1359,7 +1360,7 @@ def render_multi(reports: list[dict]) -> str:
                 meteo=report.get("meteo"),
                 route=report.get("route"),
                 terrain=report.get("terrain"),
-                basemap=report.get("basemap"),
+                basemaps=report.get("basemaps"),
                 kmz=report.get("kmz"),
                 uid=uid,
                 hidden=index > 0,
@@ -1399,10 +1400,10 @@ def render_multi(reports: list[dict]) -> str:
 
 
 def write(analysis: Analysis, path, *, meteo=None, route=None, terrain=None,
-          basemap=None, kmz: bytes | None = None) -> Path:
+          basemaps=None, kmz: bytes | None = None) -> Path:
     path = Path(path)
     path.write_text(
-        render(analysis, meteo=meteo, route=route, terrain=terrain, basemap=basemap,
+        render(analysis, meteo=meteo, route=route, terrain=terrain, basemaps=basemaps,
                kmz=kmz),
         encoding="utf-8",
     )

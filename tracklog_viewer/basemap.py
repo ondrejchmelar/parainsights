@@ -192,3 +192,25 @@ def fetch(west: float, east: float, south: float, north: float, *,
 def for_terrain(terrain, **kwargs) -> Basemap | None:
     """A basemap covering exactly the terrain grid's box."""
     return fetch(terrain.west, terrain.east, terrain.south, terrain.north, **kwargs)
+
+
+# The name the 3D view's button uses for each style, in the order it cycles through them.
+VIEW_STYLES = {"satellite": "satellite", "map": "osm"}
+
+
+def for_view(terrain, styles=None, **kwargs) -> dict:
+    """Every style the 3D view can offer, keyed by the name its button uses.
+
+    All of them are embedded, because a published page cannot fetch a tile: a style that
+    is not in this dict has no way to appear there, and a button that switches to nothing
+    is worse than a larger file.
+    """
+    wanted = VIEW_STYLES if styles is None else {
+        name: VIEW_STYLES[name] for name in styles if name in VIEW_STYLES
+    }
+    images = {}
+    for name, style in wanted.items():
+        image = for_terrain(terrain, style=style, **kwargs)
+        if image is not None:
+            images[name] = image
+    return images

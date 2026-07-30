@@ -113,14 +113,20 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   its `World_Boundaries_and_Places` label layer — both keyless. A photograph tells a pilot
   what the ground under a climb was; a road map does not. Attribution to Esri/Maxar is
   required and is rendered on the map and in the caption.
-- **Tiles are fetched at view time, not baked in.** The 3D view ships tile templates and
-  stitches its own mosaic in the browser, and the basemap button cycles
-  satellite → map → bare terrain. `--embed-basemap` bakes one image instead, for a report
-  that must work with no network — and then `tiles` is `None`, because a page that carries
-  both would try to fetch, fail under a CSP, and drop the picture it already had. Stitch
-  each source layer into **its own canvas** and composite in order at the end: the label
-  layer is requested second and frequently answers first, so painting tiles into a shared
-  mosaic as they arrive makes z-order a race.
+- **Every basemap style the button offers is embedded.** Fetching tiles at view time was
+  tried and reverted: a published artifact cannot reach any host, so the toggle switched
+  to nothing at all and the report had no imagery whatsoever. Both styles are baked in
+  (~340 KB per flight at 1600 px / q62); `tiles` carries templates only for styles that
+  are *not* embedded, as an upgrade for a page opened locally. `--no-basemap` opts out.
+  When stitching from tiles, give each source layer **its own canvas** and composite in
+  order at the end: the label layer is requested second and frequently answers first, so
+  painting into a shared mosaic as tiles arrive makes z-order a race.
+- **Hillshade is stretched to the terrain's own lit range.** A fixed shading curve assumes
+  alpine relief; over the 390–761 m of ground a Czech flight crosses, `lit` stays within a
+  few hundredths of flat-ground illumination and the overlay does nothing, which is how a
+  draped road map came out looking like a flat sheet. `litMid`/`litSpread` are measured
+  once from the grid and the shading is normalised against them (and skipped entirely when
+  the range is under 0.01, as on quicklook's flat plane).
 - **The KMZ is written on demand, not embedded.** `--earth-link` puts it in the report as
   a data URI behind "Open in Earth" (~170 KB, first flight only); by default `--kmz`
   writes a file. The report is for reading; a copy of the same flight in a second format
@@ -133,6 +139,18 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   clipped. JS sets `--scrollbar` and the panel is `calc(100vw - var(--scrollbar))`. Note
   that `scrollWidth` reports the ink extent even when clipping prevents scrolling — test
   by calling `scrollTo(300, 0)` and reading `scrollX` back.
+- **Zoom anchoring is measured from the fit's anchor, not the canvas corner.** A point's
+  screen position is `anchor + world·scale·zoom + pan`, and `refit()` puts the anchor at
+  `(W/2, 0.58H)`. Dropping that term biases every zoom by `anchor·(ratio−1)`, which reads
+  as the view diving towards the bottom-right on both wheel and pinch. Verified at three
+  different cursor positions, error ≤ 0.1 px.
+- **`handle.redraw()` paints synchronously; `draw()` schedules a frame.** Headless Chrome
+  stops servicing `requestAnimationFrame` once the page goes idle, so a test that
+  scheduled a frame and then measured the projection was reading numbers from *before* its
+  own input. Every gesture measurement was wrong in the same invisible way — including one
+  that "proved" the anchor was in the wrong place — until the test hook bypassed the
+  scheduler. A chained rAF loop in probe code hangs outright under
+  `--virtual-time-budget`; use `setTimeout` there.
 - **The 3D canvas has no width/height attributes.** CSS sizes the box (`aspect-ratio`)
   and JS matches the backing store to it, capped at 2× pixel ratio; that is what lets the
   same code serve an inline panel and full screen.
@@ -218,3 +236,7 @@ published artifact runs under a policy that blocks every external host.
   level, so flights older than ~60 days get no sounding.
 - `quicklook.py` duplicates a subset of the analysis in JavaScript. If the Python
   thresholds change, change them there too — there is no shared source for them.
+- An uploaded track gets the same 3D view, but over a **flat plane**: the DEM is a tile
+  fetch and a published page cannot make one. Imagery is attempted and arrives only when
+  the page is opened somewhere with a network. Altitudes are the track's own, so the shape
+  of the flight in the air is exact; height above ground is simply not available.
