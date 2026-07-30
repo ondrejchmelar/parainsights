@@ -10,7 +10,12 @@ dependencies = [
 
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+# Pillow is optional at *runtime* — basemap stitching and the KMZ barogram import it
+# lazily — but the test suite is not optional about it: the icon test decodes every
+# generated PNG, which is the check that caught a corrupt IDAT that Google Earth drew as
+# a red X on every placemark. Installing only `[dev]` left CI without PIL and failed
+# there while passing locally, where a stray Pillow happened to be present.
+dev = ["pytest>=8", "pillow>=10"]
 terrain = ["pillow>=10"]
 
 [project.scripts]

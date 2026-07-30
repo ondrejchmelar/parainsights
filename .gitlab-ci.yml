@@ -1,38 +1,64 @@
-# GitLab Pages. The job publishes whatever is in `public/` — it does not build the
-# report, and that is deliberate: building needs the IGC files, and flight tracks stay
-# out of this repository. Reports are built locally and committed as output.
+# GitLab Pages for the tracklog viewer.
 #
-#   .venv/bin/python -m tracklog_viewer.cli FLIGHT.igc --terrain --meteo --online \
-#       --html public/index.html
+# The site is one static HTML file. Nothing is built here — building needs the IGC
+# files, and flight tracks stay out of this repository (`*.igc` is ignored). Reports are
+# built locally and the output is committed under `public/`:
 #
-# `--online` matters here and is the reason for moving off a published artifact: a page
-# on Pages can reach the network, so imagery is fetched at view time at zoom 12–13
-# (10–20 m/px against the ~45 an embedded JPEG can afford) instead of being baked in.
-# The file is roughly a sixth of the size and sharper.
+#   .venv/bin/python -m tracklog_viewer.cli FLIGHT.igc [...] \
+#       --terrain --meteo --online --html public/index.html
+#
+# `--online` is the reason for being on Pages at all. A published artifact runs under a
+# policy that blocks every external host, which is what forced embedded imagery, an
+# embedded DEM, a flat plane for uploaded tracks and a fake fullscreen. A page served
+# from Pages can fetch, so imagery comes at view time at zoom 12–13 (10–20 m/px against
+# the ~45 an embedded JPEG affords), weather works for a track the reader uploads, and
+# the Fullscreen API is allowed.
 
 stages: [test, deploy]
 
+# Patch updates to 3.12 are wanted here, so this is deliberately not pinned harder.
+# `requires-python` is >=3.12.
 tests:
   stage: test
   image: python:3.12-slim
+  interruptible: true
   before_script:
     - python -m venv .venv
+    - .venv/bin/pip install --quiet --upgrade pip
     - .venv/bin/pip install --quiet -e '.[dev]'
   script:
-    # Chrome is not installed here, so the browser-driven 3D tests skip themselves
-    # rather than fail. Everything else runs.
+    # `-c pyproject.toml` matters: pytest otherwise walks up and adopts an enclosing
+    # project's config. The 3D view's tests drive headless Chrome, which is not in this
+    # image, so they skip themselves rather than fail — everything else runs.
     - .venv/bin/python -m pytest -c pyproject.toml
+  cache:
+    key: "pip-$CI_COMMIT_REF_SLUG"
+    paths: [.cache/pip]
+  variables:
+    PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
+# The job has to be called `pages`, and what it publishes has to be the `public/`
+# artifact — that pairing is the whole contract. It runs after `tests` because of the
+# stage order, so a red suite does not deploy.
 pages:
   stage: deploy
-  image: alpine:latest
+  # Nearly irrelevant: this job builds nothing, it only hands GitLab the `public/`
+  # directory. All it needs is a shell, and busybox covers `test`, `echo` and `du`.
+  # Two things do matter — omitting `image:` makes gitlab.com's shared runners pull a
+  # heavy default to run one `echo`, and `:latest` is a CI base that changes under you.
+  image: alpine:3.20
   script:
-    - test -f public/index.html || (echo "no public/index.html to publish" && exit 1)
-    - echo "publishing $(du -h public/index.html | cut -f1)"
+    # Fail loudly rather than deploying an empty site: without this the job goes green
+    # and publishes nothing, which looks like Pages being broken.
+    - test -f public/index.html || (echo "no public/index.html to publish — build one locally, see the header of this file" && exit 1)
+    - echo "publishing $(du -h public/index.html | cut -f1) to $CI_PAGES_URL"
   artifacts:
     paths: [public]
+  environment:
+    name: pages
+    url: $CI_PAGES_URL
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
