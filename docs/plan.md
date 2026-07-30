@@ -82,8 +82,67 @@ Parity with igc2kmz, plus the insights it lacks. In order:
     coloured by the same scales as the KMZ; below it the flight summary, thermal and
     glide tables, altitude/climb charts with a shared time cursor.
 
-Deferred: XContest's scoring *multipliers* (the flat/FAI classification itself is done —
-`Route.shape`), photo placement, task/turnpoint handling, multi-flight comparison.
+Deferred: photo placement, task/turnpoint handling, multi-flight comparison. XContest's
+scoring multipliers are **done** — see *Matching XContest* below.
+
+### Wanted: WebGL for the 3D view
+
+The one change that actually fixes the wedge artefacts, and it makes everything else faster.
+
+**Why it is the answer.** The artefacts are cells whose projected quad folds inside out, and
+they exist because canvas 2D has no depth buffer — painter's order is the only tool
+available, and no per-cell treatment is correct (the four that were tried, and how each
+failed, are under *Wedges on a zoomed-in view*). A depth buffer removes the problem rather
+than mitigating it: there stops being such a thing as a folded cell, only triangles that
+resolve per pixel.
+
+**Why it is allowed.** WebGL needs no external script — shaders are strings in the document
+— so it works under the content-security policy that rules out MapLibre and deck.gl. That
+policy is the single constraint behind every decision in `view3d.py`, and it does not apply
+here. Confirmed in this environment: `webgl2`, `depthBits=24`, `MAX_TEXTURE_SIZE=8192`.
+
+**What it buys, in numbers we already have.** One draw call for the whole heightfield instead
+of ~5 200 `drawImage` calls: the settled frame goes from 113 ms to roughly 1 ms. That
+retires the coarse-while-dragging mesh (`FINE_BUDGET`/`COARSE_BUDGET`, `moving()`), the
+per-cell overdraw arithmetic, `sampleCellColours`, `convex`/`fillHull`/`texturedTriangle`,
+and the depth sort — and leaves room to raise the DEM well past 26 000 nodes.
+
+**Plan.**
+
+1. **New module `view3d_gl.py`**, exporting the same `data()`, `panel()` and `SCRIPT`
+   surface as `view3d.py`. The payload does not change: same DEM grid, same track, same
+   embedded basemaps and tile templates.
+2. **Geometry.** One vertex buffer of `rows × cols` positions in the existing local metric
+   frame (x east, y north, z metres) plus a UV per vertex from the basemap's box, and one
+   index buffer of triangle strips. Both built once; only the camera changes per frame.
+3. **Camera.** Keep the current model exactly — yaw, pitch, zoom, panX/panY, `view.vertical`
+   — and express it as a matrix rather than the hand-rolled `world()`/`project()`. It has to
+   stay bit-compatible enough that `groundUnder()`/`holdGround()` still invert it, because
+   every gesture anchors through those.
+4. **Texture.** Upload the already-shaded basemap canvas (`shadedTexture`) as a GL texture.
+   The relief baking stays in 2D: it is a one-off cost and the reasoning behind it — the
+   basemap raster and the DEM are both axis-aligned in lon/lat — is unaffected.
+   Alternatively move the hillshade into the fragment shader later, which would also make
+   solar shading (below) a one-line change.
+5. **Track, climbs, cursor: a transparent 2D canvas layered over the GL one.** The track is
+   a few thousand points, the markers are text, and the hover cursor already shares indices
+   with every chart. Redrawing that overlay in 2D keeps `initFlight`'s linking code and the
+   charts untouched, which is most of the risk avoided for very little cost. It needs the
+   same projection, hence step 3.
+6. **Fallback.** If `getContext('webgl2') || getContext('webgl')` returns null, mount the
+   existing canvas renderer. Keep `view3d.py` as-is for that path; do not delete it.
+7. **Verification, on the same flights and the same measurements.** The existing probes
+   already cover this: `__view3d.stats()` (folded cells → must become irrelevant),
+   `redraw()` timing at both mesh budgets, `nearest()`/`screenOf()` for zoom anchoring to
+   0.1 px, `ground()`/`screenOfGround()` for gesture anchoring to 0 px, `basemap()` for the
+   satellite/map cycle with every host blocked, and a screenshot at zoom 7 / pitch 0.30 —
+   the camera in the phone report — which must come out clean. Do not ship it until it beats
+   the canvas renderer on all of them.
+
+**Watch out for.** `preserveDrawingBuffer` is off by default, so a screenshot taken outside
+the draw call comes back blank — the headless screenshot probes will need a redraw on
+demand. And context loss is real on mobile: handle `webglcontextlost` by falling back rather
+than leaving a blank panel.
 
 ### Wanted: the sun during the flight
 
@@ -105,7 +164,8 @@ Notes for whoever builds it: the timezone is already resolved (`igc.py`), so loc
 time is available; the shading normalisation in `view3d.py` (`litMid`/`litSpread`) is
 where a solar light vector would replace the fixed one; and the hillshade currently lights
 from the north-west, which is *never* where the sun is in the northern hemisphere — worth
-fixing at the same time, or at least labelling as artificial light.
+fixing at the same time, or at least labelling as artificial light. If the WebGL view lands
+first, do this in the fragment shader instead and the time of day becomes a slider.
 
 ## Weather
 

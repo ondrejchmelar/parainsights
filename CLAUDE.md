@@ -330,6 +330,16 @@ Reports are self-contained: an inlined woff2, inline SVG, embedded DEM and basem
 no external requests at view time. That is a hard constraint, not a preference — a
 published artifact runs under a policy that blocks every external host.
 
+## Wanted next
+
+Both written up with a plan in `docs/plan.md`:
+
+- **WebGL for the 3D view** — the fix for the fold artefacts rather than a mitigation, and
+  it retires most of the per-cell drawing code. WebGL needs no external script, so the CSP
+  that rules out MapLibre does not rule this out; `depthBits=24` is available.
+- **The sun during the flight** — which slopes were lit and when they switched off. Cheap to
+  compute and it answers questions a pilot actually has.
+
 ## Known gaps
 
 - FAI/flat triangle scoring with multipliers is not implemented; `xc.py` does free
