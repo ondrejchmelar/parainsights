@@ -34,6 +34,26 @@ class Turnpoint:
 # category: a closed course that fails the test is a flat triangle, which is what XContest
 # scores it as even when its three turnpoints are nearly in a line.
 FAI_MIN_SIDE = 0.28
+MAX_CLOSING = 0.20     # the gap back to the start, as a fraction of the perimeter
+# XContest's category multipliers. They are why a *shorter* triangle can score higher, and
+# why matching XContest means maximising the product rather than the distance.
+MULTIPLIER = {"open": 1.0, "flat": 1.2, "fai": 1.4}
+TRIANGLE_SAMPLES = 260
+
+
+def classify(sides) -> str:
+    """`fai` or `flat` for a triangle's three sides; `open` if they are not a triangle.
+
+    FAI requires every side to be at least 28% of the perimeter. There is deliberately no
+    degeneracy test: a triangle flattened onto a line has a + b = c, so its shortest side
+    can still be a quarter of the perimeter, and XContest scores a closed there-and-back as
+    a flat triangle anyway.
+    """
+    sides = list(sides)
+    perimeter = sum(sides)
+    if len(sides) != 3 or perimeter <= 0:
+        return "open"
+    return "fai" if min(sides) / perimeter >= FAI_MIN_SIDE else "flat"
 
 
 @dataclass
@@ -70,18 +90,14 @@ class Route:
     def shape(self) -> str:
         """`fai`, `flat` or `open` — XContest's three categories and nothing else.
 
-        A closed course through three turnpoints is a triangle: FAI if every side is at
-        least 28% of the perimeter, flat otherwise. Judging degeneracy by the shortest
-        side does not work — a triangle flattened onto a line has sides a + b = c, so its
-        shortest side can still be a quarter of the perimeter — and it is not needed:
-        XContest scores a closed there-and-back as a flat triangle too.
+        Only a route that came out of `triangle()` can claim a triangle category. The
+        open-distance optimum frequently *does* close, but its distance is the four-leg
+        path from start to finish, not a perimeter, so crediting it a triangle multiplier
+        compares two different quantities — and it beat the real triangle every time.
         """
-        if not self.closed:
-            return "open"
-        sides = self.sides
-        if len(sides) != 3 or sum(sides) <= 0:
-            return "open"
-        return "fai" if min(sides) / sum(sides) >= FAI_MIN_SIDE else "flat"
+        if self.kind in ("fai_triangle", "flat_triangle"):
+            return classify(self.sides)
+        return "open"
 
 
 def _sample(lat: np.ndarray, lon: np.ndarray, limit: int = MAX_SAMPLES) -> np.ndarray:
@@ -155,4 +171,122 @@ def optimise(lat: np.ndarray, lon: np.ndarray, *, turnpoints: int = 3,
         # XContest treats a flight as a triangle when the gap back to the start is
         # under 20% of the total; below that this is an open-distance flight.
         closed=bool(total > 0 and closing / total < 0.2),
+    )
+
+
+def score(route: Route) -> float:
+    """Kilometres times XContest's category multiplier — what it actually ranks by."""
+    return route.km * MULTIPLIER.get(route.shape, 1.0)
+
+
+def _closing_matrix(matrix: np.ndarray) -> np.ndarray:
+    """`closing[i, k]` = the shortest gap between any sample at or before *i* and any at or
+    after *k*.
+
+    A triangle does not have to start where the flight did: the loop may be flown in the
+    middle of a longer flight, and the closing distance is measured between the point where
+    the pilot entered the loop and the point where they left it. Computed once by dynamic
+    programming rather than searched per triple.
+    """
+    n = len(matrix)
+    closing = matrix.copy()
+    for i in range(1, n):                       # allow the entry to be earlier
+        np.minimum(closing[i], closing[i - 1], out=closing[i])
+    for k in range(n - 2, -1, -1):              # allow the exit to be later
+        np.minimum(closing[:, k], closing[:, k + 1], out=closing[:, k])
+    return closing
+
+
+def triangle(lat: np.ndarray, lon: np.ndarray, *, times: list[str] | None = None,
+             samples: int = TRIANGLE_SAMPLES) -> Route | None:
+    """The best-scoring closed triangle, by XContest's rules.
+
+    Maximises perimeter × category multiplier, not perimeter: an FAI triangle is worth 1.4
+    against a flat one's 1.2, so a *shorter* triangle regularly scores higher and is the one
+    XContest reports. Searching for distance alone gave 53.5 km flat on a flight XContest
+    scores as 48.63 km FAI.
+    """
+    sample = _sample(lat, lon, samples)
+    slat, slon = lat[sample], lon[sample]
+    n = len(sample)
+    if n < 3:
+        return None
+    matrix = geo.distance(slat[:, None], slon[:, None], slat[None, :], slon[None, :])
+    closing = _closing_matrix(matrix)
+
+    best_score, best = 0.0, None
+    for i in range(n - 2):
+        for j in range(i + 1, n - 1):
+            side_a = matrix[i, j]
+            side_b = matrix[j, j + 1:]
+            side_c = matrix[j + 1:, i]
+            perimeter = side_a + side_b + side_c
+            open_enough = closing[i, j + 1:] <= MAX_CLOSING * perimeter
+            shortest = np.minimum(np.minimum(side_a, side_b), side_c)
+            is_fai = shortest >= FAI_MIN_SIDE * perimeter
+            score = perimeter * np.where(is_fai, MULTIPLIER["fai"], MULTIPLIER["flat"])
+            score = np.where(open_enough, score, 0.0)
+            k = int(np.argmax(score))
+            if score[k] > best_score:
+                best_score = float(score[k])
+                best = (i, j, j + 1 + k, float(perimeter[k]), bool(is_fai[k]))
+    if best is None:
+        return None
+
+    i, j, k, perimeter, fai = best
+    # Refine on the full-resolution track. The coarse search puts each corner within half a
+    # sample spacing of the true one, which costs a consistent ~0.6% against XContest;
+    # sliding each corner over the real fixes in that window recovers most of it.
+    spacing = max(len(lat) // max(n, 1), 1)
+    picks = [int(sample[i]), int(sample[j]), int(sample[k])]
+    for _ in range(3):
+        moved = False
+        for slot in range(3):
+            low = max(picks[slot] - spacing, 0 if slot == 0 else picks[slot - 1] + 1)
+            high = min(picks[slot] + spacing,
+                       len(lat) - 1 if slot == 2 else picks[slot + 1] - 1)
+            if high <= low:
+                continue
+            window = np.arange(low, high + 1)
+            others = [picks[(slot + 1) % 3], picks[(slot + 2) % 3]]
+            side_1 = geo.distance(lat[window], lon[window], lat[others[0]], lon[others[0]])
+            side_2 = geo.distance(lat[window], lon[window], lat[others[1]], lon[others[1]])
+            side_3 = geo.distance(lat[others[0]], lon[others[0]],
+                                  lat[others[1]], lon[others[1]])
+            candidate = side_1 + side_2 + side_3
+            shortest = np.minimum(np.minimum(side_1, side_2), side_3)
+            # Keep the category the coarse search chose: sliding a corner until an FAI
+            # triangle becomes a longer flat one would score lower, not higher.
+            allowed = (shortest >= FAI_MIN_SIDE * candidate) if fai else np.ones_like(
+                candidate, dtype=bool)
+            candidate = np.where(allowed, candidate, 0.0)
+            spot = int(np.argmax(candidate))
+            if candidate[spot] > perimeter + 1.0:
+                perimeter = float(candidate[spot])
+                picks[slot] = int(window[spot])
+                moved = True
+        if not moved:
+            break
+
+    corners = [
+        Turnpoint(
+            index=c,
+            lat=float(lat[c]),
+            lon=float(lon[c]),
+            time=times[c] if times else None,
+        )
+        for c in picks
+    ]
+    sides = [
+        float(geo.distance(a.lat, a.lon, b.lat, b.lon))
+        for a, b in zip(corners, corners[1:] + corners[:1])
+    ]
+    return Route(
+        kind="fai_triangle" if fai else "flat_triangle",
+        distance=perimeter,
+        # Start and finish repeat the first corner: a triangle is a closed figure, and
+        # `points` is what the plan view draws.
+        points=[corners[0]] + corners + [corners[0]],
+        legs=sides,
+        closed=True,
     )

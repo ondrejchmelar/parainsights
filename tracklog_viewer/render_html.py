@@ -22,6 +22,14 @@ from .analysis import TURN_RESOLUTION_LIMIT, Analysis, Phase
 
 FONT_PATH = Path(__file__).parent / "assets" / "display.woff2.b64"
 
+# XContest's own names for what it scored. The distance beside them is the scored one — a
+# triangle's perimeter, not the open path through its turnpoints.
+SHAPE_LABEL = {
+    "fai": "FAI triangle",
+    "flat": "flat triangle",
+    "open": "free distance, 3 turnpoints",
+}
+
 
 def _duration(seconds: int) -> str:
     hours, rest = divmod(int(seconds), 3600)
@@ -1099,9 +1107,10 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
     tiles = [
         _stat("airtime", _duration(summary.duration), "",
               f"{summary.takeoff_time} – {summary.landing_time}"),
-        _stat("xc distance", f"{route.km:.1f}" if route else "—", " km",
-              f"free, {len(route.points) - 2} turnpoints · {summary.track_distance / 1000:.0f} km "
-              f"flown, {summary.straight_distance / 1000:.0f} km straight" if route else ""),
+        _stat("xc distance", f"{route.km:.2f}" if route else "—", " km",
+              f"{SHAPE_LABEL.get(route.shape, 'open distance')} · "
+              f"{summary.track_distance / 1000:.0f} km flown, "
+              f"{summary.straight_distance / 1000:.0f} km straight" if route else ""),
         _stat("max altitude", f"{summary.max_altitude:,.0f}".replace(",", " "), " m",
               f"at {peak_time}"
               + (f" · {summary.max_altitude + offset:,.0f} m GPS".replace(",", " ") if offset else "")),

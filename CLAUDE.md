@@ -119,12 +119,22 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
 - **The DEM budget is 26 000 nodes** (17 000 per flight in a shared document). 2 600 was
   59×43 over an alpine box — every facet of the heightfield visible as a quadrilateral.
   A finer grid costs bytes, not frames, because the drape mesh is budgeted separately.
-- **Triangles are flat or FAI, and nothing else.** `Route.shape` closes under XContest's
-  20% rule, then applies FAI's 28% shortest-side test against the *triangle's* perimeter —
-  `Route.sides`, the figure tp1-tp2-tp3, not `Route.legs`, which runs start → tp1 → tp2 →
-  tp3 → finish. Do not add a degeneracy test on side ratios: a triangle flattened onto a
-  line has a + b = c, so its shortest side can still be a quarter of the perimeter, and
-  XContest scores a closed there-and-back as a flat triangle anyway.
+- **XContest ranks by score, not distance, and that changes which route wins.** The
+  multipliers are open 1.0, flat triangle 1.2, FAI triangle 1.4, so a *shorter* triangle
+  routinely beats a longer one — and the open optimum. `xc.triangle()` maximises
+  perimeter × multiplier over a 260-point sample with the closing rule applied, then slides
+  each corner over the full-resolution fixes; `cli` picks it over `xc.optimise()` when it
+  scores higher. On the three showcase flights this reproduces XContest to **within 10 m**
+  (48.64/48.63, 201.40/201.40, 400.61/400.61). Maximising distance alone gave 53.5 km flat
+  where XContest says 48.63 km FAI: wrong number *and* wrong category.
+- **Only a route from `triangle()` may claim a category.** `optimise()`'s route often closes
+  under the 20% rule, but its distance is the four-leg path start → tp1 → tp2 → tp3 →
+  finish, not a perimeter. Crediting that a triangle multiplier compares two different
+  quantities, and it beat the real triangle on every closed flight.
+- **Triangles are flat or FAI, and nothing else** (`xc.classify`): FAI when every side is at
+  least 28% of the triangle's perimeter. Do not add a degeneracy test on side ratios — a
+  triangle flattened onto a line has a + b = c, so its shortest side can still be a quarter
+  of the perimeter, and XContest scores a closed there-and-back as a flat triangle anyway.
 - **Turn statistics are refused above 5 s sampling** (`TURN_RESOLUTION_LIMIT`). A circle
   takes ~20 s, so a 15 s KML aliases and produces a confident wrong number. **Tow
   detection is refused above 15 s** (`TOW_RESOLUTION_LIMIT`) for the same reason: a tow
@@ -178,6 +188,15 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   reaches zoom 12 (~22 m/px) on a cross-country box; the runtime path allows 120 because
   it pays in requests rather than bytes. A single-flight report embeds both styles at
   zoom 12 (~550 KB); a multi-flight document pays that per flight, so it takes zoom 11.
+- **Painter's order has no depth buffer, so cells fold.** A cell whose projected quad turns
+  inside out (a slope steeper than the pitch angle) cannot be drawn as a quad: textured
+  affinely it smears into a wedge, filled as one path it renders as a bowtie — also a wedge
+  — and skipped it leaves the sky showing, because nothing was painted behind it. It gets a
+  flat hull fill, plus two *clipped, individually-affine triangles* when the camera is still
+  (three points determine an affine map exactly, so a triangle is right even when the quad
+  is not). 955 of 6 324 cells fold at the default camera and 1 834 zoomed in at low pitch,
+  which is why this matters. Cells are also depth-sorted by `wy·cos p − wz·sin p` rather
+  than walked by horizontal depth, which ignores height entirely.
 - **The hillshade is baked into the texture, never drawn per cell.** Cells must overdraw
   their neighbours — a projected quad is not a parallelogram, so the affine texture fit
   leaves hairlines — and *any* semi-transparent tint drawn over that overdraw lands twice

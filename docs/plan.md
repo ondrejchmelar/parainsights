@@ -348,7 +348,15 @@ Modelled on Google Earth, because that is what pilots already know:
 | right-drag, middle-drag, or ctrl/shift/alt + left-drag | rotate and tilt |
 | wheel | zoom towards the pointer |
 | one finger | pan |
-| two fingers | pinch to zoom |
+| two fingers | pinch to zoom, twist to rotate, drag up/down to tilt |
+
+The two-finger gestures are the only rotation controls a phone has, and for a while there
+were none — twist-to-rotate had been removed because an imprecise pinch spun the camera,
+which left the buttons as the only way to turn the view. Both are back behind a deadzone
+that must be *broken* before either engages, and only one engages per gesture: 8° of twist
+or 26 px of vertical travel. Verified by driving synthetic touch events — a straight pinch
+gives `dyaw=0.00 dpitch=0.00 zoom=2.60`, a 40° twist gives `dyaw=0.57` with no zoom, and a
+80 px two-finger drag gives `dpitch=0.22` with no yaw.
 
 Panning needed a screen-space offset (`view.panX/panY`) applied *after* the fit: the fit
 recentres every frame, so without it the camera was welded to the middle of the flight.
@@ -476,6 +484,63 @@ The shading moved anyway, because it belongs in the texture: `shadedTexture()` c
 the illumination into a copy of the basemap once, at grid resolution, and the browser
 interpolates it up. Smooth instead of faceted, one draw instead of one per cell per frame,
 and it made room for a finer mesh.
+
+### Matching XContest, and why distance alone cannot
+
+Our numbers were consistently high: 53.5 km against 48.63, 204.8 against 201.40, 410.9
+against 400.61. Two separate mistakes, both about *what quantity* is being reported.
+
+The first: for a closed course XContest scores the **triangle's perimeter**, not the open
+path through its turnpoints. `optimise()` returns start → tp1 → tp2 → tp3 → finish, which
+includes the legs to and from the loop and is therefore longer.
+
+The second, and the interesting one: **XContest maximises score, not distance.** The
+multipliers are 1.0 open, 1.2 flat triangle, 1.4 FAI, so a shorter FAI triangle beats a
+longer flat one — 48.6 × 1.4 = 68.1 against 51.0 × 1.2 = 61.2. Searching for the longest
+triangle found the flat one and got both the number and the category wrong.
+
+`xc.triangle()` therefore maximises perimeter × multiplier: an O(n²) sweep with the third
+corner vectorised, over a 260-point distance-sample, with the closing rule enforced from a
+precomputed `closing[i, k]` (the shortest gap between any sample at or before *i* and any at
+or after *k* — a loop need not start where the flight did). That lands ~0.6% low, which is
+the sample spacing, so each corner then slides over the *full-resolution* fixes in a window
+of half a spacing, keeping the category fixed. Result, against XContest:
+
+| flight | ours | XContest |
+|---|---|---|
+| Col Rodella 2018-09-28 | 48.64 km FAI | 48.63 km FAI |
+| Krupka 2022-05-07 | 201.40 km FAI | 201.40 km FAI |
+| Hunza 2026-06-16 | 400.61 km FAI | 400.61 km FAI |
+
+Two things to keep straight. Only a route from `triangle()` may claim a category: the open
+optimum frequently closes under the 20% rule, and crediting it a triangle multiplier let it
+beat the real triangle every time, because its distance is not a perimeter. And the
+open-distance path is still what an *open* flight scores — the reference flight is 64.08 km
+against XContest's 64.09, unchanged.
+
+### Wedges on a zoomed-in view
+
+Folded cells, and the reason there is no clean fix: this is painter's order with no depth
+buffer. A cell whose projected quad turns inside out — any slope steeper than the pitch
+angle — has no correct quad rendering. Textured affinely it smears into a wedge; filled as
+one path canvas draws it as a bowtie, which is also a wedge; filled as two triangles the
+pair overlaps and leaves slivers showing older paint, which is a third wedge; skipped, the
+sky shows through because painter's order means nothing was drawn behind it.
+
+Measured before guessing further: **955 of 6 324 cells fold at the default camera, 1 834 at
+zoom 7 and pitch 0.30, and only 37 at pitch 0.9.** Folding is a low-pitch phenomenon and
+scales with zoom, which is why it only ever showed up zoomed in.
+
+What is there now: a flat fill over the cell's convex hull, plus — when the camera is still
+— two individually-affine textured triangles, each clipped to its own outline. Three points
+determine an affine map exactly, so a triangle is correct even when the quad is not. The
+minimum pitch is also raised from 0.06 to 0.18 rad, because three degrees of tilt is not a
+view of anything and folds everywhere. Cells are additionally sorted by true camera depth
+(`wy·cos p − wz·sin p`) instead of horizontal depth, which ignored height entirely; that is
+correct but changed nothing visible, and it is worth knowing it was not the cause.
+
+Some artefacts remain at extreme zoom and shallow pitch. A depth buffer is the real answer
+and canvas 2D does not have one.
 
 ### Terrain resolution, and paying for it in the right currency
 

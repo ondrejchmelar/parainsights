@@ -170,11 +170,15 @@ def _one(source: str, args, index: int = 0) -> dict:
 
     route = None
     if not args.no_xc:
-        route = xc.optimise(
-            flight.lat,
-            flight.lon,
-            times=[flight.local_time(i).strftime("%H:%M:%S") for i in range(len(flight))],
-        )
+        clock = [flight.local_time(i).strftime("%H:%M:%S") for i in range(len(flight))]
+        free = xc.optimise(flight.lat, flight.lon, times=clock)
+        # XContest scores the *category*, not the raw distance: a triangle is worth 1.2 or
+        # 1.4 times its perimeter, so a shorter closed course routinely beats a longer open
+        # one. Reporting the open optimum gave 53.5 km on a flight XContest scores 48.63.
+        closed = xc.triangle(flight.lat, flight.lon, times=clock)
+        route = free
+        if closed is not None and xc.score(closed) > free.km:
+            route = closed
 
     ground = None
     tiles = None
@@ -231,10 +235,7 @@ def _one(source: str, args, index: int = 0) -> dict:
         f"{summary.straight_distance / 1000:.1f} km straight"
     )
     if route:
-        print(
-            f"  XC free distance {route.km:.1f} km via {len(route.points) - 2} turnpoints "
-            f"({'closed' if route.closed else 'open'})"
-        )
+        print(f"  XC {route.km:.2f} km — {shape_of(route, analysis)}")
     print(
         f"  altitude {summary.min_altitude:.0f}–{summary.max_altitude:.0f} m "
         f"({summary.altitude_source}), gained {summary.total_gain:.0f} m"

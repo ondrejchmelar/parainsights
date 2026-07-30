@@ -824,21 +824,147 @@ function initView3d(root, cursorTrack) {
     return [sx, sy, Math.max(ex - sx, 0.5), Math.max(ey - sy, 0.5)];
   }
 
+  // One triangle of a cell, textured exactly.
+  //
+  // Three points determine an affine map, so a triangle's texture mapping is exact even
+  // when the cell as a whole has folded — which is the whole reason for this path. The
+  // clip is set under the identity transform (clips live in device space) and the texture
+  // transform is applied after it.
+  function texturedTriangle(a, b, c, m11, m12, m21, m22, rect) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(a[0], a[1]);
+    ctx.lineTo(b[0], b[1]);
+    ctx.lineTo(c[0], c[1]);
+    ctx.closePath();
+    ctx.clip();
+    ctx.setTransform(m11, m12, m21, m22, a[0], a[1]);
+    // A whisker of overdraw so the shared edge of the two triangles does not show.
+    ctx.drawImage(basemap, rect[0], rect[1], rect[2], rect[3], -0.01, -0.01, 1.02, 1.02);
+    ctx.restore();
+  }
+
+  // The convex hull of the cell's four projected corners, as a filled polygon.
+  //
+  // A folded cell has to be covered by *one convex* shape. Its own outline is
+  // self-intersecting, and canvas fills that as a bowtie — the wedge artefact. Splitting it
+  // into two triangles is no better: for a folded quad the two triangles overlap and their
+  // union leaves slivers uncovered, which then show whatever was painted earlier, which is
+  // another wedge. The hull covers the whole cell, always convex, in one fill.
+  function fillHull(points) {
+    var sorted = points.slice().sort(function (a, b) {
+      return a[0] - b[0] || a[1] - b[1];
+    });
+    var chain = [];
+    for (var pass = 0; pass < 2; pass++) {
+      var start = chain.length;
+      for (var i = 0; i < 4; i++) {
+        var q = pass === 0 ? sorted[i] : sorted[3 - i];
+        while (chain.length - start >= 2 &&
+               cross(chain[chain.length - 2], chain[chain.length - 1], q) <= 0) {
+          chain.pop();
+        }
+        chain.push(q);
+      }
+      chain.pop();
+    }
+    if (chain.length < 3) return;
+    ctx.beginPath();
+    ctx.moveTo(chain[0][0], chain[0][1]);
+    for (var k = 1; k < chain.length; k++) ctx.lineTo(chain[k][0], chain[k][1]);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  function cross(a, b, c) {
+    return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+  }
+
+  // Convex, wound the way a front-facing cell is, and big enough to be worth drawing.
+  function convex(a, b, c, d, facing) {
+    var t1 = cross(a, b, c) * facing;
+    if (t1 <= 0) return false;
+    var t2 = cross(b, c, d) * facing;
+    if (t2 <= 0) return false;
+    var t3 = cross(c, d, a) * facing;
+    if (t3 <= 0) return false;
+    var t4 = cross(d, a, b) * facing;
+    return t4 > 0 && (t1 + t2 + t3 + t4) > 0.5;
+  }
+
+  // Reused across frames: allocating 5 000 cells' worth of arrays per frame is its own
+  // performance problem.
+  var cellDepth = null, cellR = null, cellC = null, cellOrder = null;
+  var stats = { cells: 0, folded: 0 };
+
   function drawTerrain(withMap) {
-    // Paint far to near. Depth is the rotated northward coordinate
-    // wy = x·sin(yaw) + y·cos(yaw); x grows with column and y *falls* with row, so
-    // the sign of each contribution gives the iteration direction directly.
-    var cy = Math.cos(view.yaw), sy = Math.sin(view.yaw);
-    var colsFirst = sy > 0 ? -1 : 1;   // decreasing wy along columns
-    var rowsFirst = cy > 0 ? 1 : -1;   // dwy/drow = -cos(yaw)
+    // Paint far to near, by *camera* depth — which is not the same as the horizontal
+    // depth this used to walk. `world()` projects to screen y = −(wy·sin p + wz·cos p),
+    // so the axis into the screen is wy·cos p − wz·sin p: height matters, and at a
+    // top-down pitch it is all that matters. Ordering by wy alone is exact only in the
+    // horizontal-view limit, and everywhere else it lets a cell on the far side of a
+    // ridge paint over the near slope — fragments of the wrong slope appearing as wedges
+    // across a zoomed-in view. Sorting is a couple of milliseconds and it is correct.
+    var cyaw = Math.cos(view.yaw), syaw = Math.sin(view.yaw);
+    var cp = Math.cos(view.pitch), sp = Math.sin(view.pitch);
     var steps = texStep();
     var cStep = withMap ? steps.c : 1;
     var rStep = withMap ? steps.r : 1;
-    var rStart = rowsFirst > 0 ? 0 : rows - 1 - rStep;
-    var cStart = colsFirst > 0 ? 0 : cols - 1 - cStep;
 
-    for (var r = rStart; r >= 0 && r <= rows - 1 - rStep; r += rowsFirst * rStep) {
-      for (var c = cStart; c >= 0 && c <= cols - 1 - cStep; c += colsFirst * cStep) {
+    var down = Math.floor((rows - 1) / rStep);
+    var across = Math.floor((cols - 1) / cStep);
+    var capacity = Math.max(down * across, 1);
+    if (!cellDepth || cellDepth.length < capacity) {
+      cellDepth = new Float64Array(capacity);
+      cellR = new Int32Array(capacity);
+      cellC = new Int32Array(capacity);
+      cellOrder = new Int32Array(capacity);
+    }
+    var count = 0;
+    for (var rr = 0; rr <= rows - 1 - rStep; rr += rStep) {
+      for (var cc = 0; cc <= cols - 1 - cStep; cc += cStep) {
+        var a00 = rr * cols + cc;
+        var a01 = a00 + cStep;
+        var a10 = a00 + cols * rStep;
+        var zc = 0.25 * (dem.z[a00] + dem.z[a01] + dem.z[a10] + dem.z[a10 + cStep]);
+        var xm = 0.5 * (nodeX[a00] + nodeX[a01]);
+        var ym = 0.5 * (nodeY[a00] + nodeY[a10]);
+        cellDepth[count] = (xm * syaw + ym * cyaw) * cp -
+                           (zc - dem.min) * view.vertical * sp;
+        cellR[count] = rr;
+        cellC[count] = cc;
+        cellOrder[count] = count;
+        count++;
+      }
+    }
+    // Sorting a typed array's *indices* needs a plain array; subarray+sort would reorder
+    // the depths and lose the mapping.
+    var order = Array.prototype.slice.call(cellOrder.subarray(0, count));
+    order.sort(function (a, b) { return cellDepth[b] - cellDepth[a]; });
+    stats.cells = count;
+    stats.folded = 0;
+
+    var refA = project(nodeX[0], nodeY[0], dem.min);
+
+    // Which way round a front-facing cell comes out, taken from a flat cell at this
+    // camera. Painting far-to-near needs no depth buffer, but it does not stop a cell on
+    // the far side of a ridge from being drawn: at true scale that cell projects to a
+    // sliver or turns inside out, and its affine texture map smears the imagery into a
+    // wedge. Those were the pale triangles all over a zoomed-in view. Culling on the
+    // determinant's sign and size drops exactly those cells and nothing else.
+    var refB = project(nodeX[Math.min(cStep, cols - 1)],
+                       nodeY[Math.min(cStep, cols - 1)], dem.min);
+    var refIndex = Math.min(rStep, rows - 1) * cols;
+    var refC = project(nodeX[refIndex], nodeY[refIndex], dem.min);
+    var refDet = (refB[0] - refA[0]) * (refC[1] - refA[1]) -
+                 (refB[1] - refA[1]) * (refC[0] - refA[0]);
+    var facing = refDet >= 0 ? 1 : -1;
+
+    for (var k = 0; k < count; k++) {
+      {
+        var slot = order[k];
+        var r = cellR[slot], c = cellC[slot];
         var i00 = r * cols + c;
         var i01 = i00 + cStep;
         var i10 = i00 + cols * rStep;
@@ -848,7 +974,46 @@ function initView3d(root, cursorTrack) {
         var p11 = project(nodeX[i11], nodeY[i11], dem.z[i11]);
         var p10 = project(nodeX[i10], nodeY[i10], dem.z[i10]);
 
+        // A cell whose projected quad has folded over gets a flat fill and no texture.
+        //
+        // Folds are unavoidable here: this is painter's order with no depth buffer, and on
+        // a cliff seen from a shallow angle the far edge of a cell projects past its near
+        // edge. Three ways to handle that, and only one is any good. Texturing it anyway
+        // smears the imagery into a wedge — that was the original artefact. Skipping it
+        // leaves a hole showing the sky, because painter's order means nothing was drawn
+        // behind it. Filling it with the cell's own average colour reads as a plain facet,
+        // which is what it is.
+        var folded = !convex(p00, p01, p11, p10, facing);
+        if (folded) stats.folded++;
+
         if (withMap) {
+          if (folded) {
+            // Flat fill over the cell's convex hull, in its own average colour. It cannot
+            // be textured — the affine map of a folded quad smears the imagery — and it
+            // cannot be skipped, because painter's order means nothing was drawn behind it
+            // and the sky would show through. See fillHull for why the hull specifically.
+            if (cellColour) {
+              var fi = (Math.min(Math.floor(r / rStep), cellRows - 1) * cellCols +
+                        Math.min(Math.floor(c / cStep), cellCols - 1)) * 4;
+              ctx.fillStyle = 'rgb(' + cellColour[fi] + ',' + cellColour[fi + 1] + ',' +
+                cellColour[fi + 2] + ')';
+              ctx.strokeStyle = ctx.fillStyle;
+              ctx.lineWidth = 1;
+              fillHull([p00, p01, p11, p10]);
+            }
+            // While the camera is moving the flat hull is all it gets: two clipped draws
+            // per folded cell is affordable for a still frame and not for a drag.
+            if (!interacting) {
+              var frect = sourceRect(r, c, rStep, cStep);
+              texturedTriangle(p00, p01, p11,
+                               p01[0] - p00[0], p01[1] - p00[1],
+                               p11[0] - p01[0], p11[1] - p01[1], frect);
+              texturedTriangle(p00, p11, p10,
+                               p11[0] - p10[0], p11[1] - p10[1],
+                               p10[0] - p00[0], p10[1] - p00[1], frect);
+            }
+            continue;
+          }
           if (cellColour) {
             // Opaque base in the cell's average colour, on the true four corners.
             var ci = (Math.min(Math.floor(r / rStep), cellRows - 1) * cellCols +
@@ -1013,8 +1178,18 @@ function initView3d(root, cursorTrack) {
   var pointers = new Map();
   var gesture = null;   // 'pan' | 'orbit'
   var pinch = null;
+  // Accumulated since the second finger went down, and which of rotate/tilt has won.
+  var twistTotal = 0, tiltTotal = 0, twoFingerMode = null;
 
   function points() { return Array.from(pointers.values()); }
+
+  // Signed shortest angle from a to b, so a twist through the ±pi seam does not jump.
+  function angleDelta(a, b) {
+    var d = b - a;
+    while (d > Math.PI) d -= 2 * Math.PI;
+    while (d < -Math.PI) d += 2 * Math.PI;
+    return d;
+  }
 
   function twoFingerState() {
     var p = points();
@@ -1054,6 +1229,9 @@ function initView3d(root, cursorTrack) {
     if (pointers.size === 2) {
       gesture = 'pinch';
       pinch = twoFingerState();
+      twistTotal = 0;
+      tiltTotal = 0;
+      twoFingerMode = null;
     } else if (pointers.size === 1) {
       gesture = orbitModifier(event) ? 'orbit' : 'pan';
     }
@@ -1073,14 +1251,34 @@ function initView3d(root, cursorTrack) {
       var now = twoFingerState();
       if (pinch) {
         // Pan by the centroid's movement first, then scale about where the fingers are
-        // now. Doing it the other way round, or adding a twist-to-rotate on top, makes
-        // the view slide out from under the fingers — which is what "pinch feels off"
-        // was: zoomAt already moves the pan to anchor the point, and the earlier code
-        // then added the centroid delta again, double-counting it.
+        // now. Doing it the other way round makes the view slide out from under the
+        // fingers — zoomAt already moves the pan to anchor the point, and adding the
+        // centroid delta afterwards double-counts it.
         view.panX += (now.cx - pinch.cx) * toCanvas;
         view.panY += (now.cy - pinch.cy) * toCanvas;
         if (pinch.distance > 4 && now.distance > 4) {
           zoomAt(now.distance / pinch.distance, now.cx, now.cy);
+        }
+
+        // Twist to rotate, and drag the pair up or down to tilt: on a phone these are the
+        // only rotation controls there are, and until now there were none — the buttons
+        // were the only way to turn the view, which is not how anyone holds a map.
+        //
+        // Both live behind a deadzone that has to be *broken* before either engages, and
+        // only one can engage per gesture. Without that, twist-to-rotate spun the camera
+        // on every imprecise pinch, which is why it was taken out the first time; a
+        // deadzone keeps it available without it firing by accident.
+        twistTotal += angleDelta(pinch.angle, now.angle);
+        tiltTotal += (now.cy - pinch.cy);
+        if (!twoFingerMode) {
+          if (Math.abs(twistTotal) > 0.14) twoFingerMode = 'rotate';        // ~8 degrees
+          else if (Math.abs(tiltTotal) > 26) twoFingerMode = 'tilt';        // 26 CSS px
+        }
+        if (twoFingerMode === 'rotate') {
+          view.yaw += angleDelta(pinch.angle, now.angle);
+        } else if (twoFingerMode === 'tilt') {
+          view.pitch = Math.max(0.18, Math.min(1.45,
+            view.pitch + (now.cy - pinch.cy) * 0.004));
         }
       }
       pinch = now;
@@ -1092,7 +1290,7 @@ function initView3d(root, cursorTrack) {
     var dy = (event.clientY - previous.y) * toCanvas;
     if (gesture === 'orbit') {
       view.yaw += dx * 0.005;
-      view.pitch = Math.max(0.06, Math.min(1.45, view.pitch - dy * 0.004));
+      view.pitch = Math.max(0.18, Math.min(1.45, view.pitch - dy * 0.004));
     } else {
       view.panX += dx;
       view.panY += dy;
@@ -1102,7 +1300,7 @@ function initView3d(root, cursorTrack) {
 
   function endPointer(event) {
     pointers.delete(event.pointerId);
-    if (pointers.size < 2) pinch = null;
+    if (pointers.size < 2) { pinch = null; twoFingerMode = null; }
     if (!pointers.size) { gesture = null; canvas.classList.remove('is-dragging'); }
   }
   canvas.addEventListener('pointerup', endPointer);
@@ -1128,7 +1326,7 @@ function initView3d(root, cursorTrack) {
       if (act === 'rotate-left') view.yaw -= 0.35;
       else if (act === 'rotate-right') view.yaw += 0.35;
       else if (act === 'tilt-up') view.pitch = Math.min(1.45, view.pitch + 0.15);
-      else if (act === 'tilt-down') view.pitch = Math.max(0.06, view.pitch - 0.15);
+      else if (act === 'tilt-down') view.pitch = Math.max(0.18, view.pitch - 0.15);
       else if (act === 'fullscreen') {
         toggleMaximise();
         return;   // the resize path redraws once the box has its new size
@@ -1254,6 +1452,7 @@ function initView3d(root, cursorTrack) {
                cellCols: Math.round(cols / steps.c), cellRows: Math.round(rows / steps.r) };
     },
     setInteracting: function (on) { interacting = !!on; },
+    stats: function () { return { cells: stats.cells, folded: stats.folded }; },
     // Exposed for tests: the projection as it currently stands. Zoom anchoring is a
     // claim about these numbers, so the numbers have to be readable.
     projection: function () {
@@ -1289,7 +1488,9 @@ function initView3d(root, cursorTrack) {
     // toggle must not hide.
     basemap: function () {
       return { style: style, on: view.map, loading: loading,
-               painted: !!basemap, cached: Object.keys(ready),
+               painted: !!basemap, cells: !!cellColour,
+               isCanvas: !!(basemap && basemap.tagName === 'CANVAS'),
+               cached: Object.keys(ready),
                credit: (root.querySelector('.view3d-credit') || {}).textContent };
     }
   };

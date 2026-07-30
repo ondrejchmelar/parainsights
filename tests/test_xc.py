@@ -127,8 +127,8 @@ class TestShape:
         legs = [
             geo.distance(a.lat, a.lon, b.lat, b.lon) for a, b in zip(points, points[1:])
         ]
-        return Route(kind="free_3tp", distance=sum(legs) or 1.0, points=points,
-                     legs=legs, closed=close)
+        return Route(kind="fai_triangle" if close else "free_3tp",
+                     distance=sum(legs) or 1.0, points=points, legs=legs, closed=close)
 
     def test_equilateral_triangle_is_fai(self):
         # Each side a third of the perimeter, comfortably over the 28% floor.
@@ -156,8 +156,68 @@ class TestShape:
         corners = [(49.0, 14.0), (49.45, 14.0), (49.225, 14.6)]
         assert self._route(corners, close=False).shape == "open"
 
+    def test_the_open_optimum_never_claims_a_triangle(self):
+        """Its distance is the four-leg path from start to finish, not a perimeter. Scoring
+        it as a triangle compares two different quantities, and it won every time."""
+        from tracklog_viewer.xc import Route, Turnpoint
+
+        corners = [(49.0, 14.0), (49.45, 14.0), (49.225, 14.6)]
+        points = [Turnpoint(index=i, lat=lat, lon=lon, time=None)
+                  for i, (lat, lon) in enumerate(corners + corners[:2])]
+        route = Route(kind="free_3tp", distance=100000.0, points=points,
+                      legs=[1.0, 1.0, 1.0, 1.0], closed=True)
+        assert route.shape == "open"
+
     def test_sides_are_the_triangle_not_the_legs(self):
         corners = [(49.0, 14.0), (49.45, 14.0), (49.225, 14.6)]
         route = self._route(corners)
         assert len(route.legs) == 4
+        assert len(route.sides) == 3
+
+
+class TestScoredTriangle:
+    """`triangle()` maximises perimeter × multiplier, which is what XContest ranks by."""
+
+    def test_score_prefers_a_shorter_fai_triangle_over_a_longer_flat_one(self):
+        """The rule that matters, stated as arithmetic. The real case: a flight whose
+        longest triangle is flat at 51.0 km and whose best FAI triangle is 48.6 km.
+        XContest reports the FAI one because 48.6 x 1.4 beats 51.0 x 1.2, so maximising
+        distance alone gets both the number and the category wrong."""
+        from tracklog_viewer.xc import MULTIPLIER
+
+        assert 48.6 * MULTIPLIER["fai"] > 51.0 * MULTIPLIER["flat"]
+        assert MULTIPLIER["open"] < MULTIPLIER["flat"] < MULTIPLIER["fai"]
+
+    def test_finds_an_equilateral_loop_and_calls_it_fai(self):
+        corners = [(49.0, 14.0), (49.45, 14.0), (49.225, 14.62)]
+        lat, lon = [], []
+        for a, b in zip(corners + corners[:1], corners[1:] + corners[:1]):
+            lat += list(np.linspace(a[0], b[0], 90))
+            lon += list(np.linspace(a[1], b[1], 90))
+        route = xc.triangle(np.array(lat), np.array(lon), samples=140)
+        assert route is not None
+        assert route.shape == "fai"
+        expected = sum(
+            geo.distance(a[0], a[1], b[0], b[1])
+            for a, b in zip(corners, corners[1:] + corners[:1])
+        )
+        # The corners are on the track, so the optimum is the triangle itself.
+        assert route.distance == pytest.approx(expected, rel=0.02)
+
+    def test_refuses_a_course_that_does_not_close(self):
+        # A straight line out: no closing, so no triangle at any multiplier.
+        lat = np.linspace(49.0, 50.0, 300)
+        lon = np.full(300, 14.0)
+        route = xc.triangle(lat, lon, samples=120)
+        assert route is None or route.km < 1.0
+
+    def test_points_close_the_figure_for_the_plan_view(self):
+        lat = np.array(list(np.linspace(49.0, 49.4, 80)) + list(np.linspace(49.4, 49.2, 80))
+                       + list(np.linspace(49.2, 49.0, 80)))
+        lon = np.array(list(np.full(80, 14.0)) + list(np.linspace(14.0, 14.5, 80))
+                       + list(np.linspace(14.5, 14.0, 80)))
+        route = xc.triangle(lat, lon, samples=120)
+        assert route is not None
+        assert len(route.points) == 5
+        assert route.points[0].index == route.points[-1].index
         assert len(route.sides) == 3
