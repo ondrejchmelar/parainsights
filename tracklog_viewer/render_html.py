@@ -871,7 +871,10 @@ def _wind_shear_note(analysis: Analysis) -> str:
     ]
     if len(sounded) < 3:
         return "too few circled climbs to see a trend with height."
-    sounded.sort()
+    # Sort on the altitude only. A bare sort() falls through to the second element when
+    # two climbs share a mean altitude, and `Wind` is not orderable — which took down the
+    # whole report on a flight with eighteen climbs, two of which matched to the metre.
+    sounded.sort(key=lambda item: item[0])
     lower = sounded[: len(sounded) // 2]
     upper = sounded[-(len(sounded) // 2):]
     low_speed = sum(w.kmh for _, w in lower) / len(lower)

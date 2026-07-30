@@ -40,6 +40,12 @@ TURN_RESOLUTION_LIMIT = 5.0  # seconds between fixes
 TOW_START_SECONDS = 120
 TOW_MIN_CLIMB = 1.0
 TOW_MAX_TURNS_PER_MINUTE = 1.5
+# A tow lasts two to five minutes, so judging one needs several fixes inside it. Above
+# this the whole launch is three or four points, `progress` reads as straight because
+# every corner has been cut, and any brisk launch climb gets called a tow: an XContest
+# KMZ of an 11-hour flight is sampled at 83 s and reported a winch launch releasing at
+# 4 574 m in the Himalaya.
+TOW_RESOLUTION_LIMIT = 15.0  # seconds between fixes
 
 
 class Phase(Enum):
@@ -426,6 +432,8 @@ def _reclassify_tow(series: Series, segments: list[Segment]) -> None:
     Left as a thermal it flatters the thermal statistics and — because a straight
     climb drifts with the glider rather than the air — poisons the wind estimate.
     """
+    if sample_interval(series) > TOW_RESOLUTION_LIMIT:
+        return  # too coarse to tell a tow from any other launch climb
     for segment in segments:
         if series.t[segment.start] > TOW_START_SECONDS:
             return  # only the launch can be a tow

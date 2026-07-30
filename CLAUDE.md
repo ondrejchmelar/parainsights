@@ -117,7 +117,19 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   to fix a vertical glitch. A local-median despike costs 50 repairs where dropping cost
   122 fixes.
 - **Turn statistics are refused above 5 s sampling** (`TURN_RESOLUTION_LIMIT`). A circle
-  takes ~20 s, so a 15 s KML aliases and produces a confident wrong number.
+  takes ~20 s, so a 15 s KML aliases and produces a confident wrong number. **Tow
+  detection is refused above 15 s** (`TOW_RESOLUTION_LIMIT`) for the same reason: a tow
+  lasts 2–5 minutes, and at coarser spacing the whole launch is three points, `progress`
+  reads as straight because every corner has been cut, and any brisk launch climb gets
+  called a tow — an 83 s KMZ was reported as a winch launch releasing at 4574 m.
+- **A KMZ from a scoring site is reduced to 500 points, and everything measured *along*
+  the track comes out low.** Measured on the same three flights, KMZ against IGC:
+  89.4 → 121.3 km flown and 6 588 → 8 968 m gained; 259 → 365 km and 15.7 → 24.7 km
+  gained; 476 → 623 km and 24.9 → 44.9 km gained, GPS-only against real baro. Turn counts
+  are unavailable in every one. Straight-line and XC distances survive, because those need
+  only the corners. Both are still accepted — a KMZ is what a scoring site gives you — but
+  the uploader marks IGC as preferred and a flight read above 5 s sampling carries a
+  warning next to its numbers.
 - **Wind comes from circle drift** and is only trusted from climbs actually circled in
   one direction for ≥2 turns. A tow drifts with the glider, not the air.
 - **Tow is a fourth phase**, detected at the launch and excluded from thermal statistics

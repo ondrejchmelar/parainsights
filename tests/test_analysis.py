@@ -157,6 +157,26 @@ class TestPhases:
         assert analysis.tow is None
         assert all(s.phase is not Phase.TOW for s in analysis.segments)
 
+    def test_tow_is_refused_when_sampling_cannot_resolve_one(self, tmp_path):
+        """The same straight launch climb, sampled every 40 s instead of every second.
+
+        At that spacing the whole launch is a handful of points, every corner in the track
+        has been cut, and `progress` reads as straight everywhere — so the straightness
+        test that identifies a tow has nothing left to measure. An XContest KMZ of a long
+        flight is sampled at 83 s and was reported as a winch launch releasing at 4574 m.
+        """
+        points = straight(600, speed=8.0, climb=3.0, alt0=400.0)
+        points += straight(600, speed=10.0, climb=-1.0, t0=601, alt0=points[-1][3],
+                           x0=4800.0)
+        coarse = points[::40]
+        analysis = analyse(igc.parse(build(tmp_path / "coarse.igc", coarse)))
+        assert analysis.summary.sample_interval > 15
+        assert analysis.tow is None
+        assert all(s.phase is not Phase.TOW for s in analysis.segments)
+
+        fine = analyse(igc.parse(build(tmp_path / "fine.igc", points)))
+        assert fine.tow is not None, "the same flight at 1 Hz is still a tow"
+
     def test_circling_climb_at_launch_stays_a_thermal(self, tmp_path):
         """Soarable launch: climbing away in circles immediately is not a tow."""
         analysis = analyse(igc.parse(build(tmp_path / "soar.igc", circling(300, alt0=400.0))))
@@ -218,3 +238,27 @@ class TestSeries:
         middle = slice(10, 50)
         assert np.mean(series.climb[middle]) > 0.1  # barometrically, a climb
         assert abs(np.mean(series.te_climb[middle])) < 0.1  # energetically, nothing
+
+
+class TestWindShearNote:
+    def test_two_climbs_at_the_same_altitude_do_not_break_the_note(self, tmp_path):
+        """A bare sort() on (altitude, wind) pairs falls through to comparing Wind objects
+        when two climbs share a mean altitude, which is not orderable. That took down the
+        whole report on a real flight with eighteen climbs."""
+        from tracklog_viewer import render_html
+
+        points = []
+        t = 0
+        # Three identical circled climbs, so their mean altitudes match exactly.
+        for _ in range(3):
+            points += circling(240, t0=t, alt0=1000.0, x0=0.0)
+            t = points[-1][0] + 1
+            points += straight(200, speed=10.0, climb=-1.5, t0=t, alt0=points[-1][3])
+            t = points[-1][0] + 1
+        analysis = analyse(igc.parse(build(tmp_path / "flat.igc", points)))
+        altitudes = [
+            (s.start_altitude + s.finish_altitude) / 2
+            for s in analysis.thermals if s.wind and s.turns and s.turns >= 2
+        ]
+        assert len(altitudes) != len(set(altitudes)), "the fixture must produce a tie"
+        render_html._wind_shear_note(analysis)   # raised TypeError before the key= fix

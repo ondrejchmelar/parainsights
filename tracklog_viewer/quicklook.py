@@ -49,7 +49,12 @@ def panel() -> str:
     <div class="panel ql-drop" id="ql-drop">
       <input type="file" id="ql-file" accept=".igc,.IGC,.kml,.kmz" multiple hidden>
       <button type="button" class="ql-button" id="ql-pick">Choose track files</button>
-      <span class="ql-hint">or drag them here &middot; .igc, .kml, .kmz</span>
+      <span class="ql-hint"><strong>.igc preferred</strong> &middot; or drag them
+        here &middot; .kml and .kmz also read</span>
+      <p class="ql-note-inline">A KMZ downloaded from a scoring site is usually reduced to
+        500 points — every few minutes on a long flight. Distances, height gained and turn
+        counts are all measured along the track, so they come out low, and turns cannot be
+        counted at all. The IGC your instrument recorded is the file to use.</p>
       <p class="ql-status" id="ql-status" role="status" aria-live="polite"></p>
     </div>
   </article>
@@ -63,6 +68,7 @@ def panel() -> str:
         <div class="identity"><div><span class="key">source</span>
           <span class="val ql-source">—</span></div></div>
       </header>
+      <p class="ql-coarse" hidden></p>
       <div class="stats ql-stats"></div>
       <div class="ql-3d">
         <div class="section-head" style="margin-top:30px">
@@ -129,6 +135,12 @@ STYLE = """
 }
 .ql-button:hover { background: var(--climb); border-color: var(--climb); }
 .ql-hint { color: var(--ink-3); font-size: 12.5px; }
+.ql-note-inline { flex-basis: 100%; margin: 2px 0 0; font-size: 12.5px; color: var(--ink-3);
+  max-width: 74ch; }
+/* Sampling warning on a flight read from a reduced file: the numbers are all low, and
+   saying so beside them is the only honest way to show them at all. */
+.ql-coarse { margin: 0 6px 12px; padding: 9px 12px; border-left: 2px solid var(--climb);
+  background: var(--panel-2); font-size: 12.5px; color: var(--ink-2); }
 .ql-status { margin: 0; font-size: 12.5px; color: var(--ink-2); flex-basis: 100%; }
 .ql-status.is-error { color: var(--climb); }
 canvas.ql-canvas { display: block; width: 100%; height: auto; }
@@ -722,6 +734,20 @@ SCRIPT = r"""
     root.querySelector('.ql-heading').textContent = name.replace(/\.[^.]+$/, '');
     root.querySelector('.ql-source').textContent = a.kind + ', ' + a.t.length +
       ' fixes at ~' + a.median.toFixed(0) + ' s';
+    // Everything measured along the track is understated on a reduced file, and by a lot:
+    // the same flight read from a 500-point KMZ and from its IGC gave 476 km against
+    // 623 km flown and 24 900 m against 44 900 m gained. Say so next to the numbers.
+    var coarse = root.querySelector('.ql-coarse');
+    if (a.median > 5) {
+      coarse.hidden = false;
+      coarse.textContent = 'Sampled every ' + a.median.toFixed(0) + ' s. Distance flown, ' +
+        'height gained and climb rates are measured along the track, so at this spacing ' +
+        'they are all understated — often by a third — and turns cannot be counted. ' +
+        'Straight-line and XC distances survive, because those only need the corners. ' +
+        'Load the IGC from your instrument for the real numbers.';
+    } else {
+      coarse.hidden = true;
+    }
     var hours = Math.floor(a.duration / 3600);
     var minutes = Math.round((a.duration % 3600) / 60);
     var turnTotal = a.climbs.reduce(function (sum, c) {
