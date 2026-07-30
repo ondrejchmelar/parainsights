@@ -64,7 +64,7 @@ geometry in a renderer, no rendering in the analysis.
 | `analysis.py` | Phases, per-climb and per-glide stats, wind, time budget |
 | `xc.py` | Free distance through ≤3 turnpoints (own dynamic program) |
 | `terrain.py` | DEM grid + height above terrain (AWS terrarium, keyless) |
-| `basemap.py` | OSM tiles stitched to one embedded JPEG |
+| `basemap.py` | Satellite (Esri) or OSM tiles stitched to one embedded JPEG |
 | `meteo.py` | The day's vertical profile (Open-Meteo) |
 | `charts.py` | All SVG charts, rendered locally |
 | `view3d.py` | Canvas 3D view that works inside a published page |
@@ -109,6 +109,21 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   bug. So the three detail levels are ordered coarse → fine and the colourings within
   each end with climb: a viewer that honours `Region` draws one level, and one that
   ignores everything draws them all and the last painted is the right one.
+- **Satellite imagery is the default basemap**, composited from Esri World Imagery plus
+  its `World_Boundaries_and_Places` label layer — both keyless. A photograph tells a pilot
+  what the ground under a climb was; a road map does not. Attribution to Esri/Maxar is
+  required and is rendered on the map and in the caption.
+- **The KMZ is embedded in the HTML report** as a data URI behind an "Open in Earth"
+  link, so the Earth file travels with the report. ~170 KB; `--no-earth-link` drops it,
+  and a multi-flight report only carries one.
+- **Full-bleed needs the scrollbar measured.** `100vw` includes the scrollbar, so a
+  `100vw` panel hangs off the layout viewport and anything anchored to its right edge is
+  clipped. JS sets `--scrollbar` and the panel is `calc(100vw - var(--scrollbar))`. Note
+  that `scrollWidth` reports the ink extent even when clipping prevents scrolling — test
+  by calling `scrollTo(300, 0)` and reading `scrollX` back.
+- **The 3D canvas has no width/height attributes.** CSS sizes the box (`aspect-ratio`)
+  and JS matches the backing store to it, capped at 2× pixel ratio; that is what lets the
+  same code serve an inline panel and full screen.
 - **`Region`/`Lod` saves drawing, not bytes.** All three levels are in the file either
   way; Earth just skips the ones whose on-screen size falls outside their pixel window
   (56 points when the flight is a thumbnail, 1 727 when it fills the window). Real

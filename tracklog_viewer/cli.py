@@ -52,6 +52,10 @@ def main(argv: list[str] | None = None) -> int:
         "--no-xc", action="store_true", help="skip free-distance optimisation",
     )
     parser.add_argument(
+        "--no-earth-link", action="store_true",
+        help="leave the KMZ out of the HTML report (saves about 170 KB)",
+    )
+    parser.add_argument(
         "--no-basemap", action="store_true",
         help="with --terrain, skip the OpenStreetMap basemap image",
     )
@@ -62,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        reports = [_one(path, args) for path in args.flight]
+        reports = [_one(path, args, index) for index, path in enumerate(args.flight)]
     except (sources.SourceError, kml.NoTrackError) as error:
         # These are the user's problem to fix, not a bug: say what is wrong and stop,
         # without a traceback.
@@ -81,6 +85,7 @@ def main(argv: list[str] | None = None) -> int:
                 reports[0]["analysis"], args.html,
                 meteo=reports[0]["meteo"], route=reports[0]["route"],
                 terrain=reports[0]["terrain"], basemap=reports[0]["basemap"],
+                kmz=reports[0]["kmz"],
             )
         else:
             render_html.write_multi(reports, args.html)
@@ -121,7 +126,7 @@ def shape_of(route, analysis) -> str:
     return "open distance"
 
 
-def _one(source: str, args) -> dict:
+def _one(source: str, args, index: int = 0) -> dict:
     """Analyse a single flight and report it on stdout."""
     # A source may be a path or a URL; both reduce to a last path component for display.
     label = Path(urlsplit(str(source)).path or str(source)).name or str(source)
@@ -148,12 +153,23 @@ def _one(source: str, args) -> dict:
             print(f"warning: no terrain data for {label}", file=sys.stderr)
         elif not args.no_basemap:
             # Place names are what make the 3D view navigable.
+            # Satellite imagery is photographic and costs more than a map raster, so a
+            # shared document gets a smaller, harder-compressed one per flight.
+            single = len(args.flight) == 1
             tiles = basemap_module.for_terrain(
-                ground, max_width=2200 if len(args.flight) == 1 else 1400,
-                quality=72 if len(args.flight) == 1 else 62,
+                ground,
+                max_width=2200 if single else 1100,
+                quality=72 if single else 55,
             )
             if tiles is None:
                 print(f"warning: no basemap tiles for {label}", file=sys.stderr)
+
+    # The KMZ is embedded in the report as a download, so the Earth file travels with it.
+    earth = None
+    # One KMZ per flight would add ~170 KB each; in a shared document only the first
+    # flight carries one, and `--kmz` still writes a file for any of them.
+    if not args.no_earth_link and (len(args.flight) == 1 or index == 0):
+        earth = render_kmz.to_bytes(analysis, route=route)
 
     weather = None
     if args.meteo:
@@ -231,6 +247,7 @@ def _one(source: str, args) -> dict:
         "payload": payload,
         "terrain": ground,
         "basemap": tiles if args.terrain and not args.no_basemap else None,
+        "kmz": earth,
         "shape": shape_of(route, analysis),
         "file": label,
         # Shown in the flight picker: two reports of the same flight from an IGC and

@@ -102,13 +102,42 @@ def cursor_track(analysis: Analysis, sample) -> dict:
     }
 
 
-def panel(payload: dict, uid: str) -> str:
+GLOBE_ICON = (
+    '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false">'
+    '<circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" stroke-width="1.4"/>'
+    '<ellipse cx="8" cy="8" rx="2.9" ry="6.6" fill="none" stroke="currentColor" '
+    'stroke-width="1.1"/>'
+    '<path d="M1.6 6.1h12.8M1.6 9.9h12.8" stroke="currentColor" stroke-width="1.1" '
+    'fill="none"/></svg>'
+)
+EXPAND_ICON = (
+    '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false">'
+    '<path d="M1.5 5.5v-4h4M14.5 10.5v4h-4M14.5 5.5v-4h-4M1.5 10.5v4h4" fill="none" '
+    'stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>'
+)
+
+
+def panel(payload: dict, uid: str, *, kmz_uri: str | None = None,
+          kmz_name: str = "flight.kmz") -> str:
     """The canvas, its controls, and the embedded data."""
+    earth = ""
+    if kmz_uri:
+        # A download link rather than a button: the KMZ travels inside the report, so
+        # the file is available with no server and no second request.
+        earth = (
+            f'<a class="view3d-earth" href="{kmz_uri}" download="{kmz_name}" '
+            f'title="Download the KMZ and open it in Google Earth">'
+            f'{GLOBE_ICON}<span>Open in Earth</span></a>'
+        )
+    attribution = payload.get("basemap", {}) or {}
+    credit = attribution.get("attribution", "")
     return f"""
     <div class="panel view3d-panel">
-      <canvas class="view3d" id="view3d-{uid}" width="1080" height="620"
+      <canvas class="view3d" id="view3d-{uid}"
               aria-label="Interactive three-dimensional view of the flight over terrain">
       </canvas>
+      {earth}
+      <p class="view3d-credit">{credit}</p>
       <div class="view3d-controls">
         <button type="button" data-view3d-act="rotate-left" title="Rotate left">&#8630;</button>
         <button type="button" data-view3d-act="rotate-right" title="Rotate right">&#8631;</button>
@@ -120,6 +149,8 @@ def panel(payload: dict, uid: str) -> str:
                 title="Show map with place names">Map</button>
         <button type="button" data-view3d-act="exaggerate" title="Vertical exaggeration">
           &#215;1 height</button>
+        <button type="button" data-view3d-act="fullscreen" title="Full screen">
+          {EXPAND_ICON}</button>
         <button type="button" data-view3d-act="reset">Reset view</button>
       </div>
       <script type="application/json" class="view3d-data">{json.dumps(payload)}</script>
@@ -127,12 +158,58 @@ def panel(payload: dict, uid: str) -> str:
 
 
 STYLE = """
-.view3d-panel { position: relative; padding: 0; overflow: hidden; }
-canvas.view3d { display: block; width: 100%; height: auto; cursor: grab;
+/* Full-bleed: the map is the one thing worth more than the page's reading width. The
+   clip has to go on the *root* — html is the scroll container, so clipping body alone
+   leaves the page scrolling sideways by the scrollbar's width, which 100vw includes.
+   `clip` rather than `hidden` so no new scroll container is created. Verified by trying
+   to scroll: scrollWidth still reports the ink extent, which is why the naive check
+   looked like a bug that was not there. */
+:root, body { overflow-x: clip; }
+/* --scrollbar is measured in JS. 100vw includes the scrollbar, so a panel that wide
+   hangs off the layout viewport and anything anchored to its right edge — the controls,
+   the credit — is clipped. */
+.view3d-panel { position: relative; padding: 0; overflow: hidden;
+  --page: calc(100vw - var(--scrollbar, 0px));
+  width: var(--page); margin-left: calc(50% - var(--page) / 2);
+  border-left: 0; border-right: 0; border-radius: 0; }
+/* aspect-ratio rather than a height attribute, so the canvas can be re-sized to its box
+   — a canvas with fixed width/height attributes and height:auto cannot. */
+canvas.view3d { display: block; width: 100%; aspect-ratio: 21 / 9; cursor: grab;
   background: linear-gradient(180deg, var(--panel-2) 0%, var(--panel) 62%); touch-action: none; }
+@media (max-width: 900px) { canvas.view3d { aspect-ratio: 4 / 3; } }
+.view3d-panel:fullscreen { width: 100vw; height: 100vh; margin: 0; }
+.view3d-panel:fullscreen canvas.view3d { height: 100vh; aspect-ratio: auto; }
+.view3d-earth {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: 'NarrowDisplay', "Liberation Sans Narrow", ui-sans-serif, sans-serif;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  text-decoration: none;
+  padding: 7px 12px;
+  border-radius: 2px;
+  border: 1px solid var(--rule-strong);
+  background: var(--panel);
+  color: var(--ink);
+}
+.view3d-earth:hover { background: var(--climb); border-color: var(--climb); color: var(--paper); }
+/* Top right, opposite the Earth link: at the bottom it fought the control row, which
+   on a phone wraps into the same space. */
+.view3d-credit { position: absolute; right: 12px; top: 12px; margin: 0; font-size: 10.5px;
+  color: var(--ink-2); background: color-mix(in srgb, var(--panel) 78%, transparent);
+  padding: 3px 7px; border-radius: 2px; max-width: 46%; text-align: right; }
 canvas.view3d.is-dragging { cursor: grabbing; }
-.view3d-controls { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 5px;
-  flex-wrap: wrap; }
+.view3d-controls { position: absolute; right: 10px; bottom: 10px; left: 10px; display: flex;
+  gap: 5px; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 640px) {
+  .view3d-controls { gap: 4px; }
+  .view3d-controls button { padding: 5px 7px; font-size: 10.5px; }
+}
 .view3d-controls button {
   font: inherit;
   font-size: 11.5px;
@@ -149,10 +226,20 @@ canvas.view3d.is-dragging { cursor: grabbing; }
 .view3d-controls button:hover { color: var(--ink); background: var(--panel-2); }
 .view3d-controls button.is-on { background: var(--climb); border-color: var(--climb);
   color: var(--paper); }
+.view3d-controls button svg { display: block; }
 """
 
 
 SCRIPT = """
+// The scrollbar's width, so a full-bleed panel can be exactly the layout viewport.
+function measureScrollbar() {
+  var width = window.innerWidth - document.documentElement.clientWidth;
+  document.documentElement.style.setProperty('--scrollbar', Math.max(width, 0) + 'px');
+}
+measureScrollbar();
+window.addEventListener('resize', measureScrollbar);
+
+
 function initView3d(root, cursorTrack) {
   var canvas = root.querySelector('canvas.view3d');
   var payload = root.querySelector('.view3d-data');
@@ -160,7 +247,24 @@ function initView3d(root, cursorTrack) {
   var scene = JSON.parse(payload.textContent);
   var dem = scene.terrain;
   var ctx = canvas.getContext('2d');
-  var W = canvas.width, H = canvas.height;
+  // The canvas has no width/height attributes: CSS sizes the box and this matches the
+  // backing store to it, so the same code serves an inline panel and full screen.
+  var W = 0, H = 0;
+
+  function resize() {
+    var rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return false;
+    // Cap the pixel ratio: at 3× a phone would ask for a 3000-pixel-wide heightfield
+    // redraw on every frame of a drag.
+    var ratio = Math.min(window.devicePixelRatio || 1, 2);
+    var width = Math.round(rect.width * ratio);
+    var height = Math.round(rect.height * ratio);
+    if (width === W && height === H) return false;
+    canvas.width = W = width;
+    canvas.height = H = height;
+    return true;
+  }
+  resize();
 
   // Local metric frame about the DEM centre, so rotation is about the middle of
   // the terrain rather than the corner of a bounding box.
@@ -263,13 +367,17 @@ function initView3d(root, cursorTrack) {
       var m = toMetres(t.lon[k], t.lat[k]);
       consider(world(m[0], m[1], t.alt[k]));
     }
-    var scale = Math.min(W * 0.95 / Math.max(maxX - minX, 1), H * 0.9 / Math.max(maxY - minY, 1));
+    // Slight overfill: the bounds are of a *rotated* rectangle, whose bounding box is
+    // wider than the rectangle itself, so fitting the box exactly leaves visible margins
+    // on every side. Overflowing the terrain edge costs nothing — it is only terrain.
+    var scale = Math.min(W * 1.08 / Math.max(maxX - minX, 1),
+                         H * 1.02 / Math.max(maxY - minY, 1));
     view.vertical = wanted;
     fit.scale = scale * view.zoom;
     fit.dx = W / 2 - (minX + maxX) / 2 * fit.scale;
     // Keep the *ground* centred rather than the whole scene: as the exaggeration grows
     // the flight should climb up the canvas, not push the terrain off the bottom.
-    fit.dy = H * 0.66 - (minY + maxY) / 2 * fit.scale;
+    fit.dy = H * 0.58 - (minY + maxY) / 2 * fit.scale;
   }
 
   function project(x, y, z) {
@@ -651,6 +759,12 @@ function initView3d(root, cursorTrack) {
       else if (act === 'rotate-right') view.yaw += 0.35;
       else if (act === 'tilt-up') view.pitch = Math.min(1.45, view.pitch + 0.15);
       else if (act === 'tilt-down') view.pitch = Math.max(0.06, view.pitch - 0.15);
+      else if (act === 'fullscreen') {
+        var panel = canvas.closest('.view3d-panel');
+        if (document.fullscreenElement) document.exitFullscreen();
+        else if (panel.requestFullscreen) panel.requestFullscreen();
+        return;   // the fullscreenchange handler redraws once the box has its new size
+      }
       else if (act === 'zoom-in') zoomAt(1.25, box().cx, box().cy);
       else if (act === 'zoom-out') zoomAt(1 / 1.25, box().cx, box().cy);
       else if (act === 'exaggerate') {
@@ -682,6 +796,16 @@ function initView3d(root, cursorTrack) {
       draw();
     });
   });
+
+  // Re-measure whenever the box changes: entering full screen, rotating a phone, or a
+  // window drag all change it, and a stale backing store renders blurred or clipped.
+  function refresh() {
+    if (resize()) { view.panX = 0; view.panY = 0; }
+    draw();
+  }
+  window.addEventListener('resize', refresh);
+  document.addEventListener('fullscreenchange', refresh);
+  if (window.ResizeObserver) new ResizeObserver(refresh).observe(canvas);
 
   draw();
   var handle = {

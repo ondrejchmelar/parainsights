@@ -739,11 +739,16 @@ def document(analysis: Analysis, *, route=None, meteo=None) -> str:
     )
 
 
-def write(analysis: Analysis, path, *, route=None, meteo=None) -> Path:
-    """Write a KMZ: doc.kml plus the images it references, nothing external."""
-    path = Path(path)
+def to_bytes(analysis: Analysis, *, route=None, meteo=None) -> bytes:
+    """The KMZ as bytes, for embedding in the HTML report as a download."""
+    buffer = io.BytesIO()
+    _archive(buffer, analysis, route=route, meteo=meteo)
+    return buffer.getvalue()
+
+
+def _archive(target, analysis: Analysis, *, route=None, meteo=None) -> None:
     kml = document(analysis, route=route, meteo=meteo)
-    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
+    with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
         # doc.kml first: Google Earth opens the first .kml it finds.
         archive.writestr("doc.kml", kml)
         archive.writestr("images/climb.png", GLIDER_ICON_PNG)
@@ -753,4 +758,11 @@ def write(analysis: Analysis, path, *, route=None, meteo=None) -> Path:
         chart = barogram_png(analysis)
         if chart:
             archive.writestr("images/barogram.png", chart)
+
+
+def write(analysis: Analysis, path, *, route=None, meteo=None) -> Path:
+    """Write a KMZ: doc.kml plus the images it references, nothing external."""
+    path = Path(path)
+    with open(path, "wb") as handle:
+        _archive(handle, analysis, route=route, meteo=meteo)
     return path

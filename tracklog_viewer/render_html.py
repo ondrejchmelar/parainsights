@@ -11,6 +11,7 @@ interactive 3D view; it needs network tiles, so it cannot replace this one.
 
 from __future__ import annotations
 
+import base64
 import json
 import math
 from pathlib import Path
@@ -228,6 +229,7 @@ section { margin-top: 34px; }
   color: var(--ink-2);
   margin: 8px 8px 2px;
 }
+.view3d-caption { margin-top: 10px; }
 .chart-head { display: flex; align-items: center; justify-content: space-between; gap: 12px;
   flex-wrap: wrap; }
 .chart-head .chart-title { margin-bottom: 0; }
@@ -966,7 +968,8 @@ def _meteo_profile(analysis: Analysis, meteo, uid: str, rows: list[str]) -> str:
 
 
 def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
-                 basemap=None, uid: str = "f0", hidden: bool = False) -> str:
+                 basemap=None, kmz: bytes | None = None, uid: str = "f0",
+                 hidden: bool = False) -> str:
     """One flight's sections, from masthead to footer.
 
     ``meteo`` and ``route`` are optional: the report degrades to the flight's own
@@ -1064,21 +1067,30 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
         payload = view3d.data(
             analysis, terrain, tolerance=4.0 if uid == "f0" else 12.0, basemap=basemap
         )
+        kmz_uri = None
+        if kmz:
+            kmz_uri = (
+                "data:application/vnd.google-earth.kmz;base64,"
+                + base64.b64encode(kmz).decode("ascii")
+            )
         clearance = terrain_module.clearance(terrain, analysis)
         view3d_section = f"""
   <section>
     <div class="section-head">
       <h2>The flight over the ground</h2>
-      <p>Drag to rotate, scroll to zoom. Real terrain from a DEM, embedded in this page —
+      <p>Drag to pan, right-drag or ctrl-drag to rotate and tilt, scroll to zoom. Real terrain from a DEM, embedded in this page —
          so it keeps working with no network. Hovering the charts below moves the marker
          here too.</p>
     </div>
-    {view3d.panel(payload, uid)}
-    <p class="caption">Terrain {terrain.elevations.min():.0f}–{terrain.elevations.max():.0f} m
+    {view3d.panel(payload, uid, kmz_uri=kmz_uri,
+                  kmz_name=f"{summary.date}-{(summary.site or 'flight').replace(' ', '-')}.kmz")}
+    <p class="caption view3d-caption">Terrain {terrain.elevations.min():.0f}–{terrain.elevations.max():.0f} m
       over {terrain.cols}&#215;{terrain.rows} samples, drawn at true vertical scale so height
       above ground can be judged directly — the &#215;1 button cycles to &#215;2 and &#215;4. Lowest
       ground clearance of the flight was {clearance.min():.0f}&nbsp;m, median
-      {float(np_median(clearance)):.0f}&nbsp;m. Map &copy; OpenStreetMap contributors.</p>
+      {float(np_median(clearance)):.0f}&nbsp;m.
+      {charts.escape(basemap.attribution) + "." if basemap is not None else ""}
+      Elevation from the AWS terrarium DEM.</p>
   </section>"""
 
     wind_chart = charts.wind_profile(analysis, meteo=meteo, uid=uid)
@@ -1298,7 +1310,7 @@ def _page(title: str, bodies: list[str], tabs: str = "") -> str:
 
 
 def render(analysis: Analysis, *, meteo=None, route=None, terrain=None,
-           basemap=None) -> str:
+           basemap=None, kmz: bytes | None = None) -> str:
     """A report for a single flight, with the own-track picker alongside it."""
     summary = analysis.summary
     title = f"{summary.date} · {summary.site or 'flight'} — flight review"
@@ -1317,7 +1329,7 @@ def render(analysis: Analysis, *, meteo=None, route=None, terrain=None,
         [
             _flight_body(
                 analysis, meteo=meteo, route=route, terrain=terrain,
-                basemap=basemap, uid="f0",
+                basemap=basemap, kmz=kmz, uid="f0",
             )
         ],
         tabs,
@@ -1343,6 +1355,7 @@ def render_multi(reports: list[dict]) -> str:
                 route=report.get("route"),
                 terrain=report.get("terrain"),
                 basemap=report.get("basemap"),
+                kmz=report.get("kmz"),
                 uid=uid,
                 hidden=index > 0,
             )
@@ -1376,10 +1389,11 @@ def render_multi(reports: list[dict]) -> str:
 
 
 def write(analysis: Analysis, path, *, meteo=None, route=None, terrain=None,
-          basemap=None) -> Path:
+          basemap=None, kmz: bytes | None = None) -> Path:
     path = Path(path)
     path.write_text(
-        render(analysis, meteo=meteo, route=route, terrain=terrain, basemap=basemap),
+        render(analysis, meteo=meteo, route=route, terrain=terrain, basemap=basemap,
+               kmz=kmz),
         encoding="utf-8",
     )
     return path

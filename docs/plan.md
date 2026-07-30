@@ -271,6 +271,18 @@ swapped. The terrain paint order follows from the same rotated coordinate
 (`wy = x·sin(yaw) + y·cos(yaw)`): x grows with column and y *falls* with row, so the
 sign of each contribution gives the iteration direction directly.
 
+### The 3D panel
+
+Full-bleed (exactly the layout viewport, scrollbar measured in JS), 21:9 on a desktop and
+4:3 below 900 px, with a fullscreen toggle that re-measures the canvas backing store.
+Satellite imagery from Esri with its label layer composited on top, because a photograph
+answers "what was under that climb" and a road map does not. An **Open in Earth** link
+carries the KMZ as a data URI, so the Google Earth file is inside the report.
+
+The fit overfills slightly (1.08 × width): the bounds are of a *rotated* rectangle, whose
+bounding box is wider than the rectangle, so an exact fit leaves visible margins on every
+side.
+
 ### 3D controls
 
 Modelled on Google Earth, because that is what pilots already know:

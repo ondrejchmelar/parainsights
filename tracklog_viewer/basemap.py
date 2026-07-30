@@ -13,6 +13,7 @@ is not optional: every report that uses this credits OpenStreetMap contributors.
 from __future__ import annotations
 
 import base64
+import hashlib
 import io
 import math
 import urllib.error
@@ -20,10 +21,30 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
-TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+# Three keyless sources. Satellite is the default because a photograph tells a pilot
+# what the ground under a climb actually was — field, forest, town — which a road map
+# does not; the label layer is composited on top so places are still nameable.
+STYLES = {
+    "osm": {
+        "layers": ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+        "attribution": "© OpenStreetMap contributors",
+        "max_zoom": 19,
+    },
+    "satellite": {
+        "layers": [
+            "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery"
+            "/MapServer/tile/{z}/{y}/{x}",
+            "https://server.arcgisonline.com/ArcGIS/rest/services/Reference"
+            "/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+        ],
+        "attribution": "Imagery © Esri, Maxar, Earthstar Geographics",
+        "max_zoom": 18,
+    },
+}
+DEFAULT_STYLE = "satellite"
 CACHE = Path.home() / ".cache" / "parainsights" / "osm"
 TILE_SIZE = 256
-MAX_TILES = 24
+MAX_TILES = 24   # per layer, so satellite fetches at most twice this
 TIMEOUT = 30
 USER_AGENT = "parainsights-tracklog-viewer/0.1 flight-analysis (contact: local user)"
 
@@ -40,6 +61,7 @@ class Basemap:
     width: int
     height: int
     zoom: int
+    attribution: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -49,6 +71,7 @@ class Basemap:
             "north": round(self.north, 6),
             "uri": self.data_uri,
             "zoom": self.zoom,
+            "attribution": self.attribution,
         }
 
 
@@ -70,8 +93,9 @@ def _lat_of(y: float, zoom: int) -> float:
     return math.degrees(math.atan(0.5 * (math.exp(n) - math.exp(-n))))
 
 
-def _choose_zoom(west: float, east: float, south: float, north: float) -> int:
-    for zoom in range(13, 5, -1):
+def _choose_zoom(west: float, east: float, south: float, north: float,
+                 max_zoom: int = 18) -> int:
+    for zoom in range(min(13, max_zoom), 5, -1):
         wide = int(_tile_x(east, zoom)) - int(_tile_x(west, zoom)) + 1
         tall = int(_tile_y(south, zoom)) - int(_tile_y(north, zoom)) + 1
         if wide * tall <= MAX_TILES:
@@ -79,13 +103,15 @@ def _choose_zoom(west: float, east: float, south: float, north: float) -> int:
     return 6
 
 
-def _fetch_tile(zoom: int, x: int, y: int) -> bytes | None:
+def _fetch_tile(template: str, zoom: int, x: int, y: int) -> bytes | None:
     CACHE.mkdir(parents=True, exist_ok=True)
-    cached = CACHE / f"{zoom}-{x}-{y}.png"
+    # The cache key has to include the layer, or imagery and labels overwrite each other.
+    key = hashlib.sha1(template.encode()).hexdigest()[:8]
+    cached = CACHE / f"{key}-{zoom}-{x}-{y}"
     if cached.exists():
         return cached.read_bytes()
     request = urllib.request.Request(
-        TILE_URL.format(z=zoom, x=x, y=y), headers={"User-Agent": USER_AGENT}
+        template.format(z=zoom, x=x, y=y), headers={"User-Agent": USER_AGENT}
     )
     try:
         with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
@@ -97,32 +123,43 @@ def _fetch_tile(zoom: int, x: int, y: int) -> bytes | None:
 
 
 def fetch(west: float, east: float, south: float, north: float, *,
-          max_width: int = 2200, quality: int = 72) -> Basemap | None:
+          max_width: int = 2200, quality: int = 72,
+          style: str = DEFAULT_STYLE) -> Basemap | None:
     """Stitch a basemap covering the box. Returns None if tiles or Pillow are missing."""
     try:
         from PIL import Image
     except ImportError:
         return None
 
-    zoom = _choose_zoom(west, east, south, north)
+    spec = STYLES.get(style, STYLES[DEFAULT_STYLE])
+    zoom = _choose_zoom(west, east, south, north, spec["max_zoom"])
     x0 = int(_tile_x(west, zoom))
     x1 = int(_tile_x(east, zoom))
     y0 = int(_tile_y(north, zoom))
     y1 = int(_tile_y(south, zoom))
 
-    canvas = Image.new("RGB", ((x1 - x0 + 1) * TILE_SIZE, (y1 - y0 + 1) * TILE_SIZE), (238, 236, 231))
+    canvas = Image.new(
+        "RGB", ((x1 - x0 + 1) * TILE_SIZE, (y1 - y0 + 1) * TILE_SIZE), (238, 236, 231)
+    )
     fetched = 0
-    for ty in range(y0, y1 + 1):
-        for tx in range(x0, x1 + 1):
-            data = _fetch_tile(zoom, tx, ty)
-            if not data:
-                continue
-            try:
-                with Image.open(io.BytesIO(data)) as tile:
-                    canvas.paste(tile.convert("RGB"), ((tx - x0) * TILE_SIZE, (ty - y0) * TILE_SIZE))
-                fetched += 1
-            except Exception:
-                continue
+    # Layers composite in order: imagery first, then the transparent label overlay.
+    for index, template in enumerate(spec["layers"]):
+        for ty in range(y0, y1 + 1):
+            for tx in range(x0, x1 + 1):
+                data = _fetch_tile(template, zoom, tx, ty)
+                if not data:
+                    continue
+                try:
+                    with Image.open(io.BytesIO(data)) as tile:
+                        position = ((tx - x0) * TILE_SIZE, (ty - y0) * TILE_SIZE)
+                        if index == 0:
+                            canvas.paste(tile.convert("RGB"), position)
+                        else:
+                            overlay = tile.convert("RGBA")
+                            canvas.paste(overlay, position, overlay)
+                    fetched += 1
+                except Exception:
+                    continue
     if not fetched:
         return None
 
@@ -148,6 +185,7 @@ def fetch(west: float, east: float, south: float, north: float, *,
         width=canvas.width,
         height=canvas.height,
         zoom=zoom,
+        attribution=spec["attribution"],
     )
 
 
