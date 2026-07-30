@@ -350,6 +350,28 @@ Modelled on Google Earth, because that is what pilots already know:
 | one finger | pan |
 | two fingers | pinch to zoom, twist to rotate, drag up/down to tilt |
 
+Every rotation anchors on a **ground-plane point**, not on the middle of the flight. At
+z = dem.min the height term drops out of the projection and it inverts in closed form, so
+`groundUnder()` gives the world position under a finger and `holdGround()` moves the pan to
+put it back after yaw or pitch has changed. Without it the fit recentres every frame and the
+whole view swings around the scene's centre — "twist is centred on the wrong position", and
+"the centre shifts at higher angles" for tilt. Verified across a gesture: the anchored point
+moves **0 px** for both.
+
+Two exceptions the measurements forced:
+
+- **A two-finger drag must not pan.** The vertical travel *is* the tilt gesture, so panning
+  with it drags the ground out from under the anchor by exactly the distance the fingers
+  moved — 30 px of drift on a 30 px drag.
+- **The pan spent crossing the deadzone has to be given back.** Until the gesture is
+  classified it is treated as a pan; when it turns out to be a tilt, that pan is undone, or
+  the view has already slid by the width of the deadzone. 14 px, then 0.
+
+Tilt was also hard to trigger, because rotate was tested first and half a degree of twist
+claimed the gesture before 26 px of travel could accumulate. Both thresholds are now
+compared as *fractions of their own deadzone* and the further-along one wins, at 6° and
+13 px.
+
 The two-finger gestures are the only rotation controls a phone has, and for a while there
 were none — twist-to-rotate had been removed because an imprecise pinch spun the camera,
 which left the buttons as the only way to turn the view. Both are back behind a deadzone

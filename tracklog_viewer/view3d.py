@@ -1180,6 +1180,10 @@ function initView3d(root, cursorTrack) {
   var pinch = null;
   // Accumulated since the second finger went down, and which of rotate/tilt has won.
   var twistTotal = 0, tiltTotal = 0, twoFingerMode = null;
+  var tiltAnchor = null;
+  var undoPanX = 0, undoPanY = 0;
+  var TWIST_DEADZONE = 0.10;   // radians, about 6 degrees
+  var TILT_DEADZONE = 13;      // CSS pixels of two-finger travel
 
   function points() { return Array.from(pointers.values()); }
 
@@ -1204,6 +1208,39 @@ function initView3d(root, cursorTrack) {
   function orbitModifier(event) {
     return event.button === 2 || event.button === 1 ||
            event.ctrlKey || event.shiftKey || event.altKey || event.metaKey;
+  }
+
+  // Where a screen point lands on the ground plane, and the inverse.
+  //
+  // Rotating and tilting have to happen *about the fingers*, not about the middle of the
+  // flight. The fit recentres the scene every frame, so changing yaw or pitch on its own
+  // swings the whole view around the scene's centre — which is what "twist is centred on
+  // the wrong position" and "the centre shifts at higher angles" both are. Anchoring needs
+  // a fixed world point, and the ground plane gives an exact one: at z = dem.min the
+  // height term drops out of the projection and it inverts in closed form.
+  function groundUnder(clientX, clientY) {
+    var box = canvas.getBoundingClientRect();
+    var sp = Math.sin(view.pitch);
+    if (Math.abs(sp) < 1e-4 || !fit.scale) return null;
+    var sx = (clientX - box.left) / box.width * W;
+    var sy = (clientY - box.top) / box.height * H;
+    var wx = (sx - fit.dx - view.panX) / fit.scale;
+    var wy = -(sy - fit.dy - view.panY) / (fit.scale * sp);
+    var cy = Math.cos(view.yaw), sn = Math.sin(view.yaw);
+    return [wx * cy + wy * sn, -wx * sn + wy * cy];
+  }
+
+  // Move the pan so that `point` (a ground-plane position from groundAt) projects back to
+  // the same place on screen. Called after yaw or pitch has changed.
+  function holdGround(point, clientX, clientY) {
+    if (!point) return;
+    var box = canvas.getBoundingClientRect();
+    refit();
+    var now = project(point[0], point[1], dem.min);
+    var sx = (clientX - box.left) / box.width * W;
+    var sy = (clientY - box.top) / box.height * H;
+    view.panX += sx - now[0];
+    view.panY += sy - now[1];
   }
 
   // Keep the point under the cursor fixed while zooming, the way every map does.
@@ -1232,6 +1269,9 @@ function initView3d(root, cursorTrack) {
       twistTotal = 0;
       tiltTotal = 0;
       twoFingerMode = null;
+      tiltAnchor = null;
+      undoPanX = 0;
+      undoPanY = 0;
     } else if (pointers.size === 1) {
       gesture = orbitModifier(event) ? 'orbit' : 'pan';
     }
@@ -1254,31 +1294,60 @@ function initView3d(root, cursorTrack) {
         // now. Doing it the other way round makes the view slide out from under the
         // fingers — zoomAt already moves the pan to anchor the point, and adding the
         // centroid delta afterwards double-counts it.
-        view.panX += (now.cx - pinch.cx) * toCanvas;
-        view.panY += (now.cy - pinch.cy) * toCanvas;
+        //
+        // Not while tilting, though: there the vertical travel *is* the gesture, so panning
+        // with it drags the ground out from under the anchor by exactly the distance the
+        // fingers moved. Measured as a 30 px drift on a 30 px drag before this exception.
+        if (twoFingerMode !== 'tilt') {
+          var stepX = (now.cx - pinch.cx) * toCanvas;
+          var stepY = (now.cy - pinch.cy) * toCanvas;
+          view.panX += stepX;
+          view.panY += stepY;
+          // Remembered only until the gesture is classified: if it turns out to be a tilt,
+          // the pan spent crossing the deadzone has to come back, or the view has already
+          // slid by the width of the deadzone before tilting starts.
+          if (!twoFingerMode) { undoPanX += stepX; undoPanY += stepY; }
+        }
         if (pinch.distance > 4 && now.distance > 4) {
           zoomAt(now.distance / pinch.distance, now.cx, now.cy);
         }
 
-        // Twist to rotate, and drag the pair up or down to tilt: on a phone these are the
-        // only rotation controls there are, and until now there were none — the buttons
-        // were the only way to turn the view, which is not how anyone holds a map.
+        // Twist to rotate, drag the pair up or down to tilt. Both sit behind a deadzone
+        // that has to be broken before either engages — without it, twist-to-rotate spun
+        // the camera on every imprecise pinch, which is why it was removed the first time.
         //
-        // Both live behind a deadzone that has to be *broken* before either engages, and
-        // only one can engage per gesture. Without that, twist-to-rotate spun the camera
-        // on every imprecise pinch, which is why it was taken out the first time; a
-        // deadzone keeps it available without it firing by accident.
+        // Whichever gesture is further through *its own* threshold wins, rather than
+        // rotate being tested first: tilt was hard to trigger because a twist of half a
+        // degree claimed the gesture before 26 px of travel could accumulate.
         twistTotal += angleDelta(pinch.angle, now.angle);
         tiltTotal += (now.cy - pinch.cy);
         if (!twoFingerMode) {
-          if (Math.abs(twistTotal) > 0.14) twoFingerMode = 'rotate';        // ~8 degrees
-          else if (Math.abs(tiltTotal) > 26) twoFingerMode = 'tilt';        // 26 CSS px
+          var rotateProgress = Math.abs(twistTotal) / TWIST_DEADZONE;
+          var tiltProgress = Math.abs(tiltTotal) / TILT_DEADZONE;
+          if (rotateProgress >= 1 || tiltProgress >= 1) {
+            twoFingerMode = rotateProgress >= tiltProgress ? 'rotate' : 'tilt';
+            if (twoFingerMode === 'tilt') {
+              view.panX -= undoPanX;
+              view.panY -= undoPanY;
+            }
+            undoPanX = 0;
+            undoPanY = 0;
+          }
         }
         if (twoFingerMode === 'rotate') {
+          // Rotate about the point between the fingers, which may drift with them.
+          var hold = groundUnder(now.cx, now.cy);
           view.yaw += angleDelta(pinch.angle, now.angle);
+          holdGround(hold, now.cx, now.cy);
         } else if (twoFingerMode === 'tilt') {
+          // Tilt about a *fixed* screen point, taken where the gesture began: the fingers
+          // are travelling, so following them would be the pan this deliberately skips.
+          if (!tiltAnchor) {
+            tiltAnchor = { x: now.cx, y: now.cy, point: groundUnder(now.cx, now.cy) };
+          }
           view.pitch = Math.max(0.18, Math.min(1.45,
-            view.pitch + (now.cy - pinch.cy) * 0.004));
+            view.pitch + (now.cy - pinch.cy) * 0.005));
+          holdGround(tiltAnchor.point, tiltAnchor.x, tiltAnchor.y);
         }
       }
       pinch = now;
@@ -1289,8 +1358,11 @@ function initView3d(root, cursorTrack) {
     var dx = (event.clientX - previous.x) * toCanvas;
     var dy = (event.clientY - previous.y) * toCanvas;
     if (gesture === 'orbit') {
+      // Orbit about the point under the cursor, for the same reason the touch gestures do.
+      var orbitHold = groundUnder(event.clientX, event.clientY);
       view.yaw += dx * 0.005;
       view.pitch = Math.max(0.18, Math.min(1.45, view.pitch - dy * 0.004));
+      holdGround(orbitHold, event.clientX, event.clientY);
     } else {
       view.panX += dx;
       view.panY += dy;
@@ -1300,7 +1372,7 @@ function initView3d(root, cursorTrack) {
 
   function endPointer(event) {
     pointers.delete(event.pointerId);
-    if (pointers.size < 2) { pinch = null; twoFingerMode = null; }
+    if (pointers.size < 2) { pinch = null; twoFingerMode = null; tiltAnchor = null; }
     if (!pointers.size) { gesture = null; canvas.classList.remove('is-dragging'); }
   }
   canvas.addEventListener('pointerup', endPointer);
@@ -1323,10 +1395,14 @@ function initView3d(root, cursorTrack) {
     button.addEventListener('click', function () {
       var act = button.dataset.view3dAct;
       moving();
+      var centre = box();
+      var buttonHold = ('rotate-left rotate-right tilt-up tilt-down'.indexOf(act) >= 0)
+        ? groundUnder(centre.cx, centre.cy) : null;
       if (act === 'rotate-left') view.yaw -= 0.35;
       else if (act === 'rotate-right') view.yaw += 0.35;
       else if (act === 'tilt-up') view.pitch = Math.min(1.45, view.pitch + 0.15);
       else if (act === 'tilt-down') view.pitch = Math.max(0.18, view.pitch - 0.15);
+      if (buttonHold) holdGround(buttonHold, centre.cx, centre.cy);
       else if (act === 'fullscreen') {
         toggleMaximise();
         return;   // the resize path redraws once the box has its new size
@@ -1452,6 +1528,15 @@ function initView3d(root, cursorTrack) {
                cellCols: Math.round(cols / steps.c), cellRows: Math.round(rows / steps.r) };
     },
     setInteracting: function (on) { interacting = !!on; },
+    // Exposed for tests: the ground-plane point under a screen position, and where a
+    // ground point is on screen now. Rotating and tilting *about the fingers* is a claim
+    // about exactly these two agreeing across a gesture.
+    ground: function (clientX, clientY) { return groundUnder(clientX, clientY); },
+    screenOfGround: function (point) {
+      var box = canvas.getBoundingClientRect();
+      var p = project(point[0], point[1], dem.min);
+      return [p[0] / W * box.width, p[1] / H * box.height];
+    },
     stats: function () { return { cells: stats.cells, folded: stats.folded }; },
     // Exposed for tests: the projection as it currently stands. Zoom anchoring is a
     // claim about these numbers, so the numbers have to be readable.
