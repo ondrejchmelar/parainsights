@@ -495,12 +495,29 @@ published artifact runs under a policy that blocks every external host.
 
 Written up with a plan in `docs/plan.md`:
 
-- **Move some charts to the client.** Inline SVG is **34% of the document** (1.16 MB of
-  3.39 MB): 605 KB in 9 altitude profiles, 279 KB in 238 sparklines, 161 KB in 3 plan
-  views. The trade is data against CPU, and for the profile it is close to free — the 3D
-  payload *already* ships lon/lat/alt/climb per fix (338 KB), so the profile's polyline is
-  a second encoding of data that is in the file twice. Sparklines are the opposite case:
-  238 little charts would each need their own slice. Measure before moving anything.
+- **Move some charts to the client.** Measured again on the current `public/index.html`
+  (three flights, `--online`), because the earlier figures predate both the online build
+  and the WebGL view — the share went **up**, not down:
+
+  | | count | bytes | share of 2.27 MB |
+  |---|---|---|---|
+  | `chart` SVGs (side and top views) | 21 | 800 KB | 35% |
+  | sparklines | 208 | 268 KB | 12% |
+  | L/D bars | 119 | 30 KB | 1% |
+  | **all inline SVG** | 352 | **1.10 MB** | **48%** |
+  | 3D payloads | 4 | 641 KB | 28% |
+  | cursor data | 3 | 236 KB | 10% |
+
+  The 21 big charts are the target and they are not one shape: the largest is 99 KB and
+  1 015 shapes, and side views and top views are roughly half each. The trade is data
+  against CPU, and for the side view it is close to free — the 3D payload *already* ships
+  lon/lat/alt/climb per fix, so its polyline is a second encoding of data the file
+  carries twice. Sparklines are the opposite case: 208 little charts would each need
+  their own slice. **Not attempted yet**: it means a JavaScript renderer for the profile
+  and plan views carrying the phase bands, the ground fill, both axis modes, both themes
+  and the linked cursor — a real refactor of the two charts most looked at, which wants a
+  session that can iterate on how it looks rather than one that can only check that it
+  parses.
 
 ## Known gaps
 
