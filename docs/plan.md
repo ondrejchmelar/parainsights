@@ -482,6 +482,23 @@ or 26 px of vertical travel. Verified by driving synthetic touch events — a st
 gives `dyaw=0.00 dpitch=0.00 zoom=2.60`, a 40° twist gives `dyaw=0.57` with no zoom, and a
 80 px two-finger drag gives `dpitch=0.22` with no yaw.
 
+**And it turned the wrong way for all of that.** Every check above measured the *size* of
+`dyaw`, never its sign against the direction the fingers actually went — so a twist that
+tracked one-for-one, broke its deadzone correctly and anchored on the right ground point
+still span the map backwards, and did so for as long as the gesture has existed. It reads
+as correct in the source (`view.yaw += angleDelta(...)`), which is the trap: the finger
+angle is `atan2` in client coordinates where y grows *downward*, so a twist the reader
+sees as clockwise is a **positive** delta, while a positive `view.yaw` turns the scene
+**counter-clockwise** on screen. Three sign conventions, two of which cancel. It is now
+`-=`, and the test dispatches real `PointerEvent`s and asserts which way the ground went
+— with the old sign a 45° clockwise twist moved the scene +0.445 rad, the wrong way.
+
+Note that the **orbit drag is deliberately the opposite sense** and was left alone: drag
+right walks the *camera* right, so the ground swings left, which is Google Earth's model
+and what pilots already know. A twist is the reader turning the map; a drag is the reader
+walking around it. Both directions are now pinned by a test so that correcting one is
+never quietly applied to the other.
+
 Panning needed a screen-space offset (`view.panX/panY`) applied *after* the fit: the fit
 recentres every frame, so without it the camera was welded to the middle of the flight.
 

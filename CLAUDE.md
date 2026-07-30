@@ -275,6 +275,16 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   clipped. JS sets `--scrollbar` and the panel is `calc(100vw - var(--scrollbar))`. Note
   that `scrollWidth` reports the ink extent even when clipping prevents scrolling — test
   by calling `scrollTo(300, 0)` and reading `scrollX` back.
+- **Twist rotates the map, the orbit drag rotates the camera, and the two are opposite
+  on purpose.** A twist is direct manipulation — the ground follows the fingers, so
+  `view.yaw -= angleDelta(...)`. The minus is the whole point and it looks wrong: the
+  finger angle is `atan2` in client coordinates where y grows *downward*, so a
+  clockwise twist is a **positive** delta, while a positive `view.yaw` turns the scene
+  **counter-clockwise**. Three sign conventions, two of which cancel; the gesture span
+  the map backwards for its entire life because every test measured the magnitude of
+  `dyaw` and never its sign. Dragging, by contrast, walks the camera (Google Earth's
+  model, which pilots know), so the ground swings the other way — that is not a bug.
+  Both senses are pinned by tests that dispatch real `PointerEvent`s.
 - **Zoom anchoring is measured from the fit's anchor, not the canvas corner.** A point's
   screen position is `anchor + world·scale·zoom + pan`, and `refit()` puts the anchor at
   `(W/2, 0.58H)`. Dropping that term biases every zoom by `anchor·(ratio−1)`, which reads

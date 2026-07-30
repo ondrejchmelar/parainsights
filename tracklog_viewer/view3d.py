@@ -1375,8 +1375,16 @@ function initView3d(root, cursorTrack) {
         }
         if (twoFingerMode === 'rotate') {
           // Rotate about the point between the fingers, which may drift with them.
+          //
+          // Minus, not plus. The finger angle is measured with atan2 in client
+          // coordinates, where y grows *downward*, so a twist the reader sees as
+          // clockwise comes out as a positive delta — while a positive `view.yaw`
+          // turns the scene counter-clockwise on screen. Adding the two put the
+          // ground under the fingers and then span it the other way, which is the
+          // one thing a direct-manipulation gesture must never do. Measured rather
+          // than reasoned: see the twist test in tests/test_view3d_gl.py.
           var hold = groundUnder(now.cx, now.cy);
-          view.yaw += angleDelta(pinch.angle, now.angle);
+          view.yaw -= angleDelta(pinch.angle, now.angle);
           holdGround(hold, now.cx, now.cy);
         } else if (twoFingerMode === 'tilt') {
           // Tilt about a *fixed* screen point, taken where the gesture began: the fingers
