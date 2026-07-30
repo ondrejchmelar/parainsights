@@ -262,3 +262,69 @@ class TestWindShearNote:
         ]
         assert len(altitudes) != len(set(altitudes)), "the fixture must produce a tie"
         render_html._wind_shear_note(analysis)   # raised TypeError before the key= fix
+
+
+class TestThermalStartsWhenTurningDoes:
+    """A thermal is the circling, not the run-in to it.
+
+    Wind is fitted as the drift of a circling glider, so any straight flight inside the
+    phase is measured as though it were moving air. On a real Dolomites flight that
+    produced 18 km/h "from the east" out of a climb whose first 30 s of 70 was a straight
+    westward run, and 22 km/h out of a 242 s "thermal" that was two climbs with a 90 s
+    glide welded between them.
+
+    Every flight here opens with a glide, deliberately: a straight climb inside the first
+    two minutes is a candidate *tow* and is admitted on purpose, so testing the run-in
+    rule at t=0 tests the wrong rule.
+    """
+
+    @staticmethod
+    def _glide_then_runin_then_circle(tmp_path, name):
+        points = straight(180, speed=12.0, climb=-1.0, alt0=1500.0, heading=0.0)
+        points += straight(90, speed=10.0, climb=1.5, t0=181, alt0=points[-1][3],
+                           x0=0.0, y0=2160.0, heading=90.0)
+        points += circling(200, climb=2.0, t0=272, alt0=points[-1][3],
+                           x0=900.0, y0=2160.0)
+        return analyse(igc.parse(build(tmp_path / name, points)))
+
+    def test_a_straight_run_in_is_not_part_of_the_thermal(self, tmp_path):
+        analysis = self._glide_then_runin_then_circle(tmp_path, "runin.igc")
+        assert len(analysis.thermals) == 1
+        thermal = analysis.thermals[0]
+        # 90 s of straight climbing precede the first turn. The phase must begin at the
+        # turn, not at the lift.
+        assert analysis.series.t[thermal.start] >= 255, (
+            "the straight climb into the thermal was counted as part of it")
+        # And with the run-in excluded the drift is what it should be: nothing.
+        assert thermal.wind is not None
+        assert thermal.wind.kmh < 4.0, (
+            f"a straight run-in leaked into the wind fit: {thermal.wind.kmh:.1f} km/h")
+
+    def test_the_glide_ends_where_the_climb_begins(self, tmp_path):
+        """Not when progress finally breaks, which is well after the air started giving
+        something back. The straight climb between is neither glide nor thermal, and the
+        time budget already has a bucket for exactly that."""
+        analysis = self._glide_then_runin_then_circle(tmp_path, "other.igc")
+        assert len(analysis.glides) == 1
+        glide = analysis.glides[0]
+        assert analysis.series.t[glide.stop - 1] <= 200, (
+            "the glide ran on into the climb")
+        assert analysis.budget.other >= 60, (
+            "the straight climb should be accounted as other, not as a phase")
+
+    def test_a_glide_through_lift_does_not_weld_two_thermals_into_one(self, tmp_path):
+        """A straight run through a lift band satisfied the old `climb > 1.0` clause
+        outright, so the whole 150 s transition was "thermal" and the two climbs either
+        side of it became one segment 1.8 km long. Its drift is the transition, not the
+        air — which is how a 22 km/h wind appeared in a 5 km/h day."""
+        points = circling(160, climb=2.0, alt0=1000.0)
+        points += straight(150, speed=12.0, climb=1.2, t0=161,
+                           alt0=points[-1][3], heading=90.0)
+        points += circling(160, climb=2.0, t0=312, alt0=points[-1][3], x0=1800.0)
+        analysis = analyse(igc.parse(build(tmp_path / "welded.igc", points)))
+
+        assert len(analysis.thermals) == 2, (
+            "the glide between the two climbs was absorbed into one thermal")
+        for thermal in analysis.thermals:
+            assert thermal.wind is None or thermal.wind.kmh < 5.0, (
+                "the glide between the climbs was measured as wind")

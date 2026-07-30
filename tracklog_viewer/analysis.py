@@ -29,6 +29,9 @@ CONDENSE_THERMAL = 60
 CONDENSE_GLIDE = 60
 CONDENSE_DIVE = 30
 TURNING_THRESHOLD = 3.0  # deg/s; below this the glider is not really circling
+# How long the glider has to be turning before the climb counts as started. One stray
+# sample over the threshold is noise; five seconds of it is a pilot entering a turn.
+TURN_ONSET_SECONDS = 5.0
 # A thermal circle takes ~18–22 s. Sampling slower than a quarter of that cannot
 # reconstruct the turn — the heading change between fixes aliases, and the count comes
 # out low and confident. KML exports are typically 15 s, so this matters in practice.
@@ -217,12 +220,46 @@ def _condense(runs: list[tuple[int, int]], t: np.ndarray, gap: float) -> list[tu
     return [(a, b) for a, b in merged]
 
 
+def _sustained(mask: np.ndarray, need: int) -> np.ndarray:
+    """``mask`` with any run shorter than ``need`` samples removed.
+
+    Instantaneous turn rate is noisy: a 1 Hz GPS heading wanders several degrees a second
+    while the glider flies dead straight, so `|turn_rate| > 3` fires every 20–45 s during
+    a glide. Left in, those specks keep the gaps inside a "thermal" short enough for
+    `_condense` to bridge, and a 90 s glide between two climbs is welded into one segment
+    whose drift is the glide. Turning has to be *sustained* before it counts as circling.
+    """
+    out = np.zeros_like(mask, dtype=bool)
+    for start, stop in _runs(mask):
+        if stop - start >= need:
+            out[start:stop] = True
+    return out
+
+
 def classify(series: Series) -> np.ndarray:
-    """Assign a :class:`Phase` to every fix."""
+    """Assign a :class:`Phase` to every fix.
+
+    Three rules here exist because of what they exclude, and all three came out of the
+    same failure: a straight climbing run into a thermal is not a thermal, and calling it
+    one wrecks the wind estimate. Wind is fitted as the drift of a *circling* glider, so
+    any straight flight inside the phase is measured as if it were moving air. On one
+    Dolomites flight that put 30 s of a 70 s climb into a straight westward run and
+    reported 18 km/h from the east; the same file had a 242 s "thermal" that was really
+    two climbs with a 90 s glide welded between them, reported as 22 km/h.
+    """
     phases = np.full(len(series), Phase.UNKNOWN.value, dtype=object)
     t = series.t
+    # Actually turning, and turning for long enough to mean it. `progress` falls in a
+    # slow S as well as in a circle, and only a circle averages the glider's own airspeed
+    # away. Sustained in seconds rather than samples: a 15 s KML would otherwise need
+    # 75 s of continuous turning before it counted.
+    onset = max(int(round(TURN_ONSET_SECONDS / max(sample_interval(series), 1e-6))), 1)
+    circling = _sustained(np.abs(series.turn_rate) > TURNING_THRESHOLD, onset)
 
-    glide = series.progress >= GLIDE_PROGRESS
+    # A glide ends when the air starts giving something back. Without the climb test a
+    # straight run through lift stayed "gliding" until progress broke, which is well
+    # after the climb began.
+    glide = (series.progress >= GLIDE_PROGRESS) & (series.climb <= 0.0)
     for start, stop in _condense(_runs(glide), t, CONDENSE_GLIDE):
         phases[start:stop] = Phase.GLIDE.value
 
@@ -231,12 +268,22 @@ def classify(series: Series) -> np.ndarray:
         if series.alt[stop - 1] - series.alt[start] < -MIN_DIVE_LOSS:
             phases[start:stop] = Phase.DIVE.value
 
-    thermal = (
-        ((series.progress < GLIDE_PROGRESS) & (series.climb > 0.0))
-        | ((series.speed < 10.0) & (series.climb > 0.0))
-        | (series.climb > 1.0)
+    # Climbing *and* not going straight. The clause this replaces was `climb > 1.0`
+    # alone, which fires on a glider flying dead straight through a lift band at full
+    # speed — and, worse, fires on scattered single samples during a long glide, which
+    # CONDENSE_THERMAL then bridges into one enormous "thermal" spanning the glide.
+    thermal = (series.climb > 0.0) & (
+        (series.progress < GLIDE_PROGRESS) | (series.speed < 10.0) | circling
     )
     for start, stop in _condense(_runs(thermal), t, CONDENSE_THERMAL):
+        # The phase is the circling. Trim the straight run-in at the front and the
+        # straight exit at the back; both are left unclassified, which the time budget
+        # already accounts for as "other". Safe to span first-to-last here because a
+        # long straight stretch in the middle has already split the run above — the only
+        # gaps left inside are short enough to be one thermal exited and re-entered.
+        inside = np.flatnonzero(circling[start:stop])
+        if inside.size:
+            start, stop = start + int(inside[0]), start + int(inside[-1]) + 1
         phases[start:stop] = Phase.THERMAL.value
 
     return phases
@@ -424,6 +471,44 @@ def _segment(flight: Flight, series: Series, phase: Phase, start: int, stop: int
     return segment
 
 
+def _launch_climb(flight: Flight, series: Series, segments: list[Segment]) -> Segment | None:
+    """A straight launch climb, built as a segment so it can be judged as a tow.
+
+    `classify` will not call a straight climb a thermal — that rule is what stops a run
+    through a lift band being measured as wind — but a tow *is* a straight climb, and it
+    has to exist as a segment before it can be recognised as one. So it is constructed
+    here, at the launch only, and only when no phase already covers it.
+
+    It is built over the *whole* launch climb, deliberately overlapping whatever phases
+    fall inside it. A tow is rarely flown perfectly straight — the one on the reference
+    flight contains 2.8 turns — so the circling part of it is detected as a short, turny
+    thermal. Judged on that fragment the launch looks like a thermal at 2.8 turns per
+    minute; judged over the whole 113 s climb it is a tow. If it is one, the fragments
+    inside it are dropped in favour of it.
+
+    It is built from the climb alone, with no straightness test: whether it was flown
+    straight is `_reclassify_tow`'s judgement and it makes it on turns per minute, which
+    is the better measure. A `progress` test here would also break on any discontinuity
+    in the track, because the 20 s progress window straddles it.
+    """
+    for start, stop in _condense(_runs(series.climb > TOW_MIN_CLIMB), series.t,
+                                 CONDENSE_THERMAL):
+        if series.t[start] > TOW_START_SECONDS:
+            break                       # only the launch can be a tow
+        # A tow runs from the ground, so the candidate starts at the first fix rather
+        # than where the climb first passes TOW_MIN_CLIMB. The difference is the few
+        # seconds of acceleration on the wire, and leaving them out inflates turns per
+        # minute over a shorter window — enough to fail the reference flight at 1.54
+        # against a limit of 1.5.
+        start = 0
+        duration = series.t[stop - 1] - series.t[start]
+        gain = series.alt[stop - 1] - series.alt[start]
+        if duration < MIN_THERMAL_SECONDS or gain <= MIN_THERMAL_GAIN:
+            return None
+        return _segment(flight, series, Phase.THERMAL, start, stop)
+    return None
+
+
 def _reclassify_tow(series: Series, segments: list[Segment]) -> None:
     """Relabel a launch climb as a tow rather than a thermal.
 
@@ -527,7 +612,23 @@ def analyse(flight: Flight, *, window: float | None = None) -> Analysis:
             if duration >= minimum and test(dz, max(duration, 1)):
                 segments.append(_segment(flight, series, phase, start, stop))
     segments.sort(key=lambda s: s.start)
+    # Offer the launch climb for judgement, then take it back unless it was a tow: a
+    # straight climb that is not a tow is not a phase at all, it is transition time.
+    candidate = _launch_climb(flight, series, segments)
+    overlapped: list[Segment] = []
+    if candidate is not None:
+        overlapped = [s for s in segments
+                      if s.start < candidate.stop and candidate.start < s.stop]
+        segments.append(candidate)
+        segments.sort(key=lambda s: s.start)
     _reclassify_tow(series, segments)
+    if candidate is not None:
+        if candidate.phase is Phase.TOW:
+            # The tow won, so the turny fragments inside it are not separate climbs.
+            for segment in overlapped:
+                segments.remove(segment)
+        else:
+            segments.remove(candidate)
 
     accounted = dict.fromkeys((Phase.THERMAL, Phase.GLIDE, Phase.DIVE, Phase.TOW), 0)
     for segment in segments:

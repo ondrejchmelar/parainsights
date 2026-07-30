@@ -104,7 +104,7 @@ def panel() -> str:
         <div class="table-scroll">
           <table class="ql-glides">
             <thead><tr><th>#</th><th>start</th><th>time</th><th>km</th><th>height m</th>
-              <th>L/D</th><th>km/h</th></tr></thead>
+              <th>glide</th><th>km/h</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>

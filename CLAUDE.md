@@ -152,6 +152,29 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   warning next to its numbers.
 - **Wind comes from circle drift** and is only trusted from climbs actually circled in
   one direction for ≥2 turns. A tow drifts with the glider, not the air.
+- **A thermal is the circling, not the run-in to it — and "circling" means *sustained*
+  turning.** Wind is a straight-line fit to the drift, so any straight flight inside the
+  phase is measured as if it were moving air. Two faults, one cause, both from the old
+  `climb > 1.0` clause calling straight flight a thermal: a climb whose first 30 s of 70
+  was a straight westward run reported 18 km/h from the east, and a 242 s "thermal" that
+  was really two climbs with a 90 s glide between them reported 22 km/h — on a day whose
+  other climbs all read 1–5 km/h. Now a thermal needs `climb > 0` **and** one of
+  `progress < 0.9`, `speed < 10 km/h`, or circling; the phase is then trimmed to the
+  circling and the straight entry falls to the budget's "other". Crucially `circling` is
+  cleaned by `_sustained()` first: raw `|turn_rate| > 3` fires on 1 Hz GPS heading noise
+  every 20–45 s during a *glide*, and those specks kept the internal gaps short enough
+  for `_condense` to bridge. On the Dolomites flight this takes every per-thermal wind
+  into 0.7–9.7 km/h with no outliers, at the cost of 18 climbs becoming 13 — the ones
+  dropped were 1–2 turn straight-ish bumps that were never really thermals.
+- **A tow is built separately, over the whole launch climb, and replaces what it
+  overlaps.** It is the one straight climb that *is* a phase, so it cannot come from the
+  rule above — `_launch_climb()` constructs it from `climb > TOW_MIN_CLIMB` instead.
+  Three details are load-bearing: it starts at the **first fix**, not where the climb
+  first passes the threshold (on the reference flight that shortens the window enough to
+  read 1.54 turns/min against a 1.5 limit and lose the tow); it deliberately **overlaps**
+  the short turny thermal that the circling part of a tow produces, and removes it if the
+  tow wins; and it carries **no straightness test** of its own, because that is
+  `_reclassify_tow`'s job and a `progress` test breaks on any discontinuity in the track.
 - **Tow is a fourth phase**, detected at the launch and excluded from thermal statistics
   and from the wind estimate.
 - **`timezonefinder` is a hard dependency.** Only XCTrack ≥0.9.12 records a timezone;
@@ -388,6 +411,25 @@ published artifact runs under a policy that blocks every external host.
 
 Written up with a plan in `docs/plan.md`:
 
+- **GitHub Pages, not a published artifact, as the primary home.** The artifact CSP is
+  what forces embedded imagery, an embedded DEM and a flat plane for uploaded tracks, and
+  it costs a real fullscreen too. On a host the report can fetch: `--online` already
+  builds for that (zoom 12–13 imagery at 10–20 m/px against ~45, and half the file size),
+  the terrarium DEM is CORS-open so an *uploaded* track could get real terrain, and
+  Open-Meteo would work for it as well. Keep the embedded path — it is what makes the
+  file work offline — but stop treating it as the default.
+- **Move some charts to the client.** Inline SVG is **34% of the document** (1.16 MB of
+  3.39 MB): 605 KB in 9 altitude profiles, 279 KB in 238 sparklines, 161 KB in 3 plan
+  views. The trade is data against CPU, and for the profile it is close to free — the 3D
+  payload *already* ships lon/lat/alt/climb per fix (338 KB), so the profile's polyline is
+  a second encoding of data that is in the file twice. Sparklines are the opposite case:
+  238 little charts would each need their own slice. Measure before moving anything.
+- **Count turns as full revolutions.** `turns = total heading change / 360` counts a
+  wingover as most of a turn, because it sums |Δheading| and never asks whether the glider
+  came back to where it started. Count revolutions instead — heading advancing through
+  360° in one direction and returning to its initial bearing. `Segment.net_rotation` is
+  already computed and is the better starting point. This feeds the ≥2-turn wind filter,
+  so it changes which climbs are trusted.
 - **The sun during the flight** — which slopes were lit and when they switched off. Cheap to
   compute and it answers questions a pilot actually has. Now cheaper than when it was
   written: with the heightfield in WebGL the illumination belongs in the fragment shader,

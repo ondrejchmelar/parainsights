@@ -1321,8 +1321,9 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
   <section>
     <div class="section-head">
       <h2>Glides</h2>
-      <p>L/D here is achieved glide over the ground, so it beats the wing's still-air figure
-         whenever the line was working. Bar length and shade both carry the ratio.</p>
+      <p>Glide ratio here is what was achieved over the ground, so it beats the wing's
+         still-air figure whenever the line was working. Bar length and shade both carry
+         the ratio.</p>
     </div>
     <ul class="legend" style="margin:0 0 12px">
       <li class="legend-title">glide ratio:</li>
@@ -1336,7 +1337,7 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
       <div class="table-scroll">
         <table>
           <thead><tr><th>#</th><th>start</th><th>time</th><th>km</th><th>height m</th>
-            <th>L/D</th><th>km/h</th></tr></thead>
+            <th>glide</th><th>km/h</th></tr></thead>
           <tbody>{_glide_rows(analysis)}</tbody>
         </table>
       </div>
@@ -1369,8 +1370,9 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
         full turns, or in both directions, are excluded — they measure the pilot, not the wind.</p>
       <p><strong>Cross-checked against igc2kmz</strong> on this same file: it finds the same
         {len(thermals) + (1 if tow else 0)} climbs and {len(analysis.glides)} glides, with start
-        times within 4&nbsp;s. Its altitude figures run higher because it prefers GPS
-        altitude where this reads baro.</p>
+        times within 4&nbsp;s.{" Its altitude figures run higher because it prefers GPS "
+        "altitude where this reads baro." if summary.altitude_source == "baro" else
+        " Both read the same GPS altitude here, so the heights agree."}</p>
       <p>The {len(analysis.glides)} glides and {len(thermals)} climbs account for
         {(1 - budget.fractions()["other"]) * 100:.0f}% of airtime. The rest is transitions too
         short or too ambiguous to call, which is honest rather than tidy.</p>

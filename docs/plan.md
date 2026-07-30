@@ -350,7 +350,7 @@ the columns are blank rather than printing a number that is wrong.
 
 ## Status
 
-Done and tested (155 tests):
+Done and tested (160 tests):
 
 - `igc.py` — parser + fix cleanup. All 61 sample files parse, no failures, no warnings,
   timezone resolved 61/61.
@@ -368,6 +368,12 @@ Done and tested (155 tests):
 
 Validated against igc2kmz (python2, run as an oracle) on the reference flight: same 12
 climbs, same 11 glides, start times within 4 s.
+
+**That agreement no longer holds, on purpose.** igc2kmz shares the heuristic *and* its
+flaw — a straight climb counts as a thermal — so agreeing with it meant reproducing the
+wind outliers it produces. Requiring sustained circling takes the Dolomites flight from
+18 climbs to 13 and every per-thermal wind into 1–10 km/h. The dropped climbs were
+1–2 turn straight-ish bumps. See *Wind outliers from thermals that start too soon*.
 
 - `terrain.py` — ground elevation from the AWS terrarium DEM (keyless), cached, plus
   height-above-terrain per fix. Grids are budgeted by node count because they get
@@ -392,7 +398,13 @@ climbs, same 11 glides, start times within 4 s.
 - `sources.py` + `kml.py` — input handling (see above).
 
 Validated against igc2kmz (python2, run as an oracle) on the reference flight: same 12
-climbs, same 11 glides, start times within 4 s. **The XC optimiser agrees with XContest
+climbs, same 11 glides, start times within 4 s.
+
+**That agreement no longer holds, on purpose.** igc2kmz shares the heuristic *and* its
+flaw — a straight climb counts as a thermal — so agreeing with it meant reproducing the
+wind outliers it produces. Requiring sustained circling takes the Dolomites flight from
+18 climbs to 13 and every per-thermal wind into 1–10 km/h. The dropped climbs were
+1–2 turn straight-ish bumps. See *Wind outliers from thermals that start too soon*. **The XC optimiser agrees with XContest
 to 10 m** on that flight: ours 64.08 km, XContest's own page 64.09 km.
 
 ### Draping a map on a heightfield with canvas 2D
@@ -911,3 +923,56 @@ Reference flight `20260728XCTOCH10.igc` (2026-07-28, Všechov, UP Summit XC4):
 7 232 fixes, 1 Hz throughout, all valid, 10:53:32–12:54:03 UTC (2 h 00 m 31 s),
 89.5 km flown, 59.0 km straight-line, baro 410–2102 m, GPS 491–2227 m.
 Good smoke-test target: parser, phases and turn counting must all be sane on it.
+
+### Wind outliers from thermals that start too soon
+
+Reported from the wind sounding: two climbs on the Dolomites flight stood out at 22 and
+18 km/h on a day whose others all read 1–5. Both were real, and they had one cause.
+
+Measured first. Thermal 17 was 70 s long and its **first 30 s were dead straight** —
+progress 0.99, no turn rate, tracking 270 m west while climbing 1.5 m/s. Wind is a
+straight-line fit to the drift of a *circling* glider, so that westward run went into the
+fit as if it were moving air: 17.9 km/h "from the east". Thermal 9 was worse and
+different: 242 s containing **90 seconds of straight glide** between two separate climbs,
+866 m of easting, reported as 22.4 km/h.
+
+The shared cause was the `climb > 1.0` clause in the thermal mask, which asks nothing
+about whether the glider is turning. It labels a straight run through a lift band a
+thermal outright, and it fires on scattered single samples during a glide, which
+`CONDENSE_THERMAL` then bridges into one enormous segment spanning the glide.
+
+Three changes, and the third is the one that was not obvious:
+
+1. **A thermal is climbing *and* not going straight**: `climb > 0` and one of
+   `progress < 0.9`, `speed < 10 km/h`, or circling. The bare `climb > 1.0` is gone.
+2. **A glide ends when the climb begins** (`climb <= 0`), not when progress finally
+   breaks, and the straight climb between the two is left unclassified — the time budget
+   already accounts for that as "other".
+3. **"Circling" has to mean sustained turning.** Raw `|turn_rate| > 3°/s` fires on 1 Hz
+   GPS heading noise every 20–45 s *while flying straight*, and those specks kept the
+   internal gaps under the 60 s condense threshold, so thermal 9 stayed welded together
+   even after 1 and 2. `_sustained()` drops any run shorter than `TURN_ONSET_SECONDS`
+   before the mask is used. This was the fix that actually landed it.
+
+Result on that flight: every per-thermal wind between **0.7 and 9.7 km/h**, no outliers,
+every thermal 55–97% turning. 18 climbs become 13; the five dropped had 0.9–3.9 turns and
+were straight-ish bumps rather than thermals. Across the showcase: Krupka 44→39 climbs,
+Hunza 57→52. XC distances are untouched — they do not depend on phases.
+
+**The tow had to move.** A tow is the one straight climb that *is* a phase, so removing
+straight climbs from the thermal mask removed the segment `_reclassify_tow` relabels, and
+tow detection vanished. It is now built directly by `_launch_climb()` and three details
+are load-bearing, each found by a failing test rather than by design:
+
+- It starts at the **first fix**, not where the climb first passes `TOW_MIN_CLIMB`.
+  Starting late shortens the window and inflates turns per minute — on the reference
+  flight to 1.54 against a limit of 1.5, losing the tow by a hair.
+- It **overlaps** deliberately. A tow is rarely flown perfectly straight; the reference
+  one contains 2.8 turns, whose circling part is detected as a short turny thermal.
+  Judged on that fragment the launch is a thermal at 2.8 turns/min; judged over the whole
+  113 s climb it is a tow. If the tow wins, the fragments inside it are dropped.
+- It carries **no straightness test** of its own. That is `_reclassify_tow`'s judgement,
+  made on turns per minute, which is the better measure — and a `progress` test here
+  breaks on any discontinuity in the track, because the 20 s window straddles it.
+
+The reference tow reads `138 s, +390 m, release 870 m`, exactly as before.
