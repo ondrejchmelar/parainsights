@@ -8,7 +8,7 @@ parainsights/
 ├── CLAUDE.md              this file
 ├── pyproject.toml         one project, one venv, one test suite
 ├── tracklog_viewer/       the tool: IGC/KML/KMZ → analysis → HTML, KMZ, 3D map
-├── tests/                 pytest, 162 tests, no network
+├── tests/                 pytest, 179 tests, no network
 └── docs/
     ├── formats.md         IGC and KML/KMZ format research, measured on real files
     └── plan.md            scope, decisions and status
@@ -25,7 +25,7 @@ as the packages, so there is nothing to line up by hand:
 
 ```bash
 uv sync --extra dev          # creates .venv on the pinned Python, from uv.lock
-uv run pytest -c pyproject.toml     # 162 tests, ~100 s, no network
+uv run pytest -c pyproject.toml     # 179 tests, ~110 s, no network
 ```
 
 `-c pyproject.toml` matters when the repo sits inside another project — pytest otherwise
@@ -329,6 +329,34 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   clipped. JS sets `--scrollbar` and the panel is `calc(100vw - var(--scrollbar))`. Note
   that `scrollWidth` reports the ink extent even when clipping prevents scrolling — test
   by calling `scrollTo(300, 0)` and reading `scrollX` back.
+- **Full screen is the real Fullscreen API, and the in-page maximise is its fallback.**
+  It used to be the fallback only, because `requestFullscreen` fails two ways at once in
+  an iframe without the permission — a synchronous throw with no user activation, and a
+  rejection without the permission — and the button appeared to do nothing. That reasoning
+  held for a published artifact and stopped holding when Pages became the primary home:
+  served from a host the API is granted, and it is what a reader means by full screen. So
+  the button asks for it, and falls back to `.is-maximised` on a throw, on a rejection,
+  *and* on an implementation that returns undefined and quietly does nothing — the third
+  needs a check after a tick, which no amount of promise handling would catch. Everything
+  downstream asks `panelIsFull()` and does not care which path won. A synthetic click is
+  not a user activation, so a test can only reach the granted path by stubbing the API —
+  which means the fallback is what a browser test exercises by default, and both are
+  pinned in `tests/test_view3d_fullscreen.py`.
+- **The report declares a doctype, and the full-screen canvas is measured from its
+  panel.** These are one bug. Without a doctype the page is in **quirks mode**, where
+  `document.documentElement.clientHeight` is the height of the whole *document* rather
+  than of the viewport — and that is what `applyMaximisedSize()` sized the maximised
+  canvas from. On a 4 316 px report, full screen produced a 4 316 px canvas inside an
+  813 px panel: terrain drawn for a viewport five times too tall, the track overlay
+  registered against a projection the GL canvas underneath did not share, and every
+  gesture anchored through the wrong one. The controls stayed exactly where CSS put them
+  and did nothing sensible, which is how it was reported. Both halves are fixed, and the
+  second is the one that matters: the canvas is sized from `panel.clientWidth/Height` —
+  the panel's padding box, which is the same box `inset: 0` gives the GL canvas — so no
+  global can ever mean something different again. The panel is embeddable and does not
+  own the document it lands in. `tests/test_view3d_fullscreen.py` runs the maximise
+  probe in **both** modes for that reason; against the old code the quirks case reports
+  a 3 021 px canvas in an 813 px panel.
 - **Twist rotates the map, the orbit drag rotates the camera, and the two are opposite
   on purpose.** A twist is direct manipulation — the ground follows the fingers, so
   `view.yaw -= angleDelta(...)`. The minus is the whole point and it looks wrong: the
@@ -455,61 +483,6 @@ Written up with a plan in `docs/plan.md`:
   payload *already* ships lon/lat/alt/climb per fix (338 KB), so the profile's polyline is
   a second encoding of data that is in the file twice. Sparklines are the opposite case:
   238 little charts would each need their own slice. Measure before moving anything.
-- **Fix the controls in the full-screen 3D view.** Reported broken. Not yet diagnosed, so
-  these are suspects to measure rather than a cause — and the first one is a regression I
-  may have introduced with the WebGL backend:
-  **The two canvases are sized by different mechanisms when maximised.**
-  `applyMaximisedSize()` sets the 2D canvas to an explicit
-  `document.documentElement.clientWidth/clientHeight` in pixels, while the GL canvas
-  underneath it is sized purely by CSS (`position: absolute; inset: 0`). Everywhere else
-  those agree because both fill the panel; in the maximised state they are two different
-  measurements of "the viewport", and `clientWidth` excludes the scrollbar where a fixed
-  `inset: 0` box need not. If they disagree the track overlay sits offset from the
-  terrain, and anything anchored to the panel's right edge — which is the control row —
-  lands in the wrong place.
-  **`--scrollbar` may be stale.** It is measured once and only re-measured on a *width*
-  change; entering full screen removes the page scrollbar, and the panel's width is
-  `calc(100vw - var(--scrollbar))`. The CSS already warns that anything anchored to the
-  right edge gets clipped when that is wrong.
-  **There are two full-screen paths and only one is exercised.** `toggleMaximise()`
-  deliberately avoids the Fullscreen API in favour of an in-page `.is-maximised`, because
-  an iframe may not be granted real full screen — but `:fullscreen` rules exist in the
-  stylesheet too, and the two set width/height differently. **On GitLab Pages the real
-  Fullscreen API is available**, so this is worth revisiting rather than patching: see the
-  Pages item above.
-  Measure it with `__view3d.metrics()` before and after the toggle — it already reports
-  the box against the backing store, and it is what caught the last sizing bug of this
-  shape (713 px box against a 508 px backing store).
-- **Use `uv`** for the environment, and commit a lockfile with it. Two concrete problems
-  it fixes here, both already bitten:
-  **Nothing is pinned.** Every dependency floats with no ceiling (`numpy>=1.26`,
-  `timezonefinder>=6`, `pytest>=8`, `pillow>=10`) and there is no lockfile, so an
-  upstream release can turn CI red with no change in this repository and no way to tell
-  the two apart. `uv sync` against a committed `uv.lock` makes the installed set a fact
-  rather than a coincidence — which is the same class of fault as the Pillow failure,
-  where the environment and the declaration disagreed and only CI noticed.
-  **It is the mechanism for the 3.14 move below.** `uv python install 3.14` and
-  `uv venv --python 3.14` manage the interpreter itself, and uv refuses to build a venv
-  that violates `requires-python` — exactly the drift recorded there, a 3.11.6 venv
-  under a `>=3.12` floor.
-  Also worth having: it would largely retire the pip cache added to `.gitlab-ci.yml`
-  (`timezonefinder` is not a quick install), and `uv run` removes the `.venv/bin/python`
-  prefix from every command in this file.
-  The honest cost: a toolchain dependency where today the repo needs nothing but
-  `python3 -m venv`, and a lockfile is worse than none if it is allowed to go stale.
-- **Move to Python 3.14** — and fix the version drift it exposed on the way. Three
-  Pythons are in play right now and no two agree: the working venv is **3.11.6**,
-  `requires-python` says **>=3.12**, and CI runs **3.12-slim**. The venv is below the
-  project's own declared floor, which means anything 3.12-only would pass CI and fail on
-  the machine it was written on — that is worth fixing before the 3.14 bump, not after.
-  What 3.14 actually buys here: PEP 649/749 makes deferred annotation evaluation the
-  default, so the `from __future__ import annotations` line at the top of **27 files**
-  becomes dead; the interpreter is faster on the numpy-light glue around the analysis;
-  and the error messages are better. Free-threading is *not* a draw — there is no
-  threading in the codebase, and the tile fetches that could use it are in the browser.
-  Order: bring the venv up to the declared floor, bump `requires-python` and the CI
-  image together, run the suite, then drop the `__future__` imports as a separate change
-  so a regression is attributable.
 - **The sun during the flight** — which slopes were lit and when they switched off. Cheap to
   compute and it answers questions a pilot actually has. Now cheaper than when it was
   written: with the heightfield in WebGL the illumination belongs in the fragment shader,

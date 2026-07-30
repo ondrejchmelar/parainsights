@@ -1391,8 +1391,21 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
 
 
 def _page(title: str, bodies: list[str], tabs: str = "") -> str:
-    """Wrap one or more flight bodies into a complete document."""
-    return f"""<title>{charts.escape(title)}</title>
+    """Wrap one or more flight bodies into a complete document.
+
+    The doctype is not decoration. Without it the page is in **quirks mode**, where
+    `document.documentElement.clientHeight` is the height of the whole document rather
+    than of the viewport — and that is what the maximised 3D view sized its canvas from.
+    On a 4 316 px report the full-screen canvas came out 4 316 px tall inside an 813 px
+    panel: the terrain drawn for a viewport five times too tall, the track overlay
+    registered against a different projection from the terrain under it, and every
+    pointer gesture anchored through the wrong one. The controls looked fine and did
+    nothing sensible, which is how it was reported.
+    """
+    return f"""<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{charts.escape(title)}</title>
 <style>{_font_face()}{STYLE}{view3d.STYLE}{view3d_gl.STYLE}{quicklook.STYLE}</style>
 <div class="wrap">
 {tabs}

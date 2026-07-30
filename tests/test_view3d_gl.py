@@ -154,8 +154,18 @@ window.addEventListener('load', function () {
 """
 
 
-def _probe(scene: dict, body: str, *, gl: bool = True) -> dict:
-    """Render a panel carrying `scene`, run `body` in it, and return what it answered."""
+def _probe(scene: dict, body: str, *, gl: bool = True, page_extra: str = "",
+           doctype: bool = True) -> dict:
+    """Render a panel carrying `scene`, run `body` in it, and return what it answered.
+
+    `page_extra` is markup appended after the panel. The real report is several screens
+    tall, so the document has a scrollbar from the first layout — which is a fact the
+    full-bleed panel is sized against, and a short probe page does not have one.
+
+    `doctype=False` renders the page in quirks mode, which the report itself did until
+    the full-screen bug was traced to it. It is kept as a switch because the panel is
+    embeddable and cannot control the document it lands in.
+    """
     script = view3d_gl.SCRIPT
     if not gl:
         # Make the registration falsy rather than dropping it, so the page under test is
@@ -165,9 +175,11 @@ def _probe(scene: dict, body: str, *, gl: bool = True) -> dict:
             "window.__view3dBackend = null && function (host) {")
         assert "null && function (host)" in script
     page = (
-        '<!doctype html><meta charset="utf-8"><title>probe</title>'
+        ('<!doctype html>' if doctype else '')
+        + '<meta charset="utf-8"><title>probe</title>'
         f"<style>{view3d.STYLE}{view3d_gl.STYLE}</style>"
         f'<div class="wrap">{view3d.panel(scene, "t")}</div>'
+        + page_extra
         + _HARNESS % (view3d.SCRIPT, script, body)
     )
     with tempfile.TemporaryDirectory() as folder:
@@ -558,6 +570,22 @@ class TestWiring:
         assert page.index(view3d.SCRIPT) < page.index(view3d_gl.SCRIPT), (
             "the backend reads initView3d's host object, so view3d.SCRIPT comes first")
         assert "initView3d" in page
+
+    def test_the_report_declares_a_doctype(self):
+        """Without one the page is in quirks mode, where `documentElement.clientHeight`
+        is the height of the whole document — which is what the maximised 3D canvas was
+        sized from, giving a 4 316 px canvas inside an 813 px panel."""
+        from tracklog_viewer import render_html
+
+        page = render_html._page("t", ["<article></article>"])
+        assert page.lstrip().lower().startswith("<!doctype html>")
+
+    def test_the_maximised_canvas_is_sized_from_its_panel(self):
+        """Not from a global that means something different in quirks mode. The browser
+        test in test_view3d_fullscreen.py measures the consequence; this is the cause,
+        and it is cheap enough to check without a browser."""
+        assert "panel.clientWidth" in view3d.SCRIPT
+        assert "document.documentElement.clientWidth + 'px'" not in view3d.SCRIPT
 
     def test_the_canvas_renderer_is_still_whole(self):
         """`view3d.py` is the fallback and a live one — it is what runs after a context

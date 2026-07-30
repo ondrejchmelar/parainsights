@@ -351,7 +351,7 @@ the columns are blank rather than printing a number that is wrong.
 
 ## Status
 
-Done and tested (162 tests):
+Done and tested (179 tests):
 
 - `igc.py` — parser + fix cleanup. All 61 sample files parse, no failures, no warnings,
   timezone resolved 61/61.
@@ -546,19 +546,72 @@ imprecise pinch spun the camera. Now the pan follows the centroid, `zoomAt` hand
 scale about that point, and there is no twist. Measured from a headless browser driving
 synthetic touch events: `pinch 1.00->2.00 yaw=-0.42`, the yaw unchanged from its start.
 
-### Full screen without the Fullscreen API
+### Full screen: the API, with the in-page maximise behind it
 
-The expand button maximises the panel *in the page* (a fixed-position class) rather than
-calling `requestFullscreen`. The target is a page inside an iframe that has not been
-granted the fullscreen permission, where the API fails two ways at once — it throws
-synchronously without a user activation and rejects without the permission — and the
-button visibly did nothing.
+The expand button calls `requestFullscreen` and maximises the panel *in the page* (a
+fixed-position class) only when that fails. It was the other way round for as long as a
+published artifact was the primary destination: inside an iframe without the fullscreen
+permission the API fails two ways at once — it throws synchronously without a user
+activation and rejects without the permission — and the button visibly did nothing. On a
+host that permission is granted, and real full screen is what a reader means by the word:
+the browser chrome goes with it, and the OS knows the window is presenting.
+
+There is a third failure the promise does not describe: an implementation that returns
+`undefined` and quietly does nothing. So the fallback is armed from a `catch`, from a
+rejected promise, *and* from a check 120 ms later that asks whether the panel actually
+became the fullscreen element. Everything downstream — sizing, the redraw ladder, the
+Escape key — asks `panelIsFull()`, which is true for either path, so there is one state
+machine rather than two.
+
+Escape is deliberately not intercepted in real full screen: the browser already exits on
+it, and taking the key would only race. The in-page path has nobody else to do it, so
+there it is handled.
+
+Testing this needed a stub. `requestFullscreen` requires a user activation and a
+synthetic `click()` is not one, so a browser test reaches the *fallback* for free and can
+only reach the granted path by standing in for the browser — recording the request,
+reporting the panel as `document.fullscreenElement`, and firing `fullscreenchange`. Both
+paths are pinned, along with leaving full screen again and not stranding the in-page
+class on the way out.
 
 The canvas then needed explicit pixel sizing: a percentage height does not resolve to
 anything the backing store can match until layout settles, so the first redraw came out at
 the old size. `applyMaximisedSize()` writes px, and a redraw ladder at 0/80/200/500 ms
 catches whatever the browser settles late. Verified:
 `maximised box=1185x713 backing=1185x713 match=true | restored box=1185x508 backing=1185x508`.
+
+**Which pixels, though — the bug that made the controls useless.** Those px came from
+`document.documentElement.clientWidth/clientHeight`, which is the viewport in standards
+mode and the *whole document* in quirks mode. The report had no doctype, so it was in
+quirks mode, and maximising a 4 316 px report gave a 4 316 px canvas inside an 813 px
+panel. What that looks like from the reader's chair: the terrain is drawn for a viewport
+five times too tall, so the visible strip is a fragment of a picture composed somewhere
+off-screen; the track overlay and the GL heightfield disagree, because the GL canvas is
+sized by `inset: 0` and got the panel's real height; and the controls sit exactly where
+CSS puts them and appear to do nothing, because the projection every gesture and every
+button anchors through belongs to a canvas five times the size of the one on screen.
+
+Measured on the real report, before and after:
+
+| | panel | 2D canvas | GL canvas | GL backing store |
+|---|---|---|---|---|
+| before | 1265×813 | 1265×**4316** | 1265×811 | 1265×**4316** |
+| after | 1265×813 | 1265×811 | 1265×811 | 1265×811 |
+
+Two fixes, and the second is the durable one. The report now emits `<!doctype html>` —
+it should have all along; quirks mode was never intended and nothing else in the layout
+had noticed. And the canvas is sized from **`panel.clientWidth/clientHeight`**: the
+panel is `position: fixed; inset: 0` when maximised, so its own padding box *is* the
+space to fill, and it is the identical box the GL canvas resolves `inset: 0` against.
+Two measurements that cannot disagree, against two globals that did. The panel is
+embeddable and does not own the document it lands in, so it must not depend on the mode
+that document is parsed in.
+
+`tests/test_view3d_fullscreen.py` maximises the panel in a browser and measures the
+result in **both** modes — including `document.elementFromPoint` at each control's own
+centre, which is the question a click actually asks. Against the old code the quirks case
+fails at 3 021 px of canvas in an 813 px panel; the standards case passes, which is
+exactly why a single-mode test would have been worthless.
 
 ### Image quality is set by the tile budget
 

@@ -208,8 +208,16 @@ STYLE = """
 canvas.view3d { display: block; width: 100%; aspect-ratio: 21 / 9; cursor: grab;
   background: linear-gradient(180deg, var(--panel-2) 0%, var(--panel) 62%); touch-action: none; }
 @media (max-width: 900px) { canvas.view3d { aspect-ratio: 4 / 3; } }
-.view3d-panel:fullscreen { width: 100vw; height: 100vh; margin: 0; }
-.view3d-panel:fullscreen canvas.view3d { height: 100vh; aspect-ratio: auto; }
+/* Real full screen, which is the path taken wherever the permission allows it. The UA
+   stylesheet already positions the element over the screen; all that is needed is to
+   undo the full-bleed sizing, which would otherwise keep the panel `--page` wide and
+   pulled left by half the difference. 100%/100% and not 100vw/100vh: the viewport units
+   are the *page's* viewport, and this element's containing block is the screen. */
+.view3d-panel:fullscreen { width: 100%; height: 100%; margin: 0; border: 0; }
+.view3d-panel:fullscreen canvas.view3d { width: 100%; height: 100%; aspect-ratio: auto; }
+/* The backdrop is black by default and shows for a frame at either edge of the
+   transition, which reads as a flash against a light report. */
+.view3d-panel::backdrop { background: var(--panel); }
 /* The fallback for an iframe that is not allowed real fullscreen. inset:0 with auto
    width and height fills the layout viewport exactly — 100vw/100vh would overshoot by
    the scrollbar and leave the canvas the wrong height. */
@@ -1484,48 +1492,103 @@ function initView3d(root, cursorTrack) {
     });
   });
 
-  // In-page maximise, deliberately *not* the Fullscreen API. The primary target is a
-  // page embedded in an iframe that is not granted fullscreen permission, where
-  // requestFullscreen throws synchronously without a user activation and rejects without
-  // the permission — two failure modes that between them made the button do nothing at
-  // all. position: fixed over the viewport needs no permission and behaves identically
-  // everywhere, which also makes it testable.
+  // Full screen is the real Fullscreen API, with the in-page maximise as the fallback.
+  //
+  // The API is what a reader means by full screen — it takes the browser chrome with it
+  // and the OS knows the window is presenting — and where the report is served from a
+  // host it is granted. But it fails two ways at once inside an iframe without the
+  // permission: `requestFullscreen` throws synchronously without a user activation, and
+  // rejects without the permission. So the fallback is not decoration, it is the path a
+  // published artifact takes, and it must be exercised. Both end in the same state as far
+  // as everything else here is concerned — `panelIsFull()` is the one question asked.
+  function panelIsFull(panel) {
+    return panel.classList.contains('is-maximised') ||
+           document.fullscreenElement === panel ||
+           document.webkitFullscreenElement === panel;
+  }
+
   // Percentage height on a canvas resolves against a parent whose own height is being
   // established in the same pass, and it did not settle before the redraw — the CSS box
   // read 100 % of the viewport while the backing store kept the aspect-ratio height. An
   // explicit pixel size removes the dependency entirely.
+  // Measured from the panel, never from a global. Maximised or truly full screen, the
+  // panel's own box *is* the space to fill, and it is the same box the GL canvas
+  // underneath gets from `inset: 0` — two measurements that cannot disagree.
+  // `document.documentElement.clientWidth/clientHeight` looked equivalent and is not:
+  // in quirks mode clientHeight is the height of the whole *document*, so a report five
+  // screens long maximised to a 4 316 px canvas inside an 813 px panel. The report has
+  // a doctype now, but a viewer that renders it another way — an iframe, an email
+  // client, a page that embeds the panel in something taller — must not be able to do
+  // that again.
   function applyMaximisedSize() {
     var panel = canvas.closest('.view3d-panel');
-    if (panel.classList.contains('is-maximised')) {
-      canvas.style.width = document.documentElement.clientWidth + 'px';
-      canvas.style.height = document.documentElement.clientHeight + 'px';
+    if (panelIsFull(panel)) {
+      // clientWidth/clientHeight, not getBoundingClientRect: the panel keeps a 1 px
+      // border top and bottom, and `inset: 0` on the GL canvas resolves against the
+      // padding box. This is the same box, to the pixel.
+      canvas.style.width = panel.clientWidth + 'px';
+      canvas.style.height = panel.clientHeight + 'px';
     } else {
       canvas.style.width = '';
       canvas.style.height = '';
     }
   }
 
-  function toggleMaximise() {
-    var panel = canvas.closest('.view3d-panel');
-    panel.classList.toggle('is-maximised');
+  // The new box is not measurable immediately, and one follow-up frame was not enough:
+  // measured with __view3d.metrics(), the box read 713 px while the backing store was
+  // still 508 until an explicit later redraw. A short ladder of redraws costs nothing on
+  // a toggle and is not sensitive to how long layout takes. Real full screen needs it
+  // more than the in-page path, not less: the box changes when the compositor says so.
+  function settleSize() {
     applyMaximisedSize();
-    // Force the redraw past the layout change rather than waiting for an observer: the
-    // box changes in the same frame as the class, and a single rAF sometimes runs before
-    // the new geometry is available.
     view.panX = 0;
     view.panY = 0;
-    // The new box is not measurable immediately, and one follow-up frame was not
-    // enough: measured with __view3d.metrics(), the box read 713 px while the backing
-    // store was still 508 until an explicit later redraw. A short ladder of redraws
-    // costs nothing on a toggle and is not sensitive to how long layout takes.
     [0, 80, 200, 500].forEach(function (delay) {
-      setTimeout(function () { resize(); draw(); }, delay);
+      setTimeout(function () { applyMaximisedSize(); resize(); draw(); }, delay);
     });
+  }
+
+  function maximiseInPage(panel) {
+    panel.classList.add('is-maximised');
+    settleSize();
+  }
+
+  function toggleMaximise() {
+    var panel = canvas.closest('.view3d-panel');
+    var full = document.fullscreenElement === panel ||
+               document.webkitFullscreenElement === panel;
+    if (full) {
+      // Leaving is symmetrical, and the fullscreenchange handler does the resizing.
+      (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      return;
+    }
+    if (panel.classList.contains('is-maximised')) {
+      panel.classList.remove('is-maximised');
+      settleSize();
+      return;
+    }
+    var request = panel.requestFullscreen || panel.webkitRequestFullscreen;
+    if (!request) return maximiseInPage(panel);
+    // Three ways this can fail and only one of them is a rejected promise: a synchronous
+    // throw with no user activation, a rejection without the permission, and an older
+    // implementation that returns undefined and simply does nothing. The check after a
+    // tick catches the third, which no amount of promise handling would.
+    try {
+      var pending = request.call(panel);
+      if (pending && pending.catch) pending.catch(function () { maximiseInPage(panel); });
+    } catch (error) {
+      return maximiseInPage(panel);
+    }
+    setTimeout(function () {
+      if (!panelIsFull(panel)) maximiseInPage(panel);
+    }, 120);
   }
 
   document.addEventListener('keydown', function (event) {
     if (event.key !== 'Escape') return;
     var panel = canvas.closest('.view3d-panel');
+    // Real full screen exits on Escape by itself, and taking the key from it would only
+    // race the browser. This is the in-page path, which has nobody else to do it.
     if (panel.classList.contains('is-maximised')) toggleMaximise();
   });
 
@@ -1543,7 +1606,15 @@ function initView3d(root, cursorTrack) {
     draw();
   }
   window.addEventListener('resize', refresh);
-  document.addEventListener('fullscreenchange', refresh);
+  // Entering or leaving real full screen is the same event either way, including the
+  // browser's own Escape. `settleSize` rather than `refresh`: the screen-sized box is not
+  // measurable in the frame the event arrives in, which is the whole reason for the
+  // ladder. Both spellings, because Safari still fires only the prefixed one.
+  ['fullscreenchange', 'webkitfullscreenchange'].forEach(function (name) {
+    document.addEventListener(name, function () {
+      if (canvas.closest('.view3d-panel')) settleSize();
+    });
+  });
   if (window.ResizeObserver) new ResizeObserver(refresh).observe(canvas);
 
   draw();
