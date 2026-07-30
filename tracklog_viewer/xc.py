@@ -30,6 +30,12 @@ class Turnpoint:
     time: str | None = None
 
 
+# Every side of an FAI triangle is at least 28% of the perimeter. There is no third
+# category: a closed course that fails the test is a flat triangle, which is what XContest
+# scores it as even when its three turnpoints are nearly in a line.
+FAI_MIN_SIDE = 0.28
+
+
 @dataclass
 class Route:
     """An optimised route: the legs between start, turnpoints and finish."""
@@ -43,6 +49,39 @@ class Route:
     @property
     def km(self) -> float:
         return self.distance / 1000.0
+
+    @property
+    def sides(self) -> list[float]:
+        """The three sides of the triangle, when the route has three turnpoints.
+
+        Not the same as `legs`: those run start → tp1 → tp2 → tp3 → finish, five points
+        and four legs. The triangle is the closed figure tp1-tp2-tp3, and its shortest
+        side is what decides FAI.
+        """
+        if len(self.points) < 5:
+            return []
+        corners = self.points[1:4]
+        return [
+            float(geo.distance(a.lat, a.lon, b.lat, b.lon))
+            for a, b in zip(corners, corners[1:] + corners[:1])
+        ]
+
+    @property
+    def shape(self) -> str:
+        """`fai`, `flat` or `open` — XContest's three categories and nothing else.
+
+        A closed course through three turnpoints is a triangle: FAI if every side is at
+        least 28% of the perimeter, flat otherwise. Judging degeneracy by the shortest
+        side does not work — a triangle flattened onto a line has sides a + b = c, so its
+        shortest side can still be a quarter of the perimeter — and it is not needed:
+        XContest scores a closed there-and-back as a flat triangle too.
+        """
+        if not self.closed:
+            return "open"
+        sides = self.sides
+        if len(sides) != 3 or sum(sides) <= 0:
+            return "open"
+        return "fai" if min(sides) / sum(sides) >= FAI_MIN_SIDE else "flat"
 
 
 def _sample(lat: np.ndarray, lon: np.ndarray, limit: int = MAX_SAMPLES) -> np.ndarray:

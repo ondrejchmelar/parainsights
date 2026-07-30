@@ -461,7 +461,7 @@ SCRIPT = r"""
 
     // Free distance through up to three turnpoints, same dynamic program as xc.py but
     // on a coarser sample so it stays instant in a browser.
-    var xc = freeDistance(lat, lon, s);
+    var course = freeDistance(lat, lon, s);
 
     var budget = { thermal: 0, glide: 0, other: 0 };
     climbs.forEach(function (c) { budget.thermal += c.duration; });
@@ -487,7 +487,8 @@ SCRIPT = r"""
     for (var g = 1; g < alt.length; g++) if (alt[g] > alt[g - 1]) gained += alt[g] - alt[g - 1];
 
     return {
-      lat: lat, lon: lon, glides: glides, xc: xc, budget: budget, wind: overall,
+      lat: lat, lon: lon, glides: glides, xc: course.km, shape: course.shape,
+      budget: budget, wind: overall,
       t: t, alt: alt, s: s, x: x, y: y, climb: climb, phases: phases, climbs: climbs,
       median: median, useBaro: useBaro, kind: track.kind, dated: !!track.dated,
       epoch: fixes[0].t,
@@ -523,22 +524,55 @@ SCRIPT = r"""
         d[a][b] = distance(lat[pick[a]], lon[pick[a]], lat[pick[b]], lon[pick[b]]);
       }
     }
+    // Predecessors per stage as well as the best value, so the chain can be walked back
+    // out: the distance alone cannot say whether the flight was a triangle.
     var best = new Float64Array(n);
+    var back = [];
     for (var leg = 0; leg < 4; leg++) {
       var next = new Float64Array(n);
+      var prev = new Int32Array(n);
+      for (var q = 0; q < n; q++) prev[q] = -1;
       for (var to = 0; to < n; to++) {
-        var top = 0;
+        var top = 0, arg = -1;
         for (var from = 0; from < to; from++) {
           var value = best[from] + d[from][to];
-          if (value > top) top = value;
+          if (value > top) { top = value; arg = from; }
         }
         next[to] = top;
+        prev[to] = arg;
       }
+      back.push(prev);
       best = next;
     }
-    var km = 0;
-    for (var e = 0; e < n; e++) if (best[e] > km) km = best[e];
-    return km;
+    var km = 0, end = 0;
+    for (var e = 0; e < n; e++) if (best[e] > km) { km = best[e]; end = e; }
+
+    var chain = [end], at = end;
+    for (var lg = 3; lg >= 0; lg--) {
+      at = back[lg][at];
+      if (at < 0) break;
+      chain.unshift(at);
+    }
+    return { km: km, shape: shapeOf(lat, lon, chain.map(function (i) { return pick[i]; }), km) };
+  }
+
+  // XContest's categories, the same test the Python side applies: closed under the 20%
+  // rule, then FAI if every side of the triangle is at least 28% of its perimeter.
+  function shapeOf(lat, lon, points, total) {
+    if (points.length < 5 || !total) return '';
+    var closing = distance(lat[points[0]], lon[points[0]],
+                           lat[points[4]], lon[points[4]]);
+    if (closing / total >= 0.2) return 'open distance';
+    var corners = [points[1], points[2], points[3]];
+    var sides = [];
+    for (var i = 0; i < 3; i++) {
+      var a = corners[i], b = corners[(i + 1) % 3];
+      sides.push(distance(lat[a], lon[a], lat[b], lon[b]));
+    }
+    var perimeter = sides[0] + sides[1] + sides[2];
+    if (perimeter <= 0) return 'open distance';
+    var shortest = Math.min(sides[0], Math.min(sides[1], sides[2])) / perimeter;
+    return shortest >= 0.28 ? 'FAI triangle' : 'flat triangle';
   }
 
   // ---- drawing ---------------------------------------------------------------
@@ -756,8 +790,8 @@ SCRIPT = r"""
     root.querySelector('.ql-stats').innerHTML =
       tile('airtime', hours + ' h ' + (minutes < 10 ? '0' : '') + minutes + ' m', '') +
       tile('xc distance', (a.xc / 1000).toFixed(1) + ' km',
-           'free, 3 turnpoints · ' + (a.flown / 1000).toFixed(0) + ' km flown, ' +
-           (a.straight / 1000).toFixed(0) + ' km straight') +
+           (a.shape ? a.shape + ' · ' : '') + (a.flown / 1000).toFixed(0) +
+           ' km flown, ' + (a.straight / 1000).toFixed(0) + ' km straight') +
       tile('altitude', Math.round(a.altMax) + ' m',
            'from ' + Math.round(a.altMin) + ' m, ' + (a.useBaro ? 'baro' : 'GPS')) +
       tile('height gained', Math.round(a.gained) + ' m', '') +
@@ -888,7 +922,7 @@ SCRIPT = r"""
 
   // A tab for a flight the reader added, inserted at the end of the strip so the order
   // is the order they were dropped in.
-  function addTab(uid, label, meta) {
+  function addTab(uid, label, meta, stat) {
     var strip = tabs() && tabs().strip;
     if (!strip) return;
     var tab = document.createElement('span');
@@ -906,6 +940,12 @@ SCRIPT = r"""
     sub.textContent = meta;
     open.appendChild(date);
     open.appendChild(sub);
+    if (stat) {
+      var third = document.createElement('span');
+      third.className = 'tab-stat';
+      third.textContent = stat;
+      open.appendChild(third);
+    }
     var close = document.createElement('button');
     close.type = 'button';
     close.className = 'tab-close';
@@ -940,7 +980,8 @@ SCRIPT = r"""
       var host = document.getElementById('quicklook');
       host.parentNode.insertBefore(article, host);
       present(article, a, name, uid);
-      addTab(uid, dateOf(a), name.replace(/\.[^.]+$/, '').slice(0, 22));
+      addTab(uid, dateOf(a), name.replace(/\.[^.]+$/, '').slice(0, 22),
+             (a.xc / 1000).toFixed(0) + ' km' + (a.shape ? ' · ' + a.shape : ''));
       if (window.__measureScrollbar) window.__measureScrollbar();
       tabs().show(uid);
     } catch (error) {

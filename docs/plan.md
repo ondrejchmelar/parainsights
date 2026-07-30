@@ -82,8 +82,30 @@ Parity with igc2kmz, plus the insights it lacks. In order:
     coloured by the same scales as the KMZ; below it the flight summary, thermal and
     glide tables, altitude/climb charts with a shared time cursor.
 
-Deferred: FAI/flat triangle scoring with multipliers, photo placement, task/turnpoint
-handling, multi-flight comparison.
+Deferred: XContest's scoring *multipliers* (the flat/FAI classification itself is done —
+`Route.shape`), photo placement, task/turnpoint handling, multi-flight comparison.
+
+### Wanted: the sun during the flight
+
+Where the sun was, minute by minute. It is cheap to compute — solar position from date,
+time and latitude/longitude is closed-form, no data source needed — and it answers
+questions a pilot actually has:
+
+- **which slopes were being lit**, and when they switched off. The east faces work first
+  and die by mid-afternoon; the classic mistake is arriving at a west face an hour before
+  it starts working. With the DEM already in hand, sun elevation and azimuth give the
+  angle of incidence on every grid cell, so the 3D view could shade the ground by *solar*
+  illumination at a chosen time rather than by a fixed north-west light — and animate it.
+- **whether a climb was thermic or convergence**: a good climb on a slope that had been in
+  shadow for two hours is not sun-driven.
+- **how much of the day was left**, against the flight's own clock. Sunset at the landing
+  field, and the last hour before it, is what decides whether a final glide is on.
+
+Notes for whoever builds it: the timezone is already resolved (`igc.py`), so local solar
+time is available; the shading normalisation in `view3d.py` (`litMid`/`litSpread`) is
+where a solar light vector would replace the fixed one; and the hillshade currently lights
+from the north-west, which is *never* where the sun is in the northern hemisphere — worth
+fixing at the same time, or at least labelling as artificial light.
 
 ## Weather
 
@@ -430,6 +452,43 @@ Two things this cost:
   Basemap. Verified by clicking it in a headless browser:
   `initial btn="Satellite" style=satellite painted=true | click1 btn="Map" style=map
   painted=true | click2 btn="Basemap" on=false | click3 btn="Satellite" cached=[satellite,map]`.
+
+### The lattice of squares, and three wrong theories about it
+
+The draped basemap showed a regular grid of dark lines over the whole slab, visible even
+where the ground is flat. Three plausible causes, all wrong:
+
+1. *The overdraw band is tinted twice.* Cells are drawn 12% oversized to cover the hairline
+   the affine texture fit leaves — and the relief tint was drawn over the same 12%, so the
+   overlap did receive two tints. Cutting the image to 4% while the tint stayed at 1.0
+   moved the artefact rather than removing it: every cell then had an untinted border.
+2. *The shading is sampled at one node per cell.* Averaging the four corners smoothed the
+   values but changed nothing on screen.
+3. *The tint itself.* Removing it entirely left the lattice exactly as it was — which is
+   what finally ruled the shading out.
+
+The cause was the overdraw itself. Stretching the *same* source slice over a 10% larger
+quad scales the imagery up inside each cell, so the content no longer lines up with its
+neighbour's and every boundary is a step. Growing the source rect by the same fraction
+about the same centre keeps the texture's scale, covers the seams, and the lattice is gone.
+
+The shading moved anyway, because it belongs in the texture: `shadedTexture()` composites
+the illumination into a copy of the basemap once, at grid resolution, and the browser
+interpolates it up. Smooth instead of faceted, one draw instead of one per cell per frame,
+and it made room for a finer mesh.
+
+### Terrain resolution, and paying for it in the right currency
+
+2 600 DEM nodes was 59×43 over an alpine box: 850 m per node, and every facet of the
+heightfield visible. The budget is 26 000 now (17 000 per flight when several share a
+document), which is ~270 m per node.
+
+Bytes and frames are separate costs and were being conflated. The grid costs bytes — it is
+a flat list of integers in the document. The *drape mesh* costs frames, one `drawImage` per
+cell, and is now budgeted in cells rather than derived from the grid: `FINE_BUDGET` 5 200
+settles in ~130 ms, `COARSE_BUDGET` 1 800 keeps a drag near 45 fps, and the fine mesh
+returns 180 ms after the last gesture. Measured with `__view3d.setInteracting()` and
+`redraw()` in a headless browser, on the Dolomites flight at 188×138 nodes.
 
 ### Shading gentle terrain
 

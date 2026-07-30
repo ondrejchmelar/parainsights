@@ -69,6 +69,12 @@ def main(argv: list[str] | None = None) -> int:
              "content-security policy blocks every request.",
     )
     parser.add_argument(
+        "--label", action="append", default=[], metavar="PILOT|SITE|GLIDER",
+        help="override what a flight is credited to, one --label per flight in order. "
+             "Empty fields keep what the file says: --label '|Hunza' sets only the site. "
+             "For flights whose logger recorded no pilot or launch.",
+    )
+    parser.add_argument(
         "--terrain", action="store_true",
         help="fetch DEM tiles and embed a 3D terrain view in the report (uses the network)",
     )
@@ -118,21 +124,39 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+SHAPE_NAMES = {
+    "fai": "FAI triangle",
+    "flat": "flat triangle",
+    "open": "open distance",
+}
+
+
+def _annotate(summary, label: str) -> None:
+    """Apply a `PILOT|SITE|GLIDER` override, leaving empty fields as the file had them."""
+    if not label:
+        return
+    fields = (label.split("|") + ["", "", ""])[:3]
+    for name, value in zip(("pilot", "site", "glider"), fields):
+        if value.strip():
+            setattr(summary, name, value.strip())
+
+
 def shape_of(route, analysis) -> str:
     """A short description of the flight's geometry, for the flight picker.
 
-    Deliberately not "triangle": a closed scored route satisfies XContest's 20%
-    closing rule, but calling it a triangle would claim the three-leg geometry and
-    FAI leg-ratio rules that we do not check.
+    The names are the ones a pilot uses. `xc.Route.shape` does the work: closure under
+    XContest's 20% rule, then the FAI 28% shortest-side test against the triangle's own
+    perimeter. Out and return is only offered for a course that did *not* close — a closed
+    there-and-back is a flat triangle, which is how it scores.
     """
     if route is None:
         return ""
-    summary = analysis.summary
-    if route.closed:
-        return "closed course"
-    if summary.straight_distance < 0.5 * summary.max_distance_from_takeoff:
-        return "out and return"
-    return "open distance"
+    shape = route.shape
+    if shape == "open":
+        summary = analysis.summary
+        if summary.straight_distance < 0.5 * summary.max_distance_from_takeoff:
+            return "out and return"
+    return SHAPE_NAMES.get(shape, "open distance")
 
 
 def _one(source: str, args, index: int = 0) -> dict:
@@ -142,6 +166,7 @@ def _one(source: str, args, index: int = 0) -> dict:
     flight = sources.load(source)
     analysis = analyse(flight, window=args.window)
     summary = analysis.summary
+    _annotate(summary, args.label[index] if index < len(args.label) else "")
 
     route = None
     if not args.no_xc:
@@ -155,8 +180,10 @@ def _one(source: str, args, index: int = 0) -> dict:
     tiles = None
     if args.terrain:
         # Several flights in one document each carry their own grid, so trim the
-        # budget when the report is shared.
-        budget = 6000 if len(args.flight) == 1 else 2600
+        # budget when the report is shared. 2 600 nodes was 59x43 over an alpine box —
+        # every facet of the heightfield visible as a quadrilateral. The drape mesh is
+        # capped separately in the renderer, so a finer grid costs bytes, not frames.
+        budget = 26000 if len(args.flight) == 1 else 17000
         ground = terrain_module.for_flight(analysis, max_points=budget)
         if ground is None:
             print(f"warning: no terrain data for {label}", file=sys.stderr)

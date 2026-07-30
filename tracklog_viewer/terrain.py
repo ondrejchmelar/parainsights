@@ -134,7 +134,7 @@ def _fetch_tile(zoom: int, x: int, y: int) -> np.ndarray | None:
 
 
 def fetch(west: float, east: float, south: float, north: float, *,
-          cols: int = 200, max_points: int = 6000) -> Terrain | None:
+          cols: int = 320, max_points: int = 26000) -> Terrain | None:
     """Build an elevation grid covering the box. Returns None if tiles are unreachable."""
     zoom = _choose_zoom(west, east, south, north)
     x0, y0 = _tile_indices(north, west, zoom)
@@ -186,8 +186,8 @@ def fetch(west: float, east: float, south: float, north: float, *,
     return Terrain(west=west, east=east, south=south, north=north, elevations=elevations)
 
 
-def for_flight(analysis, *, margin: float = 0.35, cols: int = 200,
-               max_points: int = 6000) -> Terrain | None:
+def for_flight(analysis, *, margin: float = 0.35, cols: int = 320,
+               max_points: int = 26000) -> Terrain | None:
     """Terrain covering the flight's bounding box, with a margin for context."""
     flight = analysis.flight
     west, east = float(flight.lon.min()), float(flight.lon.max())

@@ -116,6 +116,15 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   vertical speed exceeds 30 m/s; on GPS-only files that discards good horizontal track
   to fix a vertical glitch. A local-median despike costs 50 repairs where dropping cost
   122 fixes.
+- **The DEM budget is 26 000 nodes** (17 000 per flight in a shared document). 2 600 was
+  59×43 over an alpine box — every facet of the heightfield visible as a quadrilateral.
+  A finer grid costs bytes, not frames, because the drape mesh is budgeted separately.
+- **Triangles are flat or FAI, and nothing else.** `Route.shape` closes under XContest's
+  20% rule, then applies FAI's 28% shortest-side test against the *triangle's* perimeter —
+  `Route.sides`, the figure tp1-tp2-tp3, not `Route.legs`, which runs start → tp1 → tp2 →
+  tp3 → finish. Do not add a degeneracy test on side ratios: a triangle flattened onto a
+  line has a + b = c, so its shortest side can still be a quarter of the perimeter, and
+  XContest scores a closed there-and-back as a flat triangle anyway.
 - **Turn statistics are refused above 5 s sampling** (`TURN_RESOLUTION_LIMIT`). A circle
   takes ~20 s, so a 15 s KML aliases and produces a confident wrong number. **Tow
   detection is refused above 15 s** (`TOW_RESOLUTION_LIMIT`) for the same reason: a tow
@@ -169,6 +178,23 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   reaches zoom 12 (~22 m/px) on a cross-country box; the runtime path allows 120 because
   it pays in requests rather than bytes. A single-flight report embeds both styles at
   zoom 12 (~550 KB); a multi-flight document pays that per flight, so it takes zoom 11.
+- **The hillshade is baked into the texture, never drawn per cell.** Cells must overdraw
+  their neighbours — a projected quad is not a parallelogram, so the affine texture fit
+  leaves hairlines — and *any* semi-transparent tint drawn over that overdraw lands twice
+  in the overlap. That is a dark lattice over the whole slab; matching the tint to a
+  smaller extent gives every cell an untinted border, which is the same lattice again.
+  The basemap raster and the DEM are both axis-aligned in lon/lat, so `shadedTexture()`
+  composites the illumination into a copy of the image once, at grid resolution, and lets
+  the browser interpolate it. Smoother, faster, and no artefact.
+- **Overdrawing a texture cell means growing the source too.** Stretching the same slice
+  over a 10% larger quad scales the imagery up inside each cell, so its content no longer
+  lines up with its neighbour's and every boundary becomes a visible step. Grow the source
+  rect and the destination by the same fraction about the same centre. This, not the
+  shading, was the lattice that survived three attempts to fix it.
+- **The drape mesh is a cell budget, and coarse while the camera moves.** Each cell costs a
+  `drawImage`, so a mesh fine enough to hide its own quadrilaterals cannot run on every
+  frame of a drag: `FINE_BUDGET` 5 200 cells settles in ~130 ms, `COARSE_BUDGET` 1 800
+  keeps a drag near 45 fps, and a 180 ms timer after the last gesture swaps back.
 - **Hillshade is stretched to the terrain's own lit range.** A fixed shading curve assumes
   alpine relief; over the 390–761 m of ground a Czech flight crosses, `lit` stays within a
   few hundredths of flat-ground illumination and the overlay does nothing, which is how a

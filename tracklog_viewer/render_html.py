@@ -417,9 +417,17 @@ section { margin-top: 34px; }
   letter-spacing: 0.08em;
   color: var(--ink-3);
 }
+.tab .tab-stat {
+  font-family: 'NarrowDisplay', "Liberation Sans Narrow", ui-sans-serif, sans-serif;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-2);
+}
 .tab:hover { background: var(--panel-2); }
 .tab.is-on { background: var(--ink); }
-.tab.is-on .tab-date, .tab.is-on .tab-meta { color: var(--paper); }
+.tab.is-on .tab-date, .tab.is-on .tab-meta, .tab.is-on .tab-stat
+  { color: var(--paper); }
 .tab.is-on .tab-close { color: var(--paper); }
 .tab-add { flex: 0 0 auto; border-right: 2px solid var(--climb); }
 .tab-add .tab-open { padding-right: 13px; }
@@ -1382,13 +1390,20 @@ def _page(title: str, bodies: list[str], tabs: str = "") -> str:
 """
 
 
-def _tab(uid: str, date: str, meta: str, *, on: bool = False) -> str:
+def first_name(pilot: str | None) -> str:
+    """Just the given name. A tab has room for one word, and it is the one people use."""
+    return (pilot or "").strip().split(" ")[0] if pilot else ""
+
+
+def _tab(uid: str, date: str, meta: str, stat: str = "", *, on: bool = False) -> str:
     """One flight tab: open it, or remove it from the document."""
     return (
         f'<span class="tab{" is-on" if on else ""}" data-flight-tab="{uid}">'
         f'<button type="button" class="tab-open" aria-pressed="{"true" if on else "false"}">'
         f'<span class="tab-date">{date}</span>'
-        f'<span class="tab-meta">{meta}</span></button>'
+        f'<span class="tab-meta">{meta}</span>'
+        + (f'<span class="tab-stat">{stat}</span>' if stat else "")
+        + '</button>'
         f'<button type="button" class="tab-close" title="Remove this flight" '
         f'aria-label="Remove this flight">&#215;</button></span>'
     )
@@ -1412,7 +1427,10 @@ def render(analysis: Analysis, *, meteo=None, route=None, terrain=None,
         '<nav class="tabs" id="flight-tabs" role="group" aria-label="Choose a flight">'
         + ADD_TAB
         + _tab("f0", charts.escape(summary.date),
-               charts.escape(summary.site or "this flight"), on=True)
+               charts.escape(" · ".join(
+                   part for part in (first_name(summary.pilot), summary.site) if part
+               ) or "this flight"),
+               on=True)
         + '</nav>'
         '<p class="tabs-note">Drop in as many of your own tracks as you like — they are '
         'analysed in this page, nothing is uploaded anywhere. Any flight can be removed '
@@ -1459,12 +1477,23 @@ def render_multi(reports: list[dict]) -> str:
         fmt = report.get("format") or ""
         # Only worth showing when it is not the canonical source.
         fmt = "" if fmt in ("IGC", "?", "") else fmt
+        route = report.get("route")
+        # Who and where on one line, how far and what shape on the next: the distance and
+        # the geometry are what you scan a list of flights for.
+        stat = " &middot; ".join(
+            part for part in (
+                f"{route.km:.0f} km" if route else "",
+                charts.escape(shape),
+                "from " + charts.escape(fmt) if fmt else "",
+            ) if part
+        )
         buttons.append(_tab(
             uid,
             charts.escape(summary.date),
-            charts.escape(summary.site or "—")
-            + (" &middot; " + charts.escape(shape) if shape else "")
-            + (" &middot; from " + charts.escape(fmt) if fmt else ""),
+            charts.escape(" · ".join(
+                part for part in (first_name(summary.pilot), summary.site) if part
+            ) or "—"),
+            stat,
             on=index == 0,
         ))
 

@@ -353,12 +353,35 @@ function initView3d(root, cursorTrack) {
   var cellColour = null;      // one averaged map colour per texture cell
   var cellCols = 0, cellRows = 0;
 
+  // Two drape resolutions. Each cell costs a drawImage and an overlay fillRect, so the
+  // fine mesh is far too expensive to run on every frame of a drag — but a mesh coarse
+  // enough to drag smoothly shows its own quadrilaterals, which is what "visible squares"
+  // was. So: coarse while the reader is moving the camera, fine once they stop.
+  // Budgets in *cells*, not in columns: the grid's aspect varies wildly between a ridge
+  // run and a triangle, and what costs time is the cell count. Measured at ~22 us per
+  // cell in software rendering, so 5 200 is about 110 ms for the settled frame and 1 800
+  // keeps a drag near 40 fps.
+  var FINE_BUDGET = 5200;
+  var COARSE_BUDGET = 1800;
+  var interacting = false;
+  var settle = null;
+
   function texStep() {
-    // Texturing costs a drawImage per cell, so drape on a coarser mesh than shading.
-    return {
-      c: Math.max(Math.round(cols / 70), 1),
-      r: Math.max(Math.round(rows / 26), 1)
-    };
+    var scale = Math.sqrt(cols * rows / (interacting ? COARSE_BUDGET : FINE_BUDGET));
+    var step = Math.max(Math.round(scale), 1);
+    return { c: step, r: step };
+  }
+
+  // Called by every gesture handler. The trailing redraw is what actually puts the fine
+  // mesh on screen, so it has to fire even if the gesture ended without a final event.
+  function moving() {
+    interacting = true;
+    if (settle) clearTimeout(settle);
+    settle = setTimeout(function () {
+      settle = null;
+      interacting = false;
+      draw();
+    }, 180);
   }
 
   // A per-cell average of the map, taken once by letting the browser downscale the
@@ -436,7 +459,7 @@ function initView3d(root, cursorTrack) {
     view.map = true;
     style = next;
     if (ready[next]) {
-      basemap = ready[next].image;
+      basemap = ready[next].shaded || ready[next].image;
       scene.basemap = ready[next].box;
       sampleCellColours();
       showCredit(ready[next].box.attribution);
@@ -456,6 +479,12 @@ function initView3d(root, cursorTrack) {
     var image = new Image();
     image.onload = function () {
       ready[name] = { image: image, box: box };
+      // Shading depends on the style (a photograph needs less than a road map), so it is
+      // baked per style rather than once.
+      var was = style;
+      style = name;
+      ready[name].shaded = shadedTexture(image, box);
+      style = was;
       if (style === name) setBasemapStyle(name);
     };
     image.src = box.uri;
@@ -526,9 +555,12 @@ function initView3d(root, cursorTrack) {
       layers.forEach(function (layer) { mctx.drawImage(layer, 0, 0); });
       var image = new Image();
       image.onload = function () {
-        ready[styleName] = {image: image, box: box};
+        var was = style;
+        style = styleName;
+        ready[styleName] = {image: image, box: box, shaded: shadedTexture(image, box)};
+        style = was;
         if (style !== styleName) return;    // the reader cycled on while we stitched
-        basemap = image;
+        basemap = ready[styleName].shaded || image;
         scene.basemap = box;
         sampleCellColours();
         showCredit(source.attribution);
@@ -722,9 +754,65 @@ function initView3d(root, cursorTrack) {
 
   // Source rectangle in basemap pixels for a grid cell, so the map can be drawn cell
   // by cell and therefore sits *on* the surface rather than under it.
+  // The shading has to live in the texture, not in the geometry pass.
+  //
+  // Tinting each cell was three artefacts in a row. Cells must overdraw their neighbours,
+  // because a projected quad is not a parallelogram and the affine texture fit leaves
+  // hairline gaps otherwise — but a semi-transparent tint drawn over that overdraw lands
+  // twice in the overlap, which is a dark lattice over the whole slab; matching the tint
+  // to a smaller extent instead gives every cell an untinted border, which is the same
+  // lattice again. There is no per-cell extent that is right.
+  //
+  // The basemap raster and the DEM are both axis-aligned in lon/lat, so the illumination
+  // can be composited into a copy of the image once, at grid resolution, and stretched by
+  // the browser — which also interpolates it, so the result is smooth rather than faceted.
+  function shadedTexture(image, box) {
+    var iw = image.naturalWidth || image.width;
+    var ih = image.naturalHeight || image.height;
+    if (!iw || !ih) return image;
+    var out = document.createElement('canvas');
+    out.width = iw;
+    out.height = ih;
+    var octx = out.getContext('2d');
+    octx.drawImage(image, 0, 0);
+    if (litSpread <= 0) return out;
+
+    var shade = document.createElement('canvas');
+    shade.width = cols;
+    shade.height = rows;
+    var sctx = shade.getContext('2d');
+    var pixels = sctx.createImageData(cols, rows);
+    var boost = reliefBoost();
+    for (var r = 0; r < rows; r++) {
+      for (var c = 0; c < cols; c++) {
+        var t = Math.max(-1, Math.min(1, (shadeFactor(r, c) - litMid) / litSpread));
+        var i = (r * cols + c) * 4;
+        if (t >= 0) {
+          pixels.data[i] = 255; pixels.data[i + 1] = 252; pixels.data[i + 2] = 242;
+        } else {
+          pixels.data[i] = 18; pixels.data[i + 1] = 26; pixels.data[i + 2] = 38;
+        }
+        pixels.data[i + 3] = Math.round(Math.min(Math.abs(t) * 0.34 * boost, 1) * 255);
+      }
+    }
+    sctx.putImageData(pixels, 0, 0);
+
+    // Where the DEM's box sits inside the image's, in the same linear lon/lat mapping
+    // sourceRect uses — so the shading registers with the texture cell for cell.
+    var x0 = (dem.west - box.west) / (box.east - box.west) * iw;
+    var x1 = (dem.east - box.west) / (box.east - box.west) * iw;
+    var y0 = (box.north - dem.north) / (box.north - box.south) * ih;
+    var y1 = (box.north - dem.south) / (box.north - box.south) * ih;
+    octx.imageSmoothingEnabled = true;
+    octx.imageSmoothingQuality = 'high';
+    octx.drawImage(shade, 0, 0, cols, rows, x0, y0, x1 - x0, y1 - y0);
+    return out;
+  }
+
   function sourceRect(r, c, rStep, cStep) {
     var bm = scene.basemap;
-    var iw = basemap.naturalWidth, ih = basemap.naturalHeight;
+    var iw = basemap.naturalWidth || basemap.width;
+    var ih = basemap.naturalHeight || basemap.height;
     var lonW = dem.west + (dem.east - dem.west) * c / (cols - 1);
     var lonE = dem.west + (dem.east - dem.west) * Math.min(c + cStep, cols - 1) / (cols - 1);
     var latN = dem.north - (dem.north - dem.south) * r / (rows - 1);
@@ -761,7 +849,6 @@ function initView3d(root, cursorTrack) {
         var p10 = project(nodeX[i10], nodeY[i10], dem.z[i10]);
 
         if (withMap) {
-          var lit0 = shadeFactor(r, c);
           if (cellColour) {
             // Opaque base in the cell's average colour, on the true four corners.
             var ci = (Math.min(Math.floor(r / rStep), cellRows - 1) * cellCols +
@@ -788,16 +875,20 @@ function initView3d(root, cursorTrack) {
             p10[0] - p00[0], p10[1] - p00[1],
             p00[0], p00[1]
           );
-          ctx.drawImage(basemap, rect[0], rect[1], rect[2], rect[3], 0, 0, 1.12, 1.12);
-          // Relief on top, so the place names stay readable underneath. Lit is measured
-          // against this terrain's own range rather than a fixed midpoint.
-          if (litSpread > 0) {
-            var t = (lit0 - litMid) / litSpread;      // −1 in shadow, +1 in full light
-            var strength = Math.min(Math.abs(t), 1) * 0.30 * reliefBoost();
-            ctx.fillStyle = (t >= 0 ? 'rgba(255,252,242,' : 'rgba(18,26,38,') +
-              strength.toFixed(3) + ')';
-            ctx.fillRect(0, 0, 1.12, 1.12);
-          }
+          // Overdraw the *destination* to cover the affine seams, and expand the
+          // *source* by the same fraction about the same centre so the texture keeps its
+          // scale. Stretching the same slice over a larger quad — which is what an
+          // overdraw on the destination alone does — scales the imagery up inside every
+          // cell, so the content no longer lines up with its neighbour's, and every cell
+          // boundary becomes a visible step. That was the lattice of squares: not the
+          // shading, not the tint, but the texture drawn 10% too large in each cell.
+          var grow = 0.05;
+          ctx.drawImage(
+            basemap,
+            rect[0] - rect[2] * grow, rect[1] - rect[3] * grow,
+            rect[2] * (1 + 2 * grow), rect[3] * (1 + 2 * grow),
+            -grow, -grow, 1 + 2 * grow, 1 + 2 * grow
+          );
           ctx.setTransform(1, 0, 0, 1, 0, 0);
           continue;
         }
@@ -900,7 +991,7 @@ function initView3d(root, cursorTrack) {
     resize();
     ctx.clearRect(0, 0, W, H);
     refit();
-    var mapped = view.map && basemap && basemap.complete && basemap.naturalWidth > 0;
+    var mapped = view.map && basemap && (basemap.width || basemap.naturalWidth) > 0;
     drawTerrain(mapped);
     drawTrack();
     drawCursor();
@@ -973,6 +1064,7 @@ function initView3d(root, cursorTrack) {
   canvas.addEventListener('pointermove', function (event) {
     var previous = pointers.get(event.pointerId);
     if (!previous) return;
+    moving();
     pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     var box = canvas.getBoundingClientRect();
     var toCanvas = W / box.width;   // CSS pixels to canvas units
@@ -1019,6 +1111,7 @@ function initView3d(root, cursorTrack) {
 
   canvas.addEventListener('wheel', function (event) {
     event.preventDefault();
+    moving();
     zoomAt(event.deltaY < 0 ? 1.12 : 1 / 1.12, event.clientX, event.clientY);
     draw();
   }, { passive: false });
@@ -1031,6 +1124,7 @@ function initView3d(root, cursorTrack) {
   root.querySelectorAll('[data-view3d-act]').forEach(function (button) {
     button.addEventListener('click', function () {
       var act = button.dataset.view3dAct;
+      moving();
       if (act === 'rotate-left') view.yaw -= 0.35;
       else if (act === 'rotate-right') view.yaw += 0.35;
       else if (act === 'tilt-up') view.pitch = Math.min(1.45, view.pitch + 0.15);
@@ -1152,6 +1246,14 @@ function initView3d(root, cursorTrack) {
                ratio: Math.min(window.devicePixelRatio || 1, 2),
                attrW: canvas.width, attrH: canvas.height };
     },
+    // Exposed for tests: the grid it is drawing, and the drape resolution in force. The
+    // coarse-while-moving trick is a claim about frame cost, so both have to be measurable.
+    grid: function () {
+      var steps = texStep();
+      return { cols: cols, rows: rows, interacting: interacting,
+               cellCols: Math.round(cols / steps.c), cellRows: Math.round(rows / steps.r) };
+    },
+    setInteracting: function (on) { interacting = !!on; },
     // Exposed for tests: the projection as it currently stands. Zoom anchoring is a
     // claim about these numbers, so the numbers have to be readable.
     projection: function () {
