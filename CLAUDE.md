@@ -20,22 +20,32 @@ rather than importing across tools.
 
 ## Getting set up
 
+The environment is [uv](https://docs.astral.sh/uv/)'s. It installs the interpreter as well
+as the packages, so there is nothing to line up by hand:
+
 ```bash
-python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
-.venv/bin/python -m pytest -c pyproject.toml        # 155 tests, ~100 s, no network
+uv sync --extra dev          # creates .venv on the pinned Python, from uv.lock
+uv run pytest -c pyproject.toml     # 160 tests, ~100 s, no network
 ```
 
 `-c pyproject.toml` matters when the repo sits inside another project — pytest otherwise
 walks up and adopts the enclosing config.
 
+**The installed set is a fact, not a coincidence.** `uv.lock` is committed and CI runs
+`uv sync --locked`, which fails rather than silently resolving something new — so an
+upstream release cannot turn the pipeline red on its own, and when a bump is wanted it is
+`uv lock --upgrade` and a commit you can point at. `.python-version` pins the interpreter;
+uv refuses to build a venv that violates `requires-python`, which is what previously let a
+3.11 venv sit under a `>=3.12` floor unnoticed.
+
 Run it:
 
 ```bash
-.venv/bin/python -m tracklog_viewer.cli FLIGHT.igc --html out.html
-.venv/bin/python -m tracklog_viewer.cli FLIGHT.igc --meteo --terrain --html out.html
-.venv/bin/python -m tracklog_viewer.cli a.igc b.kmz c.igc --html all.html   # flight picker
-.venv/bin/python -m tracklog_viewer.cli FLIGHT.igc --kmz flight.kmz         # Google Earth
-.venv/bin/python -m tracklog_viewer.cli FLIGHT.igc --map map.html           # 3D map
+uv run python -m tracklog_viewer.cli FLIGHT.igc --html out.html
+uv run python -m tracklog_viewer.cli FLIGHT.igc --meteo --terrain --html out.html
+uv run python -m tracklog_viewer.cli a.igc b.kmz c.igc --html all.html   # flight picker
+uv run python -m tracklog_viewer.cli FLIGHT.igc --kmz flight.kmz         # Google Earth
+uv run python -m tracklog_viewer.cli FLIGHT.igc --map map.html           # 3D map
 ```
 
 Only `--meteo` and `--terrain` touch the network. Everything else is offline.
@@ -58,13 +68,13 @@ embedded imagery, the local charts, the canvas 3D view and the inlined font.
 
 Build for a host instead with `--online`: nothing is baked in, the 3D view fetches tiles at
 zoom 12–13 (10–20 m/px against the ~45 m/px an embedded image can afford), and the file is
-half the size. To put it on GitHub Pages:
+half the size. **That is the primary home** — the site is GitLab Pages, published from
+`public/` by the `pages` job in `.gitlab-ci.yml`:
 
 ```bash
-.venv/bin/python -m tracklog_viewer.cli FLIGHT.igc --terrain --meteo --online \
-  --html docs/index.html
-git add docs/index.html && git commit -m "Publish flight" && git push
-# then: repository Settings → Pages → Source: main /docs
+uv run python -m tracklog_viewer.cli FLIGHT.igc --terrain --meteo --online \
+  --html public/index.html
+git add public/index.html && git commit -m "Publish flight" && git push
 ```
 
 Nothing server-side is involved — it is one static HTML file. The same file opened over
