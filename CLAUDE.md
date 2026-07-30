@@ -8,7 +8,7 @@ parainsights/
 ├── CLAUDE.md              this file
 ├── pyproject.toml         one project, one venv, one test suite
 ├── tracklog_viewer/       the tool: IGC/KML/KMZ → analysis → HTML, KMZ, 3D map
-├── tests/                 pytest, 181 tests, no network
+├── tests/                 pytest, 185 tests, no network
 └── docs/
     ├── formats.md         IGC and KML/KMZ format research, measured on real files
     └── plan.md            scope, decisions and status
@@ -25,7 +25,7 @@ as the packages, so there is nothing to line up by hand:
 
 ```bash
 uv sync --extra dev          # creates .venv on the pinned Python, from uv.lock
-uv run pytest -c pyproject.toml     # 181 tests, ~110 s, no network
+uv run pytest -c pyproject.toml     # 185 tests, ~115 s, no network
 ```
 
 `-c pyproject.toml` matters when the repo sits inside another project — pytest otherwise
@@ -58,7 +58,7 @@ Three destinations, and the differences are not cosmetic:
 |---|---|---|---|
 | can fetch anything | **no** | yes | yes |
 | imagery | must be embedded | fetched, sharp | fetched, sharp |
-| terrain for an *uploaded* track | flat plane | real DEM possible | real DEM possible |
+| terrain for an *uploaded* track | flat plane | fetched at view time | fetched at view time |
 | weather for an uploaded track | fails, says so | works | works |
 | report size (reference flight) | 1.1 MB | 0.5 MB | 0.5 MB |
 
@@ -329,6 +329,18 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   clipped. JS sets `--scrollbar` and the panel is `calc(100vw - var(--scrollbar))`. Note
   that `scrollWidth` reports the ink extent even when clipping prevents scrolling — test
   by calling `scrollTo(300, 0)` and reading `scrollX` back.
+- **An uploaded track fetches its own DEM, and CORS is why it can.** `quicklook.py`
+  mosaics the terrarium tiles onto a canvas, reads the pixels back and decodes
+  `R * 256 + G + B / 256 - 32768` — the same formula as `terrain.py`, written twice
+  because there is no shared source between Python and the page. It works because the
+  tiles carry `Access-Control-Allow-Origin: *`; without that the canvas is tainted and
+  `getImageData` throws, which the code treats as *no DEM* rather than as an error, along
+  with every other way a tile can fail. Budgets differ from the CLI's on purpose: 12 tiles
+  rather than 20 (a reader waits through this one, and at ~320 m node spacing a zoom-10
+  tile already over-samples the grid) and 16 000 nodes rather than 26 000 (that budget is
+  bytes in a document; this grid is never serialised). Fetched **before** `initView3d`,
+  because re-running it on a live panel binds a second set of pointer handlers and every
+  gesture counts twice.
 - **Full screen is the real Fullscreen API, and the in-page maximise is its fallback.**
   It used to be the fallback only, because `requestFullscreen` fails two ways at once in
   an iframe without the permission — a synchronous throw with no user activation, and a
@@ -470,13 +482,6 @@ published artifact runs under a policy that blocks every external host.
 
 Written up with a plan in `docs/plan.md`:
 
-- **GitHub Pages, not a published artifact, as the primary home.** The artifact CSP is
-  what forces embedded imagery, an embedded DEM and a flat plane for uploaded tracks, and
-  it costs a real fullscreen too. On a host the report can fetch: `--online` already
-  builds for that (zoom 12–13 imagery at 10–20 m/px against ~45, and half the file size),
-  the terrarium DEM is CORS-open so an *uploaded* track could get real terrain, and
-  Open-Meteo would work for it as well. Keep the embedded path — it is what makes the
-  file work offline — but stop treating it as the default.
 - **Move some charts to the client.** Inline SVG is **34% of the document** (1.16 MB of
   3.39 MB): 605 KB in 9 altitude profiles, 279 KB in 238 sparklines, 161 KB in 3 plan
   views. The trade is data against CPU, and for the profile it is close to free — the 3D
@@ -501,11 +506,11 @@ Written up with a plan in `docs/plan.md`:
   that as an epoch put every uploaded IGC flight on 1 January 1970 — which the weather
   lookup then fetched the real 1970 weather for and presented as "the air that day".
   A file with no `HFDTE` is marked undated and the weather is refused rather than guessed.
-- An uploaded track gets the same 3D view, but over a **flat plane**: the DEM is a tile
-  fetch and a published page cannot make one. Imagery is attempted and arrives only when
-  the page is opened somewhere with a network. Altitudes are the track's own, so the shape
-  of the flight in the air is exact; height above ground is simply not available. Fetching
-  and decoding the terrarium DEM in the browser would fix this for a hosted page — the
-  tiles are CORS-open (`Access-Control-Allow-Origin: *`) — and is not written yet.
+- An uploaded track gets real terrain **where the page can fetch it**, and a flat plane
+  where it cannot. `quicklook.py` fetches and decodes the terrarium DEM itself; inside a
+  published artifact every host is blocked, the tiles fail, and the ground falls back to
+  one plane at the flight's lowest point with the caption saying so. Height above ground
+  is still not reported for an uploaded track — the DEM is there, the clearance series is
+  not written.
 - Times in the quicklook tables are **UTC**. The Python side resolves a timezone from the
   logger headers or the coordinates; the browser version does not.

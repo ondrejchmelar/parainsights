@@ -351,7 +351,7 @@ the columns are blank rather than printing a number that is wrong.
 
 ## Status
 
-Done and tested (181 tests):
+Done and tested (185 tests):
 
 - `igc.py` — parser + fix cleanup. All 61 sample files parse, no failures, no warnings,
   timezone resolved 61/61.
@@ -822,12 +822,41 @@ file with no `HFDTE` is marked undated so the weather is refused instead of gues
 
 ### A 3D view for an uploaded track
 
-The same `initView3d`, given a synthetic one-level DEM: 61 × 25 nodes at 30 m below the
-flight's lowest point. The elevation model is a tile fetch and a published page cannot make
-one, so there is no ground shape to show — but the altitudes are the track's own, so the
-*flight* is exact and rotatable, which is most of what the view is for. Imagery is
-attempted through the same tile path and arrives only when the page has a network; without
-it the plane stays bare and the credit says so.
+The same `initView3d`, and — where the page can reach a host — the same terrain as a built
+report. `quicklook.py` fetches the terrarium tiles itself, mosaics them onto a canvas,
+reads the pixels back and decodes `R * 256 + G + B / 256 - 32768`. That is allowed because
+the tiles are CORS-open (`Access-Control-Allow-Origin: *`), which is the difference between
+"reachable" and "readable": without those headers the canvas is tainted and `getImageData`
+throws, and the code treats that as no DEM rather than as an error.
+
+Three numbers differ from the CLI's on purpose. **Twelve tiles**, not twenty: this is a
+fetch a reader waits through and a request against a donated service, and it is enough —
+at the node spacing this grid ends up with (~320 m on a cross-country box) a zoom-10 tile
+already over-samples it, so the extra tiles would buy detail the mesh cannot hold. **16 000
+nodes**, not 26 000, and for the opposite reason to the CLI's: that budget is bytes in a
+document, this one is never serialised, so the only cost is the mesh. **A 9 s timeout**,
+after which it settles with whatever arrived — a CSP refusal fires `onerror` immediately
+and never gets there, but a slow phone on a mountain must not be left staring at a spinner.
+
+Measured against `terrain.py` on the same flight and the same box: the browser builds
+139×115 nodes spanning −22 to 1449 m at zoom 10, where Python builds 139×114 spanning −3
+to 1456 m at zoom 11. The spread is the deliberate tile budget, not a decode difference.
+
+Where no host can be reached — a published artifact, which is blocked from every one — the
+ground falls back to what it always was: one flat plane of 61 × 25 nodes at 30 m below the
+flight's lowest point, with the caption saying which it is. The altitudes are the track's
+own either way, so the *flight* is exact and rotatable, which is most of what the view is
+for. Imagery follows the same rule and the credit says so.
+
+The DEM is fetched **before** `initView3d`, not swapped in after it. There is no API for
+replacing the grid under a running view, and re-running `initView3d` would bind a second
+set of pointer handlers to the same canvas — every gesture counted twice. Inventing a
+swap-in path to save a second of waiting is the worse trade; the caption reads
+"Fetching terrain…" meanwhile.
+
+Tested without a network: `tests/test_quicklook_terrain.py` rewrites the tile URL to a
+data URI carrying a tile it encodes itself, with two known elevations in it, and asserts
+both come back to the metre — plus the flat-plane fallback when every tile fails.
 
 The panel is rebuilt from its original markup on every upload rather than re-initialised:
 `initView3d` attaches its own listeners, and a second set on the same canvas would move
