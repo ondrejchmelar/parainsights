@@ -56,7 +56,7 @@ TILE_SOURCES = {
 
 
 def data(analysis: Analysis, terrain, *, tolerance: float | None = None,
-         basemaps: dict | None = None) -> dict:
+         basemaps: dict | None = None, tiles: bool = True) -> dict:
     """Terrain grid, track and climbs, in the compact form the renderer wants."""
     flight = analysis.flight
     series = analysis.series
@@ -108,10 +108,10 @@ def data(analysis: Analysis, terrain, *, tolerance: float | None = None,
         # way to appear there — which is why both are embedded by default and the tile
         # templates below are only an upgrade for a page that does have a network.
         "basemaps": {name: image.to_dict() for name, image in (basemaps or {}).items()},
-        "tiles": {
+        "tiles": (tiles and {
             name: source for name, source in TILE_SOURCES.items()
             if name not in (basemaps or {})
-        } or None,
+        }) or None,
         "landing": {
             "lon": round(float(flight.lon[-1]), 5),
             "lat": round(float(flight.lat[-1]), 5),
@@ -271,12 +271,31 @@ canvas.view3d.is-dragging { cursor: grabbing; }
 
 SCRIPT = """
 // The scrollbar's width, so a full-bleed panel can be exactly the layout viewport.
+//
+// This has to be innerWidth - clientWidth: an offscreen probe element reports 0 in a
+// browser that gives overlay scrollbars to elements and a classic one to the document,
+// which is exactly what headless Chrome does, and the panel then overhangs by the
+// scrollbar's width and clips its own controls.
+//
+// The catch is *when* it is measured. On a phone, showing or hiding the address bar fires
+// a resize during which the two numbers are briefly inconsistent, and re-measuring then
+// gave the panel a phantom 10-20 px of scrollbar mid-scroll — the 3D view visibly
+// shrinking as you dragged. So: only on a width change, clamped to a plausible scrollbar,
+// and callable by anything that grows the page enough to introduce one.
 function measureScrollbar() {
   var width = window.innerWidth - document.documentElement.clientWidth;
-  document.documentElement.style.setProperty('--scrollbar', Math.max(width, 0) + 'px');
+  document.documentElement.style.setProperty(
+    '--scrollbar', Math.max(Math.min(width, 30), 0) + 'px');
 }
 measureScrollbar();
-window.addEventListener('resize', measureScrollbar);
+window.__measureScrollbar = measureScrollbar;
+var scrollbarWidth = window.innerWidth;
+window.addEventListener('resize', function () {
+  // A height-only resize is the address bar, and must not move anything sideways.
+  if (window.innerWidth === scrollbarWidth) return;
+  scrollbarWidth = window.innerWidth;
+  measureScrollbar();
+});
 
 
 function initView3d(root, cursorTrack) {
@@ -381,13 +400,15 @@ function initView3d(root, cursorTrack) {
 
   function tileZoom(source) {
     // Enough tiles to be sharp, few enough to be polite: aim for a mosaic no wider than
-    // about 4000 px across the DEM box.
-    for (var zoom = Math.min(13, source.max_zoom); zoom > 5; zoom--) {
+    // Nothing is embedded on this path, so the budget buys sharpness rather than bytes:
+    // 120 tiles reaches zoom 12-13 on a cross-country box, roughly 10-20 m per pixel
+    // against the 80 m that a 30-tile budget allowed.
+    for (var zoom = Math.min(14, source.max_zoom); zoom > 5; zoom--) {
       var a = tileNumbers(dem.west, dem.north, zoom);
       var b = tileNumbers(dem.east, dem.south, zoom);
       var across = Math.floor(b[0]) - Math.floor(a[0]) + 1;
       var down = Math.floor(b[1]) - Math.floor(a[1]) + 1;
-      if (across * down <= 30) return zoom;
+      if (across * down <= 120) return zoom;
     }
     return 6;
   }

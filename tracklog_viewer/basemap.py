@@ -44,7 +44,12 @@ STYLES = {
 DEFAULT_STYLE = "satellite"
 CACHE = Path.home() / ".cache" / "parainsights" / "osm"
 TILE_SIZE = 256
-MAX_TILES = 24   # per layer, so satellite fetches at most twice this
+# Per layer, so satellite fetches at most twice this. 24 held the stitch to zoom 10 —
+# about 80 m per pixel, which is why the draped imagery looked like a smear. 80 lets a
+# typical cross-country box reach zoom 12 at roughly 22 m/px. Tiles are cached, so the
+# cost is paid once per flight; a multi-flight document passes a smaller budget because
+# it embeds one image per flight per style.
+MAX_TILES = 80
 TIMEOUT = 30
 USER_AGENT = "parainsights-tracklog-viewer/0.1 flight-analysis (contact: local user)"
 
@@ -94,11 +99,11 @@ def _lat_of(y: float, zoom: int) -> float:
 
 
 def _choose_zoom(west: float, east: float, south: float, north: float,
-                 max_zoom: int = 18) -> int:
-    for zoom in range(min(13, max_zoom), 5, -1):
+                 max_zoom: int = 18, max_tiles: int = MAX_TILES) -> int:
+    for zoom in range(min(14, max_zoom), 5, -1):
         wide = int(_tile_x(east, zoom)) - int(_tile_x(west, zoom)) + 1
         tall = int(_tile_y(south, zoom)) - int(_tile_y(north, zoom)) + 1
-        if wide * tall <= MAX_TILES:
+        if wide * tall <= max_tiles:
             return zoom
     return 6
 
@@ -123,7 +128,7 @@ def _fetch_tile(template: str, zoom: int, x: int, y: int) -> bytes | None:
 
 
 def fetch(west: float, east: float, south: float, north: float, *,
-          max_width: int = 2200, quality: int = 72,
+          max_width: int = 2400, quality: int = 55, max_tiles: int = MAX_TILES,
           style: str = DEFAULT_STYLE) -> Basemap | None:
     """Stitch a basemap covering the box. Returns None if tiles or Pillow are missing."""
     try:
@@ -132,7 +137,7 @@ def fetch(west: float, east: float, south: float, north: float, *,
         return None
 
     spec = STYLES.get(style, STYLES[DEFAULT_STYLE])
-    zoom = _choose_zoom(west, east, south, north, spec["max_zoom"])
+    zoom = _choose_zoom(west, east, south, north, spec["max_zoom"], max_tiles)
     x0 = int(_tile_x(west, zoom))
     x1 = int(_tile_x(east, zoom))
     y0 = int(_tile_y(north, zoom))

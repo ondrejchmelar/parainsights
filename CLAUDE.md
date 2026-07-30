@@ -40,6 +40,36 @@ Run it:
 
 Only `--meteo` and `--terrain` touch the network. Everything else is offline.
 
+## Where the report is read, and what that costs
+
+Three destinations, and the differences are not cosmetic:
+
+| | published artifact | GitHub Pages / any host | local file |
+|---|---|---|---|
+| can fetch anything | **no** | yes | yes |
+| imagery | must be embedded | fetched, sharp | fetched, sharp |
+| terrain for an *uploaded* track | flat plane | real DEM possible | real DEM possible |
+| weather for an uploaded track | fails, says so | works | works |
+| report size (reference flight) | 1.1 MB | 0.5 MB | 0.5 MB |
+
+A published artifact runs under a policy that blocks **every** external host, so anything
+it shows has to be inside the file. That single constraint explains the embedded DEM, the
+embedded imagery, the local charts, the canvas 3D view and the inlined font.
+
+Build for a host instead with `--online`: nothing is baked in, the 3D view fetches tiles at
+zoom 12–13 (10–20 m/px against the ~45 m/px an embedded image can afford), and the file is
+half the size. To put it on GitHub Pages:
+
+```bash
+.venv/bin/python -m tracklog_viewer.cli FLIGHT.igc --terrain --meteo --online \
+  --html docs/index.html
+git add docs/index.html && git commit -m "Publish flight" && git push
+# then: repository Settings → Pages → Source: main /docs
+```
+
+Nothing server-side is involved — it is one static HTML file. The same file opened over
+`file://` behaves identically.
+
 ## What the tool does
 
 Reads a tracklog and answers a pilot's questions about the flight: how the climbs were
@@ -113,14 +143,20 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   its `World_Boundaries_and_Places` label layer — both keyless. A photograph tells a pilot
   what the ground under a climb was; a road map does not. Attribution to Esri/Maxar is
   required and is rendered on the map and in the caption.
-- **Every basemap style the button offers is embedded.** Fetching tiles at view time was
-  tried and reverted: a published artifact cannot reach any host, so the toggle switched
-  to nothing at all and the report had no imagery whatsoever. Both styles are baked in
-  (~340 KB per flight at 1600 px / q62); `tiles` carries templates only for styles that
-  are *not* embedded, as an upgrade for a page opened locally. `--no-basemap` opts out.
+- **Every basemap style the button offers is embedded**, unless `--online` says the page
+  will have a network. Fetching tiles by default was tried and reverted: a published
+  artifact cannot reach any host, so the toggle switched to nothing at all and the report
+  had no imagery whatsoever. `tiles` carries templates only for styles that are *not*
+  embedded. `--no-basemap` opts out of imagery entirely.
   When stitching from tiles, give each source layer **its own canvas** and composite in
   order at the end: the label layer is requested second and frequently answers first, so
   painting into a shared mosaic as tiles arrive makes z-order a race.
+- **The tile budget is what sets image quality, not the JPEG settings.** `MAX_TILES = 24`
+  held every stitch to zoom 10 — about 80 m per pixel, which is why the draped imagery
+  looked like a smear, and no `max_width` above the native 1280 px could help. 80 tiles
+  reaches zoom 12 (~22 m/px) on a cross-country box; the runtime path allows 120 because
+  it pays in requests rather than bytes. A single-flight report embeds both styles at
+  zoom 12 (~550 KB); a multi-flight document pays that per flight, so it takes zoom 11.
 - **Hillshade is stretched to the terrain's own lit range.** A fixed shading curve assumes
   alpine relief; over the 390–761 m of ground a Czech flight crosses, `lit` stays within a
   few hundredths of flat-ground illumination and the overlay does nothing, which is how a
@@ -134,6 +170,15 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
 - **Uploading your own track is the first tab, not the last.** The bundled flights are a
   showcase. The reader's own file is the product, so the `+ your track` tab leads and a
   note under the tabs says the analysis happens in the page.
+- **Flights accumulate, and any of them can be removed.** An upload clones
+  `<template id="ql-template">` into a new article with its own uid and appends a tab;
+  every tab (bundled ones included) carries a `×` that removes both. Consequences worth
+  knowing: nothing inside that template may use an `id` — two flights would collide — the
+  tab strip is driven by **one delegated listener** on the strip rather than a listener per
+  tab, because tabs appear at runtime, and removing an article must delete its entries from
+  `window.__view3dAll`, each of which holds a DEM grid and a stitched image.
+- **A tab is a wrapper, not a button.** It contains an open button and a close button, and
+  a button inside a button is invalid HTML that browsers silently unnest.
 - **Full-bleed needs the scrollbar measured.** `100vw` includes the scrollbar, so a
   `100vw` panel hangs off the layout viewport and anything anchored to its right edge is
   clipped. JS sets `--scrollbar` and the panel is `calc(100vw - var(--scrollbar))`. Note
@@ -236,7 +281,15 @@ published artifact runs under a policy that blocks every external host.
   level, so flights older than ~60 days get no sounding.
 - `quicklook.py` duplicates a subset of the analysis in JavaScript. If the Python
   thresholds change, change them there too — there is no shared source for them.
+  It also has to parse `HFDTE` itself: B records carry only a time of day, and treating
+  that as an epoch put every uploaded IGC flight on 1 January 1970 — which the weather
+  lookup then fetched the real 1970 weather for and presented as "the air that day".
+  A file with no `HFDTE` is marked undated and the weather is refused rather than guessed.
 - An uploaded track gets the same 3D view, but over a **flat plane**: the DEM is a tile
   fetch and a published page cannot make one. Imagery is attempted and arrives only when
   the page is opened somewhere with a network. Altitudes are the track's own, so the shape
-  of the flight in the air is exact; height above ground is simply not available.
+  of the flight in the air is exact; height above ground is simply not available. Fetching
+  and decoding the terrarium DEM in the browser would fix this for a hosted page — the
+  tiles are CORS-open (`Access-Control-Allow-Origin: *`) — and is not written yet.
+- Times in the quicklook tables are **UTC**. The Python side resolves a timezone from the
+  logger headers or the coordinates; the browser version does not.

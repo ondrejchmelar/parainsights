@@ -59,7 +59,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--no-basemap", action="store_true",
         help="with --terrain, leave the map imagery out of the report (saves about "
-             "340 KB per flight, and the 3D view then shows hillshade only)",
+             "550 KB per flight, and the 3D view then shows hillshade only)",
+    )
+    parser.add_argument(
+        "--online", action="store_true",
+        help="build for a page that can reach the network (GitHub Pages, a local file): "
+             "imagery is fetched at view time at full resolution instead of embedded, "
+             "which is both sharper and much smaller. Not for a published artifact — its "
+             "content-security policy blocks every request.",
     )
     parser.add_argument(
         "--terrain", action="store_true",
@@ -87,7 +94,7 @@ def main(argv: list[str] | None = None) -> int:
                 reports[0]["analysis"], args.html,
                 meteo=reports[0]["meteo"], route=reports[0]["route"],
                 terrain=reports[0]["terrain"], basemaps=reports[0]["basemaps"],
-                kmz=reports[0]["kmz"],
+                fetch_tiles=reports[0]["fetch_tiles"], kmz=reports[0]["kmz"],
             )
         else:
             render_html.write_multi(reports, args.html)
@@ -153,16 +160,19 @@ def _one(source: str, args, index: int = 0) -> dict:
         ground = terrain_module.for_flight(analysis, max_points=budget)
         if ground is None:
             print(f"warning: no terrain data for {label}", file=sys.stderr)
-        elif not args.no_basemap:
+        elif not args.no_basemap and not args.online:
             # Place names are what make the 3D view navigable, and both styles are
             # embedded so the button works in a page that cannot fetch anything. A
             # shared document pays that twice per flight, so it gets smaller, harder
             # compressed images.
             single = len(args.flight) == 1
+            # A single-flight report can afford zoom 12 (about 22 m/px); a document with
+            # one image per flight per style cannot, and takes zoom 11 at 45 m/px.
             tiles = basemap_module.for_view(
                 ground,
-                max_width=1600 if single else 1000,
-                quality=62 if single else 50,
+                max_tiles=80 if single else 30,
+                max_width=2400 if single else 1150,
+                quality=55 if single else 45,
             )
             if not tiles:
                 print(f"warning: no basemap tiles for {label}", file=sys.stderr)
@@ -250,6 +260,9 @@ def _one(source: str, args, index: int = 0) -> dict:
         "payload": payload,
         "terrain": ground,
         "basemaps": tiles if args.terrain and not args.no_basemap else None,
+        # Templates for the styles that are not embedded. Suppressed by --no-basemap,
+        # which asks for no imagery at all rather than imagery from somewhere else.
+        "fetch_tiles": not args.no_basemap,
         "kmz": earth,
         "shape": shape_of(route, analysis),
         "file": label,

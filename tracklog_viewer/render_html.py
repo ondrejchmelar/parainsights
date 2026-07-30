@@ -365,12 +365,16 @@ section { margin-top: 34px; }
 /* Flight picker ----------------------------------------------------------- */
 .tabs { display: flex; flex-wrap: wrap; gap: 1px; background: var(--rule);
   border: 1px solid var(--rule); margin-bottom: 26px; }
-.tab {
-  flex: 1 1 150px;
+/* A tab is a wrapper, not a button, because it holds two: open and remove. A button
+   inside a button is invalid and browsers drop the inner one. */
+.tab { flex: 1 1 150px; position: relative; background: var(--panel); display: flex; }
+.tab-open {
+  flex: 1 1 auto;
+  min-width: 0;
   text-align: left;
   border: 0;
-  background: var(--panel);
-  padding: 9px 13px 10px;
+  background: none;
+  padding: 9px 26px 10px 13px;
   cursor: pointer;
   color: var(--ink-2);
   font: inherit;
@@ -378,6 +382,28 @@ section { margin-top: 34px; }
   flex-direction: column;
   gap: 1px;
 }
+.tab-close {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 19px;
+  height: 19px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: none;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.tab:hover .tab-close, .tab-close:focus-visible { opacity: 1; }
+.tab-close:hover { background: var(--climb); color: var(--paper); }
+/* Touch has no hover, so the control has to be permanently visible there. */
+@media (hover: none) { .tab-close { opacity: 0.7; } }
 .tab .tab-date {
   font-family: ui-monospace, "DejaVu Sans Mono", monospace;
   font-size: 13px;
@@ -394,7 +420,9 @@ section { margin-top: 34px; }
 .tab:hover { background: var(--panel-2); }
 .tab.is-on { background: var(--ink); }
 .tab.is-on .tab-date, .tab.is-on .tab-meta { color: var(--paper); }
+.tab.is-on .tab-close { color: var(--paper); }
 .tab-add { flex: 0 0 auto; border-right: 2px solid var(--climb); }
+.tab-add .tab-open { padding-right: 13px; }
 .tab-add .tab-date { font-size: 13px; }
 .tabs-note { margin: -18px 0 26px; font-size: 12.5px; color: var(--ink-3); }
 .swatch { width: 12px; height: 12px; border-radius: 2px; flex: none; }
@@ -643,20 +671,57 @@ function initFlight(root) {
 
 document.querySelectorAll('[data-flight-report]').forEach(initFlight);
 
-document.querySelectorAll('.tab[data-flight-tab]').forEach(function (tab) {
-  tab.addEventListener('click', function () {
-    var wanted = tab.dataset.flightTab;
-    document.querySelectorAll('.tab[data-flight-tab]').forEach(function (other) {
-      var on = other === tab;
-      other.classList.toggle('is-on', on);
-      other.setAttribute('aria-pressed', on ? 'true' : 'false');
+// One controller for the whole tab strip, delegated from the strip itself, because tabs
+// are added and removed at runtime: a listener attached per tab at load would miss every
+// flight the reader drops in later.
+var flightTabs = (function () {
+  var strip = document.getElementById('flight-tabs');
+
+  function show(key) {
+    document.querySelectorAll('.tab[data-flight-tab]').forEach(function (tab) {
+      var on = tab.dataset.flightTab === key;
+      tab.classList.toggle('is-on', on);
+      var open = tab.querySelector('.tab-open');
+      if (open) open.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
     document.querySelectorAll('[data-flight-report]').forEach(function (report) {
-      report.hidden = report.dataset.flightReport !== wanted;
+      report.hidden = report.dataset.flightReport !== key;
     });
     window.scrollTo({ top: 0, behavior: 'auto' });
-  });
-});
+  }
+
+  function remove(key) {
+    var tab = strip.querySelector('.tab[data-flight-tab="' + key + '"]');
+    var report = document.querySelector('[data-flight-report="' + key + '"]');
+    var wasOn = tab && tab.classList.contains('is-on');
+    if (tab) tab.parentNode.removeChild(tab);
+    if (report) {
+      // Drop the 3D handles this article owned: each holds a DEM grid and a stitched
+      // basemap image, so leaving them in the registry keeps a removed flight's memory.
+      if (window.__view3dAll) {
+        report.querySelectorAll('canvas.view3d').forEach(function (canvas) {
+          delete window.__view3dAll[canvas.id];
+        });
+      }
+      report.parentNode.removeChild(report);
+    }
+    if (!wasOn) return;
+    // Fall back to the first flight still in the document, or to the drop panel.
+    var next = strip.querySelector('.tab[data-flight-tab]:not(.tab-add)');
+    show(next ? next.dataset.flightTab : 'own');
+  }
+
+  if (strip) {
+    strip.addEventListener('click', function (event) {
+      var tab = event.target.closest('.tab[data-flight-tab]');
+      if (!tab) return;
+      if (event.target.closest('.tab-close')) remove(tab.dataset.flightTab);
+      else show(tab.dataset.flightTab);
+    });
+  }
+  return { show: show, remove: remove, strip: strip };
+})();
+window.__flightTabs = flightTabs;
 """
 
 
@@ -969,7 +1034,8 @@ def _meteo_profile(analysis: Analysis, meteo, uid: str, rows: list[str]) -> str:
 
 
 def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
-                 basemaps=None, kmz: bytes | None = None, uid: str = "f0",
+                 basemaps=None, fetch_tiles: bool = True,
+                 kmz: bytes | None = None, uid: str = "f0",
                  hidden: bool = False) -> str:
     """One flight's sections, from masthead to footer.
 
@@ -1066,7 +1132,8 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
     if terrain is not None:
         # A shared document carries several flights, so trade 3D track detail for size.
         payload = view3d.data(
-            analysis, terrain, tolerance=4.0 if uid == "f0" else 12.0, basemaps=basemaps
+            analysis, terrain, tolerance=4.0 if uid == "f0" else 12.0,
+            basemaps=basemaps, tiles=fetch_tiles
         )
         kmz_uri = None
         if kmz:
@@ -1312,30 +1379,48 @@ def _page(title: str, bodies: list[str], tabs: str = "") -> str:
 """
 
 
+def _tab(uid: str, date: str, meta: str, *, on: bool = False) -> str:
+    """One flight tab: open it, or remove it from the document."""
+    return (
+        f'<span class="tab{" is-on" if on else ""}" data-flight-tab="{uid}">'
+        f'<button type="button" class="tab-open" aria-pressed="{"true" if on else "false"}">'
+        f'<span class="tab-date">{date}</span>'
+        f'<span class="tab-meta">{meta}</span></button>'
+        f'<button type="button" class="tab-close" title="Remove this flight" '
+        f'aria-label="Remove this flight">&#215;</button></span>'
+    )
+
+
+ADD_TAB = (
+    '<span class="tab tab-add" data-flight-tab="own">'
+    '<button type="button" class="tab-open" aria-pressed="false" '
+    'title="Analyse your own track"><span class="tab-date">+ your track</span>'
+    '<span class="tab-meta">igc &middot; kml &middot; kmz</span></button></span>'
+)
+
+
 def render(analysis: Analysis, *, meteo=None, route=None, terrain=None,
-           basemaps=None, kmz: bytes | None = None) -> str:
+           basemaps=None, fetch_tiles: bool = True, kmz: bytes | None = None) -> str:
     """A report for a single flight, with the own-track picker alongside it."""
     summary = analysis.summary
     title = f"{summary.date} · {summary.site or 'flight'} — flight review"
     # Upload first: the bundled flight is a showcase, the reader's own track is the point.
     tabs = (
-        '<nav class="tabs" role="group" aria-label="Choose a flight">'
-        '<button type="button" class="tab tab-add" data-flight-tab="own" aria-pressed="false" '
-        'title="Analyse your own track"><span class="tab-date">+ your track</span>'
-        '<span class="tab-meta">igc · kml · kmz</span></button>'
-        '<button type="button" class="tab is-on" data-flight-tab="f0" aria-pressed="true">'
-        f'<span class="tab-date">{charts.escape(summary.date)}</span>'
-        f'<span class="tab-meta">{charts.escape(summary.site or "this flight")}</span></button>'
-        '</nav>'
-        '<p class="tabs-note">Your own flight is analysed in this page — nothing is '
-        'uploaded anywhere.</p>'
+        '<nav class="tabs" id="flight-tabs" role="group" aria-label="Choose a flight">'
+        + ADD_TAB
+        + _tab("f0", charts.escape(summary.date),
+               charts.escape(summary.site or "this flight"), on=True)
+        + '</nav>'
+        '<p class="tabs-note">Drop in as many of your own tracks as you like — they are '
+        'analysed in this page, nothing is uploaded anywhere. Any flight can be removed '
+        'with the &times; on its tab.</p>'
     )
     return _page(
         title,
         [
             _flight_body(
                 analysis, meteo=meteo, route=route, terrain=terrain,
-                basemaps=basemaps, kmz=kmz, uid="f0",
+                basemaps=basemaps, fetch_tiles=fetch_tiles, kmz=kmz, uid="f0",
             )
         ],
         tabs,
@@ -1361,6 +1446,7 @@ def render_multi(reports: list[dict]) -> str:
                 route=report.get("route"),
                 terrain=report.get("terrain"),
                 basemaps=report.get("basemaps"),
+                fetch_tiles=report.get("fetch_tiles", True),
                 kmz=report.get("kmz"),
                 uid=uid,
                 hidden=index > 0,
@@ -1370,29 +1456,24 @@ def render_multi(reports: list[dict]) -> str:
         fmt = report.get("format") or ""
         # Only worth showing when it is not the canonical source.
         fmt = "" if fmt in ("IGC", "?", "") else fmt
-        buttons.append(
-            f'<button type="button" class="tab{" is-on" if index == 0 else ""}" '
-            f'data-flight-tab="{uid}" aria-pressed="{"true" if index == 0 else "false"}">'
-            f'<span class="tab-date">{charts.escape(summary.date)}</span>'
-            f'<span class="tab-meta">{charts.escape(summary.site or "—")}'
-            f'{" · " + charts.escape(shape) if shape else ""}'
-            f'{" · from " + charts.escape(fmt) if fmt else ""}</span></button>'
-        )
+        buttons.append(_tab(
+            uid,
+            charts.escape(summary.date),
+            charts.escape(summary.site or "—")
+            + (" &middot; " + charts.escape(shape) if shape else "")
+            + (" &middot; from " + charts.escape(fmt) if fmt else ""),
+            on=index == 0,
+        ))
 
     # Upload first. The bundled flights are a showcase; the thing most readers want is
     # their own track, and a tab at the end of five examples does not say that.
-    buttons.insert(
-        0,
-        '<button type="button" class="tab tab-add" data-flight-tab="own" '
-        'aria-pressed="false" title="Analyse your own track">'
-        '<span class="tab-date">+ your track</span>'
-        '<span class="tab-meta">igc · kml · kmz</span></button>',
-    )
+    buttons.insert(0, ADD_TAB)
     tabs = (
-        '<nav class="tabs" role="group" aria-label="Choose a flight">'
+        '<nav class="tabs" id="flight-tabs" role="group" aria-label="Choose a flight">'
         f'{"".join(buttons)}</nav>'
-        '<p class="tabs-note">Your own flight is analysed in this page — nothing is '
-        'uploaded anywhere. The dated tabs are example flights.</p>'
+        '<p class="tabs-note">The dated tabs are example flights. Drop in as many of your '
+        'own tracks as you like — they are analysed in this page, nothing is uploaded '
+        'anywhere. Any flight can be removed with the &times; on its tab.</p>'
     )
     first = reports[0]["analysis"].summary
     title = f"tracklog viewer · {len(reports)} flights from {first.pilot or 'the log'}"
@@ -1400,10 +1481,11 @@ def render_multi(reports: list[dict]) -> str:
 
 
 def write(analysis: Analysis, path, *, meteo=None, route=None, terrain=None,
-          basemaps=None, kmz: bytes | None = None) -> Path:
+          basemaps=None, fetch_tiles: bool = True, kmz: bytes | None = None) -> Path:
     path = Path(path)
     path.write_text(
         render(analysis, meteo=meteo, route=route, terrain=terrain, basemaps=basemaps,
+               fetch_tiles=fetch_tiles,
                kmz=kmz),
         encoding="utf-8",
     )

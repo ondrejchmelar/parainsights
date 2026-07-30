@@ -22,6 +22,14 @@ from .render_map import RAMP_RGB
 
 
 def panel() -> str:
+    """The drop panel, plus a template for a result article.
+
+    Two pieces on purpose. The drop panel is a fixed article the `+ your track` tab shows.
+    A loaded flight becomes a *clone* of the template with its own uid, so several tracks
+    can be open at once — each with its own tab, charts and 3D view. Everything inside the
+    template is addressed by class, never by id: ids would collide the moment there were
+    two flights.
+    """
     ramp = "".join(
         f'<i style="background: rgb({r},{g},{b})"></i>' for _, (r, g, b) in RAMP_RGB
     )
@@ -30,68 +38,76 @@ def panel() -> str:
     <header class="masthead">
       <div>
         <p class="eyebrow">tracklog viewer</p>
-        <h1 id="ql-heading">Your own track</h1>
+        <h1>Your own tracks</h1>
       </div>
-      <div class="identity"><div><span class="key">source</span>
-        <span class="val" id="ql-source">—</span></div></div>
     </header>
     <div class="section-head" style="margin-top:26px">
       <h2>Read in this page</h2>
-      <p>Nothing is uploaded: the file is parsed and analysed by this page. Drop another
-         file on the panel below to replace it.</p>
+      <p>Nothing is uploaded: the file is parsed and analysed here. Each track you add gets
+         its own tab, and the &times; on a tab removes that flight again.</p>
     </div>
     <div class="panel ql-drop" id="ql-drop">
-      <input type="file" id="ql-file" accept=".igc,.IGC,.kml,.kmz" hidden>
-      <button type="button" class="ql-button" id="ql-pick">Choose a track file</button>
-      <span class="ql-hint">or drag it here &middot; .igc, .kml, .kmz</span>
-      <label class="ql-meteo"><input type="checkbox" id="ql-meteo-opt"> fetch the day's
-        weather (needs network; blocked in a published page)</label>
+      <input type="file" id="ql-file" accept=".igc,.IGC,.kml,.kmz" multiple hidden>
+      <button type="button" class="ql-button" id="ql-pick">Choose track files</button>
+      <span class="ql-hint">or drag them here &middot; .igc, .kml, .kmz</span>
       <p class="ql-status" id="ql-status" role="status" aria-live="polite"></p>
     </div>
-    <div class="stats ql-stats" id="ql-stats"></div>
-    <div id="ql-3d" hidden>
-      <div class="section-head"><h2>The flight in three dimensions</h2>
-        <p>Drag to pan, right-drag or ctrl-drag to rotate and tilt, scroll to zoom. The
-           ground is one flat plane: an elevation model has to be fetched, and a published
-           page is not allowed to. Imagery is tried anyway — it arrives if this page can
-           reach the network. The altitudes are your own, at true vertical scale.</p>
+  </article>
+  <template id="ql-template">
+    <article class="flight" data-flight-report="">
+      <header class="masthead">
+        <div>
+          <p class="eyebrow">tracklog viewer</p>
+          <h1 class="ql-heading">Your own track</h1>
+        </div>
+        <div class="identity"><div><span class="key">source</span>
+          <span class="val ql-source">—</span></div></div>
+      </header>
+      <div class="stats ql-stats"></div>
+      <div class="ql-3d">
+        <div class="section-head" style="margin-top:30px">
+          <h2>The flight in three dimensions</h2>
+          <p>Drag to pan, right-drag or ctrl-drag to rotate and tilt, scroll to zoom. The
+             ground is one flat plane: an elevation model has to be fetched, and a published
+             page is not allowed to. Imagery is tried anyway — it arrives if this page can
+             reach the network. The altitudes are your own, at true vertical scale.</p>
+        </div>
+        {view3d.panel(dict(tiles=view3d.TILE_SOURCES), "own")}
+        <p class="caption ql-3d-note"></p>
       </div>
-      {view3d.panel({"tiles": view3d.TILE_SOURCES}, "own")}
-      <p class="caption" id="ql-3d-note"></p>
-    </div>
-    <div class="panel hero ql-result" id="ql-result" hidden>
-      <p class="chart-title" id="ql-title">&nbsp;</p>
-      <p class="chart-title">Side view — altitude against distance flown</p>
-      <canvas class="ql-canvas" id="ql-side" width="1080" height="330"></canvas>
-      <div class="panel-divide"></div>
-      <p class="chart-title">Top view — the course line</p>
-      <canvas class="ql-canvas" id="ql-plan" width="1080" height="420"></canvas>
-      <div class="table-scroll">
-        <table id="ql-table">
-          <thead><tr><th>#</th><th>start</th><th>time</th><th>gain m</th><th>avg m/s</th>
-            <th>best m/s</th><th>turns</th><th>m/turn</th><th>wind</th></tr></thead>
-          <tbody></tbody>
-        </table>
+      <div class="panel hero ql-result">
+        <p class="chart-title">Side view — altitude against distance flown</p>
+        <canvas class="ql-canvas ql-side" width="1080" height="330"></canvas>
+        <div class="panel-divide"></div>
+        <p class="chart-title">Top view — the course line</p>
+        <canvas class="ql-canvas ql-plan" width="1080" height="420"></canvas>
+        <div class="table-scroll">
+          <table class="ql-table">
+            <thead><tr><th>#</th><th>start</th><th>time</th><th>gain m</th><th>avg m/s</th>
+              <th>best m/s</th><th>turns</th><th>m/turn</th><th>wind</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
-    </div>
-    <ul class="legend">
-      <li class="ramp">{ramp}</li>
-      <li>trace colour: sink &minus;4 m/s → climb +4 m/s</li>
-    </ul>
-    <div class="section-head" style="margin-top:30px"><h2>Glides</h2></div>
-    <div class="panel" style="padding:14px 16px 4px">
-      <div class="table-scroll">
-        <table id="ql-glides">
-          <thead><tr><th>#</th><th>start</th><th>time</th><th>km</th><th>height m</th>
-            <th>L/D</th><th>km/h</th></tr></thead>
-          <tbody></tbody>
-        </table>
+      <ul class="legend">
+        <li class="ramp">{ramp}</li>
+        <li>trace colour: sink &minus;4 m/s → climb +4 m/s</li>
+      </ul>
+      <div class="section-head" style="margin-top:30px"><h2>Glides</h2></div>
+      <div class="panel" style="padding:14px 16px 4px">
+        <div class="table-scroll">
+          <table class="ql-glides">
+            <thead><tr><th>#</th><th>start</th><th>time</th><th>km</th><th>height m</th>
+              <th>L/D</th><th>km/h</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
-    </div>
-    <div class="section-head" style="margin-top:30px"><h2>The air that day</h2></div>
-    <div class="stats" id="ql-meteo-stats"></div>
-    <p class="caption" id="ql-note"></p>
-  </article>"""
+      <div class="section-head" style="margin-top:30px"><h2>The air that day</h2></div>
+      <div class="stats ql-meteo-stats"></div>
+      <p class="caption ql-note"></p>
+    </article>
+  </template>"""
 
 
 STYLE = """
@@ -127,7 +143,10 @@ SCRIPT = r"""
   if (!drop) return;
   var input = document.getElementById('ql-file');
   var status = document.getElementById('ql-status');
-  var result = document.getElementById('ql-result');
+  var template = document.getElementById('ql-template');
+  // Every uploaded flight is a clone of the template with its own uid, so the lookups
+  // below are all scoped to one article. Nothing here may use an id.
+  var loaded = 0;
 
   var RAMP = [[-4, [23,80,143]], [-2, [42,120,214]], [-0.7, [143,182,230]],
               [0.7, [169,164,154]], [2, [240,160,122]], [4, [235,104,52]],
@@ -150,12 +169,26 @@ SCRIPT = r"""
   // ---- readers ---------------------------------------------------------------
   var B_RE = /^B(\d{2})(\d{2})(\d{2})(\d{2})(\d{5})([NS])(\d{3})(\d{5})([EW])([AV])(-\d{4}|\d{5})(-\d{4}|\d{5})/;
 
+  // Both syntaxes in the wild: HFDTE290523 and HFDTEDATE:280918,01.
+  var DATE_RE = /^HFDTE(?:DATE:)?(\d{2})(\d{2})(\d{2})/;
+
   function parseIgc(text) {
     var lines = text.split(/\r?\n/);
     var fixes = [];
     var day = 0, previous = null, baroSeen = false;
+    // Midnight of the flight's date, in Unix seconds. Fixes carry absolute times, as the
+    // ones read out of a KML already do: B records give only a time of day, and treating
+    // that as an epoch put every IGC flight on 1 January 1970 — which the weather lookup
+    // dutifully went and fetched the real weather for.
+    var base = null;
     for (var i = 0; i < lines.length; i++) {
       var line = lines[i];
+      var d = DATE_RE.exec(line);
+      if (d) {
+        var yy = +d[3];
+        base = Date.UTC(yy < 80 ? 2000 + yy : 1900 + yy, +d[2] - 1, +d[1]) / 1000;
+        continue;
+      }
       var m = B_RE.exec(line);
       if (!m) continue;
       var seconds = +m[1] * 3600 + +m[2] * 60 + +m[3];
@@ -166,9 +199,10 @@ SCRIPT = r"""
       var lon = (+m[7] + +m[8] / 60000) * (m[9] === 'W' ? -1 : 1);
       var baro = +m[11], gps = +m[12];
       if (baro) baroSeen = true;
-      fixes.push({ t: seconds + day, lat: lat, lon: lon, baro: baro, gps: gps });
+      fixes.push({ t: (base || 0) + seconds + day, lat: lat, lon: lon,
+                   baro: baro, gps: gps });
     }
-    return { fixes: fixes, baro: baroSeen, kind: 'IGC' };
+    return { fixes: fixes, baro: baroSeen, kind: 'IGC', dated: base !== null };
   }
 
   function parseKmlText(text) {
@@ -190,7 +224,9 @@ SCRIPT = r"""
         if (!isFinite(stamp) || parts.length < 2) continue;
         fixes.push({ t: stamp, lat: parts[1], lon: parts[0], baro: 0, gps: parts[2] || 0 });
       }
-      if (fixes.length > 1) return { fixes: fixes, baro: false, kind: 'KML gx:Track' };
+      if (fixes.length > 1) {
+        return { fixes: fixes, baro: false, kind: 'KML gx:Track', dated: true };
+      }
       fixes = [];
     }
     // Otherwise: placemarks carrying a Point and a TimeStamp or TimeSpan.
@@ -213,7 +249,7 @@ SCRIPT = r"""
       }
     }
     fixes.sort(function (a, b) { return a.t - b.t; });
-    return { fixes: fixes, baro: false, kind: 'KML placemarks' };
+    return { fixes: fixes, baro: false, kind: 'KML placemarks', dated: true };
   }
 
   // Minimal ZIP reader: locate the first .kml entry and inflate it. Browsers ship
@@ -441,7 +477,7 @@ SCRIPT = r"""
     return {
       lat: lat, lon: lon, glides: glides, xc: xc, budget: budget, wind: overall,
       t: t, alt: alt, s: s, x: x, y: y, climb: climb, phases: phases, climbs: climbs,
-      median: median, useBaro: useBaro, kind: track.kind,
+      median: median, useBaro: useBaro, kind: track.kind, dated: !!track.dated,
       epoch: fixes[0].t,
       duration: t[t.length - 1],
       flown: s[s.length - 1],
@@ -499,8 +535,8 @@ SCRIPT = r"""
     return { ink: probe.color };
   }
 
-  function drawSide(a) {
-    var canvas = document.getElementById('ql-side');
+  function drawSide(root, a) {
+    var canvas = root.querySelector('.ql-side');
     var ctx = canvas.getContext('2d');
     var W = canvas.width, H = canvas.height;
     var left = 54, right = 16, top = 14, bottom = 30;
@@ -561,8 +597,8 @@ SCRIPT = r"""
     ctx.textBaseline = 'alphabetic';
   }
 
-  function drawPlan(a) {
-    var canvas = document.getElementById('ql-plan');
+  function drawPlan(root, a) {
+    var canvas = root.querySelector('.ql-plan');
     var ctx = canvas.getContext('2d');
     var W = canvas.width, H = canvas.height;
     var pad = 24;
@@ -605,13 +641,11 @@ SCRIPT = r"""
   // not allowed to make — so the ground is one flat plane at the lowest point of the
   // flight. The shape of the flight in the air is the part worth seeing anyway, and it
   // is exact: altitudes are the track's own.
-  var host3d = document.getElementById('ql-3d');
-  var template3d = host3d ? host3d.innerHTML : '';
-  // The tile templates are already in the panel's markup; read them back rather than
+  // The tile templates are already in the template's markup; read them back rather than
   // repeating the URLs here, so there is one place they can be wrong.
   var TILES = (function () {
     try {
-      var node = host3d && host3d.querySelector('.view3d-data');
+      var node = template && template.content.querySelector('.view3d-data');
       return node ? (JSON.parse(node.textContent).tiles || null) : null;
     } catch (error) {
       return null;
@@ -669,34 +703,31 @@ SCRIPT = r"""
     return RAMP.length - 1;
   }
 
-  function show3d(a) {
-    if (!host3d || typeof initView3d !== 'function') return;
-    // Rebuild the panel from its original markup rather than re-initialising the old
-    // one: initView3d attaches its own listeners, and a second set on the same canvas
-    // would move the camera twice per drag.
-    host3d.innerHTML = template3d;
-    var panel = host3d.querySelector('.view3d-panel');
+  function show3d(root, a, uid) {
+    var host = root.querySelector('.ql-3d');
+    var panel = host && host.querySelector('.view3d-panel');
+    if (!panel || typeof initView3d !== 'function') return;
+    // Unique canvas id per flight: initView3d registers itself under it, and two panels
+    // sharing an id would leave the second unreachable.
+    panel.querySelector('canvas.view3d').id = 'view3d-' + uid;
     panel.querySelector('.view3d-data').textContent = JSON.stringify(scene3d(a));
-    host3d.hidden = false;
     initView3d(panel, null);
-    document.getElementById('ql-3d-note').textContent =
+    root.querySelector('.ql-3d-note').textContent =
       'Ground drawn as a flat plane at ' + Math.round(a.altMin - 30) + ' m — ' +
       Math.round(a.altMin) + ' m was your lowest point. Heights are ' +
       (a.useBaro ? 'pressure' : 'GPS') + ' altitude, at true vertical scale.';
   }
 
-  function present(a, name) {
-    document.getElementById('ql-heading').textContent = name.replace(/\.[^.]+$/, '');
-    document.getElementById('ql-source').textContent = a.kind + ', ' + a.t.length +
+  function present(root, a, name, uid) {
+    root.querySelector('.ql-heading').textContent = name.replace(/\.[^.]+$/, '');
+    root.querySelector('.ql-source').textContent = a.kind + ', ' + a.t.length +
       ' fixes at ~' + a.median.toFixed(0) + ' s';
-    document.getElementById('ql-title').textContent =
-      'Side view — altitude against distance flown';
     var hours = Math.floor(a.duration / 3600);
     var minutes = Math.round((a.duration % 3600) / 60);
     var turnTotal = a.climbs.reduce(function (sum, c) {
       return sum + (c.turns || 0);
     }, 0);
-    document.getElementById('ql-stats').innerHTML =
+    root.querySelector('.ql-stats').innerHTML =
       tile('airtime', hours + ' h ' + (minutes < 10 ? '0' : '') + minutes + ' m', '') +
       tile('xc distance', (a.xc / 1000).toFixed(1) + ' km',
            'free, 3 turnpoints · ' + (a.flown / 1000).toFixed(0) + ' km flown, ' +
@@ -725,10 +756,10 @@ SCRIPT = r"""
         (climb.wind ? Math.round(climb.wind.kmh) + ' ' + cardinal(climb.wind.from) : '—') +
         '</td></tr>';
     }).join('');
-    document.querySelector('#ql-table tbody').innerHTML = rows ||
+    root.querySelector('.ql-table tbody').innerHTML = rows ||
       '<tr><td colspan="9">No climbs met the thresholds.</td></tr>';
 
-    document.querySelector('#ql-glides tbody').innerHTML = a.glides.map(function (g, i) {
+    root.querySelector('.ql-glides tbody').innerHTML = a.glides.map(function (g, i) {
       var m2 = Math.floor(g.duration / 60), s2 = Math.round(g.duration % 60);
       return '<tr><td>' + (i + 1) + '</td><td>' + clock(a, a.t[g.start]) + '</td><td>' +
         m2 + ':' + (s2 < 10 ? '0' : '') + s2 + '</td><td>' + (g.distance / 1000).toFixed(1) +
@@ -736,28 +767,21 @@ SCRIPT = r"""
         (g.ld ? g.ld.toFixed(1) : '—') + '</td><td>' + Math.round(g.speed) + '</td></tr>';
     }).join('') || '<tr><td colspan="7">No glides met the thresholds.</td></tr>';
 
-    document.getElementById('ql-note').textContent =
+    root.querySelector('.ql-note').textContent =
       'Quick look: phases use the same 20 s progress heuristic as the full analysis. ' +
       'No terrain, basemap, weather or XC optimisation — those need the command line, ' +
       'which also reads the pressure altitude and the logger headers.' +
       (a.median > 5 ? ' Sampled every ' + a.median.toFixed(0) +
         ' s, too coarse to resolve a circle, so turn counts are omitted.' : '');
 
-    result.hidden = false;
-    drawSide(a);
-    drawPlan(a);
-    show3d(a);
-    showFlight('own');
-    window.scrollTo({ top: 0, behavior: 'auto' });
+    drawSide(root, a);
+    drawPlan(root, a);
+    show3d(root, a, uid);
 
-    var meteoStats = document.getElementById('ql-meteo-stats');
-    var wanted = document.getElementById('ql-meteo-opt').checked;
-    if (!wanted) {
-      meteoStats.innerHTML = '<div class="stat"><span class="key">weather</span>' +
-        '<span class="stat-value" style="font-size:15px">not requested</span>' +
-        '<span class="sub">tick the box before loading a file</span></div>';
-      return;
-    }
+    // Always attempted. It was a checkbox, on the reasoning that a request which cannot
+    // succeed in a published page should not be made silently — but the failure message
+    // says that better than an unticked box does, and every reader wanted the weather.
+    var meteoStats = root.querySelector('.ql-meteo-stats');
     meteoStats.innerHTML = '<div class="stat"><span class="key">weather</span>' +
       '<span class="stat-value" style="font-size:15px">fetching…</span></div>';
     fetchMeteo(a).then(function (m) {
@@ -780,6 +804,9 @@ SCRIPT = r"""
   // every external request, so this can only succeed when the page is opened locally —
   // hence the explicit opt-in and the plain failure message.
   function fetchMeteo(a) {
+    // Without a date there is no day to ask about, and asking anyway returns the weather
+    // of 1 January 1970 rather than an error.
+    if (!a.dated) return Promise.reject(new Error('the file carries no flight date'));
     var midLat = a.lat[Math.floor(a.lat.length / 2)];
     var midLon = a.lon[Math.floor(a.lon.length / 2)];
     var when = new Date(a.epoch * 1000);
@@ -824,21 +851,50 @@ SCRIPT = r"""
     });
   }
 
-  // Switch the document to a flight, reusing the tab machinery the examples use.
-  function showFlight(key) {
-    document.querySelectorAll('[data-flight-report]').forEach(function (report) {
-      report.hidden = report.dataset.flightReport !== key;
-    });
-    document.querySelectorAll('.tab[data-flight-tab]').forEach(function (tab) {
-      var on = tab.dataset.flightTab === key;
-      tab.classList.toggle('is-on', on);
-      tab.setAttribute('aria-pressed', on ? 'true' : 'false');
-    });
-  }
+  // The report's own tab controller owns the strip; this only asks it to switch or to
+  // add. Reimplementing the switch here was how the two got out of step.
+  function tabs() { return window.__flightTabs; }
 
   function fail(message) {
     status.textContent = 'Could not read that file: ' + message;
     status.classList.add('is-error');
+  }
+
+  // A tab for a flight the reader added, inserted at the end of the strip so the order
+  // is the order they were dropped in.
+  function addTab(uid, label, meta) {
+    var strip = tabs() && tabs().strip;
+    if (!strip) return;
+    var tab = document.createElement('span');
+    tab.className = 'tab';
+    tab.dataset.flightTab = uid;
+    var open = document.createElement('button');
+    open.type = 'button';
+    open.className = 'tab-open';
+    open.setAttribute('aria-pressed', 'false');
+    var date = document.createElement('span');
+    date.className = 'tab-date';
+    date.textContent = label;
+    var sub = document.createElement('span');
+    sub.className = 'tab-meta';
+    sub.textContent = meta;
+    open.appendChild(date);
+    open.appendChild(sub);
+    var close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'tab-close';
+    close.title = 'Remove this flight';
+    close.setAttribute('aria-label', 'Remove this flight');
+    close.innerHTML = '&#215;';
+    tab.appendChild(open);
+    tab.appendChild(close);
+    strip.appendChild(tab);
+  }
+
+  function dateOf(a) {
+    if (!a.dated) return 'no date';
+    var when = new Date(a.epoch * 1000);
+    return isFinite(when.getTime()) ? when.toISOString().slice(0, 10) : 'no date';
   }
 
   function handleText(text, name) {
@@ -849,7 +905,18 @@ SCRIPT = r"""
       var a = analyse(track);
       status.textContent = '';
       status.classList.remove('is-error');
-      present(a, name);
+      var uid = 'own' + (++loaded);
+      var article = template.content.firstElementChild.cloneNode(true);
+      article.dataset.flightReport = uid;
+      article.hidden = true;
+      // After the last flight in the document, before the quicklook drop panel's own
+      // article, so the reading order matches the tab order.
+      var host = document.getElementById('quicklook');
+      host.parentNode.insertBefore(article, host);
+      present(article, a, name, uid);
+      addTab(uid, dateOf(a), name.replace(/\.[^.]+$/, '').slice(0, 22));
+      if (window.__measureScrollbar) window.__measureScrollbar();
+      tabs().show(uid);
     } catch (error) {
       fail(error.message || String(error));
     }
@@ -874,15 +941,27 @@ SCRIPT = r"""
       .catch(function (error) { fail(error.message || String(error)); });
   }
 
+  // Several at once: dropping a season's folder on the panel should just work. They are
+  // read one at a time so the tab order matches the file order.
+  function handleFiles(list) {
+    var files = Array.prototype.slice.call(list || []);
+    (function next() {
+      var file = files.shift();
+      if (!file) return;
+      handleFile(file);
+      if (files.length) setTimeout(next, 60);
+    })();
+  }
+
   document.getElementById('ql-pick').addEventListener('click', function () { input.click(); });
-  // The "+" tab is the entry point: it shows this article and opens the picker.
+  // The "+" tab shows the drop panel; the report's tab controller has already switched to
+  // it by the time this runs, so all that is left is to open the picker.
   document.querySelectorAll('.tab[data-flight-tab="own"]').forEach(function (tab) {
     tab.addEventListener('click', function () {
-      showFlight('own');
-      if (document.getElementById('ql-result').hidden) input.click();
+      input.click();
     });
   });
-  input.addEventListener('change', function () { handleFile(input.files[0]); });
+  input.addEventListener('change', function () { handleFiles(input.files); });
   ['dragenter', 'dragover'].forEach(function (type) {
     drop.addEventListener(type, function (event) {
       event.preventDefault();
@@ -894,7 +973,7 @@ SCRIPT = r"""
       event.preventDefault();
       drop.classList.remove('is-over');
       if (type === 'drop' && event.dataTransfer && event.dataTransfer.files.length) {
-        handleFile(event.dataTransfer.files[0]);
+        handleFiles(event.dataTransfer.files);
       }
     });
   });

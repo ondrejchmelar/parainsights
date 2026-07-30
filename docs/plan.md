@@ -376,6 +376,24 @@ the old size. `applyMaximisedSize()` writes px, and a redraw ladder at 0/80/200/
 catches whatever the browser settles late. Verified:
 `maximised box=1185x713 backing=1185x713 match=true | restored box=1185x508 backing=1185x508`.
 
+### Image quality is set by the tile budget
+
+`MAX_TILES = 24` capped every stitch at zoom 10 — 81 m per pixel on the reference box —
+and no JPEG setting could recover detail that was never fetched: `max_width=1600` on a
+1280 px native canvas did nothing at all. The budget is what matters:
+
+| zoom | tiles | canvas | resolution |
+|---|---|---|---|
+| 10 | 10 | 1280×512 | 81 m/px |
+| 11 | 27 | 2304×768 | 45 m/px |
+| 12 | 72 | 4608×1024 | 22 m/px |
+
+A single-flight report embeds both styles at zoom 12 downscaled to 2400 px (~550 KB per
+flight, report 1.1 MB); a multi-flight document pays that once per flight and takes zoom 11
+instead. `--online` embeds nothing and lets the page fetch up to 120 tiles at view time —
+zoom 12–13, and a 0.5 MB file — which is the right build for GitHub Pages or a local file
+and the wrong one for a published artifact.
+
 ### Reverted: tiles at view time
 
 The section below describes fetching tiles when the page is opened. **It was reverted one
@@ -429,6 +447,39 @@ low-pass contrast on the bare hillshade went from sd 8.11 / span 35 to sd 9.85 /
 
 Worth being honest about the limit: this terrain really is 2 % relief at true vertical
 scale, and no shading makes it a mountain. That is what the ×2/×4 button is for.
+
+### Several tracks at once, and removing any of them
+
+The upload path used to overwrite one fixed article. Now each loaded flight is a clone of
+`<template id="ql-template">` with its own uid, inserted before the drop panel's article so
+reading order matches tab order, and every tab — bundled examples included — carries a `×`
+that removes the article and the tab together.
+
+Three things this forced:
+
+- **No ids inside the template.** Everything is addressed by class and scoped to the
+  article, because two flights would otherwise share `#ql-side`, `#ql-stats` and the rest.
+- **One delegated listener on the tab strip**, not one per tab. Tabs appear at runtime, and
+  listeners attached at load would miss every flight dropped in later. `render_html` owns
+  the controller and `quicklook` asks it to switch or add; the previous arrangement had two
+  independent copies of the switching logic, which is exactly how they got out of step.
+- **Removing an article must drop its 3D handles** from `window.__view3dAll`. Each holds a
+  DEM grid and a stitched basemap image, so a registry entry keeps a deleted flight's
+  memory alive.
+
+A tab is a `<span>` wrapper holding two buttons. A `<button>` inside a `<button>` is invalid
+and browsers silently unnest it.
+
+### The date an IGC file does not obviously have
+
+B records carry a time of day and nothing else; the date is in `HFDTE`, in either of two
+syntaxes. The browser parser was building fixes as `seconds since midnight` and calling that
+an epoch, which put every uploaded flight on 1 January 1970. Nothing looked wrong until the
+weather stopped being opt-in — at which point the page cheerfully fetched the *real* ERA5
+weather for 1 January 1970 at the flight's coordinates and captioned it "the air that day".
+A plausible wrong answer from a working request, which is the kind of bug a checkbox was
+hiding. Fixes now carry absolute epochs, as the ones read out of a KML always did, and a
+file with no `HFDTE` is marked undated so the weather is refused instead of guessed.
 
 ### A 3D view for an uploaded track
 
