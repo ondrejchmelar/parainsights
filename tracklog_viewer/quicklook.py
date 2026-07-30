@@ -15,8 +15,6 @@ basemap, the weather profile, or XC optimisation. Those need the CLI. The panel 
 so rather than quietly presenting a thinner analysis as the whole thing.
 """
 
-from __future__ import annotations
-
 from . import view3d
 from .render_map import RAMP_RGB
 

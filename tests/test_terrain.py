@@ -1,7 +1,5 @@
 """Terrain grid arithmetic and the 3D payload. No network: the grid is synthetic."""
 
-from __future__ import annotations
-
 import numpy as np
 import pytest
 

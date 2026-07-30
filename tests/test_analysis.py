@@ -5,8 +5,6 @@ how many turns are truly in a real thermal. These fly exact geometry instead: a
 40 m circle every 20 s climbing at 2 m/s has 10 turns in 200 s, by construction.
 """
 
-from __future__ import annotations
-
 import datetime as dt
 import math
 

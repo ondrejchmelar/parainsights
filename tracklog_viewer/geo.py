@@ -4,8 +4,6 @@ FAI-sanctioned distances are measured on a sphere of radius 6 371 000 m, so this
 is the correct model for flight distances, not an approximation we tolerate.
 """
 
-from __future__ import annotations
-
 import numpy as np
 
 R = 6371000.0

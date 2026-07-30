@@ -5,8 +5,6 @@ arrays and a resolved timezone, and never has to know that XCTrack hides the
 timezone in a base64 blob or that SkyDrop leaves the pilot name empty.
 """
 
-from __future__ import annotations
-
 import base64
 import datetime as dt
 import json

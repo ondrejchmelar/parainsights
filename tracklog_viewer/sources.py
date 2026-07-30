@@ -13,8 +13,6 @@ exactly which file to hand over. A *direct* link to an .igc/.kmz file downloads 
 works normally.
 """
 
-from __future__ import annotations
-
 import hashlib
 import re
 import urllib.error

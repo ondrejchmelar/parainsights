@@ -7,8 +7,6 @@ climb rate. Flying straight gives progress near 1; circling drives it towards 0.
 Everything here returns plain dataclasses so both renderers can serialise them.
 """
 
-from __future__ import annotations
-
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 

@@ -16,8 +16,6 @@ URLs and stopped resolving in 2019, so every graph in an old KMZ is a broken ima
 charts here are rendered to PNG locally, and simply omitted if Pillow is unavailable.
 """
 
-from __future__ import annotations
-
 import io
 import struct
 import zipfile

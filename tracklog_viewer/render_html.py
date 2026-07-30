@@ -9,8 +9,6 @@ A second renderer using MapLibre + deck.gl over a terrain DEM is planned for the
 interactive 3D view; it needs network tiles, so it cannot replace this one.
 """
 
-from __future__ import annotations
-
 import base64
 import json
 import math

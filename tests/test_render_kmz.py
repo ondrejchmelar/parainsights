@@ -1,7 +1,5 @@
 """KMZ output: structure, coordinate order, and the things Google Earth needs."""
 
-from __future__ import annotations
-
 import xml.etree.ElementTree as ET
 import zipfile
 

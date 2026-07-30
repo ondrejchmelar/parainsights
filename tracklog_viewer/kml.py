@@ -9,8 +9,6 @@ nobody records pressure altitude. So an IGC is always the better input when you 
 one; this exists for when you only kept the KMZ.
 """
 
-from __future__ import annotations
-
 import datetime as dt
 import re
 import zipfile

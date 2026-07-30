@@ -9,8 +9,6 @@ The heightfield is drawn back-to-front by walking the grid from the farthest cor
 which is exact for a regular grid seen from outside it — no depth sort, no z-buffer.
 """
 
-from __future__ import annotations
-
 import json
 
 import numpy as np

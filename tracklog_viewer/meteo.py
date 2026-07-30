@@ -12,8 +12,6 @@ archive endpoint, so they can enrich a *pre-flight* plan but cannot describe a f
 already flown.
 """
 
-from __future__ import annotations
-
 import datetime as dt
 import hashlib
 import json

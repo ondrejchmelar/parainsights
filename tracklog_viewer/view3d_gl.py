@@ -28,8 +28,6 @@ changes. Two consequences worth knowing:
   linking untouched, and it is the cheap half of the frame anyway.
 """
 
-from __future__ import annotations
-
 # The payload, the markup and the controls are unchanged — this replaces how the
 # heightfield is drawn, not what is in the document. Re-exported so a caller can treat
 # the two modules as one surface.

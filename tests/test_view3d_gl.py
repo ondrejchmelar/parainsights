@@ -13,8 +13,6 @@ under --virtual-time-budget the clock does not advance during synchronous work, 
 duration comes back zero. The measured frame costs are in docs/plan.md.
 """
 
-from __future__ import annotations
-
 import json
 import math
 import re
