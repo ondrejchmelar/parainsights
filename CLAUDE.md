@@ -205,6 +205,17 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   WebGL at none. But `drawTerrain`/`fillHull`/`texturedTriangle` are not dead code: they
   run on a browser without WebGL *and* after a `webglcontextlost`, so they are kept whole
   and there is a test that says so. The paragraph below is what that path still does.
+- **The draped texture is filtered LINEAR, with no mipmaps.** Mipmapping the terrain
+  looked obviously right and cost more than half the detail on screen: mip level comes
+  from the *longest* texture derivative, and terrain is viewed at a grazing angle, so a
+  low pitch blurs by the elongated axis in both directions. It reads as two faults with
+  one cause — the imagery goes soft, and the terrain goes **flat**, because
+  `shadedTexture()` bakes the hillshade into the texture being blurred away. Measured at
+  zoom 4 / pitch 0.20 against the canvas renderer: 44% of its detail mipmapped, 64% with
+  16× anisotropy, 98% with plain LINEAR. Anisotropy is queried and reported but not used.
+  **Measure any change here on a real report** — the effect needs the ratio between
+  texture resolution and projected ground scale that a real DEM and stitched basemap
+  have, and it does not reproduce on synthetic test data.
 - **A WebGL context is scarcer than memory.** A page gets about sixteen, and flights
   accumulate — so removing a flight calls `handle.dispose()`, which deletes the buffers
   and forces `WEBGL_lose_context`. Without it, adding and removing a few tracks exhausts

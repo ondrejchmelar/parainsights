@@ -251,6 +251,15 @@ function backend(host) {
   var mapped = null;        // the geographic box the UVs were built for
   var maxTexture = gl.getParameter(gl.MAX_TEXTURE_SIZE);
 
+  // Queried and reported but deliberately not used — see upload() for the measurements
+  // that decided it. Kept so that turning mipmapping back on stays a one-line
+  // experiment with a number attached rather than a guess.
+  var aniso = gl.getExtension('EXT_texture_filter_anisotropic') ||
+              gl.getExtension('WEBKIT_EXT_texture_filter_anisotropic') ||
+              gl.getExtension('MOZ_EXT_texture_filter_anisotropic');
+  var anisoMax = aniso
+    ? gl.getParameter(aniso.MAX_TEXTURE_MAX_ANISOTROPY_EXT) : 1;
+
   // UVs come from the same linear lon/lat mapping sourceRect() uses in the 2D renderer,
   // which is what makes the imagery register with the grid cell for cell. They depend
   // on the *image's* box, not the DEM's: a stitched mosaic covers whole tiles and so
@@ -302,12 +311,28 @@ function backend(host) {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    if (isGL2) {
-      // WebGL2 mipmaps a non-power-of-two texture happily, and zoomed out the terrain
-      // minifies hard — without this the imagery aliases into noise.
-      gl.generateMipmap(gl.TEXTURE_2D);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
-    }
+    // No mipmaps. This was measured, not assumed, and the assumption was wrong.
+    //
+    // Terrain is looked at from a grazing angle, and mip level is chosen from the
+    // *longest* texture derivative. At pitch 0.20 a pixel's footprint on the ground is
+    // enormously elongated, so an isotropic lookup blurs by the long axis in both
+    // directions and throws away the short axis, which is where the detail is. On the
+    // Blatná flight at zoom 4 / pitch 0.20, measured as the Laplacian variance of the
+    // rendered panel against the canvas renderer it replaces:
+    //
+    //     canvas 2D (no mipmaps)          1363   near ground 1788
+    //     mipmapped, isotropic             596   near ground  665
+    //     mipmapped, 16x anisotropic       874   near ground 1114
+    //     no mipmaps (this)               1336   near ground 1802
+    //
+    // Anisotropy recovers only about half of it on a software rasteriser, and the
+    // difference is not subtle to look at: the imagery goes soft and the terrain goes
+    // *flat*, because shadedTexture() bakes the hillshade into the very texture being
+    // blurred away. Plain LINEAR is exactly what the 2D path does, which means this
+    // renderer cannot come out worse than the one it replaces — and the texture is
+    // close to 1:1 at the cameras that matter, so there is little aliasing to save.
+    // The extension is still queried and reported, so a future change here is
+    // measurable rather than a guess.
     uploaded = image;
   }
 
@@ -502,6 +527,14 @@ function backend(host) {
         vertices: vertices,
         indexBits: wide ? 32 : 16,
         textured: !!uploaded,
+        anisotropy: anisoMax,
+        // Read back from the texture rather than reported from a literal, so it is a
+        // statement about what the renderer is doing and not about what a comment says
+        // it does. gl.LINEAR (9729) means no mipmapping — see upload().
+        minFilter: texture ? (function () {
+          gl.bindTexture(gl.TEXTURE_2D, texture);
+          return gl.getTexParameter(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER);
+        })() : null,
         depthBits: gl.getParameter(gl.DEPTH_BITS),
         maxTexture: maxTexture
       };

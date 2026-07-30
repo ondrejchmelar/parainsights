@@ -56,22 +56,50 @@ def _terrain(cols: int = 81, rows: int = 81) -> dict:
     }
 
 
-def _basemap() -> dict:
+def _png(rgba) -> bytes:
+    """PNG out of a numpy RGBA array. `render_kmz._png` takes lists of tuples, which is
+    fine for a 16 px icon and far too slow for the 1024 px texture the sharpness test
+    needs."""
+    import struct
+    import zlib
+
+    height, width, _ = rgba.shape
+    raw = b"".join(b"\x00" + row.tobytes() for row in rgba)
+
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        return (struct.pack(">I", len(payload)) + kind + payload
+                + struct.pack(">I", zlib.crc32(kind + payload) & 0xFFFFFFFF))
+
+    return (b"\x89PNG\r\n\x1a\n"
+            + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw, 6))
+            + chunk(b"IEND", b""))
+
+
+def _basemap(size: int = 256) -> dict:
     """A real image, generated rather than typed. A hand-written base64 constant is
-    unverifiable and the one in this repo's history was a corrupt PNG."""
-    size = 16
-    pixels = [
-        [
-            ((x * 16) % 256, (y * 16) % 256, ((x + y) * 8) % 256, 255)
-            for x in range(size)
-        ]
-        for y in range(size)
-    ]
+    unverifiable and the one in this repo's history was a corrupt PNG.
+
+    `size` is what makes the sharpness test able to fail. Mip levels above zero are only
+    selected where the texture is *minified*, so a small image stretched over the whole
+    heightfield is magnified everywhere and mipmapping cannot blur anything — a 256 px
+    fixture let the mipmapped renderer pass. The detail is a fine checker, which carries
+    the most high-frequency energy per byte and compresses to almost nothing.
+    """
+    import numpy as np
+
+    y, x = np.mgrid[0:size, 0:size]
+    checker = ((x >> 1) + (y >> 1)) & 1
+    coarse = (((x >> 5) * 37 + (y >> 5) * 53) % 256).astype(np.uint8)
+    rgba = np.empty((size, size, 4), dtype=np.uint8)
+    rgba[..., 0] = np.where(checker, 235, 40)
+    rgba[..., 1] = np.where(checker, 210, 70) // 2 + coarse // 2
+    rgba[..., 2] = np.where(checker, 60, 200)
+    rgba[..., 3] = 255
+
     import base64
 
-    uri = "data:image/png;base64," + base64.b64encode(
-        render_kmz._png(pixels)
-    ).decode("ascii")
+    uri = "data:image/png;base64," + base64.b64encode(_png(rgba)).decode("ascii")
     # Deliberately larger than the DEM's box, the way a tile mosaic always is: the UVs
     # have to be built from the image's box, not the terrain's, or the imagery lands
     # offset from the ground it belongs to.
@@ -82,7 +110,8 @@ def _basemap() -> dict:
     }
 
 
-def _scene(*, terrain: dict | None = None, basemap: bool = True) -> dict:
+def _scene(*, terrain: dict | None = None, basemap: bool = True,
+           basemap_size: int = 256) -> dict:
     dem = terrain or _terrain()
     track = {"lon": [], "lat": [], "alt": [], "c": []}
     for i in range(120):
@@ -98,7 +127,7 @@ def _scene(*, terrain: dict | None = None, basemap: bool = True) -> dict:
                     "alt": dem["max"] + 400, "tow": False}],
         "palette": [[20, 40, 60], [60, 90, 120], [120, 150, 60],
                     [200, 160, 40], [230, 110, 50], [240, 60, 40]],
-        "basemaps": {"satellite": _basemap()} if basemap else {},
+        "basemaps": {"satellite": _basemap(basemap_size)} if basemap else {},
         "tiles": None,
         "landing": {"lon": 14.2, "lat": 49.2, "alt": dem["min"]},
     }
@@ -335,6 +364,86 @@ class TestItActuallyDraws:
         painted = _probe(_scene(basemap=False), _PAINTED)
         assert painted["fraction"] > 0.2
         assert painted["shades"] > 8
+
+
+# Detail actually reaching the screen, measured the way a focus metric is: the variance
+# of the Laplacian over the composited panel. Both renderers are asked for the same
+# scene at the same camera, so the number is comparable between them.
+_SHARPNESS = """
+var h = window.__view3dAll[Object.keys(window.__view3dAll)[0]];
+h.view.zoom = 4;
+h.view.pitch = 0.20;
+h.redraw();
+var panel = document.querySelector('.view3d-panel');
+var gl = panel.querySelector('canvas.view3d-gl');
+var flat = panel.querySelector('canvas.view3d');
+var W = 480, H = 200;
+var off = document.createElement('canvas');
+off.width = W; off.height = H;
+var ctx = off.getContext('2d');
+// Composite in paint order: the heightfield, then the 2D overlay over it. With no
+// backend the first is absent and the second carries the terrain itself.
+if (gl) ctx.drawImage(gl, 0, 0, W, H);
+ctx.drawImage(flat, 0, 0, W, H);
+var px = ctx.getImageData(0, 0, W, H).data;
+var grey = new Float64Array(W * H);
+for (var i = 0; i < W * H; i++) {
+  grey[i] = 0.299 * px[i * 4] + 0.587 * px[i * 4 + 1] + 0.114 * px[i * 4 + 2];
+}
+var sum = 0, sumSq = 0, n = 0;
+for (var y = 1; y < H - 1; y++) {
+  for (var x = 1; x < W - 1; x++) {
+    var k = y * W + x;
+    var lap = grey[k - 1] + grey[k + 1] + grey[k - W] + grey[k + W] - 4 * grey[k];
+    sum += lap; sumSq += lap * lap; n++;
+  }
+}
+var mean = sum / n;
+return { detail: sumSq / n - mean * mean, backend: h.gl() ? h.gl().version : 'canvas2d',
+         minFilter: h.gl() ? h.gl().minFilter : null,
+         anisotropy: h.gl() ? h.gl().anisotropy : null };
+"""
+
+
+@needs_chrome
+def test_the_terrain_is_no_blurrier_than_the_renderer_it_replaces():
+    """A regression test for a real one, and an honest note about what it can prove.
+
+    Mipmapping the draped texture looked obviously correct and cost more than half the
+    detail on screen. Terrain is viewed from a grazing angle, and mip level is chosen
+    from the longest texture derivative — so at low pitch an isotropic lookup blurs by
+    the elongated axis in both directions and discards the short one, which is where the
+    detail is. It arrived as two complaints with one cause: the imagery went soft, and
+    the terrain went *flat*, because shadedTexture() bakes the hillshade into the very
+    texture being blurred away.
+
+    Laplacian variance of the rendered panel at zoom 4 / pitch 0.20, GL against the
+    canvas renderer it replaces, on the Blatná flight — a real DEM and a real basemap:
+
+        mipmapped, isotropic         44%
+        mipmapped, 16x anisotropic   64%
+        no mipmaps (what ships)      98%
+
+    **This test does not reproduce that.** On the synthetic fixture the same three
+    configurations measure 94%, 92% and 103%: the effect needs the particular ratio
+    between texture resolution and projected ground scale that a real DEM and a stitched
+    basemap have, and raising the fixture's texture to 1024 px did not manufacture it.
+    So the assertion below is a floor against gross blurring, not proof of that fix. The
+    filter check is the specific guard, and it is read back out of the texture rather
+    than reported from a literal.
+    """
+    scene = _scene(basemap_size=1024)
+    gl = _probe(scene, _SHARPNESS)
+    flat = _probe(scene, _SHARPNESS, gl=False)
+    assert flat["detail"] > 0, "the canvas renderer drew nothing to compare against"
+    assert gl["detail"] >= 0.85 * flat["detail"], (
+        "the WebGL terrain came out blurrier than the 2D drape it replaces: "
+        f"{gl['detail']:.1f} against {flat['detail']:.1f}")
+    LINEAR = 9729
+    assert gl["minFilter"] == LINEAR, (
+        "the draped texture is filtered LINEAR with no mipmaps on purpose — the "
+        "docstring above has what mipmapping cost last time it was tried, measured on a "
+        "real report rather than on this fixture")
 
 
 _FLAT = """

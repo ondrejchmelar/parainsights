@@ -144,8 +144,33 @@ test fixture, 16 432. WebGL folds at **none of the 105**, on either. `stats().fo
 still the probe — it now answers from the backend, and its answer is structurally zero.
 
 **Also fixed on the way past.** Bare relief is shaded per *vertex* and interpolated by the
-rasteriser, so the facets the 2D version showed on a coarse mesh are gone for free; and the
-imagery is mipmapped, which is visible as sharpness rather than as a number.
+rasteriser, so the facets the 2D version showed on a coarse mesh are gone for free.
+
+**The draped texture is filtered LINEAR, with no mipmaps, and that was a correction.**
+Mipmapping looked obviously right and shipped in the first version, where it cost more than
+half the detail on screen. Terrain is looked at from a grazing angle and mip level is chosen
+from the *longest* texture derivative, so at low pitch an isotropic lookup blurs by the
+elongated axis in both directions and throws away the short one, which is where the detail
+is. It arrived as two complaints with a single cause — the imagery went soft, and the
+terrain went **flat**, because `shadedTexture()` bakes the hillshade into the very texture
+being blurred away. Laplacian variance of the panel at zoom 4 / pitch 0.20, against the
+canvas renderer:
+
+| filtering | detail vs canvas 2D | near ground |
+|---|---|---|
+| mipmapped, isotropic | 44% | 37% |
+| mipmapped, 16× anisotropic | 64% | 62% |
+| **no mipmaps (ships)** | **98%** | **101%** |
+
+Anisotropy recovers only about half of it on a software rasteriser, so it is queried and
+reported but not used. LINEAR is exactly what the 2D path does, which is the useful
+property: this renderer cannot come out blurrier than the one it replaces. The lesson is
+narrower than "don't mipmap" — it is that a filtering change here has to be *measured on a
+real report*, because the effect needs the ratio between texture resolution and projected
+ground scale that a real DEM and a stitched basemap have. It does not reproduce on synthetic
+test data, which is why `tests/test_view3d_gl.py` guards it by reading the texture's
+`TEXTURE_MIN_FILTER` back out of the context rather than by a sharpness threshold, and says
+so.
 
 **What was watched out for, and what it cost.** `preserveDrawingBuffer` is on: it is off by
 default, and a screenshot taken outside the draw call then comes back blank — which would
