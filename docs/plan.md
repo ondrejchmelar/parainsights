@@ -384,9 +384,11 @@ scored XC route; altitude marks from `salient()`; time marks every five minutes;
 `TimeSpan` animation for the time slider; and a locally rendered barogram as a
 `ScreenOverlay`.
 
-Measured against igc2kmz on the reference flight: **105 KB / 1 816 placemarks against
+Measured against igc2kmz on the reference flight: **129 KB / 2 535 placemarks against
 612 KB / 11 373**. The savings come from one `LineString` per colour run rather than per
-segment, five-decimal coordinates, and a sampled animation.
+segment, five-decimal coordinates, and a sampled animation — *not* from `Region`/`Lod`,
+which costs bytes (three copies of the track) to save drawing work. Levels are 56 / 575 /
+1 727 points, switched at 16, 320 and 1 400 on-screen pixels.
 
 ### What Google Earth mobile taught us
 
@@ -399,9 +401,11 @@ all of them things a KML validator cannot see:
 - **The icon was a corrupt PNG.** Hand-typed base64 that passed the signature check and
   failed on the IDAT checksum: Earth drew a red X on every placemark. Icons are now
   generated with `zlib` and `struct`, and a test decodes each one.
-- **`Region`, `visibility` and `radioFolder` are all ignored on mobile.** Three stacked
-  detail levels became three tracks drawn over each other. Now one level, with the
-  colourings ordered so climb is last and therefore wins the overdraw.
+- **`visibility` is ignored on mobile.** A folder marked hidden was exactly what was on
+  screen. The fix is ordering rather than removal: the colourings end with climb, so a
+  viewer that draws them all paints the right one last. Whether mobile also ignores
+  `Region` was never established — that was an assumption, and the detail levels are back
+  (coarse → fine, same fallback argument).
 - **A Document description is printed verbatim**, markup included. The HTML table moved
   to a `Flight summary` placemark; the Document keeps a plain-text line.
 

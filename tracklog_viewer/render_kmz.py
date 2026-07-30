@@ -590,13 +590,18 @@ def document(analysis: Analysis, *, route=None, meteo=None) -> str:
 
     # Three detail levels, decimated in projected metres. The coarse one is what Earth
     # draws when the track is a thumbnail; the fine one only loads when it fills the view.
-    # One level, always drawn. Region/Lod is a real saving on desktop Earth but mobile
-    # ignores it, and three stacked levels there means three tracks drawn on top of one
-    # another — the coarse one, three points wide, included.
-    keep_fine = decimate(series.x, series.y, 4.0)
-    # The shadow can be coarser: it is a reference line on the ground, not the data.
+    # Three detail levels with Region/Lod, ordered coarse → fine. Earth on the desktop
+    # measures the flight's on-screen size and draws only the matching level: 56 points
+    # when the track is a thumbnail, 1 727 when it fills the window. A viewer that
+    # ignores Region draws all three, and because the finest is last it wins the
+    # overdraw — so the fallback is correct, merely wasteful.
+    detail = [
+        ("Coarse", decimate(series.x, series.y, 120.0), 16, 320),
+        ("Medium", decimate(series.x, series.y, 25.0), 320, 1400),
+        ("Detailed", decimate(series.x, series.y, 4.0), 1400, -1),
+    ]
+    # The shadow stays single-level: it is a reference line on the ground, not the data.
     keep_shadow = decimate(series.x, series.y, 20.0)
-    detail = [("Track", keep_fine, 0, -1)]
 
     styles = [
         '<Style id="hide-children"><ListStyle>'
@@ -660,7 +665,14 @@ def document(analysis: Analysis, *, route=None, meteo=None) -> str:
             _coloured_folder("Coloured by climb", analysis, series.climb, CLIMB_BANDS, keep,
                              prefix="climb", visible=True),
         ]
-        lod_folders.append("".join(colourings))
+        lod_folders.append(
+            f"<Folder><name>{label}</name>"
+            # KML's Feature sequence puts styleUrl before Region; a strict validator
+            # rejects the other order even though Earth tolerates it.
+            f"<styleUrl>#radio</styleUrl>"
+            f"{_region(flight.lat, flight.lon, alt, min_pixels, max_pixels)}"
+            f'{"".join(colourings)}</Folder>'
+        )
 
     shadow = (
         "<Folder><name>Shadow</name><visibility>0</visibility>"

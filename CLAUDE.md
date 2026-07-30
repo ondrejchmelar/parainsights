@@ -8,7 +8,7 @@ parainsights/
 ├── CLAUDE.md              this file
 ├── pyproject.toml         one project, one venv, one test suite
 ├── tracklog_viewer/       the tool: IGC/KML/KMZ → analysis → HTML, KMZ, 3D map
-├── tests/                 pytest, 122 tests, no network
+├── tests/                 pytest, 124 tests, no network
 └── docs/
     ├── formats.md         IGC and KML/KMZ format research, measured on real files
     └── plan.md            scope, decisions and status
@@ -22,7 +22,7 @@ rather than importing across tools.
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
-.venv/bin/python -m pytest -c pyproject.toml        # 122 tests, ~70 s, no network
+.venv/bin/python -m pytest -c pyproject.toml        # 124 tests, ~70 s, no network
 ```
 
 `-c pyproject.toml` matters when the repo sits inside another project — pytest otherwise
@@ -102,9 +102,17 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
 - **KML colours are `aabbggrr`, and every colour in `render_kmz.py` goes through
   `kml_colour()`.** Writing `#eb6834` directly yields blue. That bug painted an entire
   track solid blue on Google Earth mobile, because the solid-colour folder drew last.
-- **Assume a viewer ignores `Region`, `visibility` and `radioFolder`.** Google Earth
-  mobile does. So: one detail level rather than three stacked ones, and the colourings
-  ordered with climb *last* so the fallback when everything draws is the useful one.
+- **Assume a viewer may ignore `Region`, `visibility` and `radioFolder`, and make the
+  fallback correct rather than removing the feature.** Google Earth mobile demonstrably
+  ignores `visibility` (a folder marked hidden was what the user saw). Whether it honours
+  `Region` was never established — the reported symptom was fully explained by the colour
+  bug. So the three detail levels are ordered coarse → fine and the colourings within
+  each end with climb: a viewer that honours `Region` draws one level, and one that
+  ignores everything draws them all and the last painted is the right one.
+- **`Region`/`Lod` saves drawing, not bytes.** All three levels are in the file either
+  way; Earth just skips the ones whose on-screen size falls outside their pixel window
+  (56 points when the flight is a thumbnail, 1 727 when it fills the window). Real
+  streaming needs `NetworkLink`, which a self-contained KMZ cannot use.
 - **A Document description is shown verbatim on mobile.** HTML tables go on a Placemark
   (`Flight summary`, at the launch point); the Document gets plain text.
 - **Icons are generated, never hand-typed.** `_png()` writes them with `zlib` and
@@ -112,7 +120,8 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   IDAT, and Earth drew a red X on every placemark.
 - **The KMZ batches geometry, igc2kmz does not.** One `LineString` per colour run and
   three `Region`/`Lod` detail levels, against one placemark per fix: 125 KB and 2 534
-  placemarks where igc2kmz produces 612 KB and 11 373 for the same flight. Watch the
+  placemarks where igc2kmz produces 612 KB and 11 373 for the same flight (129 KB / 2 535
+  with the three detail levels restored). Watch the
   integer division when sampling — floor division gave one animation placemark per fix
   on short flights, which is the very thing this avoids.
 - **Test the KMZ against a real viewer.** Structure tests pass on files that look wrong

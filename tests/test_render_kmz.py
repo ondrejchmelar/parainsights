@@ -45,10 +45,43 @@ class TestStructure:
         assert {"Track", "Shadow", "Climbs", "Glides", "Altitude marks", "Time marks",
                 "Animation"} <= names
 
-    def test_the_track_is_a_single_detail_level(self, root):
-        """Region/Lod is ignored on mobile Earth, where stacked levels draw on top of
-        one another — including a three-point coarse one."""
-        assert not list(root.iter(NS + "Region"))
+    def test_three_level_of_detail_regions(self, root):
+        regions = list(root.iter(NS + "Region"))
+        assert len(regions) == 3
+        windows = [
+            (int(region.find(f"{NS}Lod/{NS}minLodPixels").text),
+             int(region.find(f"{NS}Lod/{NS}maxLodPixels").text))
+            for region in regions
+        ]
+        # Ascending, contiguous, and the finest level has no upper bound.
+        assert windows == sorted(windows)
+        assert windows[-1][1] == -1
+        for (_, upper), (lower, _) in zip(windows, windows[1:]):
+            assert upper == lower, "a gap between LOD windows leaves the track invisible"
+
+    def test_detail_levels_run_coarse_to_fine(self, root):
+        """A viewer that ignores Region draws all three; the last drawn wins, so the
+        finest has to be last."""
+        track = next(
+            folder for folder in root.iter(NS + "Folder")
+            if folder.findtext(NS + "name") == "Track"
+        )
+        levels = [
+            child.findtext(NS + "name") for child in track if child.tag == NS + "Folder"
+        ]
+        assert levels == ["Coarse", "Medium", "Detailed"]
+
+    def test_every_level_ends_with_the_climb_colouring(self, root):
+        """Same fallback argument one level down: if the colourings all draw, climb wins."""
+        track = next(
+            folder for folder in root.iter(NS + "Folder")
+            if folder.findtext(NS + "name") == "Track"
+        )
+        for level in (c for c in track if c.tag == NS + "Folder"):
+            colourings = [
+                child.findtext(NS + "name") for child in level if child.tag == NS + "Folder"
+            ]
+            assert colourings[-1] == "Coloured by climb"
 
     def test_the_document_carries_a_summary(self, root):
         description = root.find(f"{NS}Document/{NS}description")
@@ -142,18 +175,11 @@ class TestColours:
         colour = render_kmz.kml_colour("eb6834")
         assert (int(colour[6:8], 16), int(colour[4:6], 16), int(colour[2:4], 16)) == (235, 104, 52)
 
-    def test_climb_colouring_is_drawn_last(self, root):
-        """A viewer that ignores per-folder visibility draws them all, and the last one
-        wins where they overlap — so it has to be the useful one."""
-        track = next(
-            folder for folder in root.iter(NS + "Folder")
-            if folder.findtext(NS + "name") == "Track"
-        )
-        names = [
-            child.findtext(NS + "name") for child in track
-            if child.tag == NS + "Folder"
-        ]
-        assert names[-1] == "Coloured by climb"
+    def test_the_last_geometry_in_the_document_is_climb_coloured(self, document):
+        """The ultimate fallback: whatever a lenient viewer draws, the final track it
+        paints must be the climb colouring."""
+        last = document.rfind("Coloured by")
+        assert document[last:last + 40].startswith("Coloured by climb")
 
 
 class TestIcons:
