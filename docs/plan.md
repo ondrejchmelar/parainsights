@@ -59,10 +59,11 @@ Parity with igc2kmz, plus the insights it lacks. In order:
 5. **Per-thermal stats** — igc2kmz's set (altitude gain, average/max/peak climb,
    efficiency = avg ÷ max climb, duration, start/finish altitude and time,
    accumulated gain/loss, drift direction) **plus**:
-   - **number of turns** — integrate unwrapped heading change over the thermal,
-     `turns = Σ|Δheading| / 360`; also turn direction (L/R), how many direction
-     reversals, mean circle period and radius. Cheap once turn rate exists, and it is
-     the number that tells you whether a climb was worked cleanly or scratched around.
+   - **number of turns** — full revolutions of the unwrapped heading (not `Σ|Δheading| /
+     360`, which counts a wingover; see *What turn count does and does not say*); also
+     turn direction (L/R), how many direction reversals, mean circle period and radius.
+     Cheap once turn rate exists, and it is the number that tells you whether a climb was
+     worked cleanly or scratched around.
    - **wind at thermal altitude** from circle drift: fit the drift of successive circle
      centres → speed and direction, per thermal → a wind profile for the flight.
 6. **Per-glide stats** — distance, average L/D, average speed, height lost, plus
@@ -350,7 +351,7 @@ the columns are blank rather than printing a number that is wrong.
 
 ## Status
 
-Done and tested (160 tests):
+Done and tested (162 tests):
 
 - `igc.py` — parser + fix cleanup. All 61 sample files parse, no failures, no warnings,
   timezone resolved 61/61.
@@ -856,6 +857,31 @@ the module that owns the chart; nothing is re-derived in JavaScript, which is ho
 cursors normally drift away from the thing they point at.
 
 ### What turn count does and does not say
+
+A turn is a **full revolution**: the heading advancing through 360° in one direction.
+Summing |Δheading| and dividing by 360 — what this used to do — counts anything that
+swings the nose, so a wingover scores most of a turn without a circle ever being flown,
+and it is 11.5% of the turns counted across the 50 sample flights. Taking the *net*
+rotation instead (what `quicklook.py` did) has the opposite fault: a climb circled six
+times right and six times left cancels to zero. `_revolutions` splits the unwrapped
+heading into runs of one direction, cutting a run only where the heading backs up by more
+than 60°, and counts the runs that reach a full circle. The hysteresis is what makes it
+usable on real data: 1 Hz GPS heading jitters, and a pilot holding a circle wanders more
+than a few degrees, so a tight threshold chops one circle into pieces that never reach
+360° and a good climb reads as zero turns.
+
+The total swept heading is still computed, as `swept_turns`, because **tow detection
+needs it**. "Was the launch flown straight" is a question about how far the nose moved,
+not about circles closing; pointing `TOW_MAX_TURNS_PER_MINUTE` at revolutions labelled
+three foot launches in the sample set as winch launches, and the reference two-stage tow
+completes no revolution at all (it sweeps 3.3 turns of heading over 138 s, 1.43/min
+against the 1.5 limit).
+
+Circle time follows the same reasoning: it is the time spent *turning inside the counted
+revolutions*, divided by the count. Dividing the whole phase duration by the count
+charges the circles for every second of scratching straight between them, which reads as
+one slow wide turn — 143 of 704 climbs landed outside a 12–30 s circle that way, against
+86 of 691 now.
 
 Turns alone say how many circles a climb took, nothing about quality — the report used to
 imply otherwise. Quality lives in **m/turn** (height per circle), **efficiency** (mean

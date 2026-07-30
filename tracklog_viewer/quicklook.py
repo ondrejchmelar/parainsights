@@ -373,6 +373,29 @@ SCRIPT = r"""
       heading.push(heading[h - 1] + delta);
     }
 
+    // Full revolutions between two fixes, the same way `analysis._revolutions` counts
+    // them: split the unwrapped heading into runs of one turn direction — a run ends
+    // only where the heading backs up by more than REVERSAL_HYSTERESIS, so noise and
+    // the wander inside a circle extend it — and count only the runs that came all the
+    // way round. Summing |dheading| instead scores a wingover as most of a turn, and
+    // taking the net rotation (what this used to do) cancels a climb flown both ways.
+    var REVERSAL_HYSTERESIS = 60;
+    function revolutions(from, to) {
+      var last = heading[from], way = 0, total = 0, run = 0;
+      for (var r = from + 1; r < to; r++) {
+        var step = heading[r] - last;
+        if (way && step * way > 0) {
+          run += step; last = heading[r];
+        } else if (Math.abs(step) >= REVERSAL_HYSTERESIS) {
+          if (Math.abs(run) >= 360) total += Math.abs(run) / 360;
+          way = step > 0 ? 1 : -1;
+          run = step; last = heading[r];
+        }
+      }
+      if (Math.abs(run) >= 360) total += Math.abs(run) / 360;
+      return total;
+    }
+
     var phases = new Array(t.length).fill('cruise');
     function mark(test, name, minGap) {
       var run = null;
@@ -404,8 +427,7 @@ SCRIPT = r"""
         if (duration >= 60 && gain > 50) {
           var best = -Infinity;
           for (var b2 = current; b2 < stop; b2++) best = Math.max(best, climb[b2]);
-          var turns = median <= 5
-            ? Math.abs(heading[stop] - heading[current]) / 360 : null;
+          var turns = median <= 5 ? revolutions(current, stop) : null;
           climbs.push({
             start: current, stop: stop, duration: duration, gain: gain,
             average: gain / duration, best: best, turns: turns,

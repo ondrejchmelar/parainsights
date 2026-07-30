@@ -1144,7 +1144,10 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
             f"{_short_duration(tow.duration)}, {tow.altitude_change:+.0f} m at "
             f"{tow.average_climb:+.2f} m/s, released at {tow.finish_altitude:.0f} m — starts "
             f"with the flight, climbs steadily and was flown almost straight "
-            f"({f'{tow.turns:.1f} turns' if tow.turns is not None else 'nearly straight'}). "
+            # Swept turns, not revolutions: a two-stage launch contains a deliberate 180
+            # and completes no circle, so the revolution count is 0 and says nothing
+            # about how straight it was.
+            f"({f'{tow.swept_turns:.1f} turns of heading' if tow.swept_turns is not None else 'nearly straight'}). "
             f"It is kept out of the thermal statistics and out of the "
             f"wind estimate, where a straight climb would have measured the glider's own "
             f"track rather than the air. igc2kmz counts it as thermal number one.</p>"

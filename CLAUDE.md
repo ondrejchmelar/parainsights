@@ -8,7 +8,7 @@ parainsights/
 ├── CLAUDE.md              this file
 ├── pyproject.toml         one project, one venv, one test suite
 ├── tracklog_viewer/       the tool: IGC/KML/KMZ → analysis → HTML, KMZ, 3D map
-├── tests/                 pytest, 155 tests, no network
+├── tests/                 pytest, 162 tests, no network
 └── docs/
     ├── formats.md         IGC and KML/KMZ format research, measured on real files
     └── plan.md            scope, decisions and status
@@ -25,7 +25,7 @@ as the packages, so there is nothing to line up by hand:
 
 ```bash
 uv sync --extra dev          # creates .venv on the pinned Python, from uv.lock
-uv run pytest -c pyproject.toml     # 160 tests, ~100 s, no network
+uv run pytest -c pyproject.toml     # 162 tests, ~100 s, no network
 ```
 
 `-c pyproject.toml` matters when the repo sits inside another project — pytest otherwise
@@ -176,13 +176,27 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   for `_condense` to bridge. On the Dolomites flight this takes every per-thermal wind
   into 0.7–9.7 km/h with no outliers, at the cost of 18 climbs becoming 13 — the ones
   dropped were 1–2 turn straight-ish bumps that were never really thermals.
+- **A turn is a full revolution; how far the nose swung is a different number.**
+  `turns` counts heading advancing through 360° in *one* direction (`_revolutions`), so a
+  wingover — 180° out, 180° back — is no longer most of a turn, and a climb circled both
+  ways contributes the circles from each rather than cancelling to nothing. Runs are cut
+  only where the heading backs up by more than `REVERSAL_HYSTERESIS` (60°), because a
+  smaller threshold chops one circle into pieces that never reach 360° and the climb
+  reads as zero. Across the 50 sample flights this takes 9 175 counted turns to 8 122
+  (−11.5%) and 513 wind-trusted climbs to 509. **The total heading swept is kept as
+  `swept_turns`** and is what tow detection asks for, because "was it flown straight" is
+  a question about heading change, not about circles closing: pointing that test at
+  revolutions called three foot launches in the sample set a winch launch. Circle time
+  comes from the seconds spent *turning inside the counted revolutions* — dividing the
+  phase duration by the count charges the circles for the scratching between them — which
+  put 86 of 691 climbs outside a 12–30 s circle where the old measure put 143 of 704.
 - **A tow can legitimately contain a 180.** The reference tow on `2020-07-12` is a
   *two-stage* launch — a pull, a 180° turn, then a second pull — which is why the climb
-  carries 2.9 turns and why judging the launch on a turny fragment of itself gets it
-  wrong. This is the case `TOW_MAX_TURNS_PER_MINUTE` has to survive: over the whole 138 s
-  it reads 1.26 turns/min against the 1.5 limit, but over the 60 s circling fragment
-  inside it, 2.8. Any change to tow detection has to keep a deliberate 180 (and a
-  two-stage launch) on the tow side of the line.
+  sweeps 3.3 turns of heading (and completes **no** revolution) and why judging the launch
+  on a turny fragment of itself gets it wrong. This is the case `TOW_MAX_TURNS_PER_MINUTE`
+  has to survive: over the whole 138 s it reads 1.43 turns/min against the 1.5 limit, but
+  over the circling fragment inside it, far more. Any change to tow detection has to keep
+  a deliberate 180 (and a two-stage launch) on the tow side of the line.
 - **A tow is built separately, over the whole launch climb, and replaces what it
   overlaps.** It is the one straight climb that *is* a phase, so it cannot come from the
   rule above — `_launch_climb()` constructs it from `climb > TOW_MIN_CLIMB` instead.
@@ -441,12 +455,6 @@ Written up with a plan in `docs/plan.md`:
   payload *already* ships lon/lat/alt/climb per fix (338 KB), so the profile's polyline is
   a second encoding of data that is in the file twice. Sparklines are the opposite case:
   238 little charts would each need their own slice. Measure before moving anything.
-- **Count turns as full revolutions.** `turns = total heading change / 360` counts a
-  wingover as most of a turn, because it sums |Δheading| and never asks whether the glider
-  came back to where it started. Count revolutions instead — heading advancing through
-  360° in one direction and returning to its initial bearing. `Segment.net_rotation` is
-  already computed and is the better starting point. This feeds the ≥2-turn wind filter,
-  so it changes which climbs are trusted.
 - **Fix the controls in the full-screen 3D view.** Reported broken. Not yet diagnosed, so
   these are suspects to measure rather than a cause — and the first one is a regression I
   may have introduced with the WebGL backend:

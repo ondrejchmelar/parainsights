@@ -57,6 +57,24 @@ def circling(duration, *, radius=40.0, period=20.0, climb=2.0, drift=(0.0, 0.0),
     return points
 
 
+def slalom(duration, *, radius=40.0, period=20.0, climb=2.0, t0=0.0, alt0=1000.0):
+    """Fixes for a glider swinging the nose without ever completing a circle.
+
+    Half a circle one way, half a circle back, for as long as you like: the heading
+    sweeps 180° at a time and comes back, which is the shape of a wingover or a slalom
+    along a ridge. Summing |Δheading| calls this a turn every 20 s; no circle is flown.
+    """
+    speed = 2 * math.pi * radius / period
+    points, heading, x, y = [], 0.0, 0.0, 0.0
+    for second in range(int(duration) + 1):
+        points.append((t0 + second, x, y, alt0 + climb * second))
+        way = 1 if int(second // (period / 2)) % 2 == 0 else -1
+        heading += way * 2 * math.pi / period
+        x += speed * math.sin(heading)
+        y += speed * math.cos(heading)
+    return points
+
+
 def straight(duration, *, speed=11.0, climb=0.0, t0=0.0, alt0=1000.0, x0=0.0, y0=0.0, heading=0.0):
     """Fixes for a glider flying straight. Speed in m/s, heading in degrees."""
     points = []
@@ -91,6 +109,26 @@ class TestTurnCounting:
         thermal = analyse(igc.parse(build(tmp_path / "s.igc", points))).thermals[0]
         assert thermal.turn_direction == "mixed"
         assert thermal.reversals >= 1
+        # Five circles each way is ten circles flown: a reversal does not cancel the
+        # ones already flown, which counting net rotation would have it do.
+        assert thermal.turns == pytest.approx(10.0, abs=0.8)
+
+    def test_swinging_the_nose_is_not_a_turn(self, tmp_path):
+        """A wingover, or a slalom: 180° out and 180° back, over and over, no circle."""
+        thermal = analyse(igc.parse(build(tmp_path / "w.igc", slalom(200)))).thermals[0]
+        assert thermal.turns == 0.0
+        # 200 s of half-circles at 10 s each is 20 of them: ten turns' worth of heading
+        # for no circles at all. That is what the tow test asks about, so it has to stay
+        # visible somewhere — and it is exactly what the old count reported as `turns`.
+        assert thermal.swept_turns == pytest.approx(10.0, abs=0.6)
+        assert thermal.circle_seconds is None
+
+    def test_a_part_circle_is_not_a_turn(self, tmp_path):
+        """Three quarters of a circle and out again: 0.75 of a turn is not a turn."""
+        points = circling(15)  # 15 s of a 20 s circle
+        points += straight(120, speed=11.0, climb=-1.0, t0=16, alt0=points[-1][3])
+        thermals = analyse(igc.parse(build(tmp_path / "p.igc", points))).thermals
+        assert all(t.turns == 0.0 for t in thermals)
 
     def test_recovers_circle_radius(self, tmp_path):
         flight = igc.parse(build(tmp_path / "t.igc", circling(200, radius=60.0)))
