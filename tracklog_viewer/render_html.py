@@ -1079,9 +1079,10 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
   <section>
     <div class="section-head">
       <h2>The flight over the ground</h2>
-      <p>Drag to pan, right-drag or ctrl-drag to rotate and tilt, scroll to zoom. Real terrain from a DEM, embedded in this page —
-         so it keeps working with no network. Hovering the charts below moves the marker
-         here too.</p>
+      <p>Drag to pan, right-drag or ctrl-drag to rotate and tilt, scroll to zoom. The
+         terrain is a real DEM carried inside this page; the Satellite button switches
+         between imagery, a map and bare relief. Hovering the charts below moves the
+         marker here too.</p>
     </div>
     {view3d.panel(payload, uid, kmz_uri=kmz_uri,
                   kmz_name=f"{summary.date}-{(summary.site or 'flight').replace(' ', '-')}.kmz")}
