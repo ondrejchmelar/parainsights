@@ -375,7 +375,28 @@ steady climb, a wide spread is one that kept falling out of the core) and **over
 compared; auto-scaling each row would make a weak climb look identical to a strong one). Glide ratio gets a
 validated single-hue sequential ramp, double-encoded as bar length and shade.
 
-Next: `render_kmz.py` — Google Earth output, still the headline deliverable.
+### KMZ output
+
+`render_kmz.py`. igc2kmz's content on XContest's geometry: colour by climb, altitude,
+ground speed and total energy as a `radioFolder`; shadow on the ground and as a curtain;
+climb and glide placemarks whose balloons pull statistics out of `ExtendedData`; the
+scored XC route; altitude marks from `salient()`; time marks every five minutes; a
+`TimeSpan` animation for the time slider; and a locally rendered barogram as a
+`ScreenOverlay`.
+
+Measured against igc2kmz on the reference flight: **125 KB / 2 534 placemarks against
+612 KB / 11 373**. The savings come from three `Region`/`Lod` detail levels, one
+`LineString` per colour run rather than per segment, five-decimal coordinates, and a
+sampled animation.
+
+`salient()` — the altitude-mark selector — is *not* a port of igc2kmz's recursive
+largest-drop split. That port produced four marks for a flight with eleven climbs, so it
+was replaced with prominence pruning: take the turning points, then drop the least
+prominent until every remaining swing clears the threshold. Checkable by construction —
+one hill gives three marks, and the count falls monotonically with the threshold.
+
+Next: FAI and flat triangle scoring with multipliers, and thermal-by-thermal comparison
+across a season.
 
 ## Validation
 

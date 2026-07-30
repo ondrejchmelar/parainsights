@@ -13,6 +13,7 @@ from . import (
     kml,
     meteo as meteo_module,
     render_html,
+    render_kmz,
     render_map,
     sources,
     terrain as terrain_module,
@@ -31,6 +32,9 @@ def main(argv: list[str] | None = None) -> int:
              "Several inputs produce one report with a flight picker.",
     )
     parser.add_argument("--html", type=Path, metavar="FILE", help="write an HTML report")
+    parser.add_argument(
+        "--kmz", type=Path, metavar="FILE", help="write a KMZ for Google Earth",
+    )
     parser.add_argument(
         "--map", type=Path, metavar="FILE", dest="map_file",
         help="write an interactive 3D map (needs network when opened, so not embeddable)",
@@ -81,6 +85,14 @@ def main(argv: list[str] | None = None) -> int:
         else:
             render_html.write_multi(reports, args.html)
         print(f"wrote {args.html}")
+    if args.kmz:
+        render_kmz.write(
+            reports[0]["analysis"], args.kmz,
+            route=reports[0]["route"], meteo=reports[0]["meteo"],
+        )
+        print(f"wrote {args.kmz}")
+        if len(reports) > 1:
+            print("note: the KMZ covers the first flight only", file=sys.stderr)
     if args.map_file:
         render_map.write(
             reports[0]["analysis"], args.map_file, route=reports[0]["route"],

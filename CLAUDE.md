@@ -7,8 +7,8 @@ currently only one is the **tracklog viewer**.
 parainsights/
 ├── CLAUDE.md              this file
 ├── pyproject.toml         one project, one venv, one test suite
-├── tracklog_viewer/       the tool: IGC/KML/KMZ → analysis → HTML report, 3D map
-├── tests/                 pytest, 92 tests, no network
+├── tracklog_viewer/       the tool: IGC/KML/KMZ → analysis → HTML, KMZ, 3D map
+├── tests/                 pytest, 113 tests, no network
 └── docs/
     ├── formats.md         IGC and KML/KMZ format research, measured on real files
     └── plan.md            scope, decisions and status
@@ -22,7 +22,7 @@ rather than importing across tools.
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
-.venv/bin/python -m pytest -c pyproject.toml        # 92 tests, ~45 s, no network
+.venv/bin/python -m pytest -c pyproject.toml        # 113 tests, ~60 s, no network
 ```
 
 `-c pyproject.toml` matters when the repo sits inside another project — pytest otherwise
@@ -34,6 +34,7 @@ Run it:
 .venv/bin/python -m tracklog_viewer.cli FLIGHT.igc --html out.html
 .venv/bin/python -m tracklog_viewer.cli FLIGHT.igc --meteo --terrain --html out.html
 .venv/bin/python -m tracklog_viewer.cli a.igc b.kmz c.igc --html all.html   # flight picker
+.venv/bin/python -m tracklog_viewer.cli FLIGHT.igc --kmz flight.kmz         # Google Earth
 .venv/bin/python -m tracklog_viewer.cli FLIGHT.igc --map map.html           # 3D map
 ```
 
@@ -67,6 +68,7 @@ geometry in a renderer, no rendering in the analysis.
 | `meteo.py` | The day's vertical profile (Open-Meteo) |
 | `charts.py` | All SVG charts, rendered locally |
 | `view3d.py` | Canvas 3D view that works inside a published page |
+| `render_kmz.py` | Google Earth KMZ: LOD folders, balloons, animation, local charts |
 | `render_map.py` | Richer 3D map (MapLibre + deck.gl); needs network at view time |
 | `render_html.py` | The report; `quicklook.py` is its in-browser sibling |
 | `quicklook.py` | Reduced analysis in JavaScript, for a track the reader supplies |
@@ -97,6 +99,11 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
 - **Charts are rendered locally.** igc2kmz's Google Image Charts URLs died in 2019, so
   every graph in its output is a broken image. Don't reintroduce a network dependency
   into a chart.
+- **The KMZ batches geometry, igc2kmz does not.** One `LineString` per colour run and
+  three `Region`/`Lod` detail levels, against one placemark per fix: 125 KB and 2 534
+  placemarks where igc2kmz produces 612 KB and 11 373 for the same flight. Watch the
+  integer division when sampling — floor division gave one animation placemark per fix
+  on short flights, which is the very thing this avoids.
 - **Two 3D views on purpose.** `render_map.py` is better but needs network at view time;
   `view3d.py` gives up the basemap library to be embeddable. Both share the climb ramp.
 - **XContest flight pages cannot be scraped.** The page is a JavaScript shell behind
@@ -142,8 +149,6 @@ published artifact runs under a policy that blocks every external host.
 
 ## Known gaps
 
-- `render_kmz.py` does not exist yet. Google Earth output is still the headline
-  deliverable and the plan describes exactly what it should contain.
 - FAI/flat triangle scoring with multipliers is not implemented; `xc.py` does free
   distance only.
 - Historical weather is surface-only: the ERA5 archive returns nulls on every pressure

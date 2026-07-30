@@ -271,6 +271,45 @@ def _estimate_wind(series: Series, start: int, stop: int) -> Wind | None:
     return Wind(speed, float(direction), geo.cardinal(direction), confidence)
 
 
+def salient(values, threshold: float) -> list[int]:
+    """Indices of the altitude extremes worth labelling.
+
+    Marking every local maximum and minimum of a real trace buries the reader; the
+    interesting ones are those separated from their neighbours by a real height change.
+    So: take the local extremes, then repeatedly drop the one whose swing to an adjacent
+    extreme is smallest, until every remaining swing clears ``threshold``. That is
+    prominence pruning, and it is easy to check — a single hill gives three marks, and
+    the count falls monotonically as the threshold rises.
+
+    igc2kmz uses a recursive largest-drop/largest-climb split for this. A direct port
+    produced four marks for a flight with eleven climbs, so this is deliberately a
+    different algorithm rather than a broken copy of that one.
+    """
+    values = np.asarray(values, dtype=float)
+    if len(values) < 3:
+        return list(range(len(values)))
+
+    # Turning points of the sequence, endpoints always included.
+    marks = [0]
+    for i in range(1, len(values) - 1):
+        if (values[i] - values[i - 1]) * (values[i + 1] - values[i]) < 0:
+            marks.append(i)
+    marks.append(len(values) - 1)
+
+    # Prune the least prominent extreme until nothing small remains.
+    while len(marks) > 2:
+        swings = [abs(values[marks[i + 1]] - values[marks[i]]) for i in range(len(marks) - 1)]
+        smallest = min(range(len(swings)), key=lambda i: swings[i])
+        if swings[smallest] >= threshold:
+            break
+        # Drop whichever end of the flattest pair is interior; keep the endpoints.
+        drop = smallest if 0 < smallest < len(marks) - 1 else smallest + 1
+        if drop in (0, len(marks) - 1):
+            drop = smallest + 1 if smallest == 0 else smallest
+        marks.pop(drop)
+    return marks
+
+
 def sample_interval(series: Series) -> float:
     """Median seconds between fixes."""
     if len(series) < 2:
