@@ -1,0 +1,32 @@
+[project]
+name = "parainsights"
+version = "0.0.1"
+description = "Tools for paragliding flight analysis"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=1.26",
+    "timezonefinder>=6",
+]
+
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+terrain = ["pillow>=10"]
+
+[project.scripts]
+tracklog-viewer = "tracklog_viewer.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["tracklog_viewer*"]
+
+# Set explicitly so pytest does not walk up and adopt an enclosing project's config.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
