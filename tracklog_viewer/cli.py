@@ -52,12 +52,14 @@ def main(argv: list[str] | None = None) -> int:
         "--no-xc", action="store_true", help="skip free-distance optimisation",
     )
     parser.add_argument(
-        "--no-earth-link", action="store_true",
-        help="leave the KMZ out of the HTML report (saves about 170 KB)",
+        "--earth-link", action="store_true",
+        help="embed the KMZ in the HTML report as a download (adds about 170 KB); "
+             "otherwise use --kmz to write one on demand",
     )
     parser.add_argument(
-        "--no-basemap", action="store_true",
-        help="with --terrain, skip the OpenStreetMap basemap image",
+        "--embed-basemap", action="store_true",
+        help="bake the map imagery into the report (about 300 KB) instead of fetching "
+             "tiles when it is opened; needed only for a genuinely offline report",
     )
     parser.add_argument(
         "--terrain", action="store_true",
@@ -151,7 +153,7 @@ def _one(source: str, args, index: int = 0) -> dict:
         ground = terrain_module.for_flight(analysis, max_points=budget)
         if ground is None:
             print(f"warning: no terrain data for {label}", file=sys.stderr)
-        elif not args.no_basemap:
+        elif args.embed_basemap:
             # Place names are what make the 3D view navigable.
             # Satellite imagery is photographic and costs more than a map raster, so a
             # shared document gets a smaller, harder-compressed one per flight.
@@ -168,7 +170,7 @@ def _one(source: str, args, index: int = 0) -> dict:
     earth = None
     # One KMZ per flight would add ~170 KB each; in a shared document only the first
     # flight carries one, and `--kmz` still writes a file for any of them.
-    if not args.no_earth_link and (len(args.flight) == 1 or index == 0):
+    if args.earth_link and (len(args.flight) == 1 or index == 0):
         earth = render_kmz.to_bytes(analysis, route=route)
 
     weather = None
@@ -246,7 +248,7 @@ def _one(source: str, args, index: int = 0) -> dict:
         "route": route,
         "payload": payload,
         "terrain": ground,
-        "basemap": tiles if args.terrain and not args.no_basemap else None,
+        "basemap": tiles if args.terrain and args.embed_basemap else None,
         "kmz": earth,
         "shape": shape_of(route, analysis),
         "file": label,

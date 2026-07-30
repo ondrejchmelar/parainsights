@@ -173,6 +173,39 @@ The spatial picture belongs on the plan view, which also carries the scored XC l
   signed-in session, so there is nothing to fetch without holding credentials. What we
   *can* read is the public title: pilot, date and XContest's own scored distance.
 
+### Why there is no "paste an XContest link" button
+
+Checked July 2026, hoping the "log in with XContest" button on `startovne.online` meant a
+public OAuth provider. It does not appear to be one:
+
+| probe | result |
+|---|---|
+| `www.xcontest.org/.well-known/openid-configuration` | 404 |
+| `www.xcontest.org/.well-known/oauth-authorization-server`, `/oauth/authorize`, `/api/oauth/token` | 404 |
+| `auth.`, `api.`, `oauth.xcontest.org` | only `oauth.` resolves |
+| `oauth.xcontest.org/*` | Cloudflare 403 challenge, for the **`xcontest.app`** zone |
+| `oauth.xcontest.org/.well-known/openid-configuration` | Cloudflare **522** — a real origin, timed out |
+| `api.xcontest.app/*` | Cloudflare 403; `/.well-known/*` answers `Error: Forbidden path` from the origin |
+
+So an auth service exists in the newer `xcontest.app` zone, but it is unadvertised and
+reachable only as a registered partner. What *is* documented — and still answers in 2026,
+with a structured `{"error":{"message":"Invalid key 'TEST'"}}` rather than a challenge — is
+an **API key + shared secret** programme, keys from `info@xcontest.org`
+([docs](https://github.com/Iv/FlyHigh/tree/master/doc/xcontest.org)):
+
+- `GET /api/gate/ticket/?key=&hash=` then `POST /api/gate/request/?flight` — **submits** a
+  flight. Pilot auth is `sha1(md5(password)+ticket+key+secret)`, i.e. the user hands us
+  their XContest password. Not something to build, and it uploads rather than downloads.
+- `GET /api/js/?key=` — a JS widget library with `flights`, `flight`, `pilots`, `pilot`
+  and `ranking` services, locked to the website the key was issued for. It renders
+  XContest's own flight-detail view; it does not hand over the tracklog.
+
+Neither route yields an IGC file, so the tracklog still has to come from the pilot. The
+cheap version of "get it from a link" is the two clicks the pilot already has: signed in
+on their own flight page, **Download IGC**, then drop the file on the report. If the link
+path is ever worth building, the action is an email to `info@xcontest.org` asking for a
+key and whether the OAuth service is open to third parties — not more probing.
+
 ### A KML is not a substitute for the IGC
 
 Measured on the same flight, IGC against XContest's KMZ of it:
@@ -193,7 +226,7 @@ the columns are blank rather than printing a number that is wrong.
 
 ## Status
 
-Done and tested (61 tests):
+Done and tested (126 tests):
 
 - `igc.py` — parser + fix cleanup. All 61 sample files parse, no failures, no warnings,
   timezone resolved 61/61.
@@ -293,7 +326,7 @@ Modelled on Google Earth, because that is what pilots already know:
 | right-drag, middle-drag, or ctrl/shift/alt + left-drag | rotate and tilt |
 | wheel | zoom towards the pointer |
 | one finger | pan |
-| two fingers | pinch to zoom, twist to rotate |
+| two fingers | pinch to zoom |
 
 Panning needed a screen-space offset (`view.panX/panY`) applied *after* the fit: the fit
 recentres every frame, so without it the camera was welded to the middle of the flight.
@@ -305,9 +338,60 @@ a mis-timed one had me chasing a control bug that did not exist.
 
 ### Touch
 
-Two fingers mean pinch-zoom, one means rotate. A phone has no scroll wheel, so a
+Two fingers mean pinch-zoom, one means pan. A phone has no scroll wheel, so a
 pointer-tracking map replaced the single-drag handler; without it the view could only be
 rotated, never zoomed, on the device most likely to be used at a landing field.
+
+Pinch took two goes to get right. The first version panned by the centroid *and* let
+`zoomAt` anchor on the same point, so every pinch double-counted the offset and the view
+shot away sideways; it also mapped the angle between the fingers onto yaw, so any
+imprecise pinch spun the camera. Now the pan follows the centroid, `zoomAt` handles the
+scale about that point, and there is no twist. Measured from a headless browser driving
+synthetic touch events: `pinch 1.00->2.00 yaw=-0.42`, the yaw unchanged from its start.
+
+### Full screen without the Fullscreen API
+
+The expand button maximises the panel *in the page* (a fixed-position class) rather than
+calling `requestFullscreen`. The target is a page inside an iframe that has not been
+granted the fullscreen permission, where the API fails two ways at once — it throws
+synchronously without a user activation and rejects without the permission — and the
+button visibly did nothing.
+
+The canvas then needed explicit pixel sizing: a percentage height does not resolve to
+anything the backing store can match until layout settles, so the first redraw came out at
+the old size. `applyMaximisedSize()` writes px, and a redraw ladder at 0/80/200/500 ms
+catches whatever the browser settles late. Verified:
+`maximised box=1185x713 backing=1185x713 match=true | restored box=1185x508 backing=1185x508`.
+
+### Tiles at view time, and a three-state basemap button
+
+The basemap used to be a JPEG stitched at build time and embedded — about 300 KB, at a
+zoom fixed when the report was written. Now the payload carries tile templates and the
+page stitches its own mosaic, so the button can cycle **satellite → map → bare terrain**
+and each style is fetched once and cached in the page. `--embed-basemap` still bakes an
+image for a genuinely offline report, and in that case the payload carries *no* templates:
+a page holding both would try to fetch, fail under an artifact's CSP, and throw away the
+picture it already had.
+
+Two things this cost:
+
+- **Compositing is not a race you can win by luck.** Satellite is two layers — imagery
+  plus a transparent label overlay — and painting each tile into a shared mosaic as it
+  arrives makes the z-order depend on arrival order. The label layer is requested second
+  and frequently answers first, and then the imagery buries it. Each layer gets its own
+  canvas, composited in declaration order at the end.
+- **The button has to name what is on screen**, not what comes next. With three states a
+  fixed "Map" label says nothing about where you are, so it reads Satellite / Map /
+  Basemap. Verified by clicking it in a headless browser:
+  `initial btn="Satellite" style=satellite painted=true | click1 btn="Map" style=map
+  painted=true | click2 btn="Basemap" on=false | click3 btn="Satellite" cached=[satellite,map]`.
+
+### What travels in the report, and what does not
+
+The KMZ is no longer embedded. `--earth-link` puts it back as a data URI behind "Open in
+Earth"; by default `--kmz` writes a file. Same reasoning for the basemap: the report is
+for reading, and a second copy of the same flight in another format is dead weight in it.
+Together these took the reference report from 0.8 MB to 0.46 MB.
 
 ### Two 3D views, on purpose
 
@@ -348,8 +432,10 @@ The ladder is ×1 → ×2 → ×4 with the button reporting where it is.
 
 ### Reading your own track in the page
 
-Reached by the **+** tab beside the example flights; loading a file replaces the view
-rather than appending to the page.
+Reached by the **+ your track** tab, which now comes *first*, ahead of the example
+flights, with a note under the tabs saying the analysis happens in the page and nothing is
+uploaded. The bundled flights are a showcase; the reader's own file is the product.
+Loading a file replaces the view rather than appending to the page.
 
 `quicklook.py` — a deliberately reduced analysis that runs in the browser, because a
 published page cannot call Python and cannot reach the network. It reads IGC, KML and

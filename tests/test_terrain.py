@@ -116,6 +116,40 @@ class TestView3dPayload:
         assert all(0 <= i < len(payload["palette"]) for i in payload["track"]["c"])
         assert all(len(colour) == 3 for colour in payload["palette"])
 
+    def test_tiles_and_an_embedded_image_are_mutually_exclusive(self, ramp, tmp_path):
+        """An embedded basemap means the page is expected to work offline. Shipping tile
+        templates too makes the toggle fetch, fail under a CSP, and drop the picture it
+        already had."""
+        from tracklog_viewer import igc, view3d
+        from tracklog_viewer.analysis import analyse
+        from tracklog_viewer.basemap import Basemap
+        from tests.test_analysis import build, circling
+
+        analysis = analyse(igc.parse(build(tmp_path / "t.igc", circling(200))))
+
+        runtime = view3d.data(analysis, ramp)
+        assert runtime["basemap"] is None
+        assert runtime["basemapEmbedded"] is False
+        assert set(runtime["tiles"]) == {"satellite", "map"}
+
+        baked = view3d.data(analysis, ramp, basemap=Basemap(
+            west=14.0, east=15.0, south=49.0, north=50.0, zoom=12,
+            data_uri="data:image/jpeg;base64,AA==", width=256, height=256,
+            attribution="Imagery © Esri",
+        ))
+        assert baked["tiles"] is None
+        assert baked["basemapEmbedded"] is True
+
+    def test_the_basemap_button_names_the_style_it_is_showing(self, ramp, tmp_path):
+        from tracklog_viewer import igc, view3d
+        from tracklog_viewer.analysis import analyse
+        from tests.test_analysis import build, circling
+
+        analysis = analyse(igc.parse(build(tmp_path / "t.igc", circling(200))))
+        markup = view3d.panel(view3d.data(analysis, ramp), "x")
+        button = markup[markup.index('data-view3d-act="basemap"'):]
+        assert button[:button.index("</button>")].endswith(">Satellite")
+
     def test_cursor_track_matches_sample_length(self, ramp, tmp_path):
         from tracklog_viewer import igc, view3d
         from tracklog_viewer.analysis import analyse

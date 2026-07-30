@@ -394,8 +394,9 @@ section { margin-top: 34px; }
 .tab:hover { background: var(--panel-2); }
 .tab.is-on { background: var(--ink); }
 .tab.is-on .tab-date, .tab.is-on .tab-meta { color: var(--paper); }
-.tab-add { flex: 0 0 auto; }
-.tab-add .tab-date { font-size: 17px; line-height: 1; }
+.tab-add { flex: 0 0 auto; border-right: 2px solid var(--climb); }
+.tab-add .tab-date { font-size: 13px; }
+.tabs-note { margin: -18px 0 26px; font-size: 12.5px; color: var(--ink-3); }
 .swatch { width: 12px; height: 12px; border-radius: 2px; flex: none; }
 .ramp { display: flex; gap: 2px; align-items: center; }
 .ramp span { width: 22px; height: 10px; border-radius: 1px; }
@@ -1314,15 +1315,18 @@ def render(analysis: Analysis, *, meteo=None, route=None, terrain=None,
     """A report for a single flight, with the own-track picker alongside it."""
     summary = analysis.summary
     title = f"{summary.date} · {summary.site or 'flight'} — flight review"
+    # Upload first: the bundled flight is a showcase, the reader's own track is the point.
     tabs = (
         '<nav class="tabs" role="group" aria-label="Choose a flight">'
+        '<button type="button" class="tab tab-add" data-flight-tab="own" aria-pressed="false" '
+        'title="Analyse your own track"><span class="tab-date">+ your track</span>'
+        '<span class="tab-meta">igc · kml · kmz</span></button>'
         '<button type="button" class="tab is-on" data-flight-tab="f0" aria-pressed="true">'
         f'<span class="tab-date">{charts.escape(summary.date)}</span>'
         f'<span class="tab-meta">{charts.escape(summary.site or "this flight")}</span></button>'
-        '<button type="button" class="tab tab-add" data-flight-tab="own" aria-pressed="false" '
-        'title="Analyse your own track"><span class="tab-date">+</span>'
-        '<span class="tab-meta">your own track</span></button>'
         '</nav>'
+        '<p class="tabs-note">Your own flight is analysed in this page — nothing is '
+        'uploaded anywhere.</p>'
     )
     return _page(
         title,
@@ -1373,15 +1377,20 @@ def render_multi(reports: list[dict]) -> str:
             f'{" · from " + charts.escape(fmt) if fmt else ""}</span></button>'
         )
 
-    buttons.append(
+    # Upload first. The bundled flights are a showcase; the thing most readers want is
+    # their own track, and a tab at the end of five examples does not say that.
+    buttons.insert(
+        0,
         '<button type="button" class="tab tab-add" data-flight-tab="own" '
         'aria-pressed="false" title="Analyse your own track">'
-        '<span class="tab-date">+</span>'
-        '<span class="tab-meta">your own track</span></button>'
+        '<span class="tab-date">+ your track</span>'
+        '<span class="tab-meta">igc · kml · kmz</span></button>',
     )
     tabs = (
         '<nav class="tabs" role="group" aria-label="Choose a flight">'
         f'{"".join(buttons)}</nav>'
+        '<p class="tabs-note">Your own flight is analysed in this page — nothing is '
+        'uploaded anywhere. The dated tabs are example flights.</p>'
     )
     first = reports[0]["analysis"].summary
     title = f"tracklog viewer · {len(reports)} flights from {first.pilot or 'the log'}"

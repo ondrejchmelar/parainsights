@@ -8,7 +8,7 @@ parainsights/
 ├── CLAUDE.md              this file
 ├── pyproject.toml         one project, one venv, one test suite
 ├── tracklog_viewer/       the tool: IGC/KML/KMZ → analysis → HTML, KMZ, 3D map
-├── tests/                 pytest, 124 tests, no network
+├── tests/                 pytest, 126 tests, no network
 └── docs/
     ├── formats.md         IGC and KML/KMZ format research, measured on real files
     └── plan.md            scope, decisions and status
@@ -22,7 +22,7 @@ rather than importing across tools.
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
-.venv/bin/python -m pytest -c pyproject.toml        # 124 tests, ~70 s, no network
+.venv/bin/python -m pytest -c pyproject.toml        # 126 tests, ~70 s, no network
 ```
 
 `-c pyproject.toml` matters when the repo sits inside another project — pytest otherwise
@@ -113,9 +113,21 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   its `World_Boundaries_and_Places` label layer — both keyless. A photograph tells a pilot
   what the ground under a climb was; a road map does not. Attribution to Esri/Maxar is
   required and is rendered on the map and in the caption.
-- **The KMZ is embedded in the HTML report** as a data URI behind an "Open in Earth"
-  link, so the Earth file travels with the report. ~170 KB; `--no-earth-link` drops it,
-  and a multi-flight report only carries one.
+- **Tiles are fetched at view time, not baked in.** The 3D view ships tile templates and
+  stitches its own mosaic in the browser, and the basemap button cycles
+  satellite → map → bare terrain. `--embed-basemap` bakes one image instead, for a report
+  that must work with no network — and then `tiles` is `None`, because a page that carries
+  both would try to fetch, fail under a CSP, and drop the picture it already had. Stitch
+  each source layer into **its own canvas** and composite in order at the end: the label
+  layer is requested second and frequently answers first, so painting tiles into a shared
+  mosaic as they arrive makes z-order a race.
+- **The KMZ is written on demand, not embedded.** `--earth-link` puts it in the report as
+  a data URI behind "Open in Earth" (~170 KB, first flight only); by default `--kmz`
+  writes a file. The report is for reading; a copy of the same flight in a second format
+  is dead weight in it.
+- **Uploading your own track is the first tab, not the last.** The bundled flights are a
+  showcase. The reader's own file is the product, so the `+ your track` tab leads and a
+  note under the tabs says the analysis happens in the page.
 - **Full-bleed needs the scrollbar measured.** `100vw` includes the scrollbar, so a
   `100vw` panel hangs off the layout viewport and anything anchored to its right edge is
   clipped. JS sets `--scrollbar` and the panel is `calc(100vw - var(--scrollbar))`. Note
@@ -147,6 +159,19 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
 - **XContest flight pages cannot be scraped.** The page is a JavaScript shell behind
   Cloudflare Turnstile with the IGC link only present for a signed-in session. We read
   the public title (pilot, date, scored distance) and tell the user to pass the file.
+- **There is no XContest OAuth to integrate with, but there is an API-key programme.**
+  Checked July 2026: no `.well-known` discovery document and no authorize endpoint on
+  `www.xcontest.org`; `oauth.xcontest.org` resolves into the `xcontest.app` zone and
+  answers only with Cloudflare's challenge (one path reached the origin and returned 522),
+  so whatever backs the "log in with XContest" button on `startovne.online` is private to
+  registered partners. What *is* documented and still live are two key-gated APIs
+  (`?key=TEST` returns a structured `Invalid key` from both, not a challenge):
+  `/api/gate/ticket/` + `/api/gate/request/` **submits** a flight, and `/api/js/?key=…`
+  serves widgets including a `flight` detail view, locked to a registered website.
+  Keys come from `info@xcontest.org`. Neither hands over an IGC file, and the Gate API
+  authenticates the pilot with `sha1(md5(password)+…)` — asking a user for their XContest
+  password is not something to build. Docs:
+  `github.com/Iv/FlyHigh/tree/master/doc/xcontest.org`.
 
 ## Verification habits
 

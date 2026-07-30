@@ -34,6 +34,27 @@ def _colour_index(value: float) -> int:
     return len(RAMP_RGB) - 1
 
 
+TILE_SOURCES = {
+    "satellite": {
+        "label": "Satellite",
+        "layers": [
+            "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery"
+            "/MapServer/tile/{z}/{y}/{x}",
+            "https://server.arcgisonline.com/ArcGIS/rest/services/Reference"
+            "/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+        ],
+        "attribution": "Imagery © Esri, Maxar, Earthstar Geographics",
+        "max_zoom": 18,
+    },
+    "map": {
+        "label": "Map",
+        "layers": ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+        "attribution": "© OpenStreetMap contributors",
+        "max_zoom": 19,
+    },
+}
+
+
 def data(analysis: Analysis, terrain, *, tolerance: float | None = None,
          basemap=None) -> dict:
     """Terrain grid, track and climbs, in the compact form the renderer wants."""
@@ -82,7 +103,15 @@ def data(analysis: Analysis, terrain, *, tolerance: float | None = None,
         "track": track,
         "climbs": climbs,
         "palette": [list(colour) for _, colour in RAMP_RGB],
+        # Either a baked image (offline, embedded) or tile templates fetched when the
+        # page is opened. Embedding costs 300 KB and fixes the zoom at build time; tiles
+        # cost a network at view time, which a published artifact does not have.
         "basemap": basemap.to_dict() if basemap is not None else None,
+        # An embedded image is the offline case, so it must not be joined by tile
+        # templates: the toggle would try to fetch, fail behind a content-security
+        # policy, and throw away the picture that was already there.
+        "basemapEmbedded": basemap is not None,
+        "tiles": None if basemap is not None else TILE_SOURCES,
         "landing": {
             "lon": round(float(flight.lon[-1]), 5),
             "lat": round(float(flight.lat[-1]), 5),
@@ -131,6 +160,13 @@ def panel(payload: dict, uid: str, *, kmz_uri: str | None = None,
         )
     attribution = payload.get("basemap", {}) or {}
     credit = attribution.get("attribution", "")
+    # The button names what is on screen, not what comes next: with three states
+    # (satellite → map → off) "Map" as a fixed label says nothing about where you are.
+    tiles = payload.get("tiles") or {}
+    initial_style = "satellite" if "satellite" in tiles else next(iter(tiles), "")
+    basemap_label = (tiles.get(initial_style) or {}).get("label") or (
+        "Satellite" if "Esri" in credit else "Map"
+    )
     return f"""
     <div class="panel view3d-panel">
       <canvas class="view3d" id="view3d-{uid}"
@@ -146,7 +182,7 @@ def panel(payload: dict, uid: str, *, kmz_uri: str | None = None,
         <button type="button" data-view3d-act="zoom-in" title="Zoom in">+</button>
         <button type="button" data-view3d-act="zoom-out" title="Zoom out">&minus;</button>
         <button type="button" data-view3d-act="basemap" class="is-on"
-                title="Show map with place names">Map</button>
+                title="Satellite, map or bare terrain">{basemap_label}</button>
         <button type="button" data-view3d-act="exaggerate" title="Vertical exaggeration">
           &#215;1 height</button>
         <button type="button" data-view3d-act="fullscreen" title="Full screen">
@@ -179,6 +215,12 @@ canvas.view3d { display: block; width: 100%; aspect-ratio: 21 / 9; cursor: grab;
 @media (max-width: 900px) { canvas.view3d { aspect-ratio: 4 / 3; } }
 .view3d-panel:fullscreen { width: 100vw; height: 100vh; margin: 0; }
 .view3d-panel:fullscreen canvas.view3d { height: 100vh; aspect-ratio: auto; }
+/* The fallback for an iframe that is not allowed real fullscreen. inset:0 with auto
+   width and height fills the layout viewport exactly — 100vw/100vh would overshoot by
+   the scrollbar and leave the canvas the wrong height. */
+.view3d-panel.is-maximised { position: fixed; inset: 0; z-index: 60; width: auto;
+  height: auto; margin: 0; }
+.view3d-panel.is-maximised canvas.view3d { width: 100%; height: 100%; aspect-ratio: auto; }
 .view3d-earth {
   position: absolute;
   top: 12px;
@@ -322,11 +364,168 @@ function initView3d(root, cursorTrack) {
     }
   }
 
+  // Where the imagery comes from. A baked image if one was embedded; otherwise tiles
+  // stitched at view time, which also makes the satellite/map switch meaningful because
+  // each style can be fetched on demand.
+  var style = scene.basemap ? null : 'satellite';
+  var loading = false;
+
   if (scene.basemap) {
     basemap = new Image();
     basemap.onload = function () { sampleCellColours(); draw(); };
     basemap.src = scene.basemap.uri;
   }
+
+  function tileNumbers(lon, lat, zoom) {
+    var n = Math.pow(2, zoom);
+    var x = (lon + 180) / 360 * n;
+    var radians = lat * Math.PI / 180;
+    var y = (1 - Math.log(Math.tan(radians) + 1 / Math.cos(radians)) / Math.PI) / 2 * n;
+    return [x, y];
+  }
+
+  function tileZoom(source) {
+    // Enough tiles to be sharp, few enough to be polite: aim for a mosaic no wider than
+    // about 4000 px across the DEM box.
+    for (var zoom = Math.min(13, source.max_zoom); zoom > 5; zoom--) {
+      var a = tileNumbers(dem.west, dem.north, zoom);
+      var b = tileNumbers(dem.east, dem.south, zoom);
+      var across = Math.floor(b[0]) - Math.floor(a[0]) + 1;
+      var down = Math.floor(b[1]) - Math.floor(a[1]) + 1;
+      if (across * down <= 30) return zoom;
+    }
+    return 6;
+  }
+
+  // Mosaics already stitched, keyed by style, so cycling back is instant.
+  var stitched = {};
+
+  function basemapButtons() {
+    return root.querySelectorAll('[data-view3d-act="basemap"]');
+  }
+
+  function setBasemapStyle(next) {
+    var label = next === 'off'
+      ? 'Basemap'
+      : (scene.tiles[next] || {label: 'Basemap'}).label;
+    basemapButtons().forEach(function (button) {
+      button.textContent = label;
+      button.classList.toggle('is-on', next !== 'off');
+    });
+    if (next === 'off') { view.map = false; draw(); return; }
+    view.map = true;
+    style = next;
+    if (stitched[next]) {
+      basemap = stitched[next].image;
+      scene.basemap = stitched[next].box;
+      sampleCellColours();
+      showCredit(stitched[next].box.attribution);
+      draw();
+      return;
+    }
+    basemap = null;
+    cellColour = null;
+    draw();
+    loadTiles(next);
+  }
+
+  function showCredit(text) {
+    var credit = root.querySelector('.view3d-credit');
+    if (credit) credit.textContent = text;
+  }
+
+  function loadTiles(styleName) {
+    var source = scene.tiles && scene.tiles[styleName];
+    if (!source || loading) return;
+    loading = true;
+    showCredit('Loading ' + source.label.toLowerCase() + ' tiles…');
+    var zoom = tileZoom(source);
+    var a = tileNumbers(dem.west, dem.north, zoom);
+    var b = tileNumbers(dem.east, dem.south, zoom);
+    var x0 = Math.floor(a[0]), x1 = Math.floor(b[0]);
+    var y0 = Math.floor(a[1]), y1 = Math.floor(b[1]);
+    var size = 256;
+    var mosaic = document.createElement('canvas');
+    mosaic.width = (x1 - x0 + 1) * size;
+    mosaic.height = (y1 - y0 + 1) * size;
+    var mctx = mosaic.getContext('2d');
+    var pending = 0, done = 0;
+
+    // One canvas per layer, composited in declaration order at the end. Painting every
+    // tile straight into the mosaic as it arrives makes z-order a race — the labels
+    // layer is requested second but frequently answers first, and then the imagery
+    // covers it.
+    var layers = source.layers.map(function () {
+      var layer = document.createElement('canvas');
+      layer.width = mosaic.width;
+      layer.height = mosaic.height;
+      return layer;
+    });
+
+    // The mosaic covers whole tiles, so its geographic box is larger than the DEM's.
+    function lonOf(x) { return x / Math.pow(2, zoom) * 360 - 180; }
+    function latOf(y) {
+      var t = Math.PI - 2 * Math.PI * y / Math.pow(2, zoom);
+      return 180 / Math.PI * Math.atan(0.5 * (Math.exp(t) - Math.exp(-t)));
+    }
+    var box = {
+      west: lonOf(x0), east: lonOf(x1 + 1),
+      north: latOf(y0), south: latOf(y1 + 1),
+      attribution: source.attribution
+    };
+
+    function finish() {
+      loading = false;
+      if (done === 0) {
+        // No tiles at all: almost certainly a content-security policy. Say so once,
+        // rather than leaving the button looking broken.
+        showCredit('Map tiles unavailable here — hillshade only');
+        basemapButtons().forEach(function (button) {
+          button.classList.remove('is-on');
+        });
+        view.map = false;
+        draw();
+        return;
+      }
+      layers.forEach(function (layer) { mctx.drawImage(layer, 0, 0); });
+      var image = new Image();
+      image.onload = function () {
+        stitched[styleName] = {image: image, box: box};
+        if (style !== styleName) return;    // the reader cycled on while we stitched
+        basemap = image;
+        scene.basemap = box;
+        sampleCellColours();
+        showCredit(source.attribution);
+        draw();
+      };
+      image.src = mosaic.toDataURL('image/jpeg', 0.82);
+    }
+
+    source.layers.forEach(function (template, index) {
+      for (var ty = y0; ty <= y1; ty++) {
+        for (var tx = x0; tx <= x1; tx++) {
+          pending++;
+          (function (tx, ty, index) {
+            var image = new Image();
+            image.crossOrigin = 'anonymous';   // needed to read the mosaic back out
+            image.onload = function () {
+              layers[index].getContext('2d').drawImage(
+                image, (tx - x0) * size, (ty - y0) * size, size, size);
+              done++;
+              if (--pending === 0) finish();
+            };
+            image.onerror = function () {
+              if (--pending === 0) finish();
+            };
+            image.src = template.replace('{z}', zoom).replace('{x}', tx).replace('{y}', ty);
+          })(tx, ty, index);
+        }
+      }
+    });
+    if (!pending) finish();
+  }
+
+  if (!scene.basemap && scene.tiles) loadTiles(style);
 
   function world(x, y, z) {
     var cy = Math.cos(view.yaw), sy = Math.sin(view.yaw);
@@ -632,6 +831,11 @@ function initView3d(root, cursorTrack) {
     pending = true;
     requestAnimationFrame(function () {
       pending = false;
+      // Match the backing store to the box on every frame. Relying on a ResizeObserver
+      // or a post-toggle callback to do this was fragile: entering the maximised state
+      // changed the box, the observer's timing did not line up with it, and the canvas
+      // kept its old height while its CSS box was already full screen.
+      resize();
       ctx.clearRect(0, 0, W, H);
       refit();
       var mapped = view.map && basemap && basemap.complete && basemap.naturalWidth > 0;
@@ -707,13 +911,16 @@ function initView3d(root, cursorTrack) {
     if (pointers.size >= 2) {
       var now = twoFingerState();
       if (pinch) {
-        if (pinch.distance > 0 && now.distance > 0) {
-          zoomAt(now.distance / pinch.distance, now.cx, now.cy);
-        }
-        // Twist rotates, which is the gesture Earth uses for heading on touch.
-        view.yaw += (now.angle - pinch.angle) * 0.9;
+        // Pan by the centroid's movement first, then scale about where the fingers are
+        // now. Doing it the other way round, or adding a twist-to-rotate on top, makes
+        // the view slide out from under the fingers — which is what "pinch feels off"
+        // was: zoomAt already moves the pan to anchor the point, and the earlier code
+        // then added the centroid delta again, double-counting it.
         view.panX += (now.cx - pinch.cx) * toCanvas;
         view.panY += (now.cy - pinch.cy) * toCanvas;
+        if (pinch.distance > 4 && now.distance > 4) {
+          zoomAt(now.distance / pinch.distance, now.cx, now.cy);
+        }
       }
       pinch = now;
       draw();
@@ -760,10 +967,8 @@ function initView3d(root, cursorTrack) {
       else if (act === 'tilt-up') view.pitch = Math.min(1.45, view.pitch + 0.15);
       else if (act === 'tilt-down') view.pitch = Math.max(0.06, view.pitch - 0.15);
       else if (act === 'fullscreen') {
-        var panel = canvas.closest('.view3d-panel');
-        if (document.fullscreenElement) document.exitFullscreen();
-        else if (panel.requestFullscreen) panel.requestFullscreen();
-        return;   // the fullscreenchange handler redraws once the box has its new size
+        toggleMaximise();
+        return;   // the resize path redraws once the box has its new size
       }
       else if (act === 'zoom-in') zoomAt(1.25, box().cx, box().cy);
       else if (act === 'zoom-out') zoomAt(1 / 1.25, box().cx, box().cy);
@@ -779,15 +984,25 @@ function initView3d(root, cursorTrack) {
         button.classList.toggle('is-on', next !== 1);
         button.innerHTML = '&#215;' + next + ' height';
       } else if (act === 'basemap') {
-        view.map = !view.map;
-        button.classList.toggle('is-on', view.map);
+        // Cycles satellite → map → off → satellite. With a baked image there is only the
+        // one style, so the button degrades to a plain on/off toggle.
+        if (!scene.tiles || scene.basemapEmbedded) {
+          view.map = !view.map;
+          button.classList.toggle('is-on', view.map);
+        } else {
+          var cycle = ['satellite', 'map', 'off'];
+          var at = cycle.indexOf(view.map ? style : 'off');
+          setBasemapStyle(cycle[(at + 1) % cycle.length]);
+        }
       } else if (act === 'reset') {
         view.yaw = -0.42; view.pitch = 0.46; view.zoom = 1; view.vertical = baseVertical;
         view.panX = 0; view.panY = 0;
-        view.map = true;
-        root.querySelectorAll('[data-view3d-act="basemap"]').forEach(function (b) {
-          b.classList.add('is-on');
-        });
+        if (scene.tiles && !scene.basemapEmbedded) {
+          setBasemapStyle('satellite');
+        } else {
+          view.map = true;
+          basemapButtons().forEach(function (b) { b.classList.add('is-on'); });
+        }
         root.querySelectorAll('[data-view3d-act="exaggerate"]').forEach(function (b) {
           b.classList.remove('is-on');
           b.innerHTML = '&#215;1 height';
@@ -797,10 +1012,62 @@ function initView3d(root, cursorTrack) {
     });
   });
 
+  // In-page maximise, deliberately *not* the Fullscreen API. The primary target is a
+  // page embedded in an iframe that is not granted fullscreen permission, where
+  // requestFullscreen throws synchronously without a user activation and rejects without
+  // the permission — two failure modes that between them made the button do nothing at
+  // all. position: fixed over the viewport needs no permission and behaves identically
+  // everywhere, which also makes it testable.
+  // Percentage height on a canvas resolves against a parent whose own height is being
+  // established in the same pass, and it did not settle before the redraw — the CSS box
+  // read 100 % of the viewport while the backing store kept the aspect-ratio height. An
+  // explicit pixel size removes the dependency entirely.
+  function applyMaximisedSize() {
+    var panel = canvas.closest('.view3d-panel');
+    if (panel.classList.contains('is-maximised')) {
+      canvas.style.width = document.documentElement.clientWidth + 'px';
+      canvas.style.height = document.documentElement.clientHeight + 'px';
+    } else {
+      canvas.style.width = '';
+      canvas.style.height = '';
+    }
+  }
+
+  function toggleMaximise() {
+    var panel = canvas.closest('.view3d-panel');
+    panel.classList.toggle('is-maximised');
+    applyMaximisedSize();
+    // Force the redraw past the layout change rather than waiting for an observer: the
+    // box changes in the same frame as the class, and a single rAF sometimes runs before
+    // the new geometry is available.
+    view.panX = 0;
+    view.panY = 0;
+    // The new box is not measurable immediately, and one follow-up frame was not
+    // enough: measured with __view3d.metrics(), the box read 713 px while the backing
+    // store was still 508 until an explicit later redraw. A short ladder of redraws
+    // costs nothing on a toggle and is not sensitive to how long layout takes.
+    [0, 80, 200, 500].forEach(function (delay) {
+      setTimeout(function () { resize(); draw(); }, delay);
+    });
+  }
+
+  document.addEventListener('keydown', function (event) {
+    if (event.key !== 'Escape') return;
+    var panel = canvas.closest('.view3d-panel');
+    if (panel.classList.contains('is-maximised')) toggleMaximise();
+  });
+
   // Re-measure whenever the box changes: entering full screen, rotating a phone, or a
   // window drag all change it, and a stale backing store renders blurred or clipped.
   function refresh() {
-    if (resize()) { view.panX = 0; view.panY = 0; }
+    applyMaximisedSize();
+    // Only the pan is reset here; the size itself is picked up by draw().
+    var rect = canvas.getBoundingClientRect();
+    var ratio = Math.min(window.devicePixelRatio || 1, 2);
+    if (Math.round(rect.width * ratio) !== W || Math.round(rect.height * ratio) !== H) {
+      view.panX = 0;
+      view.panY = 0;
+    }
     draw();
   }
   window.addEventListener('resize', refresh);
@@ -813,7 +1080,23 @@ function initView3d(root, cursorTrack) {
     clearCursor: function () { cursorIndex = null; draw(); },
     // Exposed for tests: driving the camera from a headless browser is the only way to
     // check that a gesture does what it claims.
-    view: view
+    view: view,
+    redraw: function () { resize(); draw(); },
+    // Exposed for tests: what resize() actually measures, versus what it has stored.
+    metrics: function () {
+      var rect = canvas.getBoundingClientRect();
+      return { W: W, H: H, boxW: rect.width, boxH: rect.height,
+               ratio: Math.min(window.devicePixelRatio || 1, 2),
+               attrW: canvas.width, attrH: canvas.height };
+    },
+    // Exposed for tests: which basemap the reader is looking at, and whether its tiles
+    // actually arrived. A style that is selected but has no image is the failure the
+    // toggle must not hide.
+    basemap: function () {
+      return { style: style, on: view.map, loading: loading,
+               painted: !!basemap, cached: Object.keys(stitched),
+               credit: (root.querySelector('.view3d-credit') || {}).textContent };
+    }
   };
   window.__view3d = handle;
   return handle;
