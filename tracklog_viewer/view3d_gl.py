@@ -182,7 +182,6 @@ function backend(host) {
 
   var position = new Float32Array(vertices * 3);
   var colour = new Float32Array(vertices * 3);
-  var lit = host.lit();
   var relief = Math.max(dem.max - dem.min, 1);
   var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
 
@@ -197,22 +196,34 @@ function backend(host) {
       if (x > maxX) maxX = x;
       if (y < minY) minY = y;
       if (y > maxY) maxY = y;
-
-      // Bare relief, the same curve as view3d.py's shade(): hillshade stretched to this
-      // terrain's own lit range, then an elevation tint. Per vertex rather than per
-      // cell, so the browser interpolates it and the facets the 2D version shows are
-      // gone for free.
-      var shade = 0.96;
-      if (lit.spread > 0) {
-        var t = (host.shadeFactor(r, c) - lit.mid) / lit.spread;
-        shade = 0.86 + Math.max(-1, Math.min(1, t)) * 0.30;
-      }
-      var height = Math.min(1, Math.max(0, (z - dem.min) / relief));
-      colour[i * 3] = (120 + height * 95) * shade / 255;
-      colour[i * 3 + 1] = (135 + height * 80) * shade / 255;
-      colour[i * 3 + 2] = (105 + height * 95) * shade / 255;
     }
   }
+
+  // Bare relief, the same curve as view3d.py's shade(): hillshade stretched to this
+  // terrain's own lit range, then an elevation tint. Per vertex rather than per cell, so
+  // the browser interpolates it and the facets the 2D version shows are gone for free.
+  //
+  // Its own function because the light moves: the sun slider re-lights the terrain, and
+  // the host calls `relight()` rather than rebuilding the whole backend. The lit range
+  // is re-read from the host each time, since it is measured against the same light.
+  function shadeVertices() {
+    var lit = host.lit();
+    for (var r = 0; r < rows; r++) {
+      for (var c = 0; c < cols; c++) {
+        var i = r * cols + c;
+        var shade = 0.96;
+        if (lit.spread > 0) {
+          var t = (host.shadeFactor(r, c) - lit.mid) / lit.spread;
+          shade = 0.86 + Math.max(-1, Math.min(1, t)) * 0.30;
+        }
+        var height = Math.min(1, Math.max(0, (dem.z[i] - dem.min) / relief));
+        colour[i * 3] = (120 + height * 95) * shade / 255;
+        colour[i * 3 + 1] = (135 + height * 80) * shade / 255;
+        colour[i * 3 + 2] = (105 + height * 95) * shade / 255;
+      }
+    }
+  }
+  shadeVertices();
 
   var cells = (cols - 1) * (rows - 1);
   var indices = wide ? new Uint32Array(cells * 6) : new Uint16Array(cells * 6);
@@ -515,6 +526,16 @@ function backend(host) {
       var lose = gl.getExtension('WEBGL_lose_context');
       if (lose) lose.loseContext();
       detach();
+    },
+    // The sun moved. Only the vertex colours carry the bare-relief shading, so that is
+    // all there is to redo here — the draped texture is shaded on the host's side and
+    // arrives through `texture()` as usual. `bufferSubData` rather than a fresh buffer:
+    // the geometry is untouched and the attribute layout is the same.
+    relight: function () {
+      if (disposed) return;
+      shadeVertices();
+      gl.bindBuffer(gl.ARRAY_BUFFER, colourBuffer);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, colour);
     },
     stats: function () { return { cells: cells, folded: 0 }; },
     info: function () {

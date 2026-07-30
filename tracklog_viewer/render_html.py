@@ -928,6 +928,61 @@ def _histogram_verdict(analysis: Analysis) -> str:
     )
 
 
+def _sun_note(sun: dict | None) -> str:
+    """Where the sun was over the flight, in one sentence under the 3D view.
+
+    The slider answers "which slope was lit at four" by moving the light; this answers
+    the questions that do not need a gesture — when the day started and ended, and where
+    the sun stood at launch and at landing. Both read the same table, so they cannot say
+    different things.
+    """
+    if not sun or not sun.get("track"):
+        return ""
+
+    def clock(minute: float | None) -> str:
+        if minute is None:
+            return "—"
+        local = (round(minute) + sun["offset"]) % 1440
+        return f"{local // 60:02d}:{local % 60:02d}"
+
+    def at(minute: int) -> tuple[float, float]:
+        track = sun["track"]
+        index = min(int(round(minute / track["step"])), len(track["az"]) - 1)
+        return track["az"][index], track["el"][index]
+
+    def height(elevation: float) -> str:
+        # A flight that lands at sunset reads "-0° up", which is both ugly and wrong by
+        # the width of the sun's own disc. Say what it means instead.
+        if elevation < -1:
+            return "was already below the horizon"
+        if elevation < 1:
+            return "was sitting on the horizon"
+        return f"stood {elevation:.0f}&#176; up"
+
+    launch_az, launch_el = at(sun["launch"])
+    landing_az, landing_el = at(sun["landing"])
+    day = (
+        f"The sun was up from {clock(sun['rise'])} to {clock(sun['set'])}"
+        if sun.get("rise") is not None and sun.get("set") is not None
+        else "The sun did not set that day"
+    )
+    return (
+        f"{day}; at launch it {height(launch_el)} in the "
+        f"{charts.escape(_cardinal(launch_az))}, and at landing it {height(landing_el)} in "
+        f"the {charts.escape(_cardinal(landing_az))}. The <em>Sun</em> slider re-lights the "
+        f"terrain from any time of day, which is how to ask which slopes were still "
+        f"working — the shading is the real solar position, not a fixed north-west lamp."
+    )
+
+
+def _cardinal(azimuth: float) -> str:
+    names = ["north", "north-north-east", "north-east", "east-north-east", "east",
+             "east-south-east", "south-east", "south-south-east", "south",
+             "south-south-west", "south-west", "west-south-west", "west",
+             "west-north-west", "north-west", "north-north-west"]
+    return names[round((azimuth % 360) / 22.5) % 16]
+
+
 def _meteo_section(analysis: Analysis, meteo, uid: str = "") -> str:
     """The day's air: sounding, ceilings, and how they compare with what was flown."""
     if meteo is None:
@@ -1185,7 +1240,7 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
       {float(np_median(clearance)):.0f}&nbsp;m.
       {charts.escape("; ".join(sorted({b.attribution for b in (basemaps or {}).values()
                                        if b.attribution}))) or ""}
-      Elevation from the AWS terrarium DEM.</p>
+      Elevation from the AWS terrarium DEM. {_sun_note(payload.get("sun"))}</p>
   </section>"""
 
     wind_chart = charts.wind_profile(analysis, meteo=meteo, uid=uid)

@@ -8,7 +8,7 @@ parainsights/
 ├── CLAUDE.md              this file
 ├── pyproject.toml         one project, one venv, one test suite
 ├── tracklog_viewer/       the tool: IGC/KML/KMZ → analysis → HTML, KMZ, 3D map
-├── tests/                 pytest, 185 tests, no network
+├── tests/                 pytest, 209 tests, no network
 └── docs/
     ├── formats.md         IGC and KML/KMZ format research, measured on real files
     └── plan.md            scope, decisions and status
@@ -25,7 +25,7 @@ as the packages, so there is nothing to line up by hand:
 
 ```bash
 uv sync --extra dev          # creates .venv on the pinned Python, from uv.lock
-uv run pytest -c pyproject.toml     # 185 tests, ~115 s, no network
+uv run pytest -c pyproject.toml     # 209 tests, ~2 min, no network
 ```
 
 `-c pyproject.toml` matters when the repo sits inside another project — pytest otherwise
@@ -106,6 +106,7 @@ geometry in a renderer, no rendering in the analysis.
 | `terrain.py` | DEM grid + height above terrain (AWS terrarium, keyless) |
 | `basemap.py` | Satellite (Esri) or OSM tiles stitched to one embedded JPEG |
 | `meteo.py` | The day's vertical profile (Open-Meteo) |
+| `sun.py` | Solar position (NOAA), and the day tabulated for the 3D view |
 | `charts.py` | All SVG charts, rendered locally |
 | `view3d.py` | The 3D view: camera, gestures, tiles, track overlay — and a canvas 2D heightfield as the fallback |
 | `view3d_gl.py` | WebGL heightfield, registered as a backend for `view3d.py` |
@@ -329,6 +330,18 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   clipped. JS sets `--scrollbar` and the panel is `calc(100vw - var(--scrollbar))`. Note
   that `scrollWidth` reports the ink extent even when clipping prevents scrolling — test
   by calling `scrollTo(300, 0)` and reading `scrollX` back.
+- **The hillshade is the real sun, and the day travels as a table.** The light was a
+  fixed north-west lamp, which is a direction the sun is never in anywhere in the northern
+  hemisphere, so the shading answered nothing a pilot asks. `sun.py` is the NOAA solar
+  position algorithm; the payload carries the flight day sampled every ten minutes —
+  under 2 KB — and the panel interpolates it behind a slider that opens on **mid-flight**,
+  the light the day was actually worked in. A table rather than a JavaScript port on
+  purpose: `quicklook.py` already duplicates thresholds that can drift, and 144 pairs of
+  numbers cannot. The azimuth is **unwrapped** in the table, or interpolating across 360
+  sweeps the light the long way round the compass. Re-lighting is a slider event, never a
+  frame: it re-measures the lit range, re-bakes the draped texture on the host side and
+  calls `renderer.relight()` to rebuild the vertex colours in WebGL. A sun below the
+  horizon is held 3° up and labelled "sun down" rather than drawing a black panel.
 - **An uploaded track fetches its own DEM, and CORS is why it can.** `quicklook.py`
   mosaics the terrarium tiles onto a canvas, reads the pixels back and decodes
   `R * 256 + G + B / 256 - 32768` — the same formula as `terrain.py`, written twice
@@ -488,11 +501,6 @@ Written up with a plan in `docs/plan.md`:
   payload *already* ships lon/lat/alt/climb per fix (338 KB), so the profile's polyline is
   a second encoding of data that is in the file twice. Sparklines are the opposite case:
   238 little charts would each need their own slice. Measure before moving anything.
-- **The sun during the flight** — which slopes were lit and when they switched off. Cheap to
-  compute and it answers questions a pilot actually has. Now cheaper than when it was
-  written: with the heightfield in WebGL the illumination belongs in the fragment shader,
-  which makes the time of day a slider rather than a rebuild. The hillshade still lights
-  from the north-west, which is never where the sun is in the northern hemisphere.
 
 ## Known gaps
 

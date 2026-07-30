@@ -9,10 +9,12 @@ The heightfield is drawn back-to-front by walking the grid from the farthest cor
 which is exact for a regular grid seen from outside it — no depth sort, no z-buffer.
 """
 
+import datetime as dt
 import json
 
 import numpy as np
 
+from . import sun
 from .analysis import Analysis, Phase
 from .charts import decimate
 from .render_map import RAMP_RGB, climb_rgb
@@ -115,6 +117,47 @@ def data(analysis: Analysis, terrain, *, tolerance: float | None = None,
             "lat": round(float(flight.lat[-1]), 5),
             "alt": int(altitude[-1]),
         },
+        "sun": _sun(analysis),
+    }
+
+
+def _sun(analysis: Analysis) -> dict:
+    """The day's sun over the middle of the flight, tabulated for the slider.
+
+    A table rather than the algorithm: porting `sun.py` into JavaScript would be a second
+    place for it to be wrong, and 144 pairs of numbers cannot drift. The browser
+    interpolates between samples, which is why `day_track` unwraps the azimuth.
+
+    Times are handled as UTC minutes throughout and turned into clock time only for the
+    label, using the offset the flight's own timezone had *that day* — one flight, one
+    place, one date, so a single offset is exact and a timezone database is not needed in
+    the page.
+    """
+    flight = analysis.flight
+    lat = float(np.median(flight.lat))
+    lon = float(np.median(flight.lon))
+    launch = flight.local_time(0)
+    day = launch.astimezone(dt.timezone.utc).date() if launch.tzinfo else launch.date()
+
+    def utc_minutes(index: int) -> int:
+        when = flight.time[index].astype("datetime64[s]").astype(object)
+        return when.hour * 60 + when.minute
+
+    offset = launch.utcoffset() or dt.timedelta(0)
+    rise, set_ = sun.rise_and_set(day, lat, lon)
+    start, finish = utc_minutes(0), utc_minutes(len(flight.time) - 1)
+    return {
+        "track": sun.day_track(day, lat, lon),
+        "date": day.isoformat(),
+        # Minutes to add to a UTC minute to read it as the pilot's own clock.
+        "offset": int(offset.total_seconds() // 60),
+        "launch": start,
+        "landing": finish,
+        # Mid-flight is what the view opens on: the light the day was actually worked in,
+        # rather than an hour nobody flew.
+        "at": (start + finish) // 2 if finish >= start else start,
+        "rise": round(rise) if rise is not None else None,
+        "set": round(set_) if set_ is not None else None,
     }
 
 
@@ -169,6 +212,16 @@ def panel(payload: dict, uid: str, *, kmz_uri: str | None = None,
       </canvas>
       {earth}
       <p class="view3d-credit">{credit}</p>
+      <!-- The sun. Hidden until the script finds a table in the payload, so a panel
+           built without one (an uploaded track, whose date may be unknown) simply does
+           not have it rather than showing a dead control. -->
+      <div class="view3d-sun" hidden>
+        <label class="view3d-sun-label" for="view3d-sun-{uid}">Sun</label>
+        <input class="view3d-sun-slider" id="view3d-sun-{uid}" type="range"
+               min="0" max="1439" step="5" value="720"
+               aria-label="Time of day the terrain is lit from">
+        <span class="view3d-sun-read" aria-live="off">—</span>
+      </div>
       <div class="view3d-controls">
         <button type="button" data-view3d-act="rotate-left" title="Rotate left">&#8630;</button>
         <button type="button" data-view3d-act="rotate-right" title="Rotate right">&#8631;</button>
@@ -249,6 +302,23 @@ canvas.view3d { display: block; width: 100%; aspect-ratio: 21 / 9; cursor: grab;
   color: var(--ink-2); background: color-mix(in srgb, var(--panel) 78%, transparent);
   padding: 3px 7px; border-radius: 2px; max-width: 46%; text-align: right; }
 canvas.view3d.is-dragging { cursor: grabbing; }
+/* Top left under the Earth link, opposite the credit. Wide enough to drag an hour
+   accurately, and out of the control row, which on a phone already wraps. */
+.view3d-sun { position: absolute; left: 12px; top: 12px; display: flex; align-items: center;
+  gap: 8px; padding: 5px 10px; border-radius: 2px; border: 1px solid var(--rule-strong);
+  background: color-mix(in srgb, var(--panel) 88%, transparent); z-index: 3; }
+/* `display: flex` beats the UA stylesheet's `[hidden] { display: none }`, so a panel
+   with no sun in its payload — an uploaded track, whose date may be unknown — would
+   show the control anyway, dead. Say it here rather than relying on the attribute. */
+.view3d-sun[hidden] { display: none; }
+.view3d-earth ~ .view3d-sun { top: 56px; }
+.view3d-sun-label, .view3d-sun-read {
+  font-family: 'NarrowDisplay', "Liberation Sans Narrow", ui-sans-serif, sans-serif;
+  font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-2); }
+.view3d-sun-read { min-width: 12ch; text-align: right; color: var(--ink); }
+.view3d-sun-slider { width: 150px; accent-color: var(--climb); }
+@media (max-width: 640px) { .view3d-sun-slider { width: 96px; }
+  .view3d-sun-read { min-width: 10ch; } }
 .view3d-controls { position: absolute; right: 10px; bottom: 10px; left: 10px; display: flex;
   gap: 5px; flex-wrap: wrap; justify-content: flex-end; }
 @media (max-width: 640px) {
@@ -691,7 +761,8 @@ function initView3d(root, cursorTrack) {
   // nothing at all — which is how a road map came out looking like a flat sheet. Stretch
   // the observed range instead, so relief reads at whatever scale the ground has.
   var litMid = 0.86, litSpread = 0;
-  (function measureLit() {
+  function measureLit() {
+    litMid = 0.86; litSpread = 0;
     var lo = Infinity, hi = -Infinity;
     for (var r = 0; r < rows; r += 2) {
       for (var c = 0; c < cols; c += 2) {
@@ -703,7 +774,8 @@ function initView3d(root, cursorTrack) {
     if (!isFinite(lo) || hi - lo < 0.01) return;   // genuinely flat: leave it unshaded
     litMid = (lo + hi) / 2;
     litSpread = (hi - lo) / 2;
-  })();
+  }
+  measureLit();
 
   // The heightfield is the only part of this that a depth buffer changes, so it is the
   // only part a backend may replace. `view3d_gl.py` registers one; with nothing
@@ -737,6 +809,25 @@ function initView3d(root, cursorTrack) {
     fallback: function () { renderer = null; sampleCellColours(); draw(); }
   }) : null;
 
+  // Where the light comes from, in the frame the gradients below are computed in: x
+  // east, y *south* (rows run north to south), z up. The default is the fixed direction
+  // this always used; `setLight` replaces it with the real sun when the payload carries
+  // a day track, which is what makes "which slopes were lit, and when" a question the
+  // view can answer rather than a decoration.
+  var lightX = -0.55, lightY = 0.55, lightZ = 0.63;
+
+  function setLight(azimuth, elevation) {
+    // A sun on the horizon lights nothing and the hillshade collapses to a silhouette,
+    // so hold it a few degrees up. Below the horizon the terrain is drawn by the same
+    // rule — there is no night mode; the label says the sun is down and the shading
+    // shows the last light it had.
+    var el = Math.max(elevation, 3) * Math.PI / 180;
+    var az = azimuth * Math.PI / 180;
+    lightX = Math.cos(el) * Math.sin(az);
+    lightY = -Math.cos(el) * Math.cos(az);   // north in the payload, south in this frame
+    lightZ = Math.sin(el);
+  }
+
   function shadeFactor(r, c) {
     var i = r * cols + c;
     var here = dem.z[i];
@@ -746,7 +837,7 @@ function initView3d(root, cursorTrack) {
     var dzdx = (right - here) / cellX, dzdy = (below - here) / cellY;
     var nx = -dzdx, ny = -dzdy, nz = 1;
     var len = Math.sqrt(nx * nx + ny * ny + nz * nz);
-    var light = (nx * -0.55 + ny * 0.55 + nz * 0.63) / len;
+    var light = (nx * lightX + ny * lightY + nz * lightZ) / len;
     return Math.max(0.25, Math.min(1.15, 0.55 + light * 0.65));
   }
 
@@ -1443,6 +1534,83 @@ function initView3d(root, cursorTrack) {
     var r = canvas.getBoundingClientRect();
     return { cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
   }
+
+  // ---- the sun ---------------------------------------------------------------------
+  //
+  // The payload carries the whole day sampled every ten minutes rather than the
+  // algorithm, so there is no second implementation of solar position to drift out of
+  // step with `sun.py`. Interpolation between samples is linear and the azimuth arrives
+  // unwrapped, so the light never sweeps the long way round the compass.
+  var sunTrack = scene.sun || null;
+  var sunMinute = sunTrack ? sunTrack.at : null;
+
+  function sunAt(minute) {
+    var track = sunTrack.track;
+    var span = track.az.length * track.step;
+    var at = ((minute % span) + span) % span / track.step;
+    var i = Math.floor(at), f = at - i;
+    var j = (i + 1) % track.az.length;
+    // The wrap at midnight is the one place the unwrapped azimuth has a real step in it;
+    // ignore the fraction there rather than interpolate across a day boundary.
+    if (j === 0) return { az: track.az[i], el: track.el[i] };
+    return { az: track.az[i] + (track.az[j] - track.az[i]) * f,
+             el: track.el[i] + (track.el[j] - track.el[i]) * f };
+  }
+
+  function clock(minute) {
+    var local = ((Math.round(minute) + sunTrack.offset) % 1440 + 1440) % 1440;
+    return String(Math.floor(local / 60)).padStart(2, '0') + ':' +
+           String(local % 60).padStart(2, '0');
+  }
+
+  // Re-lighting is not free and does not have to be: the sun moves when a reader drags a
+  // slider, never during a gesture or a frame. The whole cost is one pass over the grid
+  // for the lit range, one over the vertex colours (WebGL) and one over the draped
+  // texture, and the draped one is the reason this is not done per animation frame.
+  function relight() {
+    if (!sunTrack) return;
+    var where = sunAt(sunMinute);
+    setLight(where.az, where.el);
+    measureLit();
+    Object.keys(ready).forEach(function (name) {
+      if (ready[name].image) ready[name].shaded = shadedTexture(ready[name].image,
+                                                               ready[name].box);
+    });
+    if (style && ready[style]) basemap = ready[style].shaded || ready[style].image;
+    if (renderer && renderer.relight) renderer.relight();
+    sampleCellColours();
+    var read = root.querySelector('.view3d-sun-read');
+    if (read) {
+      read.textContent = clock(sunMinute) + ' · ' +
+        (where.el > 0 ? Math.round(where.el) + '° ' + compass(where.az) : 'sun down');
+    }
+    draw();
+  }
+
+  function compass(azimuth) {
+    var names = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
+                 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+    return names[Math.round((((azimuth % 360) + 360) % 360) / 22.5) % 16];
+  }
+
+  (function wireSun() {
+    var host = root.querySelector('.view3d-sun');
+    var slider = root.querySelector('.view3d-sun-slider');
+    if (!host || !slider) return;
+    if (!sunTrack || !sunTrack.track || !sunTrack.track.az) return;   // no date, no sun
+    host.hidden = false;
+    // The slider runs in the pilot's own clock so the numbers under it are the times in
+    // the report's tables; the sun is computed in UTC, and `offset` is the one place
+    // those two meet.
+    slider.min = 0;
+    slider.max = 1435;
+    slider.value = ((sunMinute + sunTrack.offset) % 1440 + 1440) % 1440;
+    slider.addEventListener('input', function () {
+      sunMinute = Number(slider.value) - sunTrack.offset;
+      relight();
+    });
+    relight();
+  })();
 
   root.querySelectorAll('[data-view3d-act]').forEach(function (button) {
     button.addEventListener('click', function () {

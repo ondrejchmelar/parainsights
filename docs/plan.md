@@ -187,28 +187,54 @@ live one — after a context loss they are what the reader gets — and there is
 says so.
 
 
-### Wanted: the sun during the flight
+### The sun during the flight
 
-Where the sun was, minute by minute. It is cheap to compute — solar position from date,
-time and latitude/longitude is closed-form, no data source needed — and it answers
-questions a pilot actually has:
+**Done.** `sun.py` — the NOAA solar position algorithm — plus a slider in the 3D view that
+re-lights the terrain from any time of day. The hillshade was a fixed north-west lamp,
+which is a direction the sun is never in anywhere in the northern hemisphere, so it
+answered none of the questions a pilot actually has:
 
 - **which slopes were being lit**, and when they switched off. The east faces work first
   and die by mid-afternoon; the classic mistake is arriving at a west face an hour before
-  it starts working. With the DEM already in hand, sun elevation and azimuth give the
-  angle of incidence on every grid cell, so the 3D view could shade the ground by *solar*
-  illumination at a chosen time rather than by a fixed north-west light — and animate it.
+  it starts working. Dragging the slider is the answer, and the caption under the view
+  states sunrise, sunset, and where the sun stood at launch and at landing.
 - **whether a climb was thermic or convergence**: a good climb on a slope that had been in
   shadow for two hours is not sun-driven.
-- **how much of the day was left**, against the flight's own clock. Sunset at the landing
-  field, and the last hour before it, is what decides whether a final glide is on.
+- **how much of the day was left**, against the flight's own clock.
 
-Notes for whoever builds it: the timezone is already resolved (`igc.py`), so local solar
-time is available; the shading normalisation in `view3d.py` (`litMid`/`litSpread`) is
-where a solar light vector would replace the fixed one; and the hillshade currently lights
-from the north-west, which is *never* where the sun is in the northern hemisphere — worth
-fixing at the same time, or at least labelling as artificial light. If the WebGL view lands
-first, do this in the fragment shader instead and the time of day becomes a slider.
+**The day travels as a table, not as an algorithm.** 144 samples of azimuth and elevation,
+one every ten minutes, under 2 KB. Porting the solar position into JavaScript would put a
+second implementation in the document, and `quicklook.py` is the standing lesson in what
+that costs — every threshold duplicated there is a thing that can drift. A table cannot
+drift. The page interpolates linearly between samples, which is why `day_track` **unwraps**
+the azimuth: interpolating across a wrap at 360 sweeps the light the long way round the
+compass, and on a slider that reads as the sun bolting backwards through the whole sky.
+
+**The default is mid-flight**, not noon and not the old fixed lamp: the light the day was
+actually worked in. The slider runs in the pilot's own clock — the report's tables are
+local time and the sun is computed in UTC, so the payload carries the one offset where
+those meet.
+
+**Re-lighting is a slider event, never a frame.** Moving the sun re-measures `litMid`/
+`litSpread` against the new light, re-bakes the draped texture on the host side, and calls
+`renderer.relight()` so the WebGL backend rebuilds its vertex colours through
+`bufferSubData`. All of it is a pass or two over the grid, which is cheap once per drag
+event and would not be cheap per animation frame. Below the horizon the sun is held 3° up
+and the label says "sun down" — there is no night mode, because a black panel answers
+nothing.
+
+Two omissions, both deliberate: no atmospheric refraction (half a degree at the horizon,
+nothing above 10°, and this is a geometric question), and no topographic horizon — the sun
+"rises" when it clears the sea horizon, not when it clears the ridge to your east. A real
+answer to the second would march the DEM along the bearing, and the view already draws the
+terrain's own shadows.
+
+Validated against a second algorithm rather than against itself: `tests/test_sun.py`
+carries the Astronomical Almanac's low-precision solar position, which goes through right
+ascension and sidereal time where `sun.py` goes through the equation of time, and the two
+agree within half a degree at five places from Prague to Sydney. The geometry is pinned
+separately — equinox noon at 90° minus your latitude, the solstices a tilt either side,
+the sun in the eastern half of the sky before noon, a polar day with no sunrise at all.
 
 ## Weather
 
@@ -351,7 +377,7 @@ the columns are blank rather than printing a number that is wrong.
 
 ## Status
 
-Done and tested (185 tests):
+Done and tested (209 tests):
 
 - `igc.py` — parser + fix cleanup. All 61 sample files parse, no failures, no warnings,
   timezone resolved 61/61.

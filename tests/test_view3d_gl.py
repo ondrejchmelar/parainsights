@@ -109,7 +109,7 @@ def _basemap(size: int = 256) -> dict:
 
 
 def _scene(*, terrain: dict | None = None, basemap: bool = True,
-           basemap_size: int = 256) -> dict:
+           basemap_size: int = 256, sun: dict | None = None) -> dict:
     dem = terrain or _terrain()
     track = {"lon": [], "lat": [], "alt": [], "c": []}
     for i in range(120):
@@ -128,6 +128,9 @@ def _scene(*, terrain: dict | None = None, basemap: bool = True,
         "basemaps": {"satellite": _basemap(basemap_size)} if basemap else {},
         "tiles": None,
         "landing": {"lon": 14.2, "lat": 49.2, "alt": dem["min"]},
+        # Absent unless a test asks for it: a panel with no date has no sun, and the
+        # control has to stay out of the way rather than sit there dead.
+        **({"sun": sun} if sun else {}),
     }
 
 
