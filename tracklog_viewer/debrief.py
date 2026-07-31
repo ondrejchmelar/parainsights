@@ -538,15 +538,19 @@ def _verdict(analysis: Analysis, route, weather) -> Verdict | None:
 
     headline: list[dict] = []
     if route is not None and getattr(route, "distance", 0):
-        headline.append({"value": f"{route.distance / 1000:.2f} km", "label": "scored"})
+        headline.append({"value": f"{route.distance / 1000:.2f} km", "label": "scored",
+                         "key": "scored_km"})
     if thermals:
         mean = float(np.mean([s.average_climb for s in thermals]))
         headline.append(
-            {"value": f"{mean:+.2f} m/s", "label": f"mean of {len(thermals)} climbs"}
+            {"value": f"{mean:+.2f} m/s",
+             "label": f"mean of {len(thermals)} climbs",
+             "key": "mean_climb"}
         )
     use = metrics.ceiling_use(analysis, weather)
     if use is not None:
-        headline.append({"value": f"{use.fraction:.0%}", "label": "of cloudbase"})
+        headline.append({"value": f"{use.fraction:.0%}", "label": "of cloudbase",
+                         "key": "ceiling_used"})
     else:
         headline.append(
             {"value": f"{_num(summary.max_altitude)} m",

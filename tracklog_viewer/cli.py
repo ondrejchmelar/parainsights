@@ -7,6 +7,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from . import (
+    baseline,
     basemap as basemap_module,
     kml,
     meteo as meteo_module,
@@ -76,6 +77,14 @@ def main(argv: list[str] | None = None) -> int:
         "--terrain", action="store_true",
         help="fetch DEM tiles and embed a 3D terrain view in the report (uses the network)",
     )
+    parser.add_argument(
+        "--archive", type=Path, metavar="DIR",
+        help="a directory of per-flight summaries (a few KB of JSON each, no track data). "
+             "Every flight analysed is added to it, and the report places this one against "
+             "the others: 'among your best of 12 flights' rather than a bare number. "
+             "Offline, and the first few flights say nothing until there are enough to "
+             "rank against.",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -85,6 +94,21 @@ def main(argv: list[str] | None = None) -> int:
         # without a traceback.
         print(f"tracklog-viewer: {error}", file=sys.stderr)
         return 2
+
+    # The archive is written *before* the report is rendered, so this flight is in its
+    # own baseline. That is correct rather than circular: a percentile of your own flights
+    # includes the flight, and excluding it would make "your best" unreachable.
+    held = None
+    if args.archive:
+        for report in reports:
+            entry = baseline.summarise(
+                report["analysis"], route=report["route"], weather=report["meteo"]
+            )
+            baseline.save(entry, args.archive)
+        held = baseline.build(args.archive)
+        print(f"archive: {len(held)} flights in {args.archive}"
+              + ("" if held.usable
+                 else f" — {baseline.MIN_FLIGHTS} needed before it can rank anything"))
 
     if args.json:
         payload = (
@@ -99,9 +123,10 @@ def main(argv: list[str] | None = None) -> int:
                 meteo=reports[0]["meteo"], route=reports[0]["route"],
                 terrain=reports[0]["terrain"], basemaps=reports[0]["basemaps"],
                 fetch_tiles=reports[0]["fetch_tiles"], kmz=reports[0]["kmz"],
+                archive=held if args.archive else None,
             )
         else:
-            render_html.write_multi(reports, args.html)
+            render_html.write_multi(reports, args.html, archive=held if args.archive else None)
         print(f"wrote {args.html}")
     if args.kmz:
         render_kmz.write(

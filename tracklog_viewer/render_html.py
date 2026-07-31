@@ -573,6 +573,13 @@ footer { margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--rule);
   max-width: 68ch;
 }
 .verdict-figures { display: flex; flex-wrap: wrap; gap: 28px; margin-top: 12px; }
+.verdict-rank {
+  font-size: 11px;
+  color: var(--ink-3);
+  display: block;
+  margin-top: 1px;
+}
+.verdict-rank.is-best { color: var(--climb); }
 .verdict-figure { display: flex; flex-direction: column; gap: 1px; }
 .verdict-value {
   font-size: 20px;
@@ -1373,20 +1380,90 @@ def _meteo_profile(analysis: Analysis, meteo, uid: str, rows: list[str]) -> str:
     </div>"""
 
 
-def _verdict_strip(result) -> str:
+def _peer_delta(value, others, label, *, higher_is_better=True, unit=""):
+    """This flight against the other flights in the same document.
+
+    The document holds several flights and never put them side by side — free insight
+    sitting on the table. The comparison is only drawn when there is something to compare
+    against: with one flight in the document there is no delta, and inventing one by
+    ranking a flight against itself would be worse than silence.
+    """
+    peers = [v for v in others if v is not None]
+    if value is None or len(peers) < 1:
+        return ""
+    # `peers` is the *other* flights, so the comparison is against the best of them and
+    # the flight leads when it matches or beats that. Testing `value == best` instead read
+    # the leading flight as trailing the runner-up by its own margin.
+    rival = max(peers) if higher_is_better else min(peers)
+    leads = value >= rival if higher_is_better else value <= rival
+    if leads:
+        return f'<span class="verdict-rank is-best">best of {len(peers) + 1} here</span>'
+    gap = abs(value - rival)
+    if gap < 1e-9:
+        return ""
+    arrow = "&#9660;" if higher_is_better else "&#9650;"
+    return (f'<span class="verdict-rank">{arrow} {gap:,.2f}{unit} off the best of '
+            f'{len(peers) + 1}</span>').replace(",", "\u2009")
+
+
+def _verdict_strip(result, analysis=None, archive=None, peers=None) -> str:
     """The flight in one line, above the 3D view.
 
     A reader currently scrolls ~1 200 px before meeting a single number. The 3D view
     keeps its place as the hero image — it is the reason people stay — so the answer to
     "how did it go" goes above it, in one compact line, and the evidence goes below.
+
+    Each headline figure carries up to two comparisons, and they answer different
+    questions: the other flights in *this document* ("best of the 3 here") and the pilot's
+    own archive ("among your best of 12 flights"). Both are omitted rather than faked when
+    there is nothing to compare against — one flight in a document and a cold archive are
+    the normal case, not an error.
     """
     if result is None or result.verdict is None:
         return ""
     verdict = result.verdict
+
+    ranks = {}
+    if analysis is not None:
+        thermals = analysis.thermals
+        mine = {
+            "scored": None,
+            "mean of climbs": (
+                sum(s.altitude_change for s in thermals)
+                / sum(s.duration for s in thermals)
+                if thermals and sum(s.duration for s in thermals)
+                else None
+            ),
+        }
+        if peers:
+            others = {"scored": [], "mean of climbs": []}
+            for peer in peers:
+                peer_thermals = peer.thermals
+                held = sum(s.duration for s in peer_thermals)
+                others["mean of climbs"].append(
+                    sum(s.altitude_change for s in peer_thermals) / held if held else None
+                )
+            ranks["mean_climb"] = _peer_delta(
+                mine["mean of climbs"], others["mean of climbs"], "climb", unit=" m/s"
+            )
+        if archive is not None and getattr(archive, "usable", False):
+            sentence = archive.rank_sentence(
+                "mean_climb",
+                round(mine["mean of climbs"], 2) if mine["mean of climbs"] else None,
+                "climb rate",
+            )
+            if sentence:
+                ranks.setdefault("mean_climb", "")
+                ranks["mean_climb"] += (
+                    f'<span class="verdict-rank">{charts.escape(sentence)}</span>'
+                )
+
     numbers = "".join(
         f'<div class="verdict-figure"><span class="verdict-value">'
         f'{charts.escape(item["value"])}</span>'
-        f'<span class="verdict-label">{charts.escape(item["label"])}</span></div>'
+        f'<span class="verdict-label">{charts.escape(item["label"])}</span>'
+        f'{ranks.get(item.get("key"), "")}'
+        f"</div>"
         for item in verdict.headline
     )
     return f"""
@@ -1474,7 +1551,7 @@ def _debrief_cards(result, uid: str, sample: list[int]) -> str:
 def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
                  basemaps=None, fetch_tiles: bool = True,
                  kmz: bytes | None = None, uid: str = "f0",
-                 hidden: bool = False) -> str:
+                 hidden: bool = False, archive=None, peers=None) -> str:
     """One flight's sections, from masthead to footer.
 
     ``meteo`` and ``route`` are optional: the report degrades to the flight's own
@@ -1645,7 +1722,7 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
     debrief_result = debrief.build(
         analysis, route=route, weather=meteo, clearance=clearance
     )
-    verdict_strip = _verdict_strip(debrief_result)
+    verdict_strip = _verdict_strip(debrief_result, analysis, archive, peers)
     debrief_section = _debrief_cards(debrief_result, uid, sample)
 
     return f"""<article class="flight" data-flight-report="{uid}"{" hidden" if hidden else ""}>
@@ -1915,7 +1992,8 @@ ADD_TAB = (
 
 
 def render(analysis: Analysis, *, meteo=None, route=None, terrain=None,
-           basemaps=None, fetch_tiles: bool = True, kmz: bytes | None = None) -> str:
+           basemaps=None, fetch_tiles: bool = True, kmz: bytes | None = None,
+           archive=None) -> str:
     """A report for a single flight, with the own-track picker alongside it."""
     summary = analysis.summary
     title = f"{summary.date} · {summary.site or 'flight'} — flight review"
@@ -1939,13 +2017,14 @@ def render(analysis: Analysis, *, meteo=None, route=None, terrain=None,
             _flight_body(
                 analysis, meteo=meteo, route=route, terrain=terrain,
                 basemaps=basemaps, fetch_tiles=fetch_tiles, kmz=kmz, uid="f0",
+                archive=archive,
             )
         ],
         tabs,
     )
 
 
-def render_multi(reports: list[dict]) -> str:
+def render_multi(reports: list[dict], *, archive=None) -> str:
     """One document holding several flights, with a picker.
 
     Each report is ``{"analysis": …, "meteo": …, "route": …}``. Bodies are all
@@ -1967,6 +2046,11 @@ def render_multi(reports: list[dict]) -> str:
                 fetch_tiles=report.get("fetch_tiles", True),
                 kmz=report.get("kmz"),
                 uid=uid,
+                archive=archive,
+                # Every other flight in this document, so each one can say where it
+                # stands among them. The document held three flights and never once put
+                # them side by side.
+                peers=[r["analysis"] for j, r in enumerate(reports) if j != index],
                 hidden=index > 0,
             )
         )
@@ -2010,18 +2094,19 @@ def render_multi(reports: list[dict]) -> str:
 
 
 def write(analysis: Analysis, path, *, meteo=None, route=None, terrain=None,
-          basemaps=None, fetch_tiles: bool = True, kmz: bytes | None = None) -> Path:
+          basemaps=None, fetch_tiles: bool = True, kmz: bytes | None = None,
+          archive=None) -> Path:
     path = Path(path)
     path.write_text(
         render(analysis, meteo=meteo, route=route, terrain=terrain, basemaps=basemaps,
                fetch_tiles=fetch_tiles,
-               kmz=kmz),
+               kmz=kmz, archive=archive),
         encoding="utf-8",
     )
     return path
 
 
-def write_multi(reports: list[dict], path) -> Path:
+def write_multi(reports: list[dict], path, *, archive=None) -> Path:
     path = Path(path)
-    path.write_text(render_multi(reports), encoding="utf-8")
+    path.write_text(render_multi(reports, archive=archive), encoding="utf-8")
     return path

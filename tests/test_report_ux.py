@@ -230,3 +230,65 @@ class TestDebriefRendering:
     def test_show_me_is_scoped_to_the_flight_not_the_document(self, tmp_path):
         """A document holds several flights; a document-level query moves the wrong one."""
         assert "root.querySelectorAll('[data-finding-cursor]')" in render_html.SCRIPT
+
+
+class TestComparison:
+    """Phase 3: the document held three flights and never put them side by side.
+
+    Two different comparisons, answering two different questions: the other flights in
+    *this document*, and the pilot's own archive across time. Both are omitted rather
+    than faked when there is nothing to compare against.
+    """
+
+    def test_a_lone_flight_gets_no_delta(self):
+        """Ranking a flight against itself is worse than silence."""
+        assert render_html._peer_delta(1.5, [], "climb") == ""
+        assert render_html._peer_delta(None, [1.0, 2.0], "climb") == ""
+
+    def test_the_leading_flight_is_named_as_the_best(self):
+        """The leader used to read as trailing the runner-up by its own margin, because
+        the test was `value == max(others)` rather than `value >= max(others)`."""
+        html = render_html._peer_delta(2.0, [1.0, 1.5], "climb", unit=" m/s")
+        assert "best of 3 here" in html
+        assert "off the best" not in html
+
+    def test_a_trailing_flight_reports_its_gap(self):
+        html = render_html._peer_delta(1.0, [1.5, 2.0], "climb", unit=" m/s")
+        assert "off the best of 3" in html
+        assert "1.00" in html
+
+    def test_a_lower_is_better_metric_inverts(self):
+        html = render_html._peer_delta(1.0, [1.5, 2.0], "gap", higher_is_better=False)
+        assert "best of 3 here" in html
+
+    def test_a_cold_archive_says_nothing(self, tmp_path):
+        from tests.test_debrief import a_day
+        from tracklog_viewer import baseline
+
+        analysis = a_day(tmp_path, "cold.igc",
+                         [(300, 2.5), (300, 0.4), (300, 0.4), (300, 0.4), (300, 0.5)],
+                         glide=700)
+        html = render_html._flight_body(analysis, archive=baseline.Baseline([]))
+        assert "verdict-rank" not in html
+
+    def test_a_usable_archive_places_the_flight_and_names_the_sample(self, tmp_path):
+        import json
+
+        from tests.test_baseline import entry
+        from tests.test_debrief import a_day
+        from tracklog_viewer import baseline
+
+        directory = tmp_path / "arch"
+        directory.mkdir()
+        for i, rate in enumerate([0.3, 0.4, 0.5, 0.6, 0.7, 0.8]):
+            (directory / f"{i}.json").write_text(
+                json.dumps(entry(f"2026-01-{i + 1:02d}", mean_climb=rate)),
+                encoding="utf-8",
+            )
+        analysis = a_day(tmp_path, "warm.igc",
+                         [(300, 2.5), (300, 2.4), (300, 2.3), (300, 2.2), (300, 2.1)],
+                         glide=700)
+        html = render_html._flight_body(analysis, archive=baseline.build(directory))
+
+        assert "verdict-rank" in html
+        assert "of 6 flights" in html, "the sample size has to be named"
