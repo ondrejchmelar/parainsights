@@ -15,7 +15,7 @@ import json
 import math
 from pathlib import Path
 
-from . import airmass, charts, debrief, metrics, quicklook, terrain as terrain_module, view3d, view3d_gl
+from . import airmass, charts, debrief, insolation, metrics, quicklook, terrain as terrain_module, view3d, view3d_gl
 from numpy import median as np_median
 from .analysis import TURN_RESOLUTION_LIMIT, Analysis, Phase
 
@@ -1008,6 +1008,41 @@ def _stat(key: str, value: str, unit: str = "", sub: str = "") -> str:
     )
 
 
+def _trigger_note(analysis: Analysis, terrain) -> str:
+    """Which faces the climbs started over, and whether they were the lit ones.
+
+    Both halves of this are already in the page — the DEM, and the solar tables the 3D
+    view re-lights from — so it costs nothing but the reading. It is a sentence beside the
+    view rather than a debrief card because it carries no cost in metres or minutes, and
+    because it is emphatically *not* a cause: a lit south-west face under a climb is a
+    coincidence a pilot can weigh, not a reason the thermal existed.
+    """
+    if terrain is None:
+        return ""
+    found = insolation.triggers(analysis, terrain)
+    if len(found) < 3:
+        return ""
+
+    faces = {}
+    for trigger in found:
+        faces[trigger.face.cardinal] = faces.get(trigger.face.cardinal, 0) + 1
+    common = sorted(faces.items(), key=lambda pair: -pair[1])[:2]
+    lit = sum(1 for t in found if t.face.relative > 1.05)
+    note = (
+        f" Of {len(found)} climbs that started over sloping ground, "
+        + " and ".join(f"{count} began over {name}-facing slopes" for name, count in common)
+        + f"; {lit} over ground catching more sun than the slopes around it."
+    )
+
+    breeze = insolation.windward(analysis, terrain)
+    if breeze is not None and breeze.total:
+        note += (
+            f" {breeze.windward} of {breeze.total} faced within 60&#176; of the measured"
+            f" wind, which is where ridge lift would be."
+        )
+    return note
+
+
 def _ceiling_tile(analysis: Analysis, meteo, peak_time: str, offset: float) -> tuple:
     """`ceiling used`, or the bare height when there is no model to compare against.
 
@@ -1573,7 +1608,7 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
       {float(np_median(clearance)):.0f}&nbsp;m.
       {charts.escape("; ".join(sorted({b.attribution for b in (basemaps or {}).values()
                                        if b.attribution}))) or ""}
-      Elevation from the AWS terrarium DEM. {_sun_note(payload.get("sun"))}</p>
+      Elevation from the AWS terrarium DEM. {_sun_note(payload.get("sun"))}{_trigger_note(analysis, terrain)}</p>
   </section>"""
 
     wind_chart = charts.wind_profile(analysis, meteo=meteo, uid=uid)

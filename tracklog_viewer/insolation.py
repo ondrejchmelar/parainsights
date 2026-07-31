@@ -1,0 +1,203 @@
+"""What the sun was doing to the ground, from the DEM and the solar tables.
+
+Both halves are already in the report and neither costs a byte of new data: `terrain.py`
+holds the elevation grid, and `sun.py` tabulates the day's solar position every ten
+minutes for the 3D view's re-lighting. Slope and aspect are a gradient of that grid, and
+the cosine of the angle between a cell's surface normal and the sun vector is its relative
+insolation at any moment. The machinery to *show* this already exists — the 3D view lights
+the terrain from the same tables — and what was missing was reading a number out of it.
+
+Two findings fall straight out:
+
+* **The trigger** — which face was lit, and how strongly, at the minute each climb
+  started, and how that compares with the ground around it. This is the question a pilot
+  asks about a new site all day long.
+* **The windward face** — aspect against the measured wind gives ridge-lift potential,
+  which is a candidate explanation for the "rising, uncounted" minutes that the `other`
+  decomposition uncovered.
+
+Nothing here claims a cause. A lit south-west face under a climb is a coincidence the
+pilot can weigh, not a reason the thermal existed — the tool cannot see the sky.
+"""
+
+from dataclasses import dataclass
+
+import numpy as np
+
+from . import geo, sun
+
+# How far around a climb's start point to look when asking whether its face was unusual.
+# Small enough to mean "the slope you were on" rather than "the valley".
+NEIGHBOURHOOD = 1200.0  # metres
+# A slope flatter than this has no meaningful aspect, and calling one is noise.
+MIN_SLOPE = 5.0  # degrees
+
+
+@dataclass
+class Face:
+    """The ground under a point: how it lies, and how hard the sun was hitting it."""
+
+    slope: float  # degrees from horizontal
+    aspect: float  # degrees clockwise from north, the direction it faces
+    cardinal: str
+    insolation: float  # 0..1, cosine of the sun's incidence on the surface
+    relative: float  # insolation over the neighbourhood's mean, 1.0 = ordinary
+    sun_elevation: float
+
+
+def _gradients(terrain) -> tuple[np.ndarray, np.ndarray]:
+    """Ground slope in metres per metre, east and north.
+
+    The grid is regular in *degrees*, not metres, so the east spacing shrinks with the
+    cosine of latitude — using one spacing for both axes tilts every aspect towards the
+    poles. The row order matters too: row 0 is north, so the north gradient is negated.
+    """
+    rows, cols = terrain.elevations.shape
+    if rows < 2 or cols < 2:
+        return np.zeros((rows, cols)), np.zeros((rows, cols))
+
+    mid_lat = (terrain.north + terrain.south) / 2.0
+    dy = geo.R * np.radians(terrain.north - terrain.south) / (rows - 1)
+    dx = (
+        geo.R
+        * np.radians(terrain.east - terrain.west)
+        * np.cos(np.radians(mid_lat))
+        / (cols - 1)
+    )
+    d_north, d_east = np.gradient(terrain.elevations.astype(float))
+    return d_east / max(dx, 1e-6), -d_north / max(dy, 1e-6)
+
+
+def grid(terrain, position: sun.Position) -> np.ndarray:
+    """Relative insolation of every cell, 0..1, for one solar position.
+
+    The surface normal of a cell with gradients (gx, gy) is (-gx, -gy, 1) normalised; the
+    illumination is its dot product with the unit vector towards the sun. Negative means
+    the face is turned away, and is clamped to zero rather than allowed to go negative and
+    quietly subtract from a mean later.
+    """
+    gx, gy = _gradients(terrain)
+    sx, sy, sz = position.vector()
+    norm = np.sqrt(gx * gx + gy * gy + 1.0)
+    lit = (-gx * sx - gy * sy + sz) / norm
+    if position.elevation <= 0:
+        return np.zeros_like(lit)
+    return np.clip(lit, 0.0, 1.0)
+
+
+def face_at(terrain, position: sun.Position, lat: float, lon: float) -> Face | None:
+    """How the ground lies under one point, and how lit it was.
+
+    `relative` is the local comparison the finding needs: an insolation of 0.8 means
+    nothing on a day when every slope reads 0.8, and everything when the ground around it
+    reads 0.4.
+    """
+    rows, cols = terrain.elevations.shape
+    if rows < 3 or cols < 3:
+        return None
+    if not (terrain.south <= lat <= terrain.north and terrain.west <= lon <= terrain.east):
+        return None
+
+    gx, gy = _gradients(terrain)
+    row = (terrain.north - lat) / (terrain.north - terrain.south) * (rows - 1)
+    col = (lon - terrain.west) / (terrain.east - terrain.west) * (cols - 1)
+    r, c = int(round(row)), int(round(col))
+    r = min(max(r, 0), rows - 1)
+    c = min(max(c, 0), cols - 1)
+
+    slope = float(np.degrees(np.arctan(np.hypot(gx[r, c], gy[r, c]))))
+    # Aspect is the compass bearing the slope faces, which is the direction of *descent*.
+    aspect = float(np.degrees(np.arctan2(-gx[r, c], -gy[r, c])) % 360.0)
+
+    lit = grid(terrain, position)
+    here = float(lit[r, c])
+
+    # The neighbourhood, in cells rather than metres.
+    span_lat = (terrain.north - terrain.south) / max(rows - 1, 1)
+    span_lon = (terrain.east - terrain.west) / max(cols - 1, 1)
+    metres_per_row = geo.R * np.radians(span_lat)
+    metres_per_col = geo.R * np.radians(span_lon) * np.cos(np.radians(lat))
+    dr = max(int(NEIGHBOURHOOD / max(metres_per_row, 1.0)), 1)
+    dc = max(int(NEIGHBOURHOOD / max(metres_per_col, 1.0)), 1)
+    patch = lit[max(r - dr, 0) : r + dr + 1, max(c - dc, 0) : c + dc + 1]
+    around = float(np.mean(patch)) if patch.size else 0.0
+
+    return Face(
+        slope=round(slope, 1),
+        aspect=round(aspect),
+        cardinal=geo.cardinal(aspect),
+        insolation=round(here, 2),
+        relative=round(here / around, 2) if around > 0.01 else 1.0,
+        sun_elevation=round(position.elevation, 1),
+    )
+
+
+@dataclass
+class Trigger:
+    """The face under one climb, at the minute it started."""
+
+    climb: int
+    at: str
+    face: Face
+
+
+def triggers(analysis, terrain, *, limit: int | None = None) -> list[Trigger]:
+    """The ground under each climb, lit as it was when the climb began.
+
+    Solar position is computed per climb rather than once for the flight: the whole point
+    is that a face lit at 11:00 is in shadow at 17:00, which is the question a pilot is
+    actually asking.
+    """
+    if terrain is None:
+        return []
+    found = []
+    for number, segment in enumerate(analysis.thermals, start=1):
+        if segment.centre is None:
+            continue
+        lat, lon = segment.centre
+        when = analysis.flight.local_time(segment.start)
+        position = sun.position(when, lat, lon)
+        face = face_at(terrain, position, lat, lon)
+        if face is None or face.slope < MIN_SLOPE:
+            continue
+        found.append(Trigger(climb=number, at=segment.start_time, face=face))
+        if limit and len(found) >= limit:
+            break
+    return found
+
+
+@dataclass
+class WindwardFaces:
+    """How many climbs started over ground facing into the measured wind."""
+
+    windward: int
+    total: int
+    mean_offset: float  # degrees between the face and the wind it came from
+
+    @property
+    def fraction(self) -> float:
+        return self.windward / self.total if self.total else 0.0
+
+
+def windward(analysis, terrain, *, tolerance: float = 60.0) -> WindwardFaces | None:
+    """Climbs whose ground faced into the wind — candidate ridge lift.
+
+    `Wind.direction` is where the air comes *from*, and a slope facing that bearing is the
+    one the air runs up: so the comparison is aspect against direction directly, with no
+    180 in it. Refused without a wind, because every one of these is a comparison to it.
+    """
+    if terrain is None or analysis.wind is None:
+        return None
+    found = triggers(analysis, terrain)
+    if not found:
+        return None
+
+    offsets = [
+        abs(((trigger.face.aspect - analysis.wind.direction + 540) % 360) - 180)
+        for trigger in found
+    ]
+    return WindwardFaces(
+        windward=sum(1 for offset in offsets if offset <= tolerance),
+        total=len(offsets),
+        mean_offset=round(float(np.mean(offsets))),
+    )
