@@ -11,7 +11,9 @@ parainsights/
 ├── tests/                 pytest, 217 tests, no network
 └── docs/
     ├── formats.md         IGC and KML/KMZ format research, measured on real files
-    └── plan.md            scope, decisions and status
+    ├── plan.md            scope, decisions and status
+    ├── ux-review.md       the report's UX, measured; the debrief layer, planned
+    └── analysis-plan.md   what more the data can say, and what data would help
 ```
 
 A second tool goes in as a sibling package (`parainsights/<tool_name>/`) sharing this
