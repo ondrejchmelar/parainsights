@@ -1015,6 +1015,39 @@ def _stat(key: str, value: str, unit: str = "", sub: str = "") -> str:
     )
 
 
+def _clearance_note(clearance) -> str:
+    """Ground clearance, with the launch and the landing left out of it.
+
+    This read "lowest ground clearance of the flight was 2 m" on a flight whose lowest
+    point actually flown was 441 m — the 2 m was the takeoff, 25 seconds in. Shares
+    `metrics.airborne_window` with the debrief's low-point card, so the caption and the
+    card cannot drift apart and quote different numbers for the same flight.
+    """
+    window = metrics.airborne_window(clearance)
+    if window is None:
+        return ""
+    low, high = window
+    inside = clearance[low:high]
+    median = float(np_median(inside))
+    if inside.min() < 0:
+        # The same honesty the low-point card applies: a negative clearance means the DEM
+        # and the GPS disagree, not that the glider was underground, and quoting the
+        # figure as a fact here while the card refuses to would be the two contradicting
+        # each other about the same flight.
+        below = int((inside < 0).sum())
+        return (
+            f"Median ground clearance in flight was {median:.0f}&nbsp;m; "
+            f"{below} of {len(inside)} airborne fixes fall below the terrain model, "
+            f"where the grid is too coarse to separate a valley floor from the ridges "
+            f"beside it. The launch and the landing are left out."
+        )
+    return (
+        f"Lowest ground clearance in flight was {inside.min():.0f}&nbsp;m, median "
+        f"{median:.0f}&nbsp;m &mdash; the launch and the landing are left out, or both "
+        f"would win by being on the ground."
+    )
+
+
 def _trigger_note(analysis: Analysis, terrain) -> str:
     """Which faces the climbs started over, and whether they were the lit ones.
 
@@ -1681,9 +1714,8 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
                   kmz_name=f"{summary.date}-{(summary.site or 'flight').replace(' ', '-')}.kmz")}
     <p class="caption view3d-caption">Terrain {terrain.elevations.min():.0f}–{terrain.elevations.max():.0f} m
       over {terrain.cols}&#215;{terrain.rows} samples, drawn at true vertical scale so height
-      above ground can be judged directly — the &#215;1 button cycles to &#215;2 and &#215;4. Lowest
-      ground clearance of the flight was {clearance.min():.0f}&nbsp;m, median
-      {float(np_median(clearance)):.0f}&nbsp;m.
+      above ground can be judged directly — the &#215;1 button cycles to &#215;2 and &#215;4.
+      {_clearance_note(clearance)}
       {charts.escape("; ".join(sorted({b.attribution for b in (basemaps or {}).values()
                                        if b.attribution}))) or ""}
       Elevation from the AWS terrarium DEM. {_sun_note(payload.get("sun"))}{_trigger_note(analysis, terrain)}</p>

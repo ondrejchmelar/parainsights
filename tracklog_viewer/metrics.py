@@ -39,6 +39,27 @@ CENTRING_WINDOW = 60.0  # seconds
 MIN_SAVE_GAIN = 300.0  # metres
 
 
+def airborne_window(clearance, margin: float = 100.0) -> tuple[int, int] | None:
+    """The index range over which the flight is properly off the ground.
+
+    The lowest ground clearance of any flight is its own launch and landing — on the
+    reference flight the minimum is 1 m at t=25 s, the takeoff, while the lowest point
+    actually flown is 441 m. Anything that reports "how low did it get" has to exclude
+    both ends or it reports the ground it started on.
+
+    Shared by the debrief's low-point finding and the 3D view's caption, so the two
+    cannot drift apart and quote different numbers for the same flight.
+    """
+    if clearance is None:
+        return None
+    agl = np.asarray(clearance, dtype=float)
+    above = np.flatnonzero(agl > margin)
+    if above.size < 2:
+        return None
+    low, high = int(above[0]), int(above[-1]) + 1
+    return (low, high) if high - low >= 2 else None
+
+
 def _thermal_mask(analysis: Analysis) -> np.ndarray:
     mask = np.zeros(len(analysis.series), dtype=bool)
     for segment in analysis.segments:

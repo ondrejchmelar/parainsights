@@ -60,6 +60,10 @@ THRESHOLDS = {
     "centring_ratio": 0.75,
     # Ground clearance under this, in metres, is a headline rather than a caption.
     "low_clearance": 100.0,
+    # Below this AGL the flight is on the ground rather than near it. The lowest
+    # clearance of *any* flight is its own launch or landing, so the search has to start
+    # after the first and end before the last.
+    "ground_margin": 100.0,
     # Share of the top altitude band's circling time before "the top band was slow" is
     # worth printing.
     "band_share": 0.20,
@@ -248,9 +252,24 @@ def _expensive_gap(analysis: Analysis) -> Finding | None:
 def _low_point(analysis: Analysis, clearance) -> Finding | None:
     """UX finding 3 — currently buried mid-paragraph in a caption under the 3D view.
 
-    A pilot who scraped a ridge wants this as a headline. Refused without `--terrain`:
-    height above sea level is not height above the ground, and on Rodella the lowest
-    altitude of the flight is a ridge top.
+    A pilot who scraped a ridge wants this as a headline. Two things had to be right
+    before it could be one, and real flights found both.
+
+    **The launch and the landing are excluded.** The lowest ground clearance of any flight
+    is the ground it started and finished on: on the reference flight the minimum is 1 m
+    at t=25 s, which is the takeoff, while the lowest point actually *flown* is 441 m.
+    Reporting a launch as a scrape is exactly the confidently wrong sentence the debrief
+    cannot afford.
+
+    **A negative clearance is not printed as a number.** It means the track is below the
+    terrain *model*, not below the terrain. Measured on a 400 km flight: the DEM is about
+    1.2 km per cell over that box, which averages a valley floor together with the ridges
+    beside it, and a multi-flight document halves the budget per flight again — the same
+    flight reads -36 m alone and -227 m in a shared document. The moment is real; the
+    number is not, and the card says which.
+
+    Refused entirely without `--terrain`: height above sea level is not height above the
+    ground, and on an alpine flight the lowest altitude is a ridge top.
     """
     if clearance is None:
         return None
@@ -258,24 +277,48 @@ def _low_point(analysis: Analysis, clearance) -> Finding | None:
     if agl.size != len(analysis.series) or not np.isfinite(agl).any():
         return None
 
-    index = int(np.nanargmin(agl))
+    # The airborne window: from the first time the flight is properly off the ground to
+    # the last, so neither end of the track can win by being on it.
+    window = metrics.airborne_window(agl, THRESHOLDS["ground_margin"])
+    if window is None:
+        return None
+    lo, hi = window
+
+    index = lo + int(np.nanargmin(agl[lo:hi]))
     lowest = float(agl[index])
-    median = float(np.nanmedian(agl))
+    median = float(np.nanmedian(agl[lo:hi]))
     if lowest > THRESHOLDS["low_clearance"]:
         return None
 
     when = analysis.flight.local_time(index).strftime("%H:%M:%S")
+    if lowest < 0:
+        below = int((agl[lo:hi] < 0).sum())
+        title = f"The track passes below the terrain model at {when}"
+        sentence = (
+            f"Height above ground reads {lowest:.0f} m here, which means the DEM and the "
+            f"GPS disagree rather than that the glider was underground: {below} of "
+            f"{hi - lo} airborne fixes fall below the model. Over a flight this size the "
+            f"grid is about a kilometre per cell, and that averages a valley floor "
+            f"together with the ridges beside it."
+        )
+    else:
+        title = f"Lowest ground clearance in flight was {lowest:.0f} m"
+        sentence = (
+            f"At {when} the track passed {lowest:.0f} m above the terrain, against a "
+            f"median of {_num(median)} m for the flight. The launch and the landing are "
+            f"excluded, or both would win by being on the ground."
+        )
+
     return Finding(
         id="low-point",
-        title=f"Lowest ground clearance of the flight was {lowest:.0f} m",
-        sentence=(
-            f"At {when} the track passed {lowest:.0f} m above the terrain, against a "
-            f"median of {_num(median)} m for the flight."
-        ),
+        title=title,
+        sentence=sentence,
         cost=_metres(max(median - lowest, 0.0), analysis),
         at=when,
         cursor=index,
-        evidence={"lowest": round(lowest), "median": round(median)},
+        confidence=0.5 if lowest < 0 else 1.0,
+        evidence={"lowest": round(lowest), "median": round(median),
+                  "from": lo, "to": hi},
     )
 
 
@@ -440,6 +483,11 @@ def _close_that_wasnt(analysis: Analysis, route) -> Finding | None:
 
     if route is None or getattr(route, "closed", False):
         return None
+    # Same rule as the verdict, for the same reason: only a route from `triangle()` has
+    # sides that are a perimeter. `optimise()`'s route is a four-leg path, and asking
+    # what multiplier it would have earned compares two different quantities.
+    if getattr(route, "kind", "") not in ("fai_triangle", "flat_triangle"):
+        return None
     points = getattr(route, "points", None) or []
     if len(points) < 3:
         return None
@@ -601,11 +649,14 @@ def _verdict(analysis: Analysis, route, weather) -> Verdict | None:
 
     kind = "flight"
     if route is not None and getattr(route, "distance", 0):
-        from . import xc
-
-        sides = getattr(route, "sides", None)
-        category = xc.classify(sides) if sides else "open"
-        kind = f"{category} triangle" if category in ("fai", "flat") else "cross-country flight"
+        # `route.shape`, not `xc.classify(route.sides)`. Only a route that came out of
+        # `triangle()` may claim a triangle category, and `shape` is where that rule
+        # lives. Classifying the sides directly called a 64 km open-distance flight a
+        # "flat triangle" in the verdict while the tab three centimetres above it said
+        # OPEN DISTANCE — the same mistake the optimiser notes warn about.
+        category = getattr(route, "shape", "open")
+        kind = (f"{'FAI' if category == 'fai' else category} triangle"
+                if category in ("fai", "flat") else "cross-country flight")
     parts = [f"A {shape} {kind}."]
 
     envelope = metrics.day_envelope(analysis)

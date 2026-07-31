@@ -31,11 +31,16 @@ def a_day(tmp_path, name, climbs, *, glide=200):
 
 
 class Route:
-    def __init__(self, distance, *, closed=False, sides=None, points=None):
+    def __init__(self, distance, *, closed=False, sides=None, points=None,
+                 kind="fai_triangle", shape="fai"):
         self.distance = distance
         self.closed = closed
         self.sides = sides or []
         self.points = points or []
+        # Only a route from `triangle()` may claim a triangle category, so the findings
+        # ask for `kind`/`shape` rather than classifying the sides themselves.
+        self.kind = kind
+        self.shape = shape
 
 
 class TestVoice:
@@ -227,3 +232,91 @@ class TestSerialisation:
                          [(300, 2.5), (300, 0.4), (300, 0.4), (300, 0.4), (300, 0.5)],
                          glide=700)
         json.dumps(debrief.build(analysis).to_dict())
+
+
+class TestLowPoint:
+    """Two bugs that only real flights could find."""
+
+    def _analysis(self, tmp_path):
+        return a_day(tmp_path, "low2.igc",
+                     [(300, 2.5), (300, 2.0), (300, 1.4), (300, 0.8)], glide=700)
+
+    def test_the_launch_and_landing_cannot_win(self, tmp_path):
+        """The lowest ground clearance of any flight is the ground it started on.
+
+        On the reference flight the minimum is 1 m at t=25 s — the takeoff — while the
+        lowest point actually flown is 441 m. Reporting a launch as a scrape is the
+        confidently wrong sentence the debrief cannot afford.
+        """
+        analysis = self._analysis(tmp_path)
+        n = len(analysis.series)
+        clearance = [800.0] * n
+        clearance[:40] = [2.0] * 40          # on the ground at the start
+        clearance[-40:] = [2.0] * 40         # and at the end
+        clearance[n // 2] = 60.0             # the real low point, in flight
+
+        card = debrief._low_point(analysis, clearance)
+        assert card is not None
+        assert "60 m" in card.title, f"the launch or landing won: {card.title!r}"
+        assert card.evidence["lowest"] == 60
+
+    def test_a_flight_that_never_got_low_produces_nothing(self, tmp_path):
+        analysis = self._analysis(tmp_path)
+        clearance = [800.0] * len(analysis.series)
+        assert debrief._low_point(analysis, clearance) is None
+
+    def test_a_negative_clearance_is_not_printed_as_a_number(self, tmp_path):
+        """It means the DEM and the GPS disagree, not that the glider was underground.
+
+        Measured on a 400 km flight: about 1.2 km per DEM cell, which averages a valley
+        floor with the ridges beside it — the same flight reads -36 m alone and -227 m in
+        a shared document, where the per-flight budget is halved.
+        """
+        analysis = self._analysis(tmp_path)
+        n = len(analysis.series)
+        clearance = [800.0] * n
+        clearance[n // 2] = -227.0
+
+        card = debrief._low_point(analysis, clearance)
+        assert card is not None
+        assert "-227" not in card.title, f"a negative clearance was headlined: {card.title!r}"
+        assert "terrain model" in card.title
+        assert card.confidence < 1.0, "an untrustworthy number must be downgraded"
+
+
+class TestTriangleCategory:
+    """Only a route from `triangle()` may claim a triangle category.
+
+    The verdict classified `route.sides` directly, which called a 64 km open-distance
+    flight a "flat triangle" while the flight picker three centimetres above it said
+    OPEN DISTANCE. `Route.shape` is where that rule lives.
+    """
+
+    def _analysis(self, tmp_path):
+        return a_day(tmp_path, "cat.igc",
+                     [(300, 2.5), (300, 2.0), (300, 1.4), (300, 0.8)], glide=700)
+
+    def test_an_open_route_is_not_called_a_triangle(self, tmp_path):
+        route = Route(64000.0, sides=[20000.0, 20000.0, 24000.0],
+                      kind="free_3tp", shape="open")
+        verdict = debrief._verdict(self._analysis(tmp_path), route, None)
+
+        assert verdict is not None
+        assert "triangle" not in verdict.sentence, verdict.sentence
+
+    def test_a_real_triangle_still_is_one(self, tmp_path):
+        route = Route(201000.0, sides=[70000.0, 65000.0, 66000.0],
+                      kind="fai_triangle", shape="fai")
+        verdict = debrief._verdict(self._analysis(tmp_path), route, None)
+
+        assert verdict is not None
+        assert "FAI triangle" in verdict.sentence, verdict.sentence
+
+    def test_the_near_close_finding_refuses_an_open_route(self, tmp_path):
+        """`optimise()`'s route is a four-leg path, not a perimeter, so asking what
+        multiplier it would have earned compares two different quantities."""
+        route = Route(64000.0, sides=[20000.0, 20000.0, 24000.0],
+                      kind="free_3tp", shape="open",
+                      points=[Point(49.0, 14.0), Point(49.2, 14.2),
+                              Point(49.1, 14.3), Point(49.0, 14.01)])
+        assert debrief._close_that_wasnt(self._analysis(tmp_path), route) is None
