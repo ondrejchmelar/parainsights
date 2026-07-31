@@ -1,14 +1,19 @@
-"""The sun in the 3D view: the slider, and the light actually moving.
+"""The sun and the wind in the 3D view: the light following the hover, and the arrows.
 
-The Python side of this is `sun.py` and is tested against a second algorithm in
+The Python side of the sun is `sun.py`, tested against a second algorithm in
 `test_sun.py`. What that cannot see is whether the terrain is *lit* from where the table
-says the sun was — the shading is computed in the page, baked into vertex colours by the
-WebGL backend and into the draped texture by the canvas one. So this drives a browser,
-moves the slider, and reads back both the label and the pixels.
+says the sun was, whether hovering a chart moves it, and whether the arrows point where
+they claim to. The shading is computed in the page — baked into vertex colours by the
+WebGL backend and into the draped texture by the canvas one — so this drives a browser.
+
+The arrows are measured as angles rather than as pixels. A wrong arrow is still an arrow,
+and the wind one inverts a convention (`from` is where the wind comes *from*), which is
+exactly the kind of error a screenshot cannot fail on.
 """
 
 import datetime as dt
 import json
+import math
 
 import pytest
 
@@ -28,18 +33,21 @@ SUN = {
     "rise": 180,
     "set": 1200,
 }
+WIND = {"kmh": 18.0, "from": 180.0, "cardinal": "S"}
 
+# A cursor track over the fixture's terrain, carrying the minute of each sample — which
+# is the whole mechanism: the hover names a moment, and the moment lights the ground.
+CURSOR = {
+    "lon": [round(14.02 + i * 0.002, 5) for i in range(20)],
+    "lat": [round(49.05 + i * 0.001, 5) for i in range(20)],
+    "alt": [2000 + i * 10 for i in range(20)],
+    "min": [9 * 60 + i * 19 for i in range(20)],       # 09:00 to about 15:00 UTC
+}
 
-# Reads the label and the drawn pixels at three times of day. The pixels are taken from
-# the GL canvas through a 32 px downscale: the question is whether the shading moved at
-# all, and a thumbnail answers it without depending on a single pixel's value.
-_SUN = """
+_HOVER = """
 var panel = document.querySelector('.view3d-panel');
 var h = window.__handle;
-var slider = panel.querySelector('.view3d-sun-slider');
-var read = panel.querySelector('.view3d-sun-read');
-var out = { shown: !panel.querySelector('.view3d-sun').hidden };
-if (!slider) return { error: 'no slider in the panel' };
+var out = {};
 
 function frame() {
   h.redraw();
@@ -51,80 +59,121 @@ function frame() {
   return small.toDataURL();
 }
 
-function at(minute) {
-  slider.value = minute;
-  slider.dispatchEvent(new Event('input', { bubbles: true }));
-  return { label: read.textContent, pixels: frame() };
-}
+out.hasSlider = !!panel.querySelector('.view3d-sun-slider');
+out.atRest = h.rose().sun.minute;
+var rest = frame();
 
-out.initialLabel = read.textContent;
-out.initialValue = Number(slider.value);
-var morning = at(7 * 60);
-var noon = at(13 * 60);
-var evening = at(19 * 60);
-var night = at(1 * 60);
-out.morning = morning.label;
-out.noon = noon.label;
-out.evening = evening.label;
-out.night = night.label;
-out.movedByMorningEvening = morning.pixels !== evening.pixels;
-out.movedByMorningNoon = morning.pixels !== noon.pixels;
-out.backend = h.gl() ? h.gl().version : 'canvas2d';
+h.setCursor(0);
+out.early = h.rose().sun;
+var early = frame();
+
+h.setCursor(19);
+out.late = h.rose().sun;
+var late = frame();
+
+h.clearCursor();
+out.afterLeaving = h.rose().sun.minute;
+out.restored = frame() === rest;
+out.moved = early !== late;
 return out;
 """
 
-# `offsetParent` is null for anything inside a hidden ancestor, which is the question
-# worth asking: the slider element exists in the markup either way, and what matters is
-# whether a reader can see and drag it.
+_ARROWS = """
+var h = window.__handle;
+var out = {};
+h.view.yaw = 0;
+h.redraw();
+out.atNorthUp = h.rose();
+h.view.yaw = Math.PI / 2;
+h.redraw();
+out.turned = h.rose();
+return out;
+"""
+
 _NO_SUN = """
-var panel = document.querySelector('.view3d-panel');
-var slider = panel.querySelector('.view3d-sun-slider');
-return { hidden: panel.querySelector('.view3d-sun').hidden,
-         visible: !!(slider && slider.offsetParent) };
+var h = window.__handle;
+var rose = h.rose();
+return { sun: rose.sun, wind: rose.wind ? rose.wind.from : null };
 """
 
 
+def wrapped(radians: float) -> float:
+    """Screen angle in degrees, in (-180, 180]. 270 and -90 are the same direction, and
+    only one of them is a readable assertion."""
+    return (math.degrees(radians) + 180) % 360 - 180
+
+
 @pytest.fixture(scope="module")
-def lit():
-    return _probe(_scene(sun=SUN), _SUN)
+def hovered():
+    return _probe(_scene(sun=SUN, wind=WIND, cursor=CURSOR), _HOVER)
 
 
 @needs_chrome
-class TestTheSunSlider:
-    def test_it_starts_where_the_flight_was(self, lit):
-        """Mid-flight, in the pilot's own clock: the light the day was worked in."""
-        assert lit["shown"] is True
-        assert lit["initialValue"] == 12 * 60 + 120, "12:00 UTC read as 14:00 local"
-        assert lit["initialLabel"].startswith("14:00")
+class TestTheSunFollowsTheCursor:
+    def test_there_is_no_time_control(self, hovered):
+        """The slider offered hours the flight never saw and made the reader hunt for a
+        moment the charts were already pointing at."""
+        assert hovered["hasSlider"] is False
 
-    def test_the_label_reads_the_sun_out_of_the_table(self, lit):
-        # Midsummer at 49°N: low in the east early, high in the south at midday, low in
-        # the west late. The bearings come from the same table `sun.py` generated.
-        assert "E" in lit["morning"].split("·")[1]
-        assert lit["noon"].split("·")[1].strip().endswith(("S", "SSW", "SSE", "SW"))
-        assert "W" in lit["evening"].split("·")[1]
-        assert lit["night"].endswith("sun down")
+    def test_it_rests_on_the_middle_of_the_flight(self, hovered):
+        assert hovered["atRest"] == SUN["at"]
 
-    def test_moving_it_moves_the_light(self, lit):
-        """The point of the whole thing: which slopes are lit has to change."""
-        assert lit["movedByMorningEvening"] is True
-        assert lit["movedByMorningNoon"] is True
+    def test_hovering_moves_the_sun_to_that_moment(self, hovered):
+        assert hovered["early"]["minute"] == CURSOR["min"][0]
+        assert hovered["late"]["minute"] == CURSOR["min"][-1]
+        # Morning in the east, afternoon in the west, at 49°N in June.
+        assert hovered["early"]["az"] < 180 < hovered["late"]["az"]
 
-    def test_a_panel_with_no_sun_does_not_show_the_control(self):
-        """An uploaded track may have no date at all, and a dead slider is worse than
-        no slider."""
+    def test_the_terrain_is_relit_as_the_cursor_moves(self, hovered):
+        assert hovered["moved"] is True
+
+    def test_leaving_the_charts_puts_it_back(self, hovered):
+        assert hovered["afterLeaving"] == SUN["at"]
+        assert hovered["restored"] is True
+
+
+@needs_chrome
+class TestTheArrows:
+    def test_the_wind_arrow_points_where_the_wind_is_going(self):
+        """`from` is where it comes from — every forecast, every pilot. The arrow shows
+        where the air is going, so it is the opposite bearing. Drawing it along the
+        reported one is the classic 180° error, and it looks perfectly fine."""
+        answer = _probe(_scene(sun=SUN, wind=WIND, cursor=CURSOR), _ARROWS)
+        wind = answer["atNorthUp"]["wind"]
+        assert wind["from"] == 180.0
+        # A southerly blows northward, and with north up that is straight up the screen:
+        # screen angles are measured with y growing downward, so up is -90°.
+        assert wrapped(wind["screen"]) == pytest.approx(-90, abs=0.5)
+
+    def test_north_is_up_until_the_view_turns(self):
+        answer = _probe(_scene(sun=SUN, wind=WIND, cursor=CURSOR), _ARROWS)
+        assert wrapped(answer["atNorthUp"]["north"]) == pytest.approx(-90, abs=0.5)
+        # A yaw of +90° turns the scene counter-clockwise, so north swings to the right.
+        assert abs(wrapped(answer["turned"]["north"])) == pytest.approx(180, abs=0.5)
+
+    def test_both_arrows_turn_with_the_view_by_the_same_amount(self):
+        """They are bearings drawn into the scene's frame; if they did not turn with it
+        they would agree with the terrain at one heading and lie at every other."""
+        answer = _probe(_scene(sun=SUN, wind=WIND, cursor=CURSOR), _ARROWS)
+        for arrow in ("sun", "wind"):
+            before = answer["atNorthUp"][arrow]["screen"]
+            after = answer["turned"][arrow]["screen"]
+            assert wrapped(after - before) == pytest.approx(-90, abs=0.5)
+
+    def test_a_panel_with_neither_draws_no_rose(self):
+        """An uploaded track may have no date and no wind estimate at all."""
         answer = _probe(_scene(), _NO_SUN)
-        assert answer["hidden"] is True
-        assert answer["visible"] is False
+        assert answer["sun"] is None
+        assert answer["wind"] is None
 
 
 @needs_chrome
 def test_the_light_moves_on_the_canvas_renderer_too():
     """The 2D path bakes the hillshade into the draped texture rather than into vertex
     colours, so it re-lights by a completely different route and has to be checked."""
-    answer = _probe(_scene(sun=SUN), _SUN, gl=False)
-    assert answer["backend"] == "canvas2d"
-    assert answer["movedByMorningEvening"] is True
+    answer = _probe(_scene(sun=SUN, wind=WIND, cursor=CURSOR), _HOVER, gl=False)
+    assert answer["moved"] is True
+    assert answer["restored"] is True
 
 
 def test_the_payload_carries_a_day_the_page_can_interpolate():

@@ -109,7 +109,8 @@ def _basemap(size: int = 256) -> dict:
 
 
 def _scene(*, terrain: dict | None = None, basemap: bool = True,
-           basemap_size: int = 256, sun: dict | None = None) -> dict:
+           basemap_size: int = 256, sun: dict | None = None,
+           wind: dict | None = None, cursor: dict | None = None) -> dict:
     dem = terrain or _terrain()
     track = {"lon": [], "lat": [], "alt": [], "c": []}
     for i in range(120):
@@ -128,9 +129,13 @@ def _scene(*, terrain: dict | None = None, basemap: bool = True,
         "basemaps": {"satellite": _basemap(basemap_size)} if basemap else {},
         "tiles": None,
         "landing": {"lon": 14.2, "lat": 49.2, "alt": dem["min"]},
-        # Absent unless a test asks for it: a panel with no date has no sun, and the
-        # control has to stay out of the way rather than sit there dead.
+        # Absent unless a test asks for them: a panel with no date has no sun and an
+        # uploaded track may have no wind estimate, and neither may draw anything then.
         **({"sun": sun} if sun else {}),
+        **({"wind": wind} if wind else {}),
+        # Not part of the payload: the cursor track is initView3d's second argument, and
+        # `_probe` lifts it out of here and hands it over as one.
+        **({"__cursor": cursor} if cursor else {}),
     }
 
 
@@ -138,7 +143,8 @@ _HARNESS = """
 <pre id="probe-out"></pre>
 <script>%s
 %s
-window.__handle = initView3d(document.querySelector('.view3d-panel'), null);
+window.__handle = initView3d(document.querySelector('.view3d-panel'),
+                            window.__cursorTrack || null);
 </script>
 <script>
 window.addEventListener('load', function () {
@@ -158,7 +164,7 @@ window.addEventListener('load', function () {
 
 
 def _probe(scene: dict, body: str, *, gl: bool = True, page_extra: str = "",
-           doctype: bool = True) -> dict:
+           doctype: bool = True, device_scale: float | None = None) -> dict:
     """Render a panel carrying `scene`, run `body` in it, and return what it answered.
 
     `page_extra` is markup appended after the panel. The real report is several screens
@@ -168,6 +174,11 @@ def _probe(scene: dict, body: str, *, gl: bool = True, page_extra: str = "",
     `doctype=False` renders the page in quirks mode, which the report itself did until
     the full-screen bug was traced to it. It is kept as a switch because the panel is
     embeddable and cannot control the document it lands in.
+
+    `device_scale` drives the device pixel ratio. The backing store is the box times that
+    ratio, so anything that converts between CSS and canvas pixels is only half tested at
+    a ratio of 1 — which is how a rotation gesture came to turn twice as far on a retina
+    screen as on the machine it was tuned on.
     """
     script = view3d_gl.SCRIPT
     if not gl:
@@ -177,19 +188,25 @@ def _probe(scene: dict, body: str, *, gl: bool = True, page_extra: str = "",
             "window.__view3dBackend = function (host) {",
             "window.__view3dBackend = null && function (host) {")
         assert "null && function (host)" in script
+    cursor = dict(scene).pop("__cursor", None)
+    scene = {k: v for k, v in scene.items() if k != "__cursor"}
     page = (
         ('<!doctype html>' if doctype else '')
         + '<meta charset="utf-8"><title>probe</title>'
         f"<style>{view3d.STYLE}{view3d_gl.STYLE}</style>"
         f'<div class="wrap">{view3d.panel(scene, "t")}</div>'
+        + (f"<script>window.__cursorTrack = {json.dumps(cursor)};</script>" if cursor else "")
         + page_extra
         + _HARNESS % (view3d.SCRIPT, script, body)
     )
+    flags = list(CHROME_FLAGS)
+    if device_scale is not None:
+        flags.append(f"--force-device-scale-factor={device_scale}")
     with tempfile.TemporaryDirectory() as folder:
         target = Path(folder) / "probe.html"
         target.write_text(page, encoding="utf-8")
         result = subprocess.run(
-            [CHROME, *CHROME_FLAGS, target.as_uri()],
+            [CHROME, *flags, target.as_uri()],
             capture_output=True, text=True, timeout=180,
         )
     match = re.search(r'<pre id="probe-out">(.*?)</pre>', result.stdout, re.S)

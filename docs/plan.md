@@ -210,16 +210,33 @@ drift. The page interpolates linearly between samples, which is why `day_track` 
 the azimuth: interpolating across a wrap at 360 sweeps the light the long way round the
 compass, and on a slider that reads as the sun bolting backwards through the whole sky.
 
-**The default is mid-flight**, not noon and not the old fixed lamp: the light the day was
-actually worked in. The slider runs in the pilot's own clock — the report's tables are
-local time and the sun is computed in UTC, so the payload carries the one offset where
-those meet.
+**The sun follows the chart cursor, and there is no time control.** Hovering the altitude
+trace at 14:40 lights the terrain as it was at 14:40 — the question and the instrument are
+the same gesture. A slider was built first and was wrong twice over: it offered hours the
+flight never saw, and it made the reader hunt for a moment the charts were already
+pointing at. The cursor track carries a UTC minute per sample for this (carried, not
+interpolated from the flight's span — fixes are not evenly spaced in time, and a KMZ from
+a scoring site is not evenly spaced at all). Leaving the charts returns the light to
+mid-flight, which is what the view opens on: the light the day was actually worked in.
 
-**Re-lighting is a slider event, never a frame.** Moving the sun re-measures `litMid`/
-`litSpread` against the new light, re-bakes the draped texture on the host side, and calls
-`renderer.relight()` so the WebGL backend rebuilds its vertex colours through
-`bufferSubData`. All of it is a pass or two over the grid, which is cheap once per drag
-event and would not be cheap per animation frame. Below the horizon the sun is held 3° up
+**Re-lighting is not free, and a hover fires far more often than a drag.** Moving the sun
+re-measures `litMid`/`litSpread` against the new light, re-bakes the draped texture on the
+host side, and calls `renderer.relight()` so the WebGL backend rebuilds its vertex colours
+through `bufferSubData` — a pass or two over the grid plus one over the texture, which is
+nothing once and far too much per mousemove. So the shading only rebuilds once the sun has
+moved a degree of azimuth (about four minutes of a summer afternoon, and a third of the
+width of the sun's own disc). The **arrow** reads the exact interpolated position every
+frame, so it tracks the cursor smoothly while the shading catches up in steps nobody can
+see.
+
+**The arrows are drawn on the canvas.** A rose in the corner carries the sun and the wind,
+and both turn with the view — they are geographic bearings, so a widget in the DOM would
+agree with the terrain at one heading and lie at every other. `bearingToScreen` folds in
+the two conventions that cancel (a positive `view.yaw` turns the world counter-clockwise;
+screen y grows downward). The wind arrow points **opposite** `wind.from`: the reported
+bearing is where the air comes from, the arrow shows where it is going, and drawing it
+along the bearing is the classic 180° error — which still looks like a perfectly good
+arrow, so `handle.rose()` exposes both angles and the test fails on the number instead. Below the horizon the sun is held 3° up
 and the label says "sun down" — there is no night mode, because a black panel answers
 nothing.
 
@@ -377,7 +394,7 @@ the columns are blank rather than printing a number that is wrong.
 
 ## Status
 
-Done and tested (209 tests):
+Done and tested (217 tests):
 
 - `igc.py` — parser + fix cleanup. All 61 sample files parse, no failures, no warnings,
   timezone resolved 61/61.

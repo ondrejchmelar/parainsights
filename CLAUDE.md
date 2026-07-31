@@ -8,7 +8,7 @@ parainsights/
 ├── CLAUDE.md              this file
 ├── pyproject.toml         one project, one venv, one test suite
 ├── tracklog_viewer/       the tool: IGC/KML/KMZ → analysis → HTML, KMZ, 3D map
-├── tests/                 pytest, 209 tests, no network
+├── tests/                 pytest, 217 tests, no network
 └── docs/
     ├── formats.md         IGC and KML/KMZ format research, measured on real files
     └── plan.md            scope, decisions and status
@@ -25,7 +25,7 @@ as the packages, so there is nothing to line up by hand:
 
 ```bash
 uv sync --extra dev          # creates .venv on the pinned Python, from uv.lock
-uv run pytest -c pyproject.toml     # 209 tests, ~2 min, no network
+uv run pytest -c pyproject.toml     # 217 tests, ~2 min, no network
 ```
 
 `-c pyproject.toml` matters when the repo sits inside another project — pytest otherwise
@@ -330,18 +330,32 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   clipped. JS sets `--scrollbar` and the panel is `calc(100vw - var(--scrollbar))`. Note
   that `scrollWidth` reports the ink extent even when clipping prevents scrolling — test
   by calling `scrollTo(300, 0)` and reading `scrollX` back.
-- **The hillshade is the real sun, and the day travels as a table.** The light was a
-  fixed north-west lamp, which is a direction the sun is never in anywhere in the northern
-  hemisphere, so the shading answered nothing a pilot asks. `sun.py` is the NOAA solar
-  position algorithm; the payload carries the flight day sampled every ten minutes —
-  under 2 KB — and the panel interpolates it behind a slider that opens on **mid-flight**,
-  the light the day was actually worked in. A table rather than a JavaScript port on
-  purpose: `quicklook.py` already duplicates thresholds that can drift, and 144 pairs of
-  numbers cannot. The azimuth is **unwrapped** in the table, or interpolating across 360
-  sweeps the light the long way round the compass. Re-lighting is a slider event, never a
-  frame: it re-measures the lit range, re-bakes the draped texture on the host side and
-  calls `renderer.relight()` to rebuild the vertex colours in WebGL. A sun below the
-  horizon is held 3° up and labelled "sun down" rather than drawing a black panel.
+- **The hillshade is the real sun, and the sun follows the chart cursor.** The light was
+  a fixed north-west lamp, which is a direction the sun is never in anywhere in the
+  northern hemisphere, so the shading answered nothing a pilot asks. `sun.py` is the NOAA
+  solar position algorithm; the payload carries the flight day sampled every ten minutes
+  — under 2 KB — and **hovering a chart lights the terrain as it was at that moment**,
+  which is the question itself: was that face still in the sun when I got there. A slider
+  was the first attempt and was the wrong instrument twice over — it offered hours the
+  flight never saw, and it made the reader hunt for a moment the charts were already
+  pointing at. The cursor track carries a UTC minute per sample for it; leaving the chart
+  returns the light to mid-flight. A table rather than a JavaScript port on purpose:
+  `quicklook.py` already duplicates thresholds that can drift, and 144 pairs of numbers
+  cannot. The azimuth is **unwrapped** in the table, or interpolating across 360 sweeps
+  the light the long way round the compass. Re-lighting re-measures the lit range,
+  re-bakes the draped texture and calls `renderer.relight()` to rebuild the vertex
+  colours in WebGL — far too much for a mousemove, so it only fires once the sun has
+  moved a degree, while the arrow reads the exact position and stays smooth. A sun below
+  the horizon is held 3° up and labelled rather than drawing a black panel.
+- **The sun and the wind are arrows on the canvas, not in the DOM.** Both are geographic
+  bearings, so both have to turn with the view — a rose drawn in the DOM would agree with
+  the terrain at one heading and lie at every other. They live in the corner of the 2D
+  overlay and are drawn from `bearingToScreen`, which folds in the two conventions that
+  cancel: `view.yaw` turns the world counter-clockwise and screen y grows downward.
+  **The wind arrow points opposite `wind.from`** — the reported bearing is where the air
+  comes from, the arrow shows where it is going, and drawing it along the bearing is the
+  classic 180° error that still looks like a perfectly good arrow. `handle.rose()` exposes
+  both angles so a test can fail on it instead of a screenshot not doing so.
 - **An uploaded track fetches its own DEM, and CORS is why it can.** `quicklook.py`
   mosaics the terrarium tiles onto a canvas, reads the pixels back and decodes
   `R * 256 + G + B / 256 - 32768` — the same formula as `terrain.py`, written twice

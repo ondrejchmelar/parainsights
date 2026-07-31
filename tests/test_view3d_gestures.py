@@ -12,6 +12,8 @@ duplicated, in the same way `test_terrain` borrows its flight builders from
 `test_analysis`.
 """
 
+import pytest
+
 from tests.test_view3d_gl import _probe, _scene, needs_chrome
 
 # A vector between two fixed world points, in a frame the reader would recognise: right
@@ -135,3 +137,79 @@ def test_dragging_the_camera_right_swings_the_view_the_other_way():
     assert orbited["yaw"] > 0.05, "the orbit drag did not rotate at all"
     assert orbited["scene"] > 0.02, (
         "the orbit drag changed sense; it is deliberately opposite to the twist")
+
+
+# Rotating about a *fixed* ground point: the one the drag grabbed, held where it was
+# grabbed. Measured as the screen drift of that point over a 90 px drag — an orbit that
+# anchors correctly leaves it exactly where it was.
+_ORBIT_ANCHOR = """
+var h = window.__handle;
+var canvas = document.querySelector('canvas.view3d');
+var panel = canvas.closest('.view3d-panel');
+var dem = JSON.parse(document.querySelector('.view3d-data').textContent).terrain;
+
+function mouse(type, x, y, buttons) {
+  canvas.dispatchEvent(new PointerEvent(type, {
+    pointerId: 7, clientX: x, clientY: y, bubbles: true, cancelable: true,
+    pointerType: 'mouse', isPrimary: true, button: 0,
+    buttons: buttons === undefined ? 1 : buttons, ctrlKey: true
+  }));
+}
+
+function orbit(fx, fy, dx, dy) {
+  h.view.yaw = 0; h.view.pitch = 0.6; h.view.zoom = 1;
+  h.view.panX = 0; h.view.panY = 0;
+  h.redraw();
+  var hold = h.groundUnder(fx, fy);
+  var before = h.worldProject(hold[0], hold[1], dem.min);
+  mouse('pointerdown', fx, fy);
+  for (var i = 1; i <= 10; i++) mouse('pointermove', fx + dx * i / 10, fy + dy * i / 10);
+  mouse('pointerup', fx + dx, fy + dy, 0);
+  h.redraw();
+  var after = h.worldProject(hold[0], hold[1], dem.min);
+  return { driftX: after[0] - before[0], driftY: after[1] - before[1],
+           yaw: h.view.yaw, pitch: h.view.pitch, ratio: h.metrics().ratio };
+}
+
+var box = canvas.getBoundingClientRect();
+var out = { inline: orbit(box.left + box.width * 0.35, box.top + box.height * 0.4, 90, -40) };
+panel.querySelector('[data-view3d-act="fullscreen"]').click();
+return new Promise(function (resolve) {
+  setTimeout(function () {
+    var b2 = canvas.getBoundingClientRect();
+    out.maximised = orbit(b2.left + b2.width * 0.35, b2.top + b2.height * 0.4, 90, -40);
+    resolve(out);
+  }, 900);
+});
+"""
+
+
+@needs_chrome
+@pytest.mark.parametrize("state", ["inline", "maximised"])
+def test_the_orbit_turns_about_the_point_it_grabbed(state):
+    """Not about whatever is under the cursor at each event.
+
+    Re-picking the anchor per event looks equivalent and is not: the cursor has travelled
+    since the last one, so every event pins a different ground point and the centre of
+    rotation creeps across the terrain with the mouse. It measured 29 px of slide on a
+    90 px drag, and worst full screen, where there is room to drag a long way.
+    """
+    answer = _probe(_scene(basemap=False), _ORBIT_ANCHOR)
+    drift = answer[state]
+    assert abs(drift["driftX"]) < 0.5 and abs(drift["driftY"]) < 0.5, drift
+
+
+@needs_chrome
+def test_rotation_is_the_same_gesture_on_a_retina_screen():
+    """The hand moved the same distance, so the view must turn the same amount.
+
+    Yaw came from a delta converted into *backing store* pixels, which ties the gesture
+    to the device pixel ratio: the same 90 px drag turned the view 0.900 rad at ratio 2
+    against 0.450 at ratio 1. A pan does convert — it moves the scene in the canvas —
+    which is why the two units sit side by side in the handler.
+    """
+    ordinary = _probe(_scene(basemap=False), _ORBIT_ANCHOR)["inline"]
+    retina = _probe(_scene(basemap=False), _ORBIT_ANCHOR, device_scale=2)["inline"]
+    assert retina["ratio"] == 2 and ordinary["ratio"] == 1, "the fixture did not scale"
+    assert retina["yaw"] == pytest.approx(ordinary["yaw"], abs=1e-6)
+    assert retina["pitch"] == pytest.approx(ordinary["pitch"], abs=1e-6)

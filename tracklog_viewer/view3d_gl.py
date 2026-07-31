@@ -203,9 +203,10 @@ function backend(host) {
   // terrain's own lit range, then an elevation tint. Per vertex rather than per cell, so
   // the browser interpolates it and the facets the 2D version shows are gone for free.
   //
-  // Its own function because the light moves: the sun slider re-lights the terrain, and
-  // the host calls `relight()` rather than rebuilding the whole backend. The lit range
-  // is re-read from the host each time, since it is measured against the same light.
+  // Its own function because the light moves: hovering the charts re-lights the
+  // terrain for that moment of the flight, and the host calls `relight()` rather than
+  // rebuilding the whole backend. The lit range is re-read from the host each time,
+  // since it is measured against the same light.
   function shadeVertices() {
     var lit = host.lit();
     for (var r = 0; r < rows; r++) {

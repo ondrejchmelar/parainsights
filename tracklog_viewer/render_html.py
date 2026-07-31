@@ -787,6 +787,14 @@ def _cursor_data(analysis: Analysis) -> dict:
                 int((flight.alt_gps if flight.alt_gps.any() else series.alt)[i])
                 for i in indices
             ],
+            # UTC minute per sample, which is what moves the sun with the hover. Carried
+            # rather than interpolated from the flight's span: fixes are not evenly
+            # spaced in time, and a KMZ from a scoring site is not evenly spaced at all.
+            "min": [
+                (lambda when: when.hour * 60 + when.minute)(
+                    flight.time[i].astype("datetime64[s]").astype(object))
+                for i in indices
+            ],
         },
     }
 
@@ -969,9 +977,11 @@ def _sun_note(sun: dict | None) -> str:
     return (
         f"{day}; at launch it {height(launch_el)} in the "
         f"{charts.escape(_cardinal(launch_az))}, and at landing it {height(landing_el)} in "
-        f"the {charts.escape(_cardinal(landing_az))}. The <em>Sun</em> slider re-lights the "
-        f"terrain from any time of day, which is how to ask which slopes were still "
-        f"working — the shading is the real solar position, not a fixed north-west lamp."
+        f"the {charts.escape(_cardinal(landing_az))}. <strong>Hovering the charts below "
+        f"re-lights the terrain</strong> for that moment of the flight, and the rose on "
+        f"the view carries the sun and the wind as arrows that turn with it — which is "
+        f"how to ask whether a face was still in the sun when you got there. It is the "
+        f"real solar position, not a fixed north-west lamp."
     )
 
 
@@ -1352,8 +1362,11 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
   <section>
     <div class="section-head">
       <h2>Climbs</h2>
-      <p><strong>Turns</strong> is total heading change ÷ 360 — how many circles the climb took,
-         nothing more. <strong>m/turn</strong> is what that buys you: height gained per circle,
+      <p><strong>Turns</strong> is <em>full circles</em>: the heading coming all the way round,
+         in one direction. Swinging the nose does not count, so a wingover — 180&#176; out and
+         180&#176; back — is nothing here, and a climb worked both ways adds up the circles from
+         each rather than cancelling them out. A part circle scores zero.
+         <strong>m/turn</strong> is what a circle buys you: height gained per circle,
          so a thermal worked tightly in the core shows more metres per turn than the same
          average climb ground out in wide circles. <strong>Eff</strong> is mean climb over the
          best 20&nbsp;s of the same climb — the closest single number to &ldquo;did you stay in

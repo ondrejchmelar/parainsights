@@ -118,6 +118,14 @@ def data(analysis: Analysis, terrain, *, tolerance: float | None = None,
             "alt": int(altitude[-1]),
         },
         "sun": _sun(analysis),
+        # The flight's wind, for the arrow on the view. `direction` is where it blows
+        # *from*, the way every pilot and every forecast states it; the arrow has to
+        # point the other way, and that inversion is done once, in the drawing code.
+        "wind": ({
+            "kmh": round(analysis.wind.kmh, 1),
+            "from": round(analysis.wind.direction, 1),
+            "cardinal": analysis.wind.cardinal,
+        } if analysis.wind else None),
     }
 
 
@@ -162,13 +170,23 @@ def _sun(analysis: Analysis) -> dict:
 
 
 def cursor_track(analysis: Analysis, sample) -> dict:
-    """Positions for the hover cursor, aligned with the chart sample indices."""
+    """Positions for the hover cursor, aligned with the chart sample indices.
+
+    `min` is the UTC minute of each sample, which is what lets the hover move the sun:
+    the reader points at a moment in the flight and the terrain is lit as it was then.
+    """
     flight = analysis.flight
     altitude = flight.alt_gps if np.any(flight.alt_gps) else analysis.series.alt
+
+    def minute(index: int) -> int:
+        when = flight.time[index].astype("datetime64[s]").astype(object)
+        return when.hour * 60 + when.minute
+
     return {
         "lon": [round(float(flight.lon[i]), 5) for i in sample],
         "lat": [round(float(flight.lat[i]), 5) for i in sample],
         "alt": [int(altitude[i]) for i in sample],
+        "min": [minute(i) for i in sample],
     }
 
 
@@ -212,16 +230,6 @@ def panel(payload: dict, uid: str, *, kmz_uri: str | None = None,
       </canvas>
       {earth}
       <p class="view3d-credit">{credit}</p>
-      <!-- The sun. Hidden until the script finds a table in the payload, so a panel
-           built without one (an uploaded track, whose date may be unknown) simply does
-           not have it rather than showing a dead control. -->
-      <div class="view3d-sun" hidden>
-        <label class="view3d-sun-label" for="view3d-sun-{uid}">Sun</label>
-        <input class="view3d-sun-slider" id="view3d-sun-{uid}" type="range"
-               min="0" max="1439" step="5" value="720"
-               aria-label="Time of day the terrain is lit from">
-        <span class="view3d-sun-read" aria-live="off">—</span>
-      </div>
       <div class="view3d-controls">
         <button type="button" data-view3d-act="rotate-left" title="Rotate left">&#8630;</button>
         <button type="button" data-view3d-act="rotate-right" title="Rotate right">&#8631;</button>
@@ -302,23 +310,10 @@ canvas.view3d { display: block; width: 100%; aspect-ratio: 21 / 9; cursor: grab;
   color: var(--ink-2); background: color-mix(in srgb, var(--panel) 78%, transparent);
   padding: 3px 7px; border-radius: 2px; max-width: 46%; text-align: right; }
 canvas.view3d.is-dragging { cursor: grabbing; }
-/* Top left under the Earth link, opposite the credit. Wide enough to drag an hour
-   accurately, and out of the control row, which on a phone already wraps. */
-.view3d-sun { position: absolute; left: 12px; top: 12px; display: flex; align-items: center;
-  gap: 8px; padding: 5px 10px; border-radius: 2px; border: 1px solid var(--rule-strong);
-  background: color-mix(in srgb, var(--panel) 88%, transparent); z-index: 3; }
-/* `display: flex` beats the UA stylesheet's `[hidden] { display: none }`, so a panel
-   with no sun in its payload — an uploaded track, whose date may be unknown — would
-   show the control anyway, dead. Say it here rather than relying on the attribute. */
-.view3d-sun[hidden] { display: none; }
-.view3d-earth ~ .view3d-sun { top: 56px; }
-.view3d-sun-label, .view3d-sun-read {
-  font-family: 'NarrowDisplay', "Liberation Sans Narrow", ui-sans-serif, sans-serif;
-  font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-2); }
-.view3d-sun-read { min-width: 12ch; text-align: right; color: var(--ink); }
-.view3d-sun-slider { width: 150px; accent-color: var(--climb); }
-@media (max-width: 640px) { .view3d-sun-slider { width: 96px; }
-  .view3d-sun-read { min-width: 10ch; } }
+/* The sun and the wind are drawn *on the canvas*, not in the DOM: both are geographic
+   directions and have to turn with the view, which means living in the same coordinate
+   system as the terrain they describe. There is no control here any more — the sun
+   follows the chart cursor, so the time comes from wherever the reader is pointing. */
 .view3d-controls { position: absolute; right: 10px; bottom: 10px; left: 10px; display: flex;
   gap: 5px; flex-wrap: wrap; justify-content: flex-end; }
 @media (max-width: 640px) {
@@ -1281,6 +1276,141 @@ function initView3d(root, cursorTrack) {
     ctx.stroke();
   }
 
+  // The sun and the wind, as arrows that turn with the view.
+  //
+  // Both are geographic bearings, so both have to be drawn in the scene's own frame:
+  // `view.yaw` rotates the world counter-clockwise on screen, and screen y grows
+  // downward, which together turn a compass bearing b into the screen angle below. Get
+  // that wrong and the arrow points somewhere plausible at yaw 0 and lies at every other
+  // heading — the failure that is invisible until you rotate the view.
+  //
+  // Shading already says where the light is, but only to someone who can read a
+  // hillshade; an arrow says it outright, and the wind has no shading to say it at all.
+  function bearingToScreen(bearing) {
+    return (bearing - view.yaw * 180 / Math.PI - 90) * Math.PI / 180;
+  }
+
+  function drawArrow(cx, cy, angle, length, head, colour, width) {
+    var tx = cx + Math.cos(angle) * length, ty = cy + Math.sin(angle) * length;
+    ctx.strokeStyle = colour;
+    ctx.fillStyle = colour;
+    ctx.lineWidth = width;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(cx - Math.cos(angle) * length, cy - Math.sin(angle) * length);
+    ctx.lineTo(tx, ty);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(tx, ty);
+    ctx.lineTo(tx - Math.cos(angle - 0.42) * head, ty - Math.sin(angle - 0.42) * head);
+    ctx.lineTo(tx - Math.cos(angle + 0.42) * head, ty - Math.sin(angle + 0.42) * head);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // The numbers the rose is drawn from, exposed so a test can hold the wind arrow
+  // against the convention it inverts: `from` is where the wind comes from, and drawing
+  // along it rather than opposite it is the classic 180° error, invisible on any single
+  // screenshot because a wrong arrow is still an arrow.
+  function roseAngles() {
+    var wind = scene.wind || null;
+    var sunNow = sunTrack ? sunAt(sunMinute) : null;
+    return {
+      north: bearingToScreen(0),
+      sun: sunNow ? { az: sunNow.az, el: sunNow.el, screen: bearingToScreen(sunNow.az),
+                      minute: sunMinute } : null,
+      wind: wind ? { from: wind.from, kmh: wind.kmh,
+                     screen: bearingToScreen(wind.from + 180) } : null
+    };
+  }
+
+  function drawRose() {
+    var wind = scene.wind || null;
+    var sunNow = sunTrack ? sunAt(sunMinute) : null;
+    if (!wind && !sunNow) return;
+    // Bottom left: the controls own the bottom right and the credit the top right.
+    // Scaled off the backing store so it is the same size on a phone, in the panel and
+    // full screen, where W changes by a factor of three.
+    var scale = Math.max(0.75, Math.min(1.6, W / 1280));
+    var radius = 30 * scale;
+    var lines = [];
+    if (sunNow) {
+      lines.push('Sun ' + clock(sunMinute) + ' \\u00b7 ' +
+                 (sunNow.el > 0 ? Math.round(sunNow.el) + '\\u00b0 ' + compass(sunNow.az)
+                                : 'below the horizon'));
+    }
+    if (wind) lines.push('Wind ' + wind.kmh.toFixed(0) + ' km/h from ' + wind.cardinal);
+    // The labels go under the rose, so the *block* has to fit — placing the circle first
+    // and the text afterwards clipped the second line off the bottom of a 21:9 panel.
+    var lineHeight = 13 * scale;
+    var textBlock = lines.length * lineHeight;
+    var cx = 16 * scale + radius;
+    var cy = H - (14 * scale + textBlock + radius);
+
+    ctx.save();
+    ctx.font = (11 * scale).toFixed(0) + 'px ui-sans-serif, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(16,19,24,0.55)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+    ctx.lineWidth = 1 * scale;
+    ctx.stroke();
+
+    // North, so the two arrows can be read as bearings rather than as decoration.
+    var north = bearingToScreen(0);
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.fillText('N', cx + Math.cos(north) * (radius - 8 * scale),
+                 cy + Math.sin(north) * (radius - 8 * scale));
+
+    if (wind) {
+      // `wind.from` is where the wind blows *from* — the convention every forecast and
+      // every pilot uses — so the arrow, which shows where the air is going, points the
+      // opposite way. Drawing it along the reported bearing is the classic 180° error.
+      drawArrow(cx, cy, bearingToScreen(wind.from + 180), radius - 11 * scale,
+                7 * scale, 'rgba(120,190,255,0.95)', 2.2 * scale);
+    }
+    if (sunNow) {
+      // The sun sits at its bearing, out at the rim, and dims when it is below the
+      // horizon — where the shading is holding the light artificially at 3° and the
+      // reader is entitled to know.
+      var at = bearingToScreen(sunNow.az);
+      var up = sunNow.el > 0;
+      var sx = cx + Math.cos(at) * (radius - 9 * scale);
+      var sy = cy + Math.sin(at) * (radius - 9 * scale);
+      ctx.beginPath();
+      ctx.arc(sx, sy, 5.5 * scale, 0, Math.PI * 2);
+      ctx.fillStyle = up ? 'rgba(255,205,80,0.98)' : 'rgba(255,205,80,0.32)';
+      ctx.fill();
+      // Rays towards the middle: the direction the light actually travels, which is what
+      // the hillshade is doing.
+      ctx.strokeStyle = ctx.fillStyle;
+      ctx.lineWidth = 1.6 * scale;
+      ctx.beginPath();
+      ctx.moveTo(sx - Math.cos(at) * 8 * scale, sy - Math.sin(at) * 8 * scale);
+      ctx.lineTo(sx - Math.cos(at) * 15 * scale, sy - Math.sin(at) * 15 * scale);
+      ctx.stroke();
+    }
+
+    // Drawn with a dark stroke behind the fill rather than a box: the rose sits over
+    // whatever the terrain happens to be, and white text alone disappears against a
+    // limestone face or a snowfield.
+    ctx.textAlign = 'left';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 3 * scale;
+    ctx.strokeStyle = 'rgba(12,14,18,0.85)';
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    lines.forEach(function (line, i) {
+      var y = cy + radius + (10 + i * 13) * scale;
+      ctx.strokeText(line, cx - radius, y);
+      ctx.fillText(line, cx - radius, y);
+    });
+    ctx.restore();
+  }
+
   function paint() {
     // Match the backing store to the box on every frame. Relying on a ResizeObserver
     // or a post-toggle callback to do this was fragile: entering the maximised state
@@ -1296,6 +1426,7 @@ function initView3d(root, cursorTrack) {
     if (renderer) renderer.terrain(mapped); else drawTerrain(mapped);
     drawTrack();
     drawCursor();
+    drawRose();
   }
 
   var pending = false;
@@ -1316,6 +1447,7 @@ function initView3d(root, cursorTrack) {
   var pinch = null;
   // Accumulated since the second finger went down, and which of rotate/tilt has won.
   var twistTotal = 0, tiltTotal = 0, twoFingerMode = null;
+  var orbitAnchor = null;   // the ground point a rotate-drag grabbed
   var tiltAnchor = null;
   var undoPanX = 0, undoPanY = 0;
   var TWIST_DEADZONE = 0.10;   // radians, about 6 degrees
@@ -1410,6 +1542,12 @@ function initView3d(root, cursorTrack) {
       undoPanY = 0;
     } else if (pointers.size === 1) {
       gesture = orbitModifier(event) ? 'orbit' : 'pan';
+      // The point the drag grabbed, captured once. See the orbit branch below for why
+      // it cannot be re-picked as the cursor travels.
+      orbitAnchor = gesture === 'orbit'
+        ? { x: event.clientX, y: event.clientY,
+            point: groundUnder(event.clientX, event.clientY) }
+        : null;
     }
     canvas.classList.add('is-dragging');
     canvas.setPointerCapture(event.pointerId);
@@ -1499,14 +1637,34 @@ function initView3d(root, cursorTrack) {
       return;
     }
 
-    var dx = (event.clientX - previous.x) * toCanvas;
-    var dy = (event.clientY - previous.y) * toCanvas;
+    // Two units, on purpose. A pan moves the scene *in the canvas*, so it converts to
+    // canvas pixels; a rotation is a statement about how far the hand travelled, so it
+    // stays in CSS pixels. Rotating with the converted delta ties the gesture to the
+    // backing store: measured on the same 90 px drag, a device pixel ratio of 2 gave
+    // 0.900 rad of yaw against 0.450 at ratio 1 — the same movement turning the view
+    // twice as far on a retina screen as on the machine it was tuned on.
+    var cssX = event.clientX - previous.x;
+    var cssY = event.clientY - previous.y;
+    var dx = cssX * toCanvas;
+    var dy = cssY * toCanvas;
     if (gesture === 'orbit') {
-      // Orbit about the point under the cursor, for the same reason the touch gestures do.
-      var orbitHold = groundUnder(event.clientX, event.clientY);
-      view.yaw += dx * 0.005;
-      view.pitch = Math.max(0.18, Math.min(1.45, view.pitch - dy * 0.004));
-      holdGround(orbitHold, event.clientX, event.clientY);
+      // Orbit about the point the drag *grabbed*, held where it was grabbed — not about
+      // whatever is under the cursor now.
+      //
+      // Re-picking the anchor each event looks equivalent and is not: the cursor has
+      // travelled since the last one, so each event pins a different ground point, and
+      // the centre of rotation creeps across the terrain with the mouse. Measured on a
+      // 90 px drag, the point the drag started on slid 29 px at a device pixel ratio of
+      // 1 and 92 px at 2 — which reads as the view swinging about somewhere off to the
+      // side, and reads worst full screen, where the canvas is large enough to drag a
+      // long way. This is the same reason the two-finger tilt captures `tiltAnchor` once.
+      if (!orbitAnchor) {
+        orbitAnchor = { x: event.clientX, y: event.clientY,
+                        point: groundUnder(event.clientX, event.clientY) };
+      }
+      view.yaw += cssX * 0.005;
+      view.pitch = Math.max(0.18, Math.min(1.45, view.pitch - cssY * 0.004));
+      holdGround(orbitAnchor.point, orbitAnchor.x, orbitAnchor.y);
     } else {
       view.panX += dx;
       view.panY += dy;
@@ -1517,7 +1675,11 @@ function initView3d(root, cursorTrack) {
   function endPointer(event) {
     pointers.delete(event.pointerId);
     if (pointers.size < 2) { pinch = null; twoFingerMode = null; tiltAnchor = null; }
-    if (!pointers.size) { gesture = null; canvas.classList.remove('is-dragging'); }
+    if (!pointers.size) {
+      gesture = null;
+      orbitAnchor = null;
+      canvas.classList.remove('is-dragging');
+    }
   }
   canvas.addEventListener('pointerup', endPointer);
   canvas.addEventListener('pointercancel', endPointer);
@@ -1541,8 +1703,22 @@ function initView3d(root, cursorTrack) {
   // algorithm, so there is no second implementation of solar position to drift out of
   // step with `sun.py`. Interpolation between samples is linear and the azimuth arrives
   // unwrapped, so the light never sweeps the long way round the compass.
+  //
+  // There is no time control. The sun follows the **chart cursor**: hovering the
+  // altitude trace at 14:40 lights the terrain as it was at 14:40, which is the question
+  // a pilot is actually asking — was that face still in the sun when I got there. A
+  // slider was the first attempt and it was the wrong instrument twice over: it offered
+  // hours the flight never saw, and it made the reader hunt for a moment the charts were
+  // already pointing at.
   var sunTrack = scene.sun || null;
   var sunMinute = sunTrack ? sunTrack.at : null;
+  // The sun the shading was last built for. Re-lighting costs a pass over the grid, a
+  // re-bake of the draped texture and a rebuild of the vertex colours, which is far too
+  // much to do on every mousemove — so it only happens once the sun has actually moved
+  // enough to see. A degree of azimuth is about a third of the width of the sun's own
+  // disc on screen and four minutes of a summer afternoon.
+  var appliedSun = null;
+  var SUN_STEP_DEG = 1.0;
 
   function sunAt(minute) {
     var track = sunTrack.track;
@@ -1563,13 +1739,20 @@ function initView3d(root, cursorTrack) {
            String(local % 60).padStart(2, '0');
   }
 
-  // Re-lighting is not free and does not have to be: the sun moves when a reader drags a
-  // slider, never during a gesture or a frame. The whole cost is one pass over the grid
-  // for the lit range, one over the vertex colours (WebGL) and one over the draped
-  // texture, and the draped one is the reason this is not done per animation frame.
+  function compass(azimuth) {
+    var names = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
+                 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+    return names[Math.round((((azimuth % 360) + 360) % 360) / 22.5) % 16];
+  }
+
+  // Rebuild the shading for wherever the sun is now. Everything that carries light has to
+  // be redone: the lit range is measured against the light, the draped texture has the
+  // hillshade baked into it, and the WebGL backend keeps its bare-relief shading in
+  // vertex colours.
   function relight() {
     if (!sunTrack) return;
     var where = sunAt(sunMinute);
+    appliedSun = where;
     setLight(where.az, where.el);
     measureLit();
     Object.keys(ready).forEach(function (name) {
@@ -1579,38 +1762,36 @@ function initView3d(root, cursorTrack) {
     if (style && ready[style]) basemap = ready[style].shaded || ready[style].image;
     if (renderer && renderer.relight) renderer.relight();
     sampleCellColours();
-    var read = root.querySelector('.view3d-sun-read');
-    if (read) {
-      read.textContent = clock(sunMinute) + ' · ' +
-        (where.el > 0 ? Math.round(where.el) + '° ' + compass(where.az) : 'sun down');
-    }
     draw();
   }
 
-  function compass(azimuth) {
-    var names = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
-                 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
-    return names[Math.round((((azimuth % 360) + 360) % 360) / 22.5) % 16];
+  // Move the sun to `minute`, re-lighting only when it has travelled far enough to be
+  // worth the work. The arrow still reads the exact position, so it follows the cursor
+  // smoothly while the shading catches up in steps nobody can see.
+  function sunTo(minute) {
+    if (!sunTrack || minute === null || minute === undefined) return;
+    sunMinute = minute;
+    var where = sunAt(minute);
+    if (appliedSun) {
+      var turned = Math.abs(((where.az - appliedSun.az + 540) % 360) - 180);
+      if (turned < SUN_STEP_DEG && Math.abs(where.el - appliedSun.el) < SUN_STEP_DEG / 2) {
+        draw();
+        return;
+      }
+    }
+    relight();
   }
 
-  (function wireSun() {
-    var host = root.querySelector('.view3d-sun');
-    var slider = root.querySelector('.view3d-sun-slider');
-    if (!host || !slider) return;
-    if (!sunTrack || !sunTrack.track || !sunTrack.track.az) return;   // no date, no sun
-    host.hidden = false;
-    // The slider runs in the pilot's own clock so the numbers under it are the times in
-    // the report's tables; the sun is computed in UTC, and `offset` is the one place
-    // those two meet.
-    slider.min = 0;
-    slider.max = 1435;
-    slider.value = ((sunMinute + sunTrack.offset) % 1440 + 1440) % 1440;
-    slider.addEventListener('input', function () {
-      sunMinute = Number(slider.value) - sunTrack.offset;
-      relight();
-    });
-    relight();
-  })();
+  // The UTC minute a cursor sample sits at. The cursor track carries it per sample
+  // rather than being interpolated from the flight's span: fixes are not evenly spaced
+  // in time, and a KMZ from a scoring site is not evenly spaced at all.
+  function cursorMinute(index) {
+    if (!sunTrack || !cursorTrack || !cursorTrack.min) return null;
+    if (index === null || index === undefined) return null;
+    return cursorTrack.min[Math.min(index, cursorTrack.min.length - 1)];
+  }
+
+  if (sunTrack && sunTrack.track && sunTrack.track.az) relight();
 
   root.querySelectorAll('[data-view3d-act]').forEach(function (button) {
     button.addEventListener('click', function () {
@@ -1787,8 +1968,19 @@ function initView3d(root, cursorTrack) {
 
   draw();
   var handle = {
-    setCursor: function (index) { cursorIndex = index; draw(); },
-    clearCursor: function () { cursorIndex = null; draw(); },
+    // The hover moves the sun as well as the marker: the reader points at a moment and
+    // the ground is lit as it was then. `sunTo` decides whether that is worth a re-light
+    // and draws either way, so this stays one call per hover.
+    setCursor: function (index) {
+      cursorIndex = index;
+      var minute = cursorMinute(index);
+      if (minute === null) { draw(); return; }
+      sunTo(minute);
+    },
+    clearCursor: function () {
+      cursorIndex = null;
+      if (sunTrack) sunTo(sunTrack.at); else draw();
+    },
     // Exposed for tests: driving the camera from a headless browser is the only way to
     // check that a gesture does what it claims.
     view: view,
@@ -1842,6 +2034,12 @@ function initView3d(root, cursorTrack) {
     // answers in. screenOf()/nearest() speak CSS pixels and track indices, so neither
     // can be held against the matrix directly.
     worldProject: function (x, y, z) { return project(x, y, z); },
+    // Exposed for tests: the ground-plane point under a screen position. Every rotation
+    // anchors through this, so "the twist is centred on the wrong place" is a claim
+    // about it and cannot be checked without it.
+    groundUnder: function (clientX, clientY) { return groundUnder(clientX, clientY); },
+    // Exposed for tests: the sun and wind arrows as angles rather than as pixels.
+    rose: function () { return roseAngles(); },
     toMetres: function (lon, lat) { return toMetres(lon, lat); },
     // Called when the flight this panel belongs to is removed from the document. The
     // DEM grid and the stitched basemap go with the handle, but a WebGL context does
