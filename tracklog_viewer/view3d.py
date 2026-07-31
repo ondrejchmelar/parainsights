@@ -231,19 +231,28 @@ def panel(payload: dict, uid: str, *, kmz_uri: str | None = None,
       {earth}
       <p class="view3d-credit">{credit}</p>
       <div class="view3d-controls">
-        <button type="button" data-view3d-act="rotate-left" title="Rotate left">&#8630;</button>
-        <button type="button" data-view3d-act="rotate-right" title="Rotate right">&#8631;</button>
-        <button type="button" data-view3d-act="tilt-up" title="Tilt up">&#8593;</button>
-        <button type="button" data-view3d-act="tilt-down" title="Tilt down">&#8595;</button>
-        <button type="button" data-view3d-act="zoom-in" title="Zoom in">+</button>
-        <button type="button" data-view3d-act="zoom-out" title="Zoom out">&minus;</button>
+        <button type="button" data-view3d-act="rotate-left"
+                title="Rotate left" aria-label="Rotate left">&#8630;</button>
+        <button type="button" data-view3d-act="rotate-right"
+                title="Rotate right" aria-label="Rotate right">&#8631;</button>
+        <button type="button" data-view3d-act="tilt-up"
+                title="Tilt up" aria-label="Tilt up">&#8593;</button>
+        <button type="button" data-view3d-act="tilt-down"
+                title="Tilt down" aria-label="Tilt down">&#8595;</button>
+        <button type="button" data-view3d-act="zoom-in"
+                title="Zoom in" aria-label="Zoom in">+</button>
+        <button type="button" data-view3d-act="zoom-out"
+                title="Zoom out" aria-label="Zoom out">&minus;</button>
         <button type="button" data-view3d-act="basemap" class="is-on"
-                title="Satellite, map or bare terrain">{basemap_label}</button>
-        <button type="button" data-view3d-act="exaggerate" title="Vertical exaggeration">
+                title="Satellite, map or bare terrain"
+                aria-label="Basemap: satellite, map or bare terrain">{basemap_label}</button>
+        <button type="button" data-view3d-act="exaggerate"
+                title="Vertical exaggeration" aria-label="Vertical exaggeration">
           &#215;1 height</button>
-        <button type="button" data-view3d-act="fullscreen" title="Full screen">
+        <button type="button" data-view3d-act="fullscreen"
+                title="Full screen" aria-label="Full screen">
           {EXPAND_ICON}</button>
-        <button type="button" data-view3d-act="reset">Reset view</button>
+        <button type="button" data-view3d-act="reset" aria-label="Reset view">Reset view</button>
       </div>
       <script type="application/json" class="view3d-data">{json.dumps(payload)}</script>
     </div>"""
@@ -306,7 +315,7 @@ canvas.view3d { display: block; width: 100%; aspect-ratio: 21 / 9; cursor: grab;
 .view3d-earth:hover { background: var(--climb); border-color: var(--climb); color: var(--paper); }
 /* Top right, opposite the Earth link: at the bottom it fought the control row, which
    on a phone wraps into the same space. */
-.view3d-credit { position: absolute; right: 12px; top: 12px; margin: 0; font-size: 10.5px;
+.view3d-credit { position: absolute; right: 12px; top: 12px; margin: 0; font-size: 11px;
   color: var(--ink-2); background: color-mix(in srgb, var(--panel) 78%, transparent);
   padding: 3px 7px; border-radius: 2px; max-width: 46%; text-align: right; }
 canvas.view3d.is-dragging { cursor: grabbing; }
@@ -316,9 +325,13 @@ canvas.view3d.is-dragging { cursor: grabbing; }
    follows the chart cursor, so the time comes from wherever the reader is pointing. */
 .view3d-controls { position: absolute; right: 10px; bottom: 10px; left: 10px; display: flex;
   gap: 5px; flex-wrap: wrap; justify-content: flex-end; }
+/* This media query used to reduce padding to `5px 7px` and type to 10.5 px — shrinking
+   the targets on the one device where a finger replaces a mouse, which is backwards. On
+   a phone the controls get *more* room, not less, and the type sits on the 12 px mobile
+   floor rather than under the 11 px desktop one. */
 @media (max-width: 640px) {
   .view3d-controls { gap: 4px; }
-  .view3d-controls button { padding: 5px 7px; font-size: 10.5px; }
+  .view3d-controls button { padding: 8px 10px; font-size: 12px; }
 }
 .view3d-controls button {
   font: inherit;

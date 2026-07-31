@@ -193,7 +193,7 @@ body {
 .identity { display: flex; gap: 26px; flex-wrap: wrap; }
 .identity div { display: flex; flex-direction: column; }
 .identity dt, .identity .key {
-  font-size: 10.5px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.12em;
   color: var(--ink-3);
@@ -240,7 +240,7 @@ section { margin-top: 34px; }
   flex-wrap: wrap; }
 .chart-head .chart-title { margin-bottom: 0; }
 .toggle-small { margin: 4px 6px 6px 0; }
-.toggle-small .toggle-button { font-size: 10.5px; padding: 4px 9px; }
+.toggle-small .toggle-button { font-size: 11px; padding: 4px 9px; }
 
 /* Stat tiles -------------------------------------------------------------- */
 .stats {
@@ -253,7 +253,7 @@ section { margin-top: 34px; }
 .stat { background: var(--panel); padding: 12px 14px 13px; }
 .stat .key {
   display: block;
-  font-size: 10.5px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.12em;
   color: var(--ink-3);
@@ -268,10 +268,10 @@ section { margin-top: 34px; }
 
 /* Charts ------------------------------------------------------------------ */
 .chart { display: block; width: 100%; height: auto; }
-.chart .axis-label { font-size: 10.5px; fill: var(--ink-3); }
+.chart .axis-label { font-size: 11px; fill: var(--ink-3); }
 .chart .axis-y { text-anchor: end; }
 .chart .axis-x { text-anchor: middle; }
-.chart .axis-title { font-size: 10.5px; fill: var(--ink-3); text-anchor: middle;
+.chart .axis-title { font-size: 11px; fill: var(--ink-3); text-anchor: middle;
   text-transform: uppercase; letter-spacing: 0.1em; }
 .chart .grid line { stroke: var(--rule); stroke-width: 1; }
 .chart .axes line, .chart .axis { stroke: var(--rule-strong); stroke-width: 1; }
@@ -280,14 +280,14 @@ section { margin-top: 34px; }
 
 .chart-profile .drops line { stroke: var(--shadow-ink); stroke-width: 0.7; opacity: 0.45; }
 .chart-profile .endpoint { fill: var(--panel); stroke: var(--ink); stroke-width: 2; }
-.chart-profile .endpoint-label { font-size: 10.5px; fill: var(--ink-2); text-anchor: middle;
+.chart-profile .endpoint-label { font-size: 11px; fill: var(--ink-2); text-anchor: middle;
   text-transform: uppercase; letter-spacing: 0.1em; }
 .chart .mark circle { stroke-width: 2; }
-.chart .mark-label { font-size: 10.5px; fill: var(--ink); text-anchor: middle; }
+.chart .mark-label { font-size: 11px; fill: var(--ink); text-anchor: middle; }
 .chart .mark.active circle { fill: var(--climb); stroke: var(--panel); }
 
 .chart .reference { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 6 4; }
-.chart .reference-label { font-size: 10px; fill: var(--ink-3); text-anchor: end;
+.chart .reference-label { font-size: 11px; fill: var(--ink-3); text-anchor: end;
   text-transform: uppercase; letter-spacing: 0.07em; }
 .chart .reference-label.band-label { text-anchor: start; }
 
@@ -321,10 +321,10 @@ section { margin-top: 34px; }
 
 .chart-wind .wind-dot { fill: var(--panel); stroke: var(--sink); stroke-width: 2; }
 .chart-wind .wind-arrow { stroke: var(--sink); stroke-width: 1.6; }
-.chart-wind .wind-number { font-size: 10px; fill: var(--ink); text-anchor: middle;
+.chart-wind .wind-number { font-size: 11px; fill: var(--ink); text-anchor: middle;
   font-variant-numeric: tabular-nums; }
 .chart-wind .wind-point.active .wind-dot { fill: var(--climb); stroke: var(--panel); }
-.chart-wind .wind-time { font-size: 10px; fill: var(--ink-3); font-variant-numeric: tabular-nums; }
+.chart-wind .wind-time { font-size: 11px; fill: var(--ink-3); font-variant-numeric: tabular-nums; }
 .chart-wind .model polyline { fill: none; stroke: var(--neutral); stroke-width: 2;
   stroke-dasharray: 5 3; }
 .chart-wind .model .model-dot { fill: var(--neutral); }
@@ -345,7 +345,7 @@ section { margin-top: 34px; }
 .legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 12px 0 0; padding: 0; list-style: none; }
 .legend li { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink-2); }
 .legend .legend-title { color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.09em;
-  font-size: 10.5px; }
+  font-size: 11px; }
 
 /* Segmented control ------------------------------------------------------- */
 .toggle { display: inline-flex; margin-bottom: 12px; border: 1px solid var(--rule-strong);
@@ -408,8 +408,32 @@ section { margin-top: 34px; }
 }
 .tab:hover .tab-close, .tab-close:focus-visible { opacity: 1; }
 .tab-close:hover { background: var(--climb); color: var(--paper); }
-/* Touch has no hover, so the control has to be permanently visible there. */
-@media (hover: none) { .tab-close { opacity: 0.7; } }
+/* Touch has no hover, so the control has to be permanently visible there.
+
+   This is the control that *removes a flight from the document*, and at 19 x 19 px it
+   was under half the minimum touch target, sitting immediately beside the control you
+   actually meant to press. The glyph stays 19 px — it is right on a desktop — and
+   `::before` grows the hit area to 44 x 44 on touch only.
+
+   Two details that are the whole fix rather than decoration. The hit area is anchored to
+   the tab's own corner and grows *inward*, because a symmetric 44 px box centred on a
+   button 3 px from the edge hangs outside the tab and starts stealing taps from the next
+   one. And because growing a target that overlaps another target makes mis-taps more
+   likely rather than less, the × is live only once its tab is active: the first tap
+   selects the flight, and only then can a second tap remove it. Enlarging the area
+   without that pairing would have made the defect worse. */
+@media (hover: none) {
+  .tab-close { opacity: 0.7; }
+  .tab-close::before {
+    content: "";
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    width: 44px;
+    height: 44px;
+  }
+  .tab:not(.is-on) .tab-close { pointer-events: none; opacity: 0.3; }
+}
 .tab .tab-date {
   font-family: ui-monospace, "DejaVu Sans Mono", monospace;
   font-size: 13px;
@@ -468,7 +492,7 @@ table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 th {
   text-align: right;
   font-weight: 400;
-  font-size: 10.5px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--ink-3);
@@ -484,7 +508,7 @@ tbody tr:hover, tbody tr:focus-visible { background: var(--panel-2); outline: no
 tr.is-tow td:first-child { color: var(--tow); }
 .tag {
   display: inline-block;
-  font-size: 10.5px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.09em;
   padding: 1px 6px;
@@ -528,6 +552,22 @@ footer { margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--rule);
   .view3d-panel { margin-left: -8px; margin-right: -8px; }
   .section-head { flex-direction: column; gap: 4px; }
   .section-head p { max-width: none; }
+  /* 12 px floor on a phone, against 11 px on a desktop.
+
+     Most of the small type is SVG axis labels, and that makes this an accessibility
+     problem rather than only a legibility one: SVG text does not respond to the reader's
+     own font-size preference, so someone who has turned type up gets no relief from it
+     and the floor is the only thing that helps them. Where an axis ends up crowded at
+     this size, thin the ticks out — do not put the type back down. */
+  .chart .axis-label,
+  .chart .axis-title,
+  .chart .mark-label,
+  .chart .reference-label,
+  .chart-profile .endpoint-label,
+  .chart-wind .wind-number,
+  .chart-wind .wind-time { font-size: 12px; }
+  table { font-size: 14px; }
+  .notes { font-size: 14px; }
 }
 """
 
