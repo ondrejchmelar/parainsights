@@ -535,6 +535,32 @@ Written up with a plan in `docs/plan.md`:
   session that can iterate on how it looks rather than one that can only check that it
   parses.
 
+Written up in `docs/ux-review.md` and `docs/analysis-plan.md`:
+
+- **The debrief.** The report is an instrument panel: 191 numeric tokens in one flight
+  article and not one sentence saying whether the flight went well. A verdict strip and
+  3–5 ranked finding cards over the numbers already there. **A finding is a measurement
+  plus a link, never an imperative**, and it carries a cost in metres or minutes.
+- **The analysis under it.** New measurements the data supports, in three tiers by cost —
+  climb selection, working band, centring index, day envelope (tier 1, existing
+  dataclasses); the air-mass frame and an empirical polar (tier 2, gated on the wind, whose
+  flight-level confidence measures 0.36–0.39); insolation from the DEM gradient against
+  `sun.py`'s tables (tier 3, no new data). Note the measured correction: the `other` slice
+  is **not** where the losses are — on the reference flight it nets **+385 m** and is
+  rising in 56% of its samples, so it wants a three-way decomposition, not blame.
+- **The flight plan, remembered — the join between planning and analysis.** The pilot's
+  intent is the one thing the tool cannot see that the pilot can simply supply, and it is
+  the reference frame the debrief is missing: with a plan, "the flight turned 31 km short
+  of the planned goal, at 14:10" is a measurement rather than advice. Three levels — a
+  declared task, an intent, an expected day — one optional `Plan` dataclass, stored as a
+  sidecar JSON, a remembered plans directory, or `localStorage` for a track uploaded into
+  the page. **The cheapest first version throws nothing away that is not already parsed**:
+  10 of the 50 sample IGCs carry `C` task records, one of them a full 12-point task with
+  names, `igc.py` parses them into `Flight.task`, and the only reference to `.task` in the
+  whole tree is the constructor. A plan carries `made_at` and is frozen at takeoff — a plan
+  written after landing is a story, so it is labelled *reconstructed intent* and its
+  findings are downgraded. The same object makes a pre-flight mode possible later.
+
 ## Known gaps
 
 - FAI/flat triangle scoring with multipliers is not implemented; `xc.py` does free

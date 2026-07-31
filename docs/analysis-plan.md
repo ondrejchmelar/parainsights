@@ -263,6 +263,126 @@ The repo's habit is that numbers are checkable, so:
 - **No network in tests.** Archive baselines are fixtures of summary JSON; tracklogs stay
   out of the repository.
 
+## TODO — the flight plan, remembered, and the loop it closes
+
+**The single most valuable input this tool does not have is the pilot's intent.** Everything
+above works around its absence, and the UX review's central rule exists because of it:
+*a finding is a measurement plus a link, never an imperative*, because "the tool cannot see
+the sky, the gaggle, the airspace or **the pilot's plan**". Three of those four are
+genuinely out of reach. The fourth is not — the pilot can simply say what the plan was, and
+then the tool can compare against something the pilot themselves signed.
+
+That is the join between the two halves of the product. A plan is not a fifth analysis
+module; it is **the reference frame the debrief is missing**, and it converts a family of
+forbidden sentences into legitimate ones without touching the no-imperatives rule:
+
+> ✗ "You should have pushed on to Predazzo."
+>
+> ✓ "The plan was Predazzo and back, 100 km. The flight turned 31 km short, at 14:10,
+>    from 2 350 m — the first point where the track leaves the planned line by more than
+>    3 km." → *show me*
+
+Still past tense, still two measurements and a link, and now about the pilot's own stated
+intention rather than about an ideal flight nobody declared.
+
+### What already exists, and what is being thrown away
+
+Measured over the 50 sample files: **10 carry IGC `C` task records**, most of them the
+minimal takeoff/landing pair XCTrack writes, but `2020-08-16-XCT-ROP-01.igc` carries a
+full 12-point competition task with names (`START U001`, `TURN U002`, …). `igc.py` parses
+all of it into `Flight.task`. Grep the tree for `.task` and there is **exactly one hit —
+the constructor**. It is parsed, carried through `sources.py`, and never read again.
+
+So the cheapest possible first version is: draw the declared task, and score against it.
+No new input format, no storage question, no UI — just stop discarding what the parser
+already produces.
+
+### Three things called "a plan", and they are different objects
+
+1. **A declared task** — turnpoints and radii. Comes free from `C` records when present,
+   or from a competition task file. Geometric, unambiguous, machine-checkable.
+2. **An intent** — "down the ridge to the lake, turn by 15:30, be home before the valley
+   wind". Not in any file, and the part with the most debriefing value. Free text plus a
+   handful of structured fields (goal distance, planned turn time, minimum AGL, a bail-out
+   line).
+3. **An expected day** — forecast cloudbase, thermal top, start and end of the usable
+   window, wind at height. `meteo.py` already fetches all of these; what it does not do is
+   **keep the forecast that was current before the flight**, which is what makes
+   forecast-versus-outcome answerable later.
+
+All three fit one `Plan` dataclass and all three are optional.
+
+### What the analysis does with it
+
+| Comparison | What it needs | What the finding says |
+|---|---|---|
+| **Route adherence** | planned line, track | cross-track error over time; km and minutes spent off the plan; the **decision point** — first sustained departure beyond a threshold — with a marker in the 3D view |
+| **Turnpoint accounting** | task turnpoints | which were reached and when, against the schedule the plan implies; where the deficit first appeared |
+| **Distance budget** | goal distance, `Route` | planned against scored, and the required average speed against the achieved one |
+| **Where the deficit came from** | tier-2 speed decomposition | the shortfall attributed between climb rate, glide, and time doing neither — this is the finding the whole document is building towards, and it only reads as an answer when there is a target to miss |
+| **Schedule** | planned start / turn / end times, day envelope | "you turned 50 min after the planned time, on a day already decaying at 0.17 m/s per hour" — both halves measured, neither one advice |
+| **Forecast against outcome** | stored pre-flight forecast, sounding, drift winds | the day as predicted against the day as flown: cloudbase, thermal top, wind. Calibrates the *next* plan, which is the actual product |
+| **Bail-out discipline** | minimum AGL or a go-home line, `terrain.clearance()` | plainly: was the line crossed, when, for how long. Refused without `--terrain` |
+| **Planning calibration, over the archive** | past plans + `baseline.py` | "your plans assume +1.5 m/s; your last 12 flights averaged +1.05" — an evaluation of the *planning*, not of the flying, and the one thing here no single flight can tell you |
+
+### Where a plan lives, given the report is a static file
+
+This is the hard part, and it is a storage question rather than an analysis one.
+
+- **From the track**: `C` records, read automatically. No storage at all.
+- **From a sidecar**: `--plan FLIGHT.plan.json`, auto-discovered next to the tracklog.
+  Plain JSON, hand-editable, diffable, and it is what a pre-flight run would write.
+- **Remembered across runs**: `~/.config/parainsights/plans/<date>-<site>.json`, so a plan
+  made on Friday is found by Sunday's analysis without being named again. This is what
+  "remembered" has to mean for a CLI whose inputs are files.
+- **In the page, for an uploaded track**: there is no server and there never will be, so
+  the plan is `localStorage` keyed by the flight uid, with an explicit **export to JSON**
+  so it can become a sidecar for the CLI later. The reader typing a plan into the report
+  and having it survive a reload is worth a lot; pretending it is stored anywhere else is
+  not.
+
+Two rules that keep it honest:
+
+- **A plan is timestamped and frozen at takeoff.** Record `made_at`. A plan written after
+  landing is a story about the flight, not a plan, so the comparison is labelled
+  *reconstructed intent* and every finding from it is downgraded. Without this the feature
+  quietly becomes a tool for justifying whatever happened.
+- **No plan means today's debrief, unchanged.** Degrade, never blank — the same rule the
+  meteo and terrain findings already follow.
+
+### Pre-flight is the other half of the same feature
+
+Once a `Plan` exists as a first-class object, the same repository can answer the question
+*before* the flight: given a planned route, the forecast profile and the pilot's own
+measured climb rates from `baseline.py`, what does the day support — required climb rate
+for the goal, the window the forecast allows, headwind legs, terrain clearance along the
+line. That is a new mode rather than a new tool (`--plan-only`, no tracklog), and it is
+where the archive stops being a scoreboard and starts being an input. It also means the
+forecast is captured at the moment it matters, which is the only way the
+forecast-versus-outcome row above is ever truthful.
+
+**Sketch of the data model**, reusing what exists:
+
+```python
+@dataclass
+class Plan:
+    made_at: str | None            # None ⇒ reconstructed, findings downgraded
+    turnpoints: list[xc.Turnpoint] # from C records, a task file, or the page
+    radii: list[float]
+    goal_distance: float | None
+    planned_start: str | None
+    planned_turn: str | None
+    planned_finish: str | None
+    min_clearance: float | None
+    expected: Meteo | None         # the forecast as it stood before the flight
+    notes: str | None
+```
+
+`plan.py` loads and validates it; `debrief.py` grows a second family of findings that fire
+only when a plan is present; the renderers draw the planned line beside the flown track in
+the top view and the 3D view, which is close to free — both already draw one polyline over
+the same projection, and `render_kmz.py` can carry it as a second `LineString`.
+
 ## Phasing
 
 **Phase A — decompose `other`, and the four corrections.** Cheapest, and it fixes a wrong
@@ -283,6 +403,12 @@ reachable ground at the low point. All from data already in the report.
 **Phase E — the archive.** `--archive`, percentiles on every tile and finding, model
 verification accumulated over flights. This is the one that makes the tool answer *"was
 that a good flight for you"* rather than *"was that a good flight"*.
+
+**Phase F — the flight plan.** Draw and score the declared task first, because it is a
+day's work and throws nothing away that is not already parsed. Then the sidecar and the
+remembered plans directory, then the in-page plan for uploaded tracks, then the pre-flight
+mode. It is listed last only because the deficit findings want phase C's decomposition to
+be worth reading; if the pilot's own plans are the reason to use the tool, it moves up.
 
 Phases A and B are a session's work each and need nothing new. C is the one with real
 uncertainty in it — the wind field is the weakest input in the tool, and it is worth
