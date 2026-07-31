@@ -166,6 +166,90 @@ def triggers(analysis, terrain, *, limit: int | None = None) -> list[Trigger]:
     return found
 
 
+# Ridge lift only exists near the slope making it, so height above the ground is what
+# separates a climb the hill was producing from a thermal that happened to trigger on a
+# windward face. 250 m is generous for a paraglider working a ridge and well inside the
+# height a thermal is normally centred at.
+RIDGE_CLEARANCE = 250.0  # metres above the ground under the climb
+# Flatter than this and there is no ridge, whatever the wind is doing.
+RIDGE_SLOPE = 12.0  # degrees
+# A slope within this of the wind's bearing is the one the air runs up.
+RIDGE_TOLERANCE = 60.0  # degrees
+# Below this the air is not doing enough for a slope's aspect to matter.
+RIDGE_WIND = 12.0  # km/h
+
+
+@dataclass
+class Source:
+    """What appears to have been holding one climb up.
+
+    Two labels, and deliberately not three. **Ridge** is claimable because it needs three
+    things to agree that a thermal does not need at all — a steep face, the wind running
+    into it, and the glider staying within a couple of hundred metres of the slope — and
+    the absence of any one of them settles it. **Thermal** is the rest.
+
+    *Convergence is not a label here.* Its honest signature is a climb whose drift departs
+    from the surrounding air, and one tracklog cannot separate that from a ridge climb
+    holding station, a poorly sounded wind, or a pilot flying the climb badly. Naming it
+    would be the confidently wrong sentence this report exists to avoid; it wants either
+    several gliders on the same day or a wind field with a real discontinuity in it.
+
+    `confident` is False where the label is the fallback rather than a finding: no terrain,
+    no wind, or a climb the flight never located.
+    """
+
+    climb: int
+    at: str
+    label: str  # "ridge" | "thermal"
+    confident: bool
+    clearance: float | None = None  # metres above the ground where the climb began
+    offset: float | None = None  # degrees between the face and the wind it came from
+
+
+def sources(analysis, terrain) -> dict[int, Source]:
+    """Classify each climb by what was most likely holding it up, keyed by climb number.
+
+    The wind is the flight's own, not the climb's: a climb's drift *is* the measurement,
+    so testing a face against it would be checking the evidence against itself. The
+    flight-level estimate is the day's air, which is what a ridge faces into.
+    """
+    wind = getattr(analysis, "wind", None)
+    found: dict[int, Source] = {}
+    for number, segment in enumerate(analysis.thermals, start=1):
+        at = segment.start_time
+        if terrain is None or wind is None or segment.centre is None:
+            found[number] = Source(number, at, "thermal", confident=False)
+            continue
+
+        lat, lon = segment.centre
+        when = analysis.flight.local_time(segment.start)
+        face = face_at(terrain, sun.position(when, lat, lon), lat, lon)
+        ground = terrain.at(lat, lon)
+        clearance = (
+            float(segment.start_altitude) - float(ground) if ground is not None else None
+        )
+        if face is None or clearance is None:
+            found[number] = Source(number, at, "thermal", confident=False)
+            continue
+
+        offset = abs(((face.aspect - wind.direction + 540) % 360) - 180)
+        ridge = (
+            wind.kmh >= RIDGE_WIND
+            and face.slope >= RIDGE_SLOPE
+            and offset <= RIDGE_TOLERANCE
+            and clearance <= RIDGE_CLEARANCE
+        )
+        found[number] = Source(
+            climb=number,
+            at=at,
+            label="ridge" if ridge else "thermal",
+            confident=True,
+            clearance=round(clearance),
+            offset=round(offset),
+        )
+    return found
+
+
 @dataclass
 class WindwardFaces:
     """How many climbs started over ground facing into the measured wind."""

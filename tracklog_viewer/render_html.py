@@ -522,6 +522,10 @@ tr.is-tow td:first-child { color: var(--tow); }
   border: 1px solid currentColor;
 }
 .tag-tow { color: var(--tow); }
+/* What held a climb up. Ridge is the one that had to be argued for, so it is the one
+   that gets a colour; thermal is the ordinary case and stays quiet. */
+.tag-ridge { color: var(--climb-3); }
+.tag-thermal { color: var(--ink-3); }
 .tag-thermal { color: var(--climb); }
 .tag-glide { color: var(--sink); }
 .bar-cell { display: flex; align-items: center; gap: 7px; justify-content: flex-end; }
@@ -1358,16 +1362,37 @@ def _trigger_note(analysis: Analysis, terrain) -> str:
     if len(found) < 3:
         return ""
 
-    faces = {}
-    for trigger in found:
-        faces[trigger.face.cardinal] = faces.get(trigger.face.cardinal, 0) + 1
-    common = sorted(faces.items(), key=lambda pair: -pair[1])[:2]
+    # Counting aspects over the whole flight was the shallow version of this: "3 began
+    # over ESE-facing slopes and 2 over E-facing" is a tally, and a tally of a quantity
+    # that is *supposed* to change through the day tells the reader nothing. The sun moves,
+    # so the question is whether the climbs moved with it — morning on the eastern faces,
+    # afternoon on the western ones — which needs the flight split in time before the
+    # aspects are averaged.
     lit = sum(1 for t in found if t.face.relative > 1.05)
     note = (
-        f" Of {len(found)} climbs that started over sloping ground, "
-        + " and ".join(f"{count} began over {name}-facing slopes" for name, count in common)
-        + f"; {lit} over ground catching more sun than the slopes around it."
+        f" Of {len(found)} climbs that started over sloping ground, {lit} began over "
+        f"ground catching more sun than the slopes around it."
     )
+
+    half = len(found) // 2
+    if half >= 2:
+        early, late = found[:half], found[-half:]
+        first = _mean_aspect([t.face.aspect for t in early])
+        second = _mean_aspect([t.face.aspect for t in late])
+        swing = ((second - first + 540) % 360) - 180
+        if abs(swing) >= 30:
+            note += (
+                f" The faces swung {'clockwise' if swing > 0 else 'anticlockwise'} through"
+                f" the day, from {geo.cardinal(first)}-facing early on"
+                f" ({early[0].at}&ndash;{early[-1].at}) to {geo.cardinal(second)}-facing"
+                f" later ({late[0].at}&ndash;{late[-1].at})"
+                f"{', which is the sun going round' if swing > 0 else ''}."
+            )
+        else:
+            note += (
+                f" They stayed on {geo.cardinal(first)}-facing ground from"
+                f" {early[0].at} to {late[-1].at} rather than following the sun round."
+            )
 
     breeze = insolation.windward(analysis, terrain)
     if breeze is not None and breeze.total:
@@ -1376,6 +1401,14 @@ def _trigger_note(analysis: Analysis, terrain) -> str:
             f" wind, which is where ridge lift would be."
         )
     return note
+
+
+def _mean_aspect(aspects: list[float]) -> float:
+    """Mean compass bearing. Averaging 350 and 10 arithmetically gives 180, due south."""
+    radians = [math.radians(a) for a in aspects]
+    east = sum(math.sin(r) for r in radians)
+    north = sum(math.cos(r) for r in radians)
+    return math.degrees(math.atan2(east, north)) % 360.0
 
 
 def _ceiling_tile(analysis: Analysis, meteo, peak_time: str, offset: float) -> tuple:
@@ -1396,7 +1429,8 @@ def _ceiling_tile(analysis: Analysis, meteo, peak_time: str, offset: float) -> t
             f"{use.source.replace('_', ' ')}".replace(",", " "))
 
 
-def _thermal_rows(analysis: Analysis, sample: list[int] | None = None) -> str:
+def _thermal_rows(analysis: Analysis, sample: list[int] | None = None,
+                  sources: dict | None = None) -> str:
     rows = []
     number = 0
     best_climb = max((s.average_climb for s in analysis.thermals), default=1.0)
@@ -1408,6 +1442,18 @@ def _thermal_rows(analysis: Analysis, sample: list[int] | None = None) -> str:
         else:
             number += 1
             label, tag = str(number), ""
+        # What appears to have been holding the climb up. A tow is a tow and never asks.
+        # An unconfident classification prints nothing rather than the fallback label —
+        # "thermal" because there was no terrain to check is not the same claim as
+        # "thermal" because the ground under it was flat and out of the wind.
+        source = sources.get(number) if sources and segment.phase is Phase.THERMAL else None
+        source_html = (
+            f'<span class="tag tag-{source.label}" title="'
+            f'{source.clearance:.0f} m above the ground, face {source.offset:.0f}° off the '
+            f'wind">{source.label}</span>'
+            if source is not None and source.confident
+            else "<span class='dir'>—</span>"
+        )
         width = 46 * max(segment.average_climb, 0) / max(best_climb, 0.1)
         wind = (
             f"{segment.wind.kmh:.0f} <span class='dir'>{segment.wind.cardinal}</span>"
@@ -1445,6 +1491,7 @@ def _thermal_rows(analysis: Analysis, sample: list[int] | None = None) -> str:
             f'<td><span class="bar-cell">{segment.average_climb:+.2f}'
             f'<span class="bar" style="width:{width:.0f}px"></span></span></td>'
             f"<td>{efficiency}</td>"
+            f"<td>{source_html}</td>"
             # Six columns of circling mechanics: a whole sub-story, and a specialist one.
             # Kept, because a finding cites radius as its receipt, but folded away.
             f'<td class="circling-detail">{turns}</td>'
@@ -2132,6 +2179,7 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
         flight_plan=flight_plan,
     )
     verdict_strip = _verdict_strip(debrief_result, analysis, archive, peers)
+    climb_sources = insolation.sources(analysis, terrain)
     debrief_section = _debrief_cards(
         debrief_result, uid, sample,
         context=f"{_clearance_note(clearance)} {_trigger_note(analysis, terrain)}",
@@ -2269,7 +2317,11 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
          closest single number to &ldquo;did you stay in the core&rdquo;. <strong>Rev</strong>
          counts reversals: the times the turn changed direction mid-climb, so a thermal
          circled one way throughout reads zero. With <strong>radius</strong> it says how
-         tidily the climb was flown.{" This track is sampled every " + f"{summary.sample_interval:.0f}" + " s, which is too coarse to resolve a circle, so the turn columns are blank." if coarse else ""}</p>
+         tidily the climb was flown. <strong>Lift</strong> reads
+         <em>ridge</em> only when three things agree — a steep face, the wind running into
+         it, and you within {insolation.RIDGE_CLEARANCE:.0f}&nbsp;m of the slope — and
+         <em>thermal</em> otherwise; a dash means there was nothing to check it
+         against.{" This track is sampled every " + f"{summary.sample_interval:.0f}" + " s, which is too coarse to resolve a circle, so the turn columns are blank." if coarse else ""}</p>
     </div>
     <div class="toggle toggle-small" role="group" aria-label="Circling detail columns">
       <button type="button" class="toggle-button" data-detail="circling" aria-pressed="false">
@@ -2280,14 +2332,14 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
         <table class="table-climbs">
           <thead><tr>
             <th>#</th><th>start</th><th>time</th><th>gain m</th><th>top m</th>
-            <th>avg m/s</th><th>eff</th>
+            <th>avg m/s</th><th>eff</th><th>lift</th>
             <th class="circling-detail">turns</th><th class="circling-detail">m/turn</th>
             <th class="circling-detail">dir</th><th class="circling-detail">rev</th>
             <th class="circling-detail">s/turn</th>
             <th class="circling-detail">radius m</th>
             <th>over time &rarr;</th>
           </tr></thead>
-          <tbody>{_thermal_rows(analysis, sample)}</tbody>
+          <tbody>{_thermal_rows(analysis, sample, climb_sources)}</tbody>
         </table>
       </div>
     </div>

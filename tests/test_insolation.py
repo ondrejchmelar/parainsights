@@ -10,7 +10,7 @@ the module, and it is checkable without a real DEM.
 import numpy as np
 import pytest
 
-from tracklog_viewer import insolation, sun
+from tracklog_viewer import geo, insolation, sun
 from tracklog_viewer.terrain import Terrain
 
 
@@ -120,3 +120,95 @@ class TestTriggersAndWind:
     def test_a_point_outside_the_grid_is_refused(self):
         overhead = sun.Position(azimuth=180.0, elevation=60.0)
         assert insolation.face_at(ramp("west"), overhead, 40.0, 14.02) is None
+
+
+class TestWhatHeldTheClimbUp:
+    """Ridge against thermal, on a slope whose aspect is known by construction.
+
+    The classifier needs three things to agree before it says ridge, so each test moves
+    exactly one of them and checks the label follows. Nothing here checks *convergence* —
+    it is deliberately not a label, because one tracklog cannot separate it from a ridge
+    climb holding station or a badly sounded wind.
+    """
+
+    def _analysis(self, tmp_path, *, alt0, wind_from, wind_kmh, name="c.igc"):
+        from tests.test_analysis import build, circling
+        from tracklog_viewer import igc
+        from tracklog_viewer.analysis import Wind, analyse
+
+        # Centred in the ramp, so the face under the climb is the one `ramp` built.
+        analysis = analyse(igc.parse(build(
+            tmp_path / name, circling(400, climb=1.5, alt0=alt0))))
+        analysis.wind = Wind(speed=wind_kmh / 3.6, direction=wind_from,
+                             cardinal=geo.cardinal(wind_from), confidence=1.0)
+        # `circling` is built around the origin of the test projection; put the climb in
+        # the middle of the ramp so `face_at` and `terrain.at` both have ground under it.
+        for segment in analysis.thermals:
+            segment.centre = (49.025, 14.025)
+        return analysis
+
+    def _label(self, analysis, terrain):
+        found = insolation.sources(analysis, terrain)
+        assert found, "no climbs were classified"
+        return found[1]
+
+    def test_a_windward_face_worked_close_in_is_ridge(self, tmp_path):
+        """A west-facing slope with the wind out of the west, worked just above it."""
+        hill = ramp("west")
+        ground = float(hill.at(49.025, 14.025))
+        analysis = self._analysis(tmp_path, alt0=ground + 80, wind_from=270.0,
+                                  wind_kmh=25.0)
+
+        source = self._label(analysis, hill)
+        assert source.label == "ridge", source
+        assert source.confident is True
+        assert source.clearance == pytest.approx(80, abs=30)
+        assert source.offset < insolation.RIDGE_TOLERANCE
+
+    def test_the_same_face_worked_high_above_it_is_a_thermal(self, tmp_path):
+        """Ridge lift does not reach; height above the slope is what tells them apart."""
+        hill = ramp("west")
+        ground = float(hill.at(49.025, 14.025))
+        analysis = self._analysis(tmp_path, alt0=ground + 1200, wind_from=270.0,
+                                  wind_kmh=25.0, name="high.igc")
+
+        source = self._label(analysis, hill)
+        assert source.label == "thermal", source
+        assert source.clearance > insolation.RIDGE_CLEARANCE
+
+    def test_a_lee_face_is_never_ridge_however_close(self, tmp_path):
+        """The wind has to run *into* the slope. Behind it is the one place it does not."""
+        hill = ramp("west")           # faces west
+        ground = float(hill.at(49.025, 14.025))
+        analysis = self._analysis(tmp_path, alt0=ground + 80, wind_from=90.0,
+                                  wind_kmh=25.0, name="lee.igc")
+
+        source = self._label(analysis, hill)
+        assert source.label == "thermal", source
+        assert source.offset > insolation.RIDGE_TOLERANCE
+
+    def test_a_calm_day_has_no_ridge_lift(self, tmp_path):
+        hill = ramp("west")
+        ground = float(hill.at(49.025, 14.025))
+        analysis = self._analysis(tmp_path, alt0=ground + 80, wind_from=270.0,
+                                  wind_kmh=3.0, name="calm.igc")
+
+        assert self._label(analysis, hill).label == "thermal"
+
+    def test_without_terrain_the_label_is_offered_but_not_claimed(self, tmp_path):
+        """"Thermal because there was nothing to check" is not the same claim as
+        "thermal because the ground was flat and out of the wind", and the report shows
+        a dash rather than the fallback."""
+        analysis = self._analysis(tmp_path, alt0=1000, wind_from=270.0, wind_kmh=25.0,
+                                  name="noterrain.igc")
+
+        source = self._label(analysis, None)
+        assert source.label == "thermal"
+        assert source.confident is False
+
+    def test_without_a_wind_nothing_is_claimed_either(self, tmp_path):
+        analysis = self._analysis(tmp_path, alt0=1000, wind_from=270.0, wind_kmh=25.0,
+                                  name="nowind.igc")
+        analysis.wind = None
+
+        assert self._label(analysis, ramp("west")).confident is False
