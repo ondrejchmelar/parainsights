@@ -364,3 +364,54 @@ class TestThermalStartsWhenTurningDoes:
         for thermal in analysis.thermals:
             assert thermal.wind is None or thermal.wind.kmh < 5.0, (
                 "the glide between the climbs was measured as wind")
+
+
+class TestOtherDecomposition:
+    """The unclassified slice, split three ways.
+
+    The plan's first correction: `other` is not a loss. On the reference flight it nets
+    +385 m, because `classify` deliberately pushes the straight run-in to a climb and
+    everything outside the sustained circling into exactly this bucket.
+    """
+
+    def test_the_parts_reconstruct_the_slice(self, tmp_path):
+        """The identity the whole decomposition rests on, asserted rather than assumed.
+
+        Charging *gaps between fixes* rather than fixes is what makes this exact; a
+        sample-counting version double-counts every phase boundary.
+        """
+        points = circling(160, climb=2.0, alt0=1000.0)
+        points += straight(150, speed=12.0, climb=1.2, t0=161,
+                           alt0=points[-1][3], heading=90.0)
+        points += straight(200, speed=12.0, climb=-1.2, t0=312,
+                           alt0=points[-1][3], heading=90.0)
+        analysis = analyse(igc.parse(build(tmp_path / "recon.igc", points)))
+        other = analysis.other
+
+        assert other.straight_sink + other.scratching + other.rising == other.seconds
+        assert other.seconds == analysis.budget.other
+        assert analysis.budget.total == analysis.summary.duration
+
+    def test_a_straight_climb_lands_in_rising_not_in_loss(self, tmp_path):
+        """The correction itself.
+
+        A straight run through lift is refused as a thermal — that rule is what keeps the
+        wind estimate honest — so it lands here. Publishing this slice as "time lost"
+        would be the first confidently wrong sentence in the report: this one gains height.
+        """
+        points = straight(240, speed=12.0, climb=1.0, alt0=1000.0, heading=90.0)
+        analysis = analyse(igc.parse(build(tmp_path / "rising.igc", points)))
+        other = analysis.other
+
+        assert other.rising > other.straight_sink + other.scratching
+        assert other.net_altitude > 0, "a climbing slice was reported as a loss"
+        assert other.mean_climb > 0
+        assert other.fractions()["rising"] > 0.8
+
+    def test_a_straight_glide_is_charged_to_straight_sink(self, tmp_path):
+        """Short enough that no GLIDE phase claims it, so it falls to the slice."""
+        points = straight(90, speed=12.0, climb=-1.5, alt0=2000.0, heading=90.0)
+        other = analyse(igc.parse(build(tmp_path / "sink.igc", points))).other
+
+        assert other.straight_sink > other.rising
+        assert other.net_altitude < 0

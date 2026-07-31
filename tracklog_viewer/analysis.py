@@ -165,6 +165,39 @@ class TimeBudget:
 
 
 @dataclass
+class OtherSlice:
+    """The time no phase claimed, decomposed into three stories.
+
+    This slice is the one the report never explained, and the tempting sentence — "you
+    lost 40 minutes here" — is wrong. On the reference flight it *nets +385 m* and its
+    mean climb is +0.16 m/s. It is largely the thermal rule working as designed:
+    `classify` trims the straight run-in to a climb and everything outside the sustained
+    circling, so rising straight flight lands here by construction.
+
+    So it is published as three parts with three different meanings — straight sink is
+    the price of the glide, scratching is the price of being low, and rising-uncounted is
+    the ridge and street flying the phase model has no name for — and never as one loss.
+
+    The parts partition the slice exactly; see `_decompose_other`.
+    """
+
+    seconds: int
+    straight_sink: int  # going somewhere and paying for it
+    scratching: int  # turning and not climbing: low, working
+    rising: int  # climbing, and no phase counted it
+    net_altitude: float  # metres over the whole slice
+    mean_climb: float  # m/s over the whole slice
+
+    def fractions(self) -> dict[str, float]:
+        total = self.seconds or 1
+        return {
+            "straight_sink": self.straight_sink / total,
+            "scratching": self.scratching / total,
+            "rising": self.rising / total,
+        }
+
+
+@dataclass
 class Analysis:
     flight: Flight
     series: Series
@@ -172,6 +205,7 @@ class Analysis:
     segments: list[Segment]
     budget: TimeBudget
     wind: Wind | None
+    other: OtherSlice | None = None
     climb_histogram: dict[str, list[float]] = field(default_factory=dict)
 
     @property
@@ -195,6 +229,11 @@ class Analysis:
         return {
             "summary": asdict(self.summary),
             "budget": {**asdict(self.budget), "fractions": self.budget.fractions()},
+            "other": (
+                {**asdict(self.other), "fractions": self.other.fractions()}
+                if self.other
+                else None
+            ),
             "wind": asdict(self.wind) if self.wind else None,
             "climb_histogram": self.climb_histogram,
             "segments": [
@@ -636,6 +675,46 @@ def _summary(flight: Flight, series: Series) -> Summary:
     )
 
 
+def _decompose_other(series: Series, segments: list[Segment]) -> OtherSlice:
+    """Split the unclassified time three ways, exactly.
+
+    This works on the *gaps between* fixes rather than on the fixes themselves, and that
+    is what makes the arithmetic exact rather than approximately right. A segment's
+    duration is ``t[stop - 1] - t[start]``, which is precisely the sum of the gaps
+    ``[start, stop - 1)``; charging every remaining gap to exactly one bucket therefore
+    reconstructs ``TimeBudget.other`` to the second. Counting *samples* instead would
+    double-count every segment boundary and drift by a second per phase.
+
+    Each free gap is classified by the state at the fix that opens it, using the same
+    `GLIDE_PROGRESS` that `classify` uses — so "straight" means the same thing here as it
+    does everywhere else in this module.
+    """
+    steps = np.diff(series.t)
+    if not steps.size:
+        return OtherSlice(0, 0, 0, 0, 0.0, 0.0)
+
+    covered = np.zeros(len(steps), dtype=bool)
+    for segment in segments:
+        covered[segment.start : max(segment.stop - 1, segment.start)] = True
+    free = ~covered
+
+    climb, progress = series.climb[:-1], series.progress[:-1]
+    up = free & (climb > 0.0)
+    straight = free & ~up & (progress >= GLIDE_PROGRESS)
+    scratch = free & ~up & (progress < GLIDE_PROGRESS)
+
+    seconds = float(steps[free].sum())
+    net = float(np.diff(series.alt)[free].sum())
+    return OtherSlice(
+        seconds=int(round(seconds)),
+        straight_sink=int(round(float(steps[straight].sum()))),
+        scratching=int(round(float(steps[scratch].sum()))),
+        rising=int(round(float(steps[up].sum()))),
+        net_altitude=round(net),
+        mean_climb=round(net / seconds, 2) if seconds else 0.0,
+    )
+
+
 def _climb_histogram(series: Series, phases: np.ndarray) -> dict[str, list[float]]:
     """Distribution of climb rate while thermalling, in 0.5 m/s buckets."""
     thermalling = phases == Phase.THERMAL.value
@@ -738,5 +817,6 @@ def analyse(flight: Flight, *, window: float | None = None) -> Analysis:
         segments=segments,
         budget=budget,
         wind=overall,
+        other=_decompose_other(series, segments),
         climb_histogram=_climb_histogram(series, phases),
     )
