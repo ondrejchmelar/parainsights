@@ -11,6 +11,7 @@ from . import (
     basemap as basemap_module,
     kml,
     meteo as meteo_module,
+    plan as plan_module,
     render_html,
     render_kmz,
     render_map,
@@ -78,6 +79,14 @@ def main(argv: list[str] | None = None) -> int:
         help="fetch DEM tiles and embed a 3D terrain view in the report (uses the network)",
     )
     parser.add_argument(
+        "--plan", type=Path, metavar="FILE", dest="plan_file",
+        help="a flight plan as JSON: turnpoints, a goal distance, planned times. "
+             "Auto-discovered as FLIGHT.plan.json beside the tracklog, or from the "
+             "remembered plans directory, and read from the tracklog's own C task "
+             "records when it has them. A plan without a made_at timestamp is treated "
+             "as reconstructed intent and its findings are downgraded.",
+    )
+    parser.add_argument(
         "--archive", type=Path, metavar="DIR",
         help="a directory of per-flight summaries (a few KB of JSON each, no track data). "
              "Every flight analysed is added to it, and the report places this one against "
@@ -124,6 +133,7 @@ def main(argv: list[str] | None = None) -> int:
                 terrain=reports[0]["terrain"], basemaps=reports[0]["basemaps"],
                 fetch_tiles=reports[0]["fetch_tiles"], kmz=reports[0]["kmz"],
                 archive=held if args.archive else None,
+                flight_plan=reports[0]["plan"],
             )
         else:
             render_html.write_multi(reports, args.html, archive=held if args.archive else None)
@@ -308,6 +318,9 @@ def _one(source: str, args, index: int = 0) -> dict:
         "analysis": analysis,
         "meteo": weather,
         "route": route,
+        # Resolved here rather than in main(), because a plan is discovered relative to
+        # the tracklog's own path and only this function knows it.
+        "plan": plan_module.for_flight(analysis, source, explicit=args.plan_file),
         "payload": payload,
         "terrain": ground,
         "basemaps": tiles if args.terrain and not args.no_basemap else None,

@@ -488,6 +488,97 @@ def _detour(analysis: Analysis, route) -> Finding | None:
     )
 
 
+def _plan_departure(analysis: Analysis, flight_plan) -> Finding | None:
+    """The decision point: where the flight left the line the pilot drew.
+
+    This is the finding the whole plan feature exists for, and it is the clearest example
+    of what a plan buys: with no plan, "the flight turned early" is advice from a blind
+    coach. With one, it is two measurements and a link.
+    """
+    from . import plan as plan_module
+
+    followed = plan_module.adherence(analysis, flight_plan)
+    if followed is None or followed.departed_index is None:
+        return None
+
+    series = analysis.series
+    height = float(series.alt[followed.departed_index])
+    remaining = (
+        f" — {followed.departed_distance / 1000:.0f} km short of the planned goal"
+        if followed.departed_distance
+        else ""
+    )
+    caveat = (
+        " This plan carries no timestamp, so it is recorded as reconstructed intent."
+        if followed.reconstructed
+        else ""
+    )
+    return Finding(
+        id="plan-departure",
+        title=(
+            f"The track left the planned line at {followed.departed_at}"
+            f"{remaining}"
+        ),
+        sentence=(
+            f"The first sustained departure beyond "
+            f"{plan_module.DEPARTURE_METRES / 1000:.0f} km from the plan was at "
+            f"{followed.departed_at}, from {_num(height)} m. Median distance from the "
+            f"planned line over the flight was {_num(followed.median_off)} m.{caveat}"
+        ),
+        # The cost is the distance the plan still had to run when the track left it. That
+        # is a measurement of the plan, not a claim that the distance was achievable.
+        cost=_metres(followed.departed_distance or followed.max_off, analysis),
+        at=followed.departed_at,
+        cursor=followed.departed_index,
+        confidence=0.6 if followed.reconstructed else 1.0,
+        evidence={
+            "median_off": followed.median_off,
+            "max_off": followed.max_off,
+            "reconstructed": followed.reconstructed,
+        },
+    )
+
+
+def _plan_turnpoints(analysis: Analysis, flight_plan) -> Finding | None:
+    """Turnpoint accounting against the declared task."""
+    from . import plan as plan_module
+
+    marks = plan_module.turnpoints(analysis, flight_plan)
+    if marks is None or marks.reached >= marks.total:
+        return None
+    missed = marks.total - marks.reached
+
+    return Finding(
+        id="plan-turnpoints",
+        title=f"{marks.reached} of {marks.total} planned turnpoints were reached",
+        sentence=(
+            f"The first not reached was {charts_escape(marks.first_missed)}."
+            if marks.first_missed
+            else f"{missed} planned turnpoints were not reached."
+        ),
+        # One turnpoint short of a task is a different flight from five short, and the
+        # honest scale here is the share of the task that went unflown.
+        cost=Cost(missed, "m", min(missed / max(marks.total, 1), 1.0)),
+        confidence=0.6 if marks.reconstructed else 1.0,
+        evidence={"reached": marks.reached, "total": marks.total,
+                  "first_missed": marks.first_missed},
+    )
+
+
+def charts_escape(value):
+    """Local escape so this module keeps its "no renderer" rule.
+
+    `debrief.py` must not import a renderer, and a turnpoint name comes from a file the
+    tool did not write. Escaping here keeps the sentence safe wherever it is rendered.
+    """
+    return (
+        str(value)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+
 # ---------------------------------------------------------------------------
 # The verdict strip
 # ---------------------------------------------------------------------------
@@ -566,6 +657,7 @@ def build(
     route=None,
     weather=None,
     clearance=None,
+    flight_plan=None,
     limit: int | None = None,
 ) -> Debrief:
     """Rank the findings this flight's data supports.
@@ -585,6 +677,10 @@ def build(
         ("other-slice", lambda: _other_slice(analysis)),
         ("near-close", lambda: _close_that_wasnt(analysis, route)),
         ("detour", lambda: _detour(analysis, route)),
+        # Plan findings fire only when there is a plan, which is the whole point: no
+        # plan means today's debrief, unchanged.
+        ("plan-departure", lambda: _plan_departure(analysis, flight_plan)),
+        ("plan-turnpoints", lambda: _plan_turnpoints(analysis, flight_plan)),
     ]
 
     found: list[Finding] = []
@@ -605,6 +701,8 @@ def build(
         suppressed.append("route")
     if analysis.thermals and any(s.turns is None for s in analysis.thermals):
         suppressed.append("sampling")
+    if flight_plan is None:
+        suppressed.append("plan")
 
     return Debrief(
         verdict=_verdict(analysis, route, weather),

@@ -1551,7 +1551,8 @@ def _debrief_cards(result, uid: str, sample: list[int]) -> str:
 def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
                  basemaps=None, fetch_tiles: bool = True,
                  kmz: bytes | None = None, uid: str = "f0",
-                 hidden: bool = False, archive=None, peers=None) -> str:
+                 hidden: bool = False, archive=None, peers=None,
+                 flight_plan=None) -> str:
     """One flight's sections, from masthead to footer.
 
     ``meteo`` and ``route`` are optional: the report degrades to the flight's own
@@ -1720,7 +1721,8 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
     # network at view time. `clearance` is None without `--terrain`, `meteo` is None
     # without `--meteo`, and the findings that rest on them simply do not exist.
     debrief_result = debrief.build(
-        analysis, route=route, weather=meteo, clearance=clearance
+        analysis, route=route, weather=meteo, clearance=clearance,
+        flight_plan=flight_plan,
     )
     verdict_strip = _verdict_strip(debrief_result, analysis, archive, peers)
     debrief_section = _debrief_cards(debrief_result, uid, sample)
@@ -1993,7 +1995,7 @@ ADD_TAB = (
 
 def render(analysis: Analysis, *, meteo=None, route=None, terrain=None,
            basemaps=None, fetch_tiles: bool = True, kmz: bytes | None = None,
-           archive=None) -> str:
+           archive=None, flight_plan=None) -> str:
     """A report for a single flight, with the own-track picker alongside it."""
     summary = analysis.summary
     title = f"{summary.date} · {summary.site or 'flight'} — flight review"
@@ -2017,7 +2019,7 @@ def render(analysis: Analysis, *, meteo=None, route=None, terrain=None,
             _flight_body(
                 analysis, meteo=meteo, route=route, terrain=terrain,
                 basemaps=basemaps, fetch_tiles=fetch_tiles, kmz=kmz, uid="f0",
-                archive=archive,
+                archive=archive, flight_plan=flight_plan,
             )
         ],
         tabs,
@@ -2047,6 +2049,7 @@ def render_multi(reports: list[dict], *, archive=None) -> str:
                 kmz=report.get("kmz"),
                 uid=uid,
                 archive=archive,
+                flight_plan=report.get("plan"),
                 # Every other flight in this document, so each one can say where it
                 # stands among them. The document held three flights and never once put
                 # them side by side.
@@ -2095,12 +2098,12 @@ def render_multi(reports: list[dict], *, archive=None) -> str:
 
 def write(analysis: Analysis, path, *, meteo=None, route=None, terrain=None,
           basemaps=None, fetch_tiles: bool = True, kmz: bytes | None = None,
-          archive=None) -> Path:
+          archive=None, flight_plan=None) -> Path:
     path = Path(path)
     path.write_text(
         render(analysis, meteo=meteo, route=route, terrain=terrain, basemaps=basemaps,
                fetch_tiles=fetch_tiles,
-               kmz=kmz, archive=archive),
+               kmz=kmz, archive=archive, flight_plan=flight_plan),
         encoding="utf-8",
     )
     return path
