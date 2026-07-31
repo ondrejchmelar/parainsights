@@ -107,7 +107,7 @@ geometry in a renderer, no rendering in the analysis.
 | `metrics.py` | Tier-1 measurements over an `Analysis`: climb selection, working band, centring, gaps, concentration, day envelope, detour, lowest save |
 | `debrief.py` | `Finding`, the ranking pass, and the one `THRESHOLDS` dict |
 | `airmass.py` | Wind field from the per-thermal soundings; corrected glides, circle wander, the empirical polar |
-| `insolation.py` | Slope, aspect and sun incidence from the DEM and `sun.py` |
+| `insolation.py` | Slope, aspect and sun incidence from the DEM and `sun.py`; ridge-or-thermal per climb |
 | `baseline.py` | The pilot's archive: summary JSON per flight, percentiles behind `--archive` |
 | `plan.py` | The declared task or a sidecar plan, and what the flight did against it |
 | `xc.py` | Free distance through ≤3 turnpoints (own dynamic program) |
@@ -346,8 +346,12 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   which is the question itself: was that face still in the sun when I got there. A slider
   was the first attempt and was the wrong instrument twice over — it offered hours the
   flight never saw, and it made the reader hunt for a moment the charts were already
-  pointing at. The cursor track carries a UTC minute per sample for it; leaving the chart
-  returns the light to mid-flight. A table rather than a JavaScript port on purpose:
+  pointing at. The cursor track carries a UTC minute per sample for it; **leaving the
+  chart holds the light where it was** rather than snapping back to mid-flight, which was
+  a full re-light and a colour swing across the whole terrain triggered by the pointer
+  merely leaving on its way somewhere else — and it undid the comparison the reader had
+  just set up. Mid-flight is still where an untouched panel starts. A table rather than a
+  JavaScript port on purpose:
   `quicklook.py` already duplicates thresholds that can drift, and 144 pairs of numbers
   cannot. The azimuth is **unwrapped** in the table, or interpolating across 360 sweeps
   the light the long way round the compass. Re-lighting re-measures the lit range,
@@ -404,6 +408,45 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   own the document it lands in. `tests/test_view3d_fullscreen.py` runs the maximise
   probe in **both** modes for that reason; against the old code the quirks case reports
   a 3 021 px canvas in an 813 px panel.
+- **The keyboard follows the map; the pointer follows the hand.** Bare arrows pan and
+  shift + arrows rotate and tilt, matching the pointer, where it used to be the other way
+  round — so holding shift turned a pan into a rotate on the mouse and a rotate into a pan
+  on the keyboard, on the same panel. And `rotate-left` swings the ground *anticlockwise*,
+  which is `view.yaw` **increasing** and the opposite sign to the orbit drag beside it.
+  That looks like a bug in the source and is not: a drag is direct manipulation of a
+  grabbed point, so pushing left spins the world clockwise, exactly as the twist gesture
+  is deliberately opposite to the drag. A key grabs nothing, so it follows the map. Both
+  are pinned by `tests/test_view3d_gestures.py`, which dispatches real `KeyboardEvent`s
+  and measures where the ground ended up — reading the sign off the source is what got it
+  wrong in the first place. Note that a shifted arrow moves `panX`/`panY` too, and that is
+  not a pan: a turn anchors through `holdGround` so the ground under the middle of the
+  view stays there, exactly as the orbit drag does.
+- **A click pins the linked cursor; hover is only a preview.** Hover is the right default
+  — sweep a chart and the map keeps up — but on its own it takes the marker away at the
+  moment the reader wants it, when they have found something and are turning to look at
+  the 3D view or the table. So a click pins: hovering still previews, leaving a chart
+  returns to the pinned point rather than clearing, and the pin lets go on a second click,
+  on Escape, or after 30 s with no interaction, re-armed by any hover so it expires after
+  the reader stops rather than while they are still reading. "Show me" pins too, for the
+  same reason and worse — it is a deliberate act that any stray mouse movement undid. The
+  climbs and glides tables are the third way in: rows carry `data-cursor`, a *sample*
+  position mapped from the segment's fix index by `_sample_position`, the same mapping a
+  finding's cursor uses. Pinning also calls `handle.revealCursor`, which pans the 3D view
+  until the marker is inside a comfortable inset — pan only, because this projection has
+  no behind-the-camera case and turning the view unasked throws away the orientation the
+  reader had just built. It needs a pixel of slack: `panX += (padX - p)` does not land `p`
+  back on `padX` exactly, and a strict comparison asks for another correction every call.
+- **No finding may assert something the run did not check.** Three sentences broke this
+  and are gone: a per-flight claim that igc2kmz had been run on *this* file and found the
+  same climbs (printed for every flight, checked for none); a cap sentence quoting the
+  reference flight's "above ~2 080 m the profile only cools 4 K/km" at every reader, now
+  measured per day by `_cap_note`; and the underground low-point card, where a negative
+  clearance is the DEM losing an argument with the GPS. That last one is the general rule:
+  a card that has to explain why its own headline number is wrong is worse than no card,
+  because the framing lands and the disclaimer does not. `insolation.sources` carries the
+  same rule as a flag — `confident` is false where the label is a fallback rather than a
+  finding, and the table prints a dash, since "thermal because there was nothing to check"
+  is not the claim "thermal because the ground was flat and out of the wind".
 - **Twist rotates the map, the orbit drag rotates the camera, and the two are opposite
   on purpose.** A twist is direct manipulation — the ground follows the fingers, so
   `view.yaw -= angleDelta(...)`. The minus is the whole point and it looks wrong: the
@@ -567,6 +610,23 @@ Still wanted:
   parses.
 - **Calibrate `THRESHOLDS` against a real archive.** See the known gap below — this is the
   one piece of both plans that could not be finished here.
+- **The glider's EN class**, beside the glider name. There is no offline source: an IGC
+  header carries `HFGTY` as free text ("OZONE Zeolite 2") and nothing about certification,
+  and the certification databases that would answer it — DHV's, para-test's — publish no
+  API and were unreachable from the sandbox, so a table could be neither built nor
+  checked. Writing one from memory would put unverifiable certification claims in front of
+  pilots, which is the one kind of error this report must not make. Wants a session with a
+  network: fetch a list once, commit it as data with its provenance and fetch date, and
+  match on the normalised glider string with an explicit "unknown" rather than a guess.
+- **Convergence as a third climb class.** `insolation.sources` labels ridge and thermal
+  and deliberately stops there; see its docstring for why one tracklog cannot support the
+  third.
+- **The model wind profile behind the sounded wind, for a page built without `--meteo`.**
+  The chart draws it when `meteo` is present and the caption now says why it is missing
+  otherwise, but the in-page `__fetchMeteo` that fills "The air that day" at view time
+  does not feed the wind chart. Doing so means `charts.wind_profile` publishing its axis
+  mapping so the page can plot into the SVG it did not draw. The real fix for the bundled
+  flights is simply to rebuild with `--meteo` from a machine that can reach Open-Meteo.
 
 ## Known gaps
 
@@ -586,6 +646,14 @@ Still wanted:
   basemap spinner, but **it was built without `--meteo`**, because Open-Meteo is blocked
   from the environment it was built in; the page now fetches the sounding at view time
   instead, so the section is there, but a local rebuild with `--meteo` is still better.
+  It also owes the third flight its `--label`: the logger recorded no pilot, site or
+  glider, so the masthead is bare where the other two are not. The rebuild is
+  ```bash
+  uv run python -m tracklog_viewer.cli A.igc B.igc PK-Hunza.igc --terrain --meteo --online \
+    --label '' --label '' --label 'Antoine Girard|PK Hunza|OZONE Zeolite 2' \
+    --html public/index.html
+  ```
+  — one `--label` per flight, in order, empty where the file already says it.
 - FAI/flat triangle scoring with multipliers is not implemented; `xc.py` does free
   distance only.
 - Historical weather is surface-only: the ERA5 archive returns nulls on every pressure

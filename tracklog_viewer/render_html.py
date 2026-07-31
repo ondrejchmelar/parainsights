@@ -2295,7 +2295,9 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
       <p class="caption">One point per climb, numbered as in the table below and therefore in the
         order flown — the first and last carry their clock time, and hovering any point gives the
         rest. Height is where the climb was worked; the tail points downwind. Reading it bottom to
-        top: {_wind_shear_note(analysis)}</p>
+        top: {_wind_shear_note(analysis)}{
+        " The day's forecast profile would be drawn behind these as a check on them, but "
+        + _meteo_reason(analysis) + "." if meteo is None else ""}</p>
     </div>
     <div>
       <div class="section-head">
