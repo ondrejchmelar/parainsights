@@ -199,11 +199,11 @@ def _best_climb_left(analysis: Analysis) -> Finding | None:
 
     return Finding(
         id="best-climb-left",
-        title=f"Left the day's strongest climb {under:.0f} m under the day's best height",
+        title=f"You left the day's best climb {under:.0f} m below the height you later reached",
         sentence=(
-            f"Climb {index + 1} ran at {best.average_climb:+.2f} m/s and it was left at "
-            f"{_num(best.finish_altitude)} m, {under:.0f} m below the {_num(ceiling)} m "
-            f"reached later. The next climb took {gap / 60:.0f} min to find and averaged "
+            f"Climb {index + 1} was running at {best.average_climb:+.2f} m/s when you left "
+            f"it at {_num(best.finish_altitude)} m. Later in the flight you were at "
+            f"{_num(ceiling)} m. The next climb took {gap / 60:.0f} min to find and gave "
             f"{following.average_climb:+.2f} m/s."
         ),
         cost=_minutes(gap, analysis),
@@ -232,11 +232,11 @@ def _expensive_gap(analysis: Analysis) -> Finding | None:
 
     return Finding(
         id="expensive-gap",
-        title=f"{gaps.longest / 60:.0f} min between climbs, against a median of {gaps.median / 60:.0f}",
+        title=f"Your longest search for a climb ran {gaps.longest / 60:.0f} min",
         sentence=(
-            f"The longest stretch without a climb started at {gaps.longest_at} and ran "
-            f"{gaps.longest / 60:.0f} min, losing {_num(abs(gaps.longest_loss))} m. The "
-            f"day's median gap was {gaps.median / 60:.0f} min."
+            f"It began at {gaps.longest_at} and cost {_num(abs(gaps.longest_loss))} m of "
+            f"height before you found the next one. Most gaps that day were about "
+            f"{gaps.median / 60:.0f} min."
         ),
         cost=_minutes(gaps.longest - gaps.median, analysis),
         at=gaps.longest_at,
@@ -293,20 +293,20 @@ def _low_point(analysis: Analysis, clearance) -> Finding | None:
     when = analysis.flight.local_time(index).strftime("%H:%M:%S")
     if lowest < 0:
         below = int((agl[lo:hi] < 0).sum())
-        title = f"The track passes below the terrain model at {when}"
+        title = f"The elevation model puts you underground at {when}"
         sentence = (
-            f"Height above ground reads {lowest:.0f} m here, which means the DEM and the "
-            f"GPS disagree rather than that the glider was underground: {below} of "
-            f"{hi - lo} airborne fixes fall below the model. Over a flight this size the "
-            f"grid is about a kilometre per cell, and that averages a valley floor "
-            f"together with the ridges beside it."
+            f"It reads {lowest:.0f} m above ground there, which means the model disagrees "
+            f"with your GPS rather than that you were in a tunnel: {below} of {hi - lo} "
+            f"airborne fixes come out below it. Over a flight this size each grid cell is "
+            f"about a kilometre across, so a valley floor gets averaged in with the ridges "
+            f"beside it. The moment is real; the number is not."
         )
     else:
-        title = f"Lowest ground clearance in flight was {lowest:.0f} m"
+        title = f"You came within {lowest:.0f} m of the ground"
         sentence = (
-            f"At {when} the track passed {lowest:.0f} m above the terrain, against a "
-            f"median of {_num(median)} m for the flight. The launch and the landing are "
-            f"excluded, or both would win by being on the ground."
+            f"That was at {when}. For most of the flight you had about {_num(median)} m "
+            f"underneath you. Launch and landing are left out of this, or they would win "
+            f"every time."
         )
 
     return Finding(
@@ -336,12 +336,13 @@ def _climb_selection(analysis: Analysis) -> Finding | None:
     return Finding(
         id="climb-selection",
         title=(
-            f"{selection.weak_seconds / 60:.0f} min of circling was in the day's weaker climbs"
+            f"You spent {selection.weak_seconds / 60:.0f} of your "
+            f"{selection.total_seconds / 60:.0f} min circling in the day's weaker climbs"
         ),
         sentence=(
-            f"{selection.weak_seconds / 60:.0f} min of {selection.total_seconds / 60:.0f} min "
-            f"circling was spent in {selection.weak_climbs} climbs under "
-            f"{selection.threshold:+.2f} m/s, on a day that offered {selection.best:+.2f}."
+            f"{selection.weak_climbs} of your climbs averaged under "
+            f"{selection.threshold:+.2f} m/s, on a day whose best gave "
+            f"{selection.best:+.2f}."
         ),
         cost=_minutes(selection.weak_seconds, analysis),
         at=worst.start_time if worst else None,
@@ -365,12 +366,12 @@ def _centring(analysis: Analysis) -> Finding | None:
 
     return Finding(
         id="centring",
-        title=f"The first minute of a climb averaged {index.ratio:.0%} of the rest of it",
+        title=f"Your first minute in a climb was worth {index.ratio:.0%} of the rest of it",
         sentence=(
-            f"Over {index.climbs} climbs the first minute averaged {index.first:+.2f} m/s "
-            f"against {index.rest:+.2f} m/s for the remainder — about "
-            f"{index.cost_seconds / 60:.0f} min of extra circling at the rate those same "
-            f"climbs went on to give."
+            f"Across {index.climbs} climbs the opening minute averaged "
+            f"{index.first:+.2f} m/s against {index.rest:+.2f} once you had settled in. "
+            f"That is roughly {index.cost_seconds / 60:.0f} min of extra circling at the "
+            f"rate those same climbs went on to give."
         ),
         cost=_minutes(index.cost_seconds, analysis),
         evidence={
@@ -399,15 +400,15 @@ def _working_band(analysis: Analysis) -> Finding | None:
     return Finding(
         id="working-band",
         title=(
-            f"The top {_num(height)} m gave {band.climbs[2]:+.2f} m/s for "
-            f"{band.seconds[2] / 60:.0f} min of circling"
+            f"The lift was best "
+            f"{'down low' if band.best == 0 else 'in the middle of the band' if band.best == 1 else 'up high'}"
         ),
         sentence=(
-            f"Between {_num(band.edges[0])} m and {_num(band.edges[3])} m the climbs "
-            f"averaged {band.climbs[0]:+.2f}, {band.climbs[1]:+.2f} and "
-            f"{band.climbs[2]:+.2f} m/s by altitude third. The best band was the "
-            f"{'lowest' if band.best == 0 else 'middle' if band.best == 1 else 'top'} "
-            f"one."
+            f"Split into thirds between {_num(band.edges[0])} m and "
+            f"{_num(band.edges[3])} m, your climbs averaged {band.climbs[0]:+.2f}, "
+            f"{band.climbs[1]:+.2f} and {band.climbs[2]:+.2f} m/s. The top "
+            f"{_num(height)} m gave {band.climbs[2]:+.2f} for "
+            f"{band.seconds[2] / 60:.0f} min of circling."
         ),
         # The cost is the circling done in the weakest band, which is the time the shape
         # of this profile actually charged for.
@@ -425,11 +426,11 @@ def _ceiling_used(analysis: Analysis, weather) -> Finding | None:
 
     return Finding(
         id="ceiling-used",
-        title=f"Topped out at {use.fraction:.0%} of the modelled {use.source.replace('_', ' ')}",
+        title=f"You used {use.fraction:.0%} of the height the day was offering",
         sentence=(
-            f"The highest point of the flight was {_num(use.reached)} m against a modelled "
-            f"{_num(use.ceiling)} m — {_num(use.ceiling - use.reached)} m of the column was "
-            f"never used."
+            f"Your highest point was {_num(use.reached)} m against a modelled "
+            f"{use.source.replace('_', ' ')} of {_num(use.ceiling)} m, so "
+            f"{_num(use.ceiling - use.reached)} m of the column went unused."
         ),
         cost=_metres(use.ceiling - use.reached, analysis),
         evidence={"reached": use.reached, "ceiling": use.ceiling,
@@ -457,14 +458,15 @@ def _other_slice(analysis: Analysis) -> Finding | None:
     return Finding(
         id="other-slice",
         title=(
-            f"{slice_.seconds / 60:.0f} min was neither climbing nor gliding, and it "
-            f"{direction} {_num(abs(net))} m"
+            f"{slice_.seconds / 60:.0f} min counted as neither a climb nor a glide, "
+            f"and you {direction} {_num(abs(net))} m in it"
         ),
         sentence=(
-            f"{slice_.straight_sink / 60:.0f} min of it was straight sink — the price of "
-            f"the glide — {slice_.scratching / 60:.0f} min was turning without climbing, "
-            f"and {slice_.rising / 60:.0f} min was rising air no phase counted, worth "
-            f"{slice_.mean_climb:+.2f} m/s over the whole slice."
+            f"{slice_.straight_sink / 60:.0f} min of that was straight sink, which is "
+            f"what a glide costs; {slice_.scratching / 60:.0f} min was turning without "
+            f"climbing; and {slice_.rising / 60:.0f} min was rising air that no phase "
+            f"counted. Over the whole stretch it worked out at "
+            f"{slice_.mean_climb:+.2f} m/s."
         ),
         cost=_minutes(lossy, analysis),
         evidence={
@@ -504,11 +506,12 @@ def _close_that_wasnt(analysis: Analysis, route) -> Finding | None:
     multiplier = xc.MULTIPLIER.get(category, 1.0)
     return Finding(
         id="near-close",
-        title=f"The triangle came within {gap / 1000:.1f} km of closing",
+        title=f"You finished {gap / 1000:.1f} km from closing the triangle",
         sentence=(
-            f"The route's finish was {gap / 1000:.1f} km from its start, against a "
+            f"The route came back to within {gap / 1000:.1f} km of where it started, on a "
             f"{perimeter / 1000:.1f} km perimeter. Closed, it would have scored as a "
-            f"{category} triangle at ×{multiplier:.1f}."
+            f"{'an FAI' if category == 'fai' else 'a flat'} triangle, at "
+            f"×{multiplier:.1f} instead of ×1.0."
         ),
         cost=_metres(gap, analysis),
         evidence={"gap": round(gap), "perimeter": round(perimeter),
@@ -525,10 +528,10 @@ def _detour(analysis: Analysis, route) -> Finding | None:
     extra = (ratio.track_km - ratio.scored_km) * 1000.0
     return Finding(
         id="detour",
-        title=f"{ratio.track_km:.0f} km flown to score {ratio.scored_km:.2f} km",
+        title=f"You flew {ratio.track_km:.0f} km to score {ratio.scored_km:.2f} km",
         sentence=(
-            f"The track is {ratio.ratio:.2f}× the scored route — every scored kilometre "
-            f"cost {ratio.ratio:.2f} km of flying."
+            f"Every scored kilometre took {ratio.ratio:.2f} km of flying — climbs, "
+            f"detours and all."
         ),
         cost=_metres(extra, analysis),
         evidence={"ratio": ratio.ratio, "track_km": ratio.track_km,

@@ -236,7 +236,6 @@ section { margin-top: 34px; }
   color: var(--ink-2);
   margin: 8px 8px 2px;
 }
-.view3d-caption { margin-top: 10px; }
 .chart-head { display: flex; align-items: center; justify-content: space-between; gap: 12px;
   flex-wrap: wrap; }
 .chart-head .chart-title { margin-bottom: 0; }
@@ -463,7 +462,6 @@ section { margin-top: 34px; }
 .tab-add { flex: 0 0 auto; border-right: 2px solid var(--climb); }
 .tab-add .tab-open { padding-right: 13px; }
 .tab-add .tab-date { font-size: 13px; }
-.tabs-note { margin: -18px 0 26px; font-size: 12.5px; color: var(--ink-3); }
 .swatch { width: 12px; height: 12px; border-radius: 2px; flex: none; }
 .ramp { display: flex; gap: 2px; align-items: center; }
 .ramp span { width: 22px; height: 10px; border-radius: 1px; }
@@ -580,6 +578,44 @@ footer { margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--rule);
   margin-top: 1px;
 }
 .verdict-rank.is-best { color: var(--climb); }
+.verdict-delta {
+  font-size: 11px;
+  color: var(--ink-3);
+  display: block;
+  margin-top: 1px;
+}
+.verdict-delta.is-best { color: var(--climb); }
+.verdict-delta[hidden] { display: none; }
+
+/* The compare control sits beside the close button and is dim until used, so a tab reads
+   as one thing rather than a row of three. */
+.tab-compare {
+  position: absolute;
+  top: 3px;
+  right: 24px;
+  width: 19px;
+  height: 19px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: none;
+  color: var(--ink-3);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.tab:hover .tab-compare, .tab-compare:focus-visible, .tab-compare.is-on { opacity: 1; }
+.tab-compare.is-on { background: var(--climb); color: var(--paper); }
+.tab-compare:hover { color: var(--ink); }
+.tab.is-on .tab-compare { color: var(--paper); }
+.tab.is-on .tab-compare.is-on { background: var(--paper); color: var(--ink); }
+@media (hover: none) {
+  .tab-compare { opacity: 0.7; }
+  .tab:not(.is-on) .tab-compare { pointer-events: none; opacity: 0.3; }
+}
 .verdict-figure { display: flex; flex-direction: column; gap: 1px; }
 .verdict-value {
   font-size: 20px;
@@ -700,6 +736,128 @@ footer { margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--rule);
 """
 
 SCRIPT = """
+// "The air that day" for bundled flights built without --meteo.
+//
+// Uses quicklook's request, which has fetched this in the browser for uploaded tracks all
+// along. Deferred until the page is idle so it never delays the first paint, and it fails
+// quietly-but-visibly inside a published artifact, where every host is blocked.
+(function () {
+  function tile(key, value, sub) {
+    return '<div class="stat"><span class="key">' + key + '</span>' +
+      '<span class="stat-value">' + value + '</span>' +
+      (sub ? '<span class="sub">' + sub + '</span>' : '') + '</div>';
+  }
+  function cardinal(deg) {
+    var names = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW',
+                 'W','WNW','NW','NNW'];
+    return names[Math.round(((deg % 360) + 360) % 360 / 22.5) % 16];
+  }
+  function run() {
+    if (!window.__fetchMeteo) return;
+    document.querySelectorAll('.air-fetch').forEach(function (section) {
+      var stats = section.querySelector('.air-stats');
+      if (!stats || stats.dataset.done) return;
+      stats.dataset.done = '1';
+      stats.innerHTML = tile('weather', 'fetching…', '');
+      var top = parseFloat(section.dataset.airTop);
+      window.__fetchMeteo({
+        dated: true,
+        lat: [parseFloat(section.dataset.airLat)],
+        lon: [parseFloat(section.dataset.airLon)],
+        epoch: parseFloat(section.dataset.airEpoch)
+      }).then(function (m) {
+        var used = m.cloudbase > 0 ? Math.round(top / m.cloudbase * 100) : null;
+        stats.innerHTML =
+          tile('surface', Math.round(m.temperature) + ' °C',
+               'dew ' + Math.round(m.dew) + ' °C') +
+          tile('cloudbase', Math.round(m.cloudbase) + ' m', 'from the surface spread') +
+          tile('boundary layer', m.blTop ? Math.round(m.blTop) + ' m' : '—',
+               'model mixing depth') +
+          tile('ceiling used', used === null ? '—' : used + '%',
+               'you reached ' + Math.round(top) + ' m') +
+          tile('model wind', Math.round(m.wind) + ' km/h',
+               'from ' + cardinal(m.windFrom) + ' at 850 hPa');
+      }).catch(function (error) {
+        stats.innerHTML = tile('weather', 'unavailable', error.message || String(error));
+      });
+    });
+  }
+  if (window.requestIdleCallback) requestIdleCallback(run, { timeout: 3000 });
+  else setTimeout(run, 400);
+})();
+
+// Cross-flight comparison, opt-in.
+//
+// Comparing whatever happens to be open is a claim nobody asked for — three unrelated
+// flights are not a set — so nothing is compared until the reader marks two or more tabs
+// with the compare control. Then each marked flight's headline figures gain a line
+// saying where they stand *among the flights the reader chose*.
+//
+// Document-level on purpose, unlike the cursor code, which is per flight: this is a fact
+// about the document rather than about one article.
+(function () {
+  var HIGHER_IS_BETTER = { 'scored_km': true, 'mean_climb': true, 'ceiling_used': true };
+  var UNITS = { 'scored_km': ' km', 'mean_climb': ' m/s', 'ceiling_used': '' };
+  var chosen = {};
+
+  function articles() {
+    return Array.prototype.slice.call(
+      document.querySelectorAll('[data-flight-report]'));
+  }
+
+  function valueOf(article, key) {
+    var raw = article.getAttribute('data-compare-' + key.replace(/_/g, '-'));
+    if (raw === null || raw === '') return null;
+    var value = parseFloat(raw);
+    return isNaN(value) ? null : value;
+  }
+
+  function refresh() {
+    var picked = articles().filter(function (a) {
+      return chosen[a.getAttribute('data-flight-report')];
+    });
+    articles().forEach(function (article) {
+      var mine = chosen[article.getAttribute('data-flight-report')];
+      article.querySelectorAll('.verdict-delta').forEach(function (slot) {
+        var key = slot.parentNode.getAttribute('data-key');
+        // Under two flights there is nothing to compare against, and a flight the reader
+        // did not pick is not part of the comparison at all.
+        if (!mine || picked.length < 2 || !key) { slot.hidden = true; return; }
+        var value = valueOf(article, key);
+        var others = picked.filter(function (a) { return a !== article; })
+                           .map(function (a) { return valueOf(a, key); })
+                           .filter(function (v) { return v !== null; });
+        if (value === null || !others.length) { slot.hidden = true; return; }
+        var up = HIGHER_IS_BETTER[key] !== false;
+        var rival = up ? Math.max.apply(null, others) : Math.min.apply(null, others);
+        var leads = up ? value >= rival : value <= rival;
+        var unit = UNITS[key] || '';
+        slot.hidden = false;
+        slot.className = 'verdict-delta' + (leads ? ' is-best' : '');
+        slot.textContent = leads
+          ? 'best of ' + picked.length + ' compared'
+          : (up ? '\u25bc ' : '\u25b2 ') + Math.abs(value - rival).toFixed(2) + unit +
+            ' off the best of ' + picked.length;
+      });
+    });
+  }
+
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest && event.target.closest('[data-compare-toggle]');
+    if (!button) return;
+    // The compare control lives inside the tab, which opens the flight. Without this the
+    // tab would switch every time someone marked one for comparison.
+    event.stopPropagation();
+    var uid = button.getAttribute('data-compare-toggle');
+    chosen[uid] = !chosen[uid];
+    button.setAttribute('aria-pressed', chosen[uid] ? 'true' : 'false');
+    button.classList.toggle('is-on', chosen[uid]);
+    var count = Object.keys(chosen).filter(function (k) { return chosen[k]; }).length;
+    document.documentElement.classList.toggle('is-comparing', count >= 2);
+    refresh();
+  }, true);
+})();
+
 function initFlight(root) {
   var payload = root.querySelector('.cursor-data');
   var tip = document.getElementById('tip');
@@ -1284,6 +1442,31 @@ def _cardinal(azimuth: float) -> str:
     return names[round((azimuth % 360) / 22.5) % 16]
 
 
+def _air_fetch_section(analysis: Analysis, uid: str) -> str:
+    """"The air that day", fetched in the page when it was not baked in at build time.
+
+    A report built without `--meteo` used to have no weather at all, which is why the
+    published site lost the section the moment it was rebuilt anywhere the API was not
+    reachable. But `quicklook.py` has fetched Open-Meteo in the browser for uploaded
+    tracks all along, so the bundled flights can use the same request: the data is public,
+    keyless and CORS-enabled, and the page already knows how to ask.
+
+    No opt-in and no capability check, matching quicklook's own reasoning: inside a
+    published artifact every host is blocked and the request simply fails, and saying
+    "unavailable" with the reason is more use to a reader than an unticked box.
+    """
+    flight = analysis.flight
+    middle = len(flight.lat) // 2
+    when = flight.time[middle].astype("datetime64[s]").astype(int)
+    return f"""
+  <section class="air-fetch" data-air-lat="{float(flight.lat[middle]):.3f}"
+           data-air-lon="{float(flight.lon[middle]):.3f}" data-air-epoch="{int(when)}"
+           data-air-top="{analysis.summary.max_altitude:.0f}">
+    <div class="section-head"><h2>The air that day</h2></div>
+    <div class="stats air-stats"></div>
+  </section>"""
+
+
 def _meteo_section(analysis: Analysis, meteo, uid: str = "") -> str:
     """The day's air: sounding, ceilings, and how they compare with what was flown."""
     if meteo is None:
@@ -1413,89 +1596,43 @@ def _meteo_profile(analysis: Analysis, meteo, uid: str, rows: list[str]) -> str:
     </div>"""
 
 
-def _peer_delta(value, others, label, *, higher_is_better=True, unit=""):
-    """This flight against the other flights in the same document.
-
-    The document holds several flights and never put them side by side — free insight
-    sitting on the table. The comparison is only drawn when there is something to compare
-    against: with one flight in the document there is no delta, and inventing one by
-    ranking a flight against itself would be worse than silence.
-    """
-    peers = [v for v in others if v is not None]
-    if value is None or len(peers) < 1:
-        return ""
-    # `peers` is the *other* flights, so the comparison is against the best of them and
-    # the flight leads when it matches or beats that. Testing `value == best` instead read
-    # the leading flight as trailing the runner-up by its own margin.
-    rival = max(peers) if higher_is_better else min(peers)
-    leads = value >= rival if higher_is_better else value <= rival
-    if leads:
-        return f'<span class="verdict-rank is-best">best of {len(peers) + 1} here</span>'
-    gap = abs(value - rival)
-    if gap < 1e-9:
-        return ""
-    arrow = "&#9660;" if higher_is_better else "&#9650;"
-    return (f'<span class="verdict-rank">{arrow} {gap:,.2f}{unit} off the best of '
-            f'{len(peers) + 1}</span>').replace(",", "\u2009")
-
-
 def _verdict_strip(result, analysis=None, archive=None, peers=None) -> str:
-    """The flight in one line, above the 3D view.
+    """The flight in one line, above the map.
 
-    A reader currently scrolls ~1 200 px before meeting a single number. The 3D view
-    keeps its place as the hero image — it is the reason people stay — so the answer to
-    "how did it go" goes above it, in one compact line, and the evidence goes below.
+    A reader used to scroll ~1 200 px before meeting a single number. One compact line at
+    the top answers the question the report exists to answer, and the evidence follows.
 
-    Each headline figure carries up to two comparisons, and they answer different
-    questions: the other flights in *this document* ("best of the 3 here") and the pilot's
-    own archive ("among your best of 12 flights"). Both are omitted rather than faked when
-    there is nothing to compare against — one flight in a document and a cold archive are
-    the normal case, not an error.
+    Two comparisons can hang off the headline figures, and they are deliberately
+    different in kind. The **archive** rank ("among your best of 12 flights") is about
+    the pilot's history, is true regardless of what else is open, and so is baked in here.
+    The **cross-flight** delta is not: comparing whatever happens to be in the document is
+    a claim nobody asked for — three unrelated flights are not a set — so it is opt-in,
+    computed in the page once two or more tabs have been added to the comparison. That is
+    why the figures carry `data-key` and their values, and why nothing is written here.
     """
     if result is None or result.verdict is None:
         return ""
     verdict = result.verdict
 
     ranks = {}
-    if analysis is not None:
+    if analysis is not None and archive is not None and getattr(archive, "usable", False):
         thermals = analysis.thermals
-        mine = {
-            "scored": None,
-            "mean of climbs": (
-                sum(s.altitude_change for s in thermals)
-                / sum(s.duration for s in thermals)
-                if thermals and sum(s.duration for s in thermals)
-                else None
-            ),
-        }
-        if peers:
-            others = {"scored": [], "mean of climbs": []}
-            for peer in peers:
-                peer_thermals = peer.thermals
-                held = sum(s.duration for s in peer_thermals)
-                others["mean of climbs"].append(
-                    sum(s.altitude_change for s in peer_thermals) / held if held else None
-                )
-            ranks["mean_climb"] = _peer_delta(
-                mine["mean of climbs"], others["mean of climbs"], "climb", unit=" m/s"
+        held = sum(s.duration for s in thermals)
+        mean = sum(s.altitude_change for s in thermals) / held if held else None
+        sentence = archive.rank_sentence(
+            "mean_climb", round(mean, 2) if mean else None, "climb rate"
+        )
+        if sentence:
+            ranks["mean_climb"] = (
+                f'<span class="verdict-rank">{charts.escape(sentence)}</span>'
             )
-        if archive is not None and getattr(archive, "usable", False):
-            sentence = archive.rank_sentence(
-                "mean_climb",
-                round(mine["mean of climbs"], 2) if mine["mean of climbs"] else None,
-                "climb rate",
-            )
-            if sentence:
-                ranks.setdefault("mean_climb", "")
-                ranks["mean_climb"] += (
-                    f'<span class="verdict-rank">{charts.escape(sentence)}</span>'
-                )
 
     numbers = "".join(
-        f'<div class="verdict-figure"><span class="verdict-value">'
-        f'{charts.escape(item["value"])}</span>'
+        f'<div class="verdict-figure" data-key="{charts.escape(item.get("key", ""))}">'
+        f'<span class="verdict-value">{charts.escape(item["value"])}</span>'
         f'<span class="verdict-label">{charts.escape(item["label"])}</span>'
         f'{ranks.get(item.get("key"), "")}'
+        f'<span class="verdict-delta" hidden></span>'
         f"</div>"
         for item in verdict.headline
     )
@@ -1506,7 +1643,7 @@ def _verdict_strip(result, analysis=None, archive=None, peers=None) -> str:
   </div>"""
 
 
-def _debrief_cards(result, uid: str, sample: list[int]) -> str:
+def _debrief_cards(result, uid: str, sample: list[int], context: str = "") -> str:
     """The findings, immediately under the instrument they point into.
 
     Each card is a measurement plus a link, never an imperative — the phrasing is
@@ -1561,6 +1698,7 @@ def _debrief_cards(result, uid: str, sample: list[int]) -> str:
         "sampling": "this track is too coarse to count circles",
     }
     missing = [reasons[key] for key in result.suppressed if key in reasons]
+    context = f'<p class="caption debrief-context">{context.strip()}</p>' if context.strip() else ""
     note = (
         f'<p class="caption debrief-note">Some findings are not computed here: '
         f'{charts.escape("; ".join(missing))}.</p>'
@@ -1577,6 +1715,7 @@ def _debrief_cards(result, uid: str, sample: list[int]) -> str:
          gaggle, the airspace or the plan, and you were there.</p>
     </div>
     <div class="findings">{"".join(cards)}</div>
+    {context}
     {note}
   </section>"""
 
@@ -1704,26 +1843,18 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
   <section>
     <div class="section-head">
       <h2>The flight over the ground</h2>
-      <p>Drag to pan, right-drag or ctrl-drag to rotate and tilt, scroll to zoom. Click
-         the view and the arrow keys turn and tilt it, <kbd>1</kbd> <kbd>2</kbd>
-         <kbd>4</kbd> set the exaggeration and <kbd>?</kbd> lists the rest. The terrain is
-         a real DEM carried inside this page; the buttons under it switch between imagery,
-         a map and bare relief. Hovering the charts below moves the marker here too.</p>
     </div>
     {view3d.panel(payload, uid, kmz_uri=kmz_uri,
                   kmz_name=f"{summary.date}-{(summary.site or 'flight').replace(' ', '-')}.kmz")}
-    <p class="caption view3d-caption">Terrain {terrain.elevations.min():.0f}–{terrain.elevations.max():.0f} m
-      over {terrain.cols}&#215;{terrain.rows} samples, drawn at true vertical scale so height
-      above ground can be judged directly — the &#215;1 button cycles to &#215;2 and &#215;4.
-      {_clearance_note(clearance)}
-      {charts.escape("; ".join(sorted({b.attribution for b in (basemaps or {}).values()
-                                       if b.attribution}))) or ""}
-      Elevation from the AWS terrarium DEM. {_sun_note(payload.get("sun"))}{_trigger_note(analysis, terrain)}</p>
+
   </section>"""
 
     wind_chart = charts.wind_profile(analysis, meteo=meteo, uid=uid)
     histogram = charts.climb_histogram(analysis)
-    meteo_section = _meteo_section(analysis, meteo, uid)
+    meteo_section = (
+        _meteo_section(analysis, meteo, uid) if meteo is not None
+        else _air_fetch_section(analysis, uid)
+    )
 
     # The air-mass frame. Deliberately *not* a debrief card: a wind-corrected glide ratio
     # is context, not a cost, and "every finding carries a cost in metres or minutes or it
@@ -1757,9 +1888,28 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
         flight_plan=flight_plan,
     )
     verdict_strip = _verdict_strip(debrief_result, analysis, archive, peers)
-    debrief_section = _debrief_cards(debrief_result, uid, sample)
+    debrief_section = _debrief_cards(
+        debrief_result, uid, sample,
+        context=f"{_clearance_note(clearance)} {_trigger_note(analysis, terrain)}",
+    )
 
-    return f"""<article class="flight" data-flight-report="{uid}"{" hidden" if hidden else ""}>
+    compare_values = {
+        "scored_km": round(route.distance / 1000.0, 2) if route else None,
+        "mean_climb": round(climb_rate, 2) if thermals else None,
+        "ceiling_used": (lambda u: u.fraction if u else None)(
+            metrics.ceiling_use(analysis, meteo)
+        ),
+    }
+    compare_attrs = "".join(
+        f' data-compare-{key.replace("_", "-")}="{value}"'
+        for key, value in compare_values.items()
+        if value is not None
+    )
+    compare_name = charts.escape(
+        " · ".join(part for part in (summary.date, summary.site) if part)
+    )
+
+    return f"""<article class="flight" data-flight-report="{uid}"{compare_attrs} data-compare-name="{compare_name}"{" hidden" if hidden else ""}>
   <header class="masthead">
     <div>
       <p class="eyebrow">tracklog viewer</p>
@@ -1770,7 +1920,6 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
 {verdict_strip}
 
 {view3d_section}
-{debrief_section}
 
   <section>
     <div class="section-head">
@@ -1819,6 +1968,7 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
       <li><span class="swatch" style="background:var(--sink);opacity:.5"></span>gliding</li>
     </ul>
   </section>
+{debrief_section}
 
   <section>
     <div class="stats">{stats}</div>
@@ -2012,6 +2162,9 @@ def _tab(uid: str, date: str, meta: str, stat: str = "", *, on: bool = False) ->
         f'<span class="tab-meta">{meta}</span>'
         + (f'<span class="tab-stat">{stat}</span>' if stat else "")
         + '</button>'
+        f'<button type="button" class="tab-compare" data-compare-toggle="{uid}" '
+        f'title="Add this flight to the comparison" aria-pressed="false" '
+        f'aria-label="Add this flight to the comparison">&#8646;</button>'
         f'<button type="button" class="tab-close" title="Remove this flight" '
         f'aria-label="Remove this flight">&#215;</button></span>'
     )
@@ -2041,9 +2194,6 @@ def render(analysis: Analysis, *, meteo=None, route=None, terrain=None,
                ) or "this flight"),
                on=True)
         + '</nav>'
-        '<p class="tabs-note">Drop in as many of your own tracks as you like — they are '
-        'analysed in this page, nothing is uploaded anywhere. Any flight can be removed '
-        'with the &times; on its tab.</p>'
     )
     return _page(
         title,
@@ -2119,9 +2269,6 @@ def render_multi(reports: list[dict], *, archive=None) -> str:
     tabs = (
         '<nav class="tabs" id="flight-tabs" role="group" aria-label="Choose a flight">'
         f'{"".join(buttons)}</nav>'
-        '<p class="tabs-note">The dated tabs are example flights. Drop in as many of your '
-        'own tracks as you like — they are analysed in this page, nothing is uploaded '
-        'anywhere. Any flight can be removed with the &times; on its tab.</p>'
     )
     first = reports[0]["analysis"].summary
     title = f"tracklog viewer · {len(reports)} flights from {first.pilot or 'the log'}"

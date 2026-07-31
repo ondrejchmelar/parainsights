@@ -280,7 +280,9 @@ class TestLowPoint:
         card = debrief._low_point(analysis, clearance)
         assert card is not None
         assert "-227" not in card.title, f"a negative clearance was headlined: {card.title!r}"
-        assert "terrain model" in card.title
+        # Wording-agnostic: what matters is that the card blames the model rather than
+        # asserting the glider was underground, not which noun it picks for the model.
+        assert "model" in card.title.lower()
         assert card.confidence < 1.0, "an untrustworthy number must be downgraded"
 
 

@@ -9,6 +9,7 @@ deliberately. A regression here is someone typing `font-size: 10.5px` or droppin
 browser job is `allow_failure: true` and covers only the two view3d suites.
 """
 
+import pathlib
 import re
 
 from tracklog_viewer import render_html, view3d
@@ -233,43 +234,57 @@ class TestDebriefRendering:
 
 
 class TestComparison:
-    """Phase 3: the document held three flights and never put them side by side.
+    """Comparison is opt-in, and the two kinds of comparison are different in kind.
 
-    Two different comparisons, answering two different questions: the other flights in
-    *this document*, and the pilot's own archive across time. Both are omitted rather
-    than faked when there is nothing to compare against.
+    The archive rank ("among your best of 12") is about the pilot's history, is true no
+    matter what else is open, and is baked in. The cross-flight delta is not: whatever
+    happens to be loaded is not a set the reader chose, so it is computed in the page and
+    only once two or more tabs have been marked.
     """
 
-    def test_a_lone_flight_gets_no_delta(self):
-        """Ranking a flight against itself is worse than silence."""
-        assert render_html._peer_delta(1.5, [], "climb") == ""
-        assert render_html._peer_delta(None, [1.0, 2.0], "climb") == ""
-
-    def test_the_leading_flight_is_named_as_the_best(self):
-        """The leader used to read as trailing the runner-up by its own margin, because
-        the test was `value == max(others)` rather than `value >= max(others)`."""
-        html = render_html._peer_delta(2.0, [1.0, 1.5], "climb", unit=" m/s")
-        assert "best of 3 here" in html
-        assert "off the best" not in html
-
-    def test_a_trailing_flight_reports_its_gap(self):
-        html = render_html._peer_delta(1.0, [1.5, 2.0], "climb", unit=" m/s")
-        assert "off the best of 3" in html
-        assert "1.00" in html
-
-    def test_a_lower_is_better_metric_inverts(self):
-        html = render_html._peer_delta(1.0, [1.5, 2.0], "gap", higher_is_better=False)
-        assert "best of 3 here" in html
-
-    def test_a_cold_archive_says_nothing(self, tmp_path):
+    def _report(self, tmp_path, name="cmp.igc"):
         from tests.test_debrief import a_day
-        from tracklog_viewer import baseline
 
-        analysis = a_day(tmp_path, "cold.igc",
+        analysis = a_day(tmp_path, name,
                          [(300, 2.5), (300, 0.4), (300, 0.4), (300, 0.4), (300, 0.5)],
                          glide=700)
-        html = render_html._flight_body(analysis, archive=baseline.Baseline([]))
+        return render_html._flight_body(analysis), analysis
+
+    def test_no_delta_is_baked_into_the_page(self, tmp_path):
+        """The old build-time version compared whichever flights happened to be loaded."""
+        html, _ = self._report(tmp_path)
+        assert "off the best of" not in html
+
+    def test_each_flight_publishes_its_comparable_numbers(self, tmp_path):
+        html, _ = self._report(tmp_path)
+        assert "data-compare-mean-climb=" in html
+        assert 'class="verdict-figure" data-key=' in html
+
+    def test_every_figure_has_somewhere_to_put_a_delta(self, tmp_path):
+        html, _ = self._report(tmp_path)
+        assert html.count("verdict-delta") == html.count('class="verdict-figure"')
+
+    def test_the_tab_carries_an_opt_in_control(self):
+        tab = render_html._tab("f1", "2026-07-01", "Test")
+        assert "data-compare-toggle=" in tab
+        assert 'aria-pressed="false"' in tab
+
+    def test_marking_a_tab_does_not_switch_to_it(self):
+        """The control lives inside the tab, which opens the flight; without stopping the
+        event, marking a flight for comparison would also select it."""
+        assert "event.stopPropagation()" in render_html.SCRIPT
+
+    def test_under_two_flights_nothing_is_compared(self):
+        assert "picked.length < 2" in render_html.SCRIPT
+
+    def test_a_cold_archive_says_nothing(self, tmp_path):
+        from tracklog_viewer import baseline
+
+        html, _ = self._report(tmp_path, "cold.igc")
         assert "verdict-rank" not in html
+        assert "verdict-rank" not in render_html._flight_body(
+            self._report(tmp_path, "cold2.igc")[1], archive=baseline.Baseline([])
+        )
 
     def test_a_usable_archive_places_the_flight_and_names_the_sample(self, tmp_path):
         import json
@@ -292,3 +307,62 @@ class TestComparison:
 
         assert "verdict-rank" in html
         assert "of 6 flights" in html, "the sample size has to be named"
+
+
+class TestPageText:
+    """What the report stopped saying, and where the survivors went."""
+
+    def test_the_tab_blurb_is_gone(self, tmp_path):
+        """Its only load-bearing sentence — nothing is uploaded — is in the upload panel
+        itself, where someone about to hand over a file will actually read it."""
+        from tracklog_viewer import quicklook
+
+        assert "tabs-note" not in render_html.render(
+            self._analysis(tmp_path), terrain=None
+        )
+        assert "Nothing is uploaded" in quicklook.panel()
+
+    def _analysis(self, tmp_path):
+        from tests.test_debrief import a_day
+
+        return a_day(tmp_path, "text.igc",
+                     [(300, 2.5), (300, 2.0), (300, 1.4), (300, 0.8)], glide=700)
+
+    def test_the_map_no_longer_explains_its_own_gestures(self):
+        """Five lines teaching drag, ctrl-drag and scroll on every page load, for
+        gestures every map on the web already has."""
+        body = render_html.__dict__["_flight_body"].__doc__ or ""
+        assert "right-drag or ctrl-drag" not in render_html.STYLE
+        panel = view3d.panel({"bounds": {}}, "uid")
+        # The lesson survives, but behind the ? button rather than above the map.
+        assert "right-drag / ctrl-drag" in panel
+
+    def test_the_controls_are_explained_behind_a_button_instead(self):
+        panel = view3d.panel({"bounds": {}}, "uid")
+        assert 'data-view3d-act="help"' in panel
+        assert "view3d-keys" in panel
+        assert "right-drag / ctrl-drag" in panel
+
+    def test_the_terrain_facts_moved_into_the_debrief(self, tmp_path):
+        """Slope aspect and ground clearance are about the flight, not about how the
+        picture was drawn, so they belong with the reading rather than under the map."""
+        assert not hasattr(render_html, "_view3d_caption")
+        # The caption element itself is gone from the template.
+        html = render_html.render(self._analysis(tmp_path), terrain=None)
+        assert "view3d-caption" not in html
+        # And the notes it used to carry are now rendered into the debrief section.
+        source = pathlib.Path(render_html.__file__).read_text(encoding="utf-8")
+        assert "_clearance_note(clearance)" in source
+        assert "_trigger_note(analysis, terrain)" in source
+        assert "debrief-context" in source
+
+    def test_the_map_and_the_charts_are_neighbours(self, tmp_path):
+        """One instrument in two projections, sharing a cursor: nothing scrolls between
+        them any more. Asserted on the template, because whether a debrief renders at all
+        depends on whether this particular day produced any findings."""
+        source = pathlib.Path(render_html.__file__).read_text(encoding="utf-8")
+        view = source.index("{view3d_section}")
+        charts = source.index("Side view and top view")
+        debrief = source.index("{debrief_section}", view)
+        assert view < charts < debrief, (
+            "the debrief is back between the map and the charts")

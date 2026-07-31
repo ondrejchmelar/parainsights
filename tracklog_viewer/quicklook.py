@@ -1108,6 +1108,12 @@ SCRIPT = r"""
     });
   }
 
+  // Shared with the bundled flights. `render_html.py` has the same problem — a report
+  // built without --meteo has no sounding — and the fix is the same request, so it is
+  // exposed rather than written twice. One copy also means one place where the endpoint,
+  // the 60-day archive cutoff and the cloudbase formula live.
+  window.__fetchMeteo = fetchMeteo;
+
   // The report's own tab controller owns the strip; this only asks it to switch or to
   // add. Reimplementing the switch here was how the two got out of step.
   function tabs() { return window.__flightTabs; }

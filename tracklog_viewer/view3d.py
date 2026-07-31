@@ -264,6 +264,14 @@ def panel(payload: dict, uid: str, *, kmz_uri: str | None = None,
       <p class="view3d-credit">{credit}</p>
       <p class="view3d-hint" hidden>arrows turn and tilt &middot; <kbd>?</kbd> for keys</p>
       <div class="view3d-keys" hidden>
+        <p class="view3d-keys-head">Mouse and touch</p>
+        <dl>
+          <dt>drag</dt><dd>pan</dd>
+          <dt>right-drag / ctrl-drag</dt><dd>rotate and tilt</dd>
+          <dt>scroll / pinch</dt><dd>zoom</dd>
+          <dt>two-finger twist</dt><dd>rotate</dd>
+        </dl>
+        <p class="view3d-keys-head">Keys, once the view has focus</p>
         <dl>
           <dt>&larr; &rarr;</dt><dd>rotate</dd>
           <dt>&uarr; &darr;</dt><dd>tilt</dd>
@@ -274,6 +282,7 @@ def panel(payload: dict, uid: str, *, kmz_uri: str | None = None,
           <dt>f</dt><dd>full screen</dd>
           <dt>0</dt><dd>reset view</dd>
         </dl>
+        <p class="view3d-keys-foot">Hovering the charts moves the marker here too.</p>
       </div>
       <div class="view3d-controls">
         <div class="view3d-seg" role="group" aria-label="What the ground is">{segments}</div>
@@ -290,6 +299,8 @@ def panel(payload: dict, uid: str, *, kmz_uri: str | None = None,
           <button type="button" data-view3d-act="zoom-in"
                   title="Zoom in" aria-label="Zoom in">+</button>
         </div>
+        <button type="button" data-view3d-act="help"
+                title="Controls" aria-label="How to control this view">?</button>
         <button type="button" data-view3d-act="fullscreen"
                 title="Full screen" aria-label="Full screen">
           {EXPAND_ICON}</button>
@@ -434,6 +445,10 @@ canvas.view3d.is-dragging { cursor: grabbing; }
   grid-template-columns: auto auto;
   gap: 4px 16px;
 }
+.view3d-keys-head { margin: 0 0 5px; font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--ink-3); }
+.view3d-keys dl + .view3d-keys-head { margin-top: 11px; }
+.view3d-keys-foot { margin: 11px 0 0; font-size: 11px; color: var(--ink-3); }
 .view3d-keys dt { color: var(--ink); font-family: ui-monospace, monospace; }
 .view3d-keys dd { margin: 0; color: var(--ink-2); }
 .view3d-hint[hidden], .view3d-keys[hidden] { display: none; }
@@ -1960,6 +1975,9 @@ function initView3d(root, cursorTrack) {
       // width, so the multiples are here for when the shape of the climbs matters
       // more than their absolute height.
       setVertical(parseFloat(options.vertical));
+    } else if (act === 'help') {
+      toggleKeyHelp();
+      return;
     } else if (act === 'basemap-set') {
       setBasemapStyle(options.style);
     } else if (act === 'reset') {
