@@ -124,6 +124,16 @@ def _scene(*, terrain: dict | None = None, basemap: bool = True,
         "track": track,
         "climbs": [{"label": "1", "lon": 14.1, "lat": 49.1,
                     "alt": dem["max"] + 400, "tow": False}],
+        # One of each, so a test can turn the two label switches on independently and see
+        # that each drew only its own.
+        "phases": [
+            {"kind": "climb", "text": "+2.1 m/s · +480 m",
+             "lon": [14.04, 14.06], "lat": [49.06, 49.08],
+             "alt": [dem["max"] + 220, dem["max"] + 700]},
+            {"kind": "glide", "text": "8.4:1 · 12.0 km",
+             "lon": [14.06, 14.14], "lat": [49.08, 49.12],
+             "alt": [dem["max"] + 700, dem["max"] + 260]},
+        ],
         "palette": [[20, 40, 60], [60, 90, 120], [120, 150, 60],
                     [200, 160, 40], [230, 110, 50], [240, 60, 40]],
         "basemaps": {"satellite": _basemap(basemap_size)} if basemap else {},
@@ -614,3 +624,58 @@ class TestWiring:
         assert "function drawTerrain(" in view3d.SCRIPT
         assert "function fillHull(" in view3d.SCRIPT
         assert "function texturedTriangle(" in view3d.SCRIPT
+
+
+# The optional phase labels. Whether they *draw* is not visible from Python, and the
+# canvas that matters is the 2D overlay — the GL canvas behind it carries the heightfield
+# and nothing else, so sampling that one shows no change however well the labels work.
+_LABELS = """
+var h = window.__handle;
+var panel = document.querySelector('.view3d-panel');
+var overlay = panel.querySelector('canvas.view3d');
+function shot() {
+  h.redraw();
+  var s = document.createElement('canvas');
+  s.width = 96; s.height = 96;
+  s.getContext('2d').drawImage(overlay, 0, 0, 96, 96);
+  return s.toDataURL();
+}
+var btns = panel.querySelectorAll('[data-view3d-act="labels-toggle"]');
+var out = { buttons: btns.length };
+out.pressedAtRest = [].map.call(btns, function (b) {
+  return b.getAttribute('aria-pressed');
+}).join(',');
+
+var bare = shot();
+btns[0].click();
+var climbs = shot();
+btns[1].click();
+var both = shot();
+btns[0].click();
+btns[1].click();
+var off = shot();
+
+out.climbsDrew = climbs !== bare;
+out.glidesDrew = both !== climbs;
+out.turningBothOffRestoresIt = off === bare;
+return out;
+"""
+
+
+@needs_chrome
+def test_phase_labels_are_off_until_asked_for_and_draw_when_they_are():
+    """Two independent switches, both starting off.
+
+    A label per climb *and* per glide over a long flight is more ink than terrain, so
+    neither is on by default and neither implies the other. Turning both off again has to
+    put the view back exactly as it was, which is what catches a label drawn into some
+    state the toggle does not own.
+    """
+    from tests.test_view3d_sun import CURSOR
+
+    answer = _probe(_scene(basemap=False, cursor=CURSOR), _LABELS)
+    assert answer["buttons"] == 2
+    assert answer["pressedAtRest"] == "false,false", "a label switch started on"
+    assert answer["climbsDrew"] is True, "the climb labels drew nothing"
+    assert answer["glidesDrew"] is True, "the glide labels drew nothing"
+    assert answer["turningBothOffRestoresIt"] is True

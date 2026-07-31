@@ -96,12 +96,43 @@ def data(analysis: Analysis, terrain, *, tolerance: float | None = None,
             }
         )
 
+    # Every climb and glide as a start point, an end point and what it was worth, for the
+    # optional labels on the view. The numbers are the table's own — a climb rate and a
+    # height gain, a glide ratio and a distance — so the map cannot disagree with the
+    # rows below it. About 40 bytes a phase, which is why it ships unconditionally and
+    # the *drawing* is what the toggle controls.
+    phases = []
+    for segment in analysis.segments:
+        if segment.phase is Phase.THERMAL:
+            kind, value = "climb", (
+                f"{segment.average_climb:+.1f} m/s · {segment.altitude_change:+.0f} m"
+            )
+        elif segment.phase is Phase.GLIDE:
+            kind, value = "glide", (
+                f"{segment.average_ld:.1f}:1 · {segment.distance / 1000:.1f} km"
+                if segment.average_ld
+                else f"{segment.distance / 1000:.1f} km"
+            )
+        else:
+            continue
+        last = segment.stop - 1
+        phases.append({
+            "kind": kind,
+            "text": value,
+            "lon": [round(float(flight.lon[segment.start]), 5),
+                    round(float(flight.lon[last]), 5)],
+            "lat": [round(float(flight.lat[segment.start]), 5),
+                    round(float(flight.lat[last]), 5)],
+            "alt": [int(altitude[segment.start]), int(altitude[last])],
+        })
+
     # Cursor positions for the shared hover, at the same sample indices the charts use.
     return {
         "terrain": terrain.to_dict(),
         "trackTop": int(max(track["alt"])) if track["alt"] else 0,
         "track": track,
         "climbs": climbs,
+        "phases": phases,
         "palette": [list(colour) for _, colour in RAMP_RGB],
         # Imagery baked into the document, keyed by the style the button names. A
         # published artifact cannot fetch anything, so a style that is not in here has no
@@ -293,6 +324,17 @@ def panel(payload: dict, uid: str, *, kmz_uri: str | None = None,
         <div class="view3d-seg" role="group" aria-label="What the ground is">{segments}</div>
         <div class="view3d-seg view3d-vert" role="group"
              aria-label="Vertical exaggeration">{exaggeration}</div>
+        <!-- Two independent switches, not a segmented control: the reader can want both,
+             either, or — the default — neither. Both on at once over a long flight is
+             more label than terrain, which is why neither starts on. -->
+        <div class="view3d-seg view3d-labels" role="group" aria-label="Phase labels">
+          <button type="button" data-view3d-act="labels-toggle" data-kind="climb"
+                  aria-pressed="false" aria-label="Label each climb with its rate and gain"
+            >climbs</button>
+          <button type="button" data-view3d-act="labels-toggle" data-kind="glide"
+                  aria-pressed="false"
+                  aria-label="Label each glide with its ratio and distance">glides</button>
+        </div>
         <!-- The zoom pair survives on a desktop because pinch is the one gesture that is
              genuinely awkward on a trackpad. Rotate and tilt do not: they are a drag, a
              ctrl-drag and a right-drag, the caption above teaches exactly that, and they
@@ -409,6 +451,9 @@ canvas.view3d.is-dragging { cursor: grabbing; }
   .view3d-controls button { padding: 8px 10px; font-size: 12px; }
   .view3d-zoom { display: none; }
   .view3d-reset { display: none; }
+  /* Goes with the zoom pair, and for the same reason: on a 295 px map there is no room
+     for a label per phase, so the switch that would draw them is not worth the bar. */
+  .view3d-labels { display: none; }
 }
 
 /* The rose moves to the top right and the attribution to the top left.
@@ -1495,6 +1540,59 @@ function initView3d(root, cursorTrack) {
     });
   }
 
+  // What each climb and glide was worth, drawn on the phase itself.
+  //
+  // Off by default, and two toggles rather than one, because the two answer different
+  // questions: climbs label where the day's lift was, glides label whether the lines
+  // between it paid. Both at once on a long flight is more ink than terrain, which is why
+  // neither is on to begin with.
+  //
+  // A chord from the first fix of the phase to the last, not the flown track — the track
+  // is already drawn underneath in climb colour, and a second line along it would say
+  // nothing. The chord is the phase's *extent*, which is the thing a label needs to sit
+  // on. Labels are pinned to the midpoint of the chord and drawn with a halo rather than
+  // a filled box: over satellite imagery a box is a hole in the map, and there may be
+  // twenty of them.
+  var showPhase = { climb: false, glide: false };
+  function drawPhaseLabels() {
+    var phases = scene.phases || [];
+    if (!phases.length || (!showPhase.climb && !showPhase.glide)) return;
+    ctx.save();
+    ctx.font = '600 11px ui-sans-serif, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineCap = 'round';
+    phases.forEach(function (phase) {
+      if (!showPhase[phase.kind]) return;
+      var a = toMetres(phase.lon[0], phase.lat[0]);
+      var b = toMetres(phase.lon[1], phase.lat[1]);
+      var p = project(a[0], a[1], phase.alt[0]);
+      var q = project(b[0], b[1], phase.alt[1]);
+      var colour = phase.kind === 'climb' ? 'rgba(235,104,52,0.95)'
+                                          : 'rgba(42,120,214,0.95)';
+      ctx.strokeStyle = colour;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(p[0], p[1]);
+      ctx.lineTo(q[0], q[1]);
+      ctx.stroke();
+      // End caps, so a short climb still reads as a span rather than a dot.
+      [p, q].forEach(function (end) {
+        ctx.beginPath();
+        ctx.arc(end[0], end[1], 2.6, 0, Math.PI * 2);
+        ctx.fillStyle = colour;
+        ctx.fill();
+      });
+      var mx = (p[0] + q[0]) / 2, my = (p[1] + q[1]) / 2;
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+      ctx.strokeText(phase.text, mx, my - 9);
+      ctx.fillStyle = '#fff';
+      ctx.fillText(phase.text, mx, my - 9);
+    });
+    ctx.restore();
+  }
+
   var cursorIndex = null;
   function drawCursor() {
     if (cursorIndex === null || !cursorTrack) return;
@@ -1674,6 +1772,9 @@ function initView3d(root, cursorTrack) {
     // already wired to the charts. The heightfield goes underneath it in GL.
     if (renderer) renderer.terrain(mapped); else drawTerrain(mapped);
     drawTrack();
+    // After the track and before the cursor: the labels annotate the track, and the
+    // cursor is the one thing that must never be written over.
+    drawPhaseLabels();
     drawCursor();
     drawRose();
   }
@@ -2084,6 +2185,15 @@ function initView3d(root, cursorTrack) {
       return;
     } else if (act === 'basemap-set') {
       setBasemapStyle(options.style);
+    } else if (act === 'labels-toggle') {
+      var kind = options.kind;
+      if (showPhase[kind] === undefined) return;
+      showPhase[kind] = !showPhase[kind];
+      root.querySelectorAll('[data-view3d-act="labels-toggle"]').forEach(function (button) {
+        var on = !!showPhase[button.dataset.kind];
+        button.classList.toggle('is-on', on);
+        button.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
     } else if (act === 'reset') {
       view.yaw = -0.42; view.pitch = 0.46; view.zoom = 1; view.panX = 0; view.panY = 0;
       setVertical(baseVertical);
