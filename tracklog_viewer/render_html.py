@@ -15,7 +15,7 @@ import json
 import math
 from pathlib import Path
 
-from . import charts, debrief, metrics, quicklook, terrain as terrain_module, view3d, view3d_gl
+from . import airmass, charts, debrief, metrics, quicklook, terrain as terrain_module, view3d, view3d_gl
 from numpy import median as np_median
 from .analysis import TURN_RESOLUTION_LIMIT, Analysis, Phase
 
@@ -1580,6 +1580,30 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
     histogram = charts.climb_histogram(analysis)
     meteo_section = _meteo_section(analysis, meteo, uid)
 
+    # The air-mass frame. Deliberately *not* a debrief card: a wind-corrected glide ratio
+    # is context, not a cost, and "every finding carries a cost in metres or minutes or it
+    # does not ship" is the rule that stops the list becoming trivia. So it lands next to
+    # the glides table it describes, and refuses itself when the wind cannot carry it —
+    # which on both real flights measured in the plan it could not, at 0.36 and 0.39.
+    air_note = ""
+    wind_field = airmass.field(analysis, weather=meteo)
+    performance = airmass.glide_performance(analysis, wind_field)
+    if performance is not None:
+        curve = airmass.polar(analysis, wind_field)
+        best = (
+            f" The best bin of the measured polar sits at {curve.best_glide[0]:.0f} km/h"
+            f" for {curve.best_glide[1]:.1f}:1."
+            if curve and curve.best_glide
+            else ""
+        )
+        air_note = (
+            f" Through the air the median is <strong>{performance.air_ld:.1f}:1</strong>"
+            f" against {performance.ground_ld:.1f}:1 over the ground, at a median"
+            f" {performance.median_airspeed:.0f} km/h airspeed \u2014 corrected with the"
+            f" wind measured by {len(wind_field.soundings)} circled climbs"
+            f" (confidence {performance.confidence:.2f}).{best}"
+        )
+
     # The debrief is computed here and baked in: findings are sentences, and there is no
     # network at view time. `clearance` is None without `--terrain`, `meteo` is None
     # without `--meteo`, and the findings that rest on them simply do not exist.
@@ -1732,7 +1756,7 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
       <h2>Glides</h2>
       <p>Glide ratio here is what was achieved over the ground, so it beats the wing's
          still-air figure whenever the line was working. Bar length and shade both carry
-         the ratio.</p>
+         the ratio.{air_note}</p>
     </div>
     <ul class="legend" style="margin:0 0 12px">
       <li class="legend-title">glide ratio:</li>
