@@ -8,7 +8,7 @@ parainsights/
 ├── CLAUDE.md              this file
 ├── pyproject.toml         one project, one venv, one test suite
 ├── tracklog_viewer/       the tool: IGC/KML/KMZ → analysis → HTML, KMZ, 3D map
-├── tests/                 pytest, 339 tests, no network
+├── tests/                 pytest, 360 tests, no network
 └── docs/
     ├── formats.md         IGC and KML/KMZ format research, measured on real files
     ├── plan.md            scope, decisions and status
@@ -27,7 +27,7 @@ as the packages, so there is nothing to line up by hand:
 
 ```bash
 uv sync --extra dev          # creates .venv on the pinned Python, from uv.lock
-uv run pytest -c pyproject.toml     # 339 tests, ~3 min, no network
+uv run pytest -c pyproject.toml     # 360 tests, ~3 min, no network
 ```
 
 `-c pyproject.toml` matters when the repo sits inside another project — pytest otherwise
@@ -578,10 +578,14 @@ Still wanted:
   `docs/analysis-plan.md` and marked as such in the code. `--archive` is the machinery for
   fixing this: point it at the real files and check which findings fire on more than a
   third of them.
-- **`public/index.html` is a committed build artifact and was not regenerated.** Every
-  renderer change since it was built — the debrief, the table cuts, the segmented map bar
-  — is absent from the published site until someone rebuilds it locally, which needs the
-  IGC files and the network.
+- **`public/index.html` is a committed build artifact, and the `pages` job builds
+  nothing.** It checks the file exists and hands the directory to GitLab, so a green
+  pipeline republishes whatever was last committed — the site sat weeks out of date behind
+  successful pipelines until someone noticed the rose was still bottom-left. Rebuild and
+  commit it whenever the renderer changes. The current copy carries everything up to the
+  basemap spinner, but **it was built without `--meteo`**, because Open-Meteo is blocked
+  from the environment it was built in; the page now fetches the sounding at view time
+  instead, so the section is there, but a local rebuild with `--meteo` is still better.
 - FAI/flat triangle scoring with multipliers is not implemented; `xc.py` does free
   distance only.
 - Historical weather is surface-only: the ERA5 archive returns nulls on every pressure
