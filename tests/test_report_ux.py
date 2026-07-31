@@ -366,3 +366,65 @@ class TestPageText:
         debrief = source.index("{debrief_section}", view)
         assert view < charts < debrief, (
             "the debrief is back between the map and the charts")
+
+
+class TestBasemapSpinner:
+    """Stitching a basemap over a cross-country box is slow enough that "did my click
+    register" is a real question, and the credit line in the corner was the only sign."""
+
+    def _panel(self):
+        return view3d.panel({"bounds": {}}, "uid")
+
+    def test_the_panel_carries_a_loading_overlay(self):
+        panel = self._panel()
+        assert "view3d-loading" in panel
+        assert "view3d-spin" in panel
+
+    def test_it_starts_hidden(self):
+        assert 'class="view3d-loading" hidden' in self._panel()
+
+    def test_it_is_shown_when_tiles_start_loading(self):
+        assert "showLoading(" in view3d.SCRIPT
+
+    def test_every_exit_from_the_load_hides_it(self):
+        """Including the ones that give up: a spinner left running over terrain that is
+        never going to change is worse than no spinner."""
+        script = view3d.SCRIPT
+        assert script.count("hideLoading()") >= 3
+        assert "image.onerror = hideLoading" in script
+
+    def test_a_hung_request_is_given_up_on(self):
+        """The failure this suite originally missed.
+
+        A blocked host or a captive portal *hangs* rather than returning an error, so
+        neither the tile `onerror` nor `finish()` ever runs and the spinner — and the
+        credit line before it — sat there indefinitely. Measured against a proxy that
+        drops the tile hosts: still loading after eight seconds with nothing pending.
+        """
+        script = view3d.SCRIPT
+        assert "TILE_STALL_MS" in script
+        assert "function stall()" in script
+        # The watchdog and the normal finish must not both run.
+        assert "if (settled) return;" in script
+
+    def test_the_watchdog_is_a_stall_detector_not_a_deadline(self):
+        """A slow connection trickling 80 tiles in is still making progress, and cutting
+        it off at a fixed deadline would break exactly the case the spinner is for."""
+        script = view3d.SCRIPT
+        assert "function progress()" in script
+        # Every tile outcome re-arms it, errors included: the host answered either way.
+        assert script.count("progress();") >= 3
+
+    def test_it_clears_after_the_stitched_image_decodes_not_before(self):
+        """`shadedTexture` and `sampleCellColours` run after the last tile arrives, so
+        hiding on tile count leaves the reader watching unchanged terrain."""
+        script = view3d.SCRIPT
+        decode = script.index("image.onload = function ()")
+        assert script.index("hideLoading()", decode) < script.index(
+            "image.src = mosaic.toDataURL", decode)
+
+    def test_the_label_survives_reduced_motion(self):
+        """The global reduced-motion rule stops the ring, so the text beside it is what
+        carries the message."""
+        assert "view3d-loading-text" in self._panel()
+        assert "prefers-reduced-motion" in view3d.STYLE

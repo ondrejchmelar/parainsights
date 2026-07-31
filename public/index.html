@@ -823,6 +823,43 @@ canvas.view3d.is-dragging { cursor: grabbing; }
 .view3d-keys dt { color: var(--ink); font-family: ui-monospace, monospace; }
 .view3d-keys dd { margin: 0; color: var(--ink-2); }
 .view3d-hint[hidden], .view3d-keys[hidden] { display: none; }
+.view3d-loading[hidden] { display: none; }
+
+/* Centred over the terrain rather than in a corner: it is telling the reader that the
+   thing they are looking at is about to change, and a stitch over a cross-country box
+   takes long enough that "did my click register" is a real question. */
+.view3d-loading {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 14px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  border: 1px solid var(--rule-strong);
+  font-size: 12px;
+  color: var(--ink-2);
+  pointer-events: none;
+}
+.view3d-spin {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border: 2px solid var(--rule-strong);
+  border-top-color: var(--climb);
+  border-radius: 50%;
+  animation: view3d-spin 0.8s linear infinite;
+}
+@keyframes view3d-spin { to { transform: rotate(360deg); } }
+/* The report's global reduced-motion rule kills the animation, which would leave a
+   static ring saying nothing. The label beside it is what actually carries the message,
+   so the frozen ring is fine — but it must not read as a broken control, so it dims. */
+@media (prefers-reduced-motion: reduce) {
+  .view3d-spin { opacity: 0.35; }
+}
 .view3d-hint kbd {
   font-family: ui-monospace, monospace;
   border: 1px solid var(--rule-strong);
@@ -927,6 +964,9 @@ canvas.ql-canvas { display: block; width: 100%; height: auto; }
       
       <p class="view3d-credit">Imagery © Esri, Maxar, Earthstar Geographics</p>
       <p class="view3d-hint" hidden>arrows turn and tilt &middot; <kbd>?</kbd> for keys</p>
+      <div class="view3d-loading" hidden>
+        <span class="view3d-spin"></span><span class="view3d-loading-text"></span>
+      </div>
       <div class="view3d-keys" hidden>
         <p class="view3d-keys-head">Mouse and touch</p>
         <dl>
@@ -1320,6 +1360,9 @@ canvas.ql-canvas { display: block; width: 100%; height: auto; }
       
       <p class="view3d-credit">Imagery © Esri, Maxar, Earthstar Geographics</p>
       <p class="view3d-hint" hidden>arrows turn and tilt &middot; <kbd>?</kbd> for keys</p>
+      <div class="view3d-loading" hidden>
+        <span class="view3d-spin"></span><span class="view3d-loading-text"></span>
+      </div>
       <div class="view3d-keys" hidden>
         <p class="view3d-keys-head">Mouse and touch</p>
         <dl>
@@ -1713,6 +1756,9 @@ canvas.ql-canvas { display: block; width: 100%; height: auto; }
       
       <p class="view3d-credit">Imagery © Esri, Maxar, Earthstar Geographics</p>
       <p class="view3d-hint" hidden>arrows turn and tilt &middot; <kbd>?</kbd> for keys</p>
+      <div class="view3d-loading" hidden>
+        <span class="view3d-spin"></span><span class="view3d-loading-text"></span>
+      </div>
       <div class="view3d-keys" hidden>
         <p class="view3d-keys-head">Mouse and touch</p>
         <dl>
@@ -2134,6 +2180,9 @@ canvas.ql-canvas { display: block; width: 100%; height: auto; }
       
       <p class="view3d-credit">Imagery © Esri, Maxar, Earthstar Geographics</p>
       <p class="view3d-hint" hidden>arrows turn and tilt &middot; <kbd>?</kbd> for keys</p>
+      <div class="view3d-loading" hidden>
+        <span class="view3d-spin"></span><span class="view3d-loading-text"></span>
+      </div>
       <div class="view3d-keys" hidden>
         <p class="view3d-keys-head">Mouse and touch</p>
         <dl>
@@ -2454,11 +2503,33 @@ function initView3d(root, cursorTrack) {
     if (credit) credit.textContent = text;
   }
 
+  function showLoading(label) {
+    var box = root.querySelector('.view3d-loading');
+    if (!box) return;
+    box.querySelector('.view3d-loading-text').textContent = label;
+    box.hidden = false;
+  }
+
+  function hideLoading() {
+    var box = root.querySelector('.view3d-loading');
+    if (box) box.hidden = true;
+  }
+
+  // How long a stitch may go with *no tile arriving at all* before it is given up on.
+  // A stall detector rather than a deadline: a slow connection trickling 80 tiles in is
+  // still making progress and must not be cut off, but a request that hangs — which is
+  // what a blocked host or a captive portal does, rather than returning an error — used
+  // to leave "Loading satellite tiles…" on screen forever. Measured here against a
+  // proxy that drops the tile hosts: nothing ever resolved, and before this the credit
+  // line and the spinner both ran indefinitely.
+  var TILE_STALL_MS = 12000;
+
   function loadTiles(styleName) {
     var source = scene.tiles && scene.tiles[styleName];
     if (!source || loading) return;
     loading = true;
     showCredit('Loading ' + source.label.toLowerCase() + ' tiles…');
+    showLoading('Loading ' + source.label.toLowerCase() + '…');
     var zoom = tileZoom(source);
     var a = tileNumbers(dem.west, dem.north, zoom);
     var b = tileNumbers(dem.east, dem.south, zoom);
@@ -2494,7 +2565,31 @@ function initView3d(root, cursorTrack) {
       attribution: source.attribution
     };
 
+    var settled = false;
+    var watchdog = null;
+
+    function stall() {
+      if (settled) return;
+      settled = true;
+      loading = false;
+      hideLoading();
+      showCredit('Map imagery timed out — hillshade only');
+      pressSegment('[data-view3d-act="basemap-set"]', function (button) {
+        return button.dataset.style === 'off';
+      });
+      view.map = false;
+      draw();
+    }
+
+    function progress() {
+      if (watchdog) clearTimeout(watchdog);
+      watchdog = setTimeout(stall, TILE_STALL_MS);
+    }
+
     function finish() {
+      if (settled) return;    // the watchdog gave up first
+      settled = true;
+      if (watchdog) clearTimeout(watchdog);
       loading = false;
       if (done === 0) {
         // No tiles at all: almost certainly a content-security policy. Skip to the next
@@ -2503,6 +2598,7 @@ function initView3d(root, cursorTrack) {
           return name !== styleName && (ready[name] || embedded[name]);
         })[0];
         if (fallback) { setBasemapStyle(fallback); return; }
+        hideLoading();
         showCredit('Map imagery unavailable here — hillshade only');
         pressSegment('[data-view3d-act="basemap-set"]', function (button) {
           return button.dataset.style === 'off';
@@ -2513,6 +2609,10 @@ function initView3d(root, cursorTrack) {
       }
       layers.forEach(function (layer) { mctx.drawImage(layer, 0, 0); });
       var image = new Image();
+      // Hidden once the stitched image has decoded, not when the last tile arrives:
+      // `shadedTexture` and `sampleCellColours` still run after that, and hiding early
+      // leaves the reader looking at unchanged terrain with nothing happening.
+      image.onerror = hideLoading;
       image.onload = function () {
         var was = style;
         style = styleName;
@@ -2523,11 +2623,13 @@ function initView3d(root, cursorTrack) {
         scene.basemap = box;
         sampleCellColours();
         showCredit(source.attribution);
+        hideLoading();
         draw();
       };
       image.src = mosaic.toDataURL('image/jpeg', 0.82);
     }
 
+    progress();
     source.layers.forEach(function (template, index) {
       for (var ty = y0; ty <= y1; ty++) {
         for (var tx = x0; tx <= x1; tx++) {
@@ -2539,9 +2641,12 @@ function initView3d(root, cursorTrack) {
               layers[index].getContext('2d').drawImage(
                 image, (tx - x0) * size, (ty - y0) * size, size, size);
               done++;
+              progress();
               if (--pending === 0) finish();
             };
             image.onerror = function () {
+              // An error is progress too: the host answered, so the load is not stalled.
+              progress();
               if (--pending === 0) finish();
             };
             image.src = template.replace('{z}', zoom).replace('{x}', tx).replace('{y}', ty);
