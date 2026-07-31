@@ -484,14 +484,43 @@ def plan_view(analysis: Analysis, *, width: int = 1080, height: int = 230, route
 
 
 def budget_bar(analysis: Analysis, *, width: int = 460, height: int = 58) -> str:
-    """How the airtime was spent: one stacked bar, 2 px surface gaps."""
+    """How the airtime was spent: one stacked bar, 2 px surface gaps.
+
+    The last slice used to be one grey block called "other", which on a real flight is
+    forty unexplained minutes — and it is the slice most worth knowing, because the
+    transitions live in it. `analysis.other` already measures it three ways, so the bar
+    shows those instead of their total: sink flown straight, turning that did not climb,
+    and rising air no phase claimed.
+    """
     fractions = analysis.budget.fractions()
     order = [
         ("towing", "var(--tow)", "tow"),
         ("thermalling", "var(--climb)", "climbing"),
         ("gliding", "var(--sink)", "gliding"),
-        ("other", "var(--neutral)", "other"),
     ]
+    slice_ = getattr(analysis, "other", None)
+    total = analysis.budget.total or 1
+    if slice_ is not None and slice_.seconds:
+        # Sub-shares of the same airtime, so they stack against the phases on one scale.
+        # Any rounding remainder rides with the largest of the three rather than becoming
+        # a fourth sliver: three parts rounded to the second are not guaranteed to
+        # reproduce the budget's own `other`, and a three-second grey gap is not
+        # information.
+        split = {
+            "other_sink": slice_.straight_sink / total,
+            "other_scratch": slice_.scratching / total,
+            "other_rising": slice_.rising / total,
+        }
+        biggest = max(split, key=lambda key: split[key])
+        split[biggest] += fractions["other"] - sum(split.values())
+        fractions = {**fractions, **split}
+        order += [
+            ("other_sink", "var(--neutral)", "sinking"),
+            ("other_scratch", "var(--shadow-ink)", "scratching"),
+            ("other_rising", "var(--climb-1)", "drifting up"),
+        ]
+    else:
+        order.append(("other", "var(--neutral)", "other"))
     gap = 2
     bar_h = 26
     parts, labels = [], []

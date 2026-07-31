@@ -9,7 +9,7 @@ they should have done — the rule the report's credibility rests on.
 import pytest
 
 from tests.test_analysis import build, circling, straight
-from tracklog_viewer import debrief, igc
+from tracklog_viewer import debrief, igc, metrics
 from tracklog_viewer.analysis import analyse
 
 
@@ -181,13 +181,22 @@ class TestRouteFindings:
                       points=[Point(49.0, 14.0), Point(49.2, 14.2), Point(49.1, 14.3)])
         assert debrief._close_that_wasnt(self._analysis(tmp_path), route) is None
 
-    def test_detour_is_measured_against_the_scored_route(self, tmp_path):
+    def test_flying_far_to_score_little_is_not_a_finding(self, tmp_path):
+        """"You flew 121 km to score 48.64 km" describes the scoring rules, not the day.
+
+        A scored route is three turnpoints through a track that also had to climb, so the
+        ratio between the two is near-constant for the discipline — and charging the
+        difference as a cost in metres made a rule of the sport read as a mistake the
+        pilot made. The measurement survives in `metrics.detour` for the archive, where a
+        percentile across many flights can say something one flight's ratio cannot.
+        """
         analysis = self._analysis(tmp_path, "detour.igc")
         track = analysis.summary.track_distance
-        card = debrief._detour(analysis, Route(track / 3.0))
+        route = Route(track / 3.0)
 
-        assert card is not None
-        assert card.evidence["ratio"] == pytest.approx(3.0, abs=0.05)
+        assert metrics.detour(analysis, route) is not None, "the measurement was removed too"
+        ids = {f.id for f in debrief.build(analysis, route=route).findings}
+        assert "detour" not in ids
 
 
 class TestOtherSlice:
@@ -265,25 +274,24 @@ class TestLowPoint:
         clearance = [800.0] * len(analysis.series)
         assert debrief._low_point(analysis, clearance) is None
 
-    def test_a_negative_clearance_is_not_printed_as_a_number(self, tmp_path):
+    def test_a_negative_clearance_produces_no_card_at_all(self, tmp_path):
         """It means the DEM and the GPS disagree, not that the glider was underground.
 
         Measured on a 400 km flight: about 1.2 km per DEM cell, which averages a valley
         floor with the ridges beside it — the same flight reads -36 m alone and -227 m in
         a shared document, where the per-flight budget is halved.
+
+        A card that explained why its own headline was wrong was tried first and was worse
+        than nothing: "the elevation model puts you underground at 15:35:38" sat at the
+        top of a ranked list of things the flight did, and no disclaimer underneath undid
+        that framing. There is nothing here to tell the pilot, so nothing is told.
         """
         analysis = self._analysis(tmp_path)
         n = len(analysis.series)
         clearance = [800.0] * n
         clearance[n // 2] = -227.0
 
-        card = debrief._low_point(analysis, clearance)
-        assert card is not None
-        assert "-227" not in card.title, f"a negative clearance was headlined: {card.title!r}"
-        # Wording-agnostic: what matters is that the card blames the model rather than
-        # asserting the glider was underground, not which noun it picks for the model.
-        assert "model" in card.title.lower()
-        assert card.confidence < 1.0, "an untrustworthy number must be downgraded"
+        assert debrief._low_point(analysis, clearance) is None
 
 
 class TestTriangleCategory:

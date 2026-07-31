@@ -127,9 +127,18 @@ class TestTheSunFollowsTheCursor:
     def test_the_terrain_is_relit_as_the_cursor_moves(self, hovered):
         assert hovered["moved"] is True
 
-    def test_leaving_the_charts_puts_it_back(self, hovered):
-        assert hovered["afterLeaving"] == SUN["at"]
-        assert hovered["restored"] is True
+    def test_leaving_the_charts_holds_the_light_where_it_was(self, hovered):
+        """The marker goes; the light stays.
+
+        Snapping back to mid-flight was a full re-light and a colour swing across the
+        whole terrain, fired by the pointer merely leaving a chart on its way somewhere
+        else — and it undid the comparison the reader had just set up, usually at the
+        moment they turned to look at the ground. Mid-flight is still where an untouched
+        panel starts, which `test_it_rests_on_the_middle_of_the_flight` holds.
+        """
+        assert hovered["afterLeaving"] == CURSOR["min"][-1]
+        assert hovered["afterLeaving"] != SUN["at"], "the fixture cannot tell the two apart"
+        assert hovered["restored"] is False
 
 
 @needs_chrome
@@ -173,7 +182,9 @@ def test_the_light_moves_on_the_canvas_renderer_too():
     colours, so it re-lights by a completely different route and has to be checked."""
     answer = _probe(_scene(sun=SUN, wind=WIND, cursor=CURSOR), _HOVER, gl=False)
     assert answer["moved"] is True
-    assert answer["restored"] is True
+    # And holds the last light on leaving, by that same different route.
+    assert answer["afterLeaving"] == CURSOR["min"][-1]
+    assert answer["restored"] is False
 
 
 def test_the_payload_carries_a_day_the_page_can_interpolate():

@@ -11,6 +11,7 @@ interactive 3D view; it needs network tiles, so it cannot replace this one.
 
 import bisect
 import base64
+import datetime as dt
 import json
 import math
 from pathlib import Path
@@ -315,6 +316,10 @@ section { margin-top: 34px; }
 .chart .cursor { visibility: hidden; }
 .chart .cursor.on { visibility: visible; }
 .chart .cursor-dot { fill: var(--panel); stroke: var(--ink); stroke-width: 2; }
+/* A pinned marker is drawn heavier than a hovered one, or the reader cannot tell whether
+   the moment on screen is one they chose or one the mouse is passing over. */
+.is-pinned .chart .cursor-dot { stroke-width: 3.5; }
+.is-pinned .chart .crosshair { stroke-dasharray: none; }
 .chart .hit { fill: transparent; cursor: crosshair; }
 .chart .crosshair { stroke: var(--ink-2); stroke-width: 1; stroke-dasharray: 3 3; }
 .panel-divide { height: 1px; background: var(--rule); margin: 2px 6px 4px; }
@@ -503,6 +508,8 @@ th:first-child, td:first-child { text-align: left; padding-left: 2px; }
 td { padding: 7px 9px; border-bottom: 1px solid var(--rule); text-align: right;
   font-variant-numeric: tabular-nums; white-space: nowrap; }
 tbody tr { cursor: default; }
+/* A row that can drive the cursor says so, and one that cannot must not pretend to. */
+tbody tr.is-linked { cursor: pointer; }
 tbody tr:hover, tbody tr:focus-visible { background: var(--panel-2); outline: none; }
 tr.is-tow td:first-child { color: var(--tow); }
 .tag {
@@ -767,16 +774,25 @@ SCRIPT = """
         epoch: parseFloat(section.dataset.airEpoch)
       }).then(function (m) {
         var used = m.cloudbase > 0 ? Math.round(top / m.cloudbase * 100) : null;
-        stats.innerHTML =
+        var spread = Math.round(m.temperature - m.dew);
+        var html =
           tile('surface', Math.round(m.temperature) + ' °C',
-               'dew ' + Math.round(m.dew) + ' °C') +
-          tile('cloudbase', Math.round(m.cloudbase) + ' m', 'from the surface spread') +
+               'dew ' + Math.round(m.dew) + ' °C · spread ' + spread + ' K') +
+          tile('cloudbase', Math.round(m.cloudbase) + ' m',
+               spread + ' K spread, lifted until it closes') +
           tile('boundary layer', m.blTop ? Math.round(m.blTop) + ' m' : '—',
-               'model mixing depth') +
+               'as high as the day\\'s heating reaches') +
           tile('ceiling used', used === null ? '—' : used + '%',
-               'you reached ' + Math.round(top) + ' m') +
-          tile('model wind', Math.round(m.wind) + ' km/h',
-               'from ' + cardinal(m.windFrom) + ' at 850 hPa');
+               'you reached ' + Math.round(top) + ' m');
+        // No 850 hPa wind in the answer is missing data, and a missing wind is not a calm
+        // day: the tile read "model wind 0 km/h from N", which is a specific and wrong
+        // forecast rather than an absent one. An omitted tile says "not known"; a zero
+        // says "still". They are the opposite claim on a windy day.
+        if (m.wind > 0 && isFinite(m.windFrom)) {
+          html += tile('model wind', Math.round(m.wind) + ' km/h',
+                       'from ' + cardinal(m.windFrom) + ' at 850 hPa');
+        }
+        stats.innerHTML = html;
       }).catch(function (error) {
         stats.innerHTML = tile('weather', 'unavailable', error.message || String(error));
       });
@@ -941,7 +957,7 @@ function initFlight(root) {
     highlight(data.segment[index]);
   }
 
-  function hide() {
+  function clearMarker() {
     views.forEach(function (view) {
       if (view.cursor) view.cursor.classList.remove('on');
     });
@@ -950,16 +966,93 @@ function initFlight(root) {
     highlight(null);
   }
 
+  // A click pins the moment; hover alone is only a preview.
+  //
+  // Hover is the right default — sweep a chart and the map keeps up — but on its own it
+  // takes the marker away at exactly the moment the reader wants it: they have found
+  // something, and now they want to look at the 3D view, or read the row in the table, or
+  // point at the screen. Both the chart hover and the debrief's "show me" had that fault,
+  // and "show me" had it worse, because it is a deliberate act that any stray mouse
+  // movement then undid.
+  //
+  // So: a click pins. Hovering still previews and moves the marker; leaving the chart
+  // returns to the pinned point rather than clearing; and the pin lets go on a second
+  // click, on Escape, or after PIN_IDLE_MS with no interaction with this flight at all.
+  // The timeout is re-armed by any hover, so it expires after the reader has stopped
+  // looking rather than while they are still reading.
+  var PIN_IDLE_MS = 30000;
+  var pinned = null;
+  var pinTimer = null;
+
+  function armPin() {
+    if (pinTimer) { clearTimeout(pinTimer); pinTimer = null; }
+    if (pinned !== null) pinTimer = setTimeout(release, PIN_IDLE_MS);
+  }
+
+  function release() {
+    if (pinTimer) { clearTimeout(pinTimer); pinTimer = null; }
+    pinned = null;
+    root.classList.remove('is-pinned');
+    clearMarker();
+  }
+
+  // The view a marker should be positioned from: `place` skips a chart with no layout
+  // box, so a hidden profile variant would leave the tooltip placed against nothing.
+  function visibleView() {
+    for (var i = 0; i < views.length; i++) {
+      if (views[i].svg.getClientRects().length) return views[i];
+    }
+    return null;
+  }
+
+  function markAt(index, view) {
+    view = view || visibleView();
+    if (!view) return false;
+    index = Math.max(0, Math.min(index, view.px.length - 1));
+    place(index, view,
+          { box: view.svg.getBoundingClientRect(), vb: view.svg.viewBox.baseVal });
+    return true;
+  }
+
+  // Pin, and bring the moment into view in the 3D panel as well — a pinned point the
+  // reader cannot see on the map answers half the question they asked.
+  function pinAt(index, view) {
+    if (!markAt(index, view)) return;
+    pinned = index;
+    root.classList.add('is-pinned');
+    if (terrainView && terrainView.revealCursor) terrainView.revealCursor(index);
+    armPin();
+  }
+
+  function restore() {
+    if (pinned === null) { clearMarker(); return; }
+    markAt(pinned);
+    armPin();
+  }
+
   views.forEach(function (view) {
     function show(event) {
       var point = svgPoint(view, event);
       place(nearestIndex(view, point), view, point);
+      armPin();
     }
     view.hit.addEventListener('mousemove', show);
-    view.hit.addEventListener('mouseleave', hide);
+    view.hit.addEventListener('mouseleave', restore);
+    view.hit.addEventListener('click', function (event) {
+      var point = svgPoint(view, event);
+      var index = nearestIndex(view, point);
+      // Clicking the pinned point again is how the reader lets go without hunting for a
+      // key, so the same click both pins and unpins.
+      if (pinned === index) release(); else pinAt(index, view);
+    });
     view.hit.addEventListener('touchmove', function (event) {
       if (event.touches.length) { show(event.touches[0]); event.preventDefault(); }
     }, { passive: false });
+  });
+
+  // Escape lets go from anywhere, which is the one shortcut a reader will guess.
+  root.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && pinned !== null) { release(); event.preventDefault(); }
   });
 
   // "show me" on a debrief card drives the cursor the charts already share, rather than
@@ -973,16 +1066,11 @@ function initFlight(root) {
     button.addEventListener('click', function () {
       var index = parseInt(button.getAttribute('data-finding-cursor'), 10);
       if (isNaN(index)) return;
-      // A hidden profile variant has no layout box and `place` skips it, so pick a view
-      // that is actually on screen — otherwise the tooltip is positioned from nothing.
-      var view = null;
-      for (var i = 0; i < views.length; i++) {
-        if (views[i].svg.getClientRects().length) { view = views[i]; break; }
-      }
+      var view = visibleView();
       if (!view) return;
-      index = Math.max(0, Math.min(index, view.px.length - 1));
-      place(index, view,
-            { box: view.svg.getBoundingClientRect(), vb: view.svg.viewBox.baseVal });
+      // Pinned rather than merely placed. "Show me" is a deliberate act, and it used to
+      // be undone by the reader's own mouse on its way to look at what had been shown.
+      pinAt(index, view);
       view.svg.scrollIntoView({ block: 'center', behavior: 'smooth' });
     });
   });
@@ -1039,12 +1127,35 @@ function initFlight(root) {
     });
   });
 
+  // The tables are the third way into the same moment. Hovering a row lights the matching
+  // band and mark, which it always did; clicking one now pins the cursor to where that
+  // climb or glide began, in both charts and on the 3D map — the reader had a row in
+  // front of them and no way to ask where on the ground it happened.
+  //
+  // `data-cursor` is a position in the sampled arrays the charts are drawn over, mapped
+  // from the segment's fix index in Python, exactly as a finding's cursor is. A row
+  // without one (a table built with no sample) simply stays hover-only.
   root.querySelectorAll('tr[data-segment]').forEach(function (row) {
     row.tabIndex = 0;
     row.addEventListener('mouseenter', function () { highlight(row.dataset.segment); });
     row.addEventListener('focus', function () { highlight(row.dataset.segment); });
-    row.addEventListener('mouseleave', function () { highlight(null); });
-    row.addEventListener('blur', function () { highlight(null); });
+    row.addEventListener('mouseleave', function () {
+      if (pinned === null) highlight(null); else restore();
+    });
+    row.addEventListener('blur', function () {
+      if (pinned === null) highlight(null); else restore();
+    });
+
+    var at = parseInt(row.dataset.cursor, 10);
+    if (isNaN(at)) return;
+    row.classList.add('is-linked');
+    function go() {
+      if (pinned === at) release(); else pinAt(at);
+    }
+    row.addEventListener('click', go);
+    row.addEventListener('keydown', function (event) {
+      if (event.key === 'Enter' || event.key === ' ') { go(); event.preventDefault(); }
+    });
   });
 }
 
@@ -1164,6 +1275,33 @@ def _cursor_data(analysis: Analysis) -> dict:
     }
 
 
+def _sample_position(sample: list[int], fix: int) -> int:
+    """The sampled position nearest a *fix* index.
+
+    Charts are drawn over a few hundred sampled fixes and every cursor array is indexed by
+    position in that sample, while a finding and a segment both point at a fix. Mapped
+    here rather than in the page: the sample list is right here, and the alternative is
+    shipping it a second time so JavaScript can repeat the same search.
+    """
+    position = bisect.bisect_left(sample, fix)
+    if position >= len(sample):
+        return len(sample) - 1
+    if position and abs(sample[position - 1] - fix) <= abs(sample[position] - fix):
+        return position - 1
+    return position
+
+
+def _row_cursor(sample: list[int] | None, fix: int) -> str:
+    """`data-cursor` for a table row, so clicking it drives the linked cursor.
+
+    Absent when the table was built without a sample, and the page treats a row with no
+    attribute as hover-only rather than guessing a position.
+    """
+    if not sample:
+        return ""
+    return f' data-cursor="{_sample_position(sample, fix)}"'
+
+
 def _stat(key: str, value: str, unit: str = "", sub: str = "") -> str:
     unit_html = f"<small>{unit}</small>" if unit else ""
     sub_html = f'<span class="sub">{sub}</span>' if sub else ""
@@ -1188,16 +1326,15 @@ def _clearance_note(clearance) -> str:
     inside = clearance[low:high]
     median = float(np_median(inside))
     if inside.min() < 0:
-        # The same honesty the low-point card applies: a negative clearance means the DEM
-        # and the GPS disagree, not that the glider was underground, and quoting the
-        # figure as a fact here while the card refuses to would be the two contradicting
-        # each other about the same flight.
-        below = int((inside < 0).sum())
+        # The DEM has put part of the track under the ground, so the *lowest* clearance is
+        # not a number about this flight and is not quoted — the same refusal the
+        # low-point card makes, for the same reason. Counting the offending fixes and
+        # explaining the grid spacing was tried and read as a finding about the flight
+        # rather than about the model. The median over hundreds of fixes survives a few
+        # bad cells, so it stays.
         return (
-            f"Median ground clearance in flight was {median:.0f}&nbsp;m; "
-            f"{below} of {len(inside)} airborne fixes fall below the terrain model, "
-            f"where the grid is too coarse to separate a valley floor from the ridges "
-            f"beside it. The launch and the landing are left out."
+            f"Median ground clearance in flight was {median:.0f}&nbsp;m &mdash; the launch "
+            f"and the landing are left out, or both would win by being on the ground."
         )
     return (
         f"Lowest ground clearance in flight was {inside.min():.0f}&nbsp;m, median "
@@ -1259,7 +1396,7 @@ def _ceiling_tile(analysis: Analysis, meteo, peak_time: str, offset: float) -> t
             f"{use.source.replace('_', ' ')}".replace(",", " "))
 
 
-def _thermal_rows(analysis: Analysis) -> str:
+def _thermal_rows(analysis: Analysis, sample: list[int] | None = None) -> str:
     rows = []
     number = 0
     best_climb = max((s.average_climb for s in analysis.thermals), default=1.0)
@@ -1289,11 +1426,16 @@ def _thermal_rows(analysis: Analysis) -> str:
             if segment.turn_direction
             else "<span class='dir'>—</span>"
         )
+        # Reversals were measured and never shown, while the caption beside the table
+        # named them as one of the two columns saying how tidily the climb was flown.
+        # Zero is a real answer here — one direction throughout — so it prints as 0 and
+        # only an unmeasurable climb gets the dash.
+        reversals = f"{segment.reversals}" if segment.reversals is not None else "—"
         circle = f"{segment.circle_seconds:.0f}" if segment.circle_seconds else "—"
         radius = f"{segment.circle_radius:.0f}" if segment.circle_radius else "—"
         efficiency = f"{segment.efficiency:.0f}%" if segment.efficiency is not None else "—"
         rows.append(
-            f'<tr data-segment="{segment.start}"'
+            f'<tr data-segment="{segment.start}"{_row_cursor(sample, segment.start)}'
             f'{" class=is-tow" if segment.phase is Phase.TOW else ""}>'
             f"<td>{label} {tag}</td>"
             f"<td>{segment.start_time}</td>"
@@ -1303,11 +1445,12 @@ def _thermal_rows(analysis: Analysis) -> str:
             f'<td><span class="bar-cell">{segment.average_climb:+.2f}'
             f'<span class="bar" style="width:{width:.0f}px"></span></span></td>'
             f"<td>{efficiency}</td>"
-            # Five columns of circling mechanics: a whole sub-story, and a specialist one.
+            # Six columns of circling mechanics: a whole sub-story, and a specialist one.
             # Kept, because a finding cites radius as its receipt, but folded away.
             f'<td class="circling-detail">{turns}</td>'
             f'<td class="circling-detail">{per_turn}</td>'
             f'<td class="circling-detail">{direction}</td>'
+            f'<td class="circling-detail">{reversals}</td>'
             f'<td class="circling-detail">{circle}</td>'
             f'<td class="circling-detail">{radius}</td>'
             f'<td class="spark-cell">'
@@ -1317,13 +1460,13 @@ def _thermal_rows(analysis: Analysis) -> str:
     return "".join(rows)
 
 
-def _glide_rows(analysis: Analysis) -> str:
+def _glide_rows(analysis: Analysis, sample: list[int] | None = None) -> str:
     rows = []
     best = max((s.average_ld or 0) for s in analysis.glides) if analysis.glides else 1.0
     for index, segment in enumerate(analysis.glides, start=1):
         ld = f"{segment.average_ld:.1f}" if segment.average_ld else "—"
         rows.append(
-            f'<tr data-segment="{segment.start}">'
+            f'<tr data-segment="{segment.start}"{_row_cursor(sample, segment.start)}>'
             f"<td>{index}</td>"
             f"<td>{segment.start_time}</td>"
             f"<td>{_short_duration(segment.duration)}</td>"
@@ -1467,6 +1610,40 @@ def _air_fetch_section(analysis: Analysis, uid: str) -> str:
   </section>"""
 
 
+def _cap_note(meteo) -> str:
+    """What the profile does immediately above the thermal top, on *this* day.
+
+    A dry adiabat cools at about 9.8 K/km, so a layer cooling much more slowly than that
+    is what stops a thermal — the "cap" a pilot feels as a day that will not go higher.
+    Measured over the first kilometre above the top; silent when the sounding does not
+    reach far enough to say anything, which is the usual reason to have no opinion.
+    """
+    top = meteo.thermal_top
+    if not top or not meteo.levels:
+        return ""
+    above = sorted(
+        (level for level in meteo.levels if level.height >= top),
+        key=lambda level: level.height,
+    )
+    if len(above) < 2 or above[-1].height - above[0].height < 400:
+        return ""
+    span = min(above[-1], above[1], key=lambda level: abs(level.height - top - 1000.0))
+    rise = span.height - above[0].height
+    if rise < 400:
+        return ""
+    lapse = (above[0].temperature - span.temperature) / rise * 1000.0
+    if lapse < 6.0:
+        return (
+            f" Above that the profile cools {lapse:.1f}&nbsp;K/km against the dry "
+            f"adiabat's 9.8 — a stable layer, which is what a day that caps out feels "
+            f"like from the harness."
+        )
+    return (
+        f" Above that it still cools {lapse:.1f}&nbsp;K/km, so nothing in the profile "
+        f"was holding the day down."
+    )
+
+
 def _meteo_section(analysis: Analysis, meteo, uid: str = "") -> str:
     """The day's air: sounding, ceilings, and how they compare with what was flown."""
     if meteo is None:
@@ -1479,7 +1656,12 @@ def _meteo_section(analysis: Analysis, meteo, uid: str = "") -> str:
         ("surface", f"{meteo.surface_temperature:.0f} °C",
          f"dew {meteo.surface_dew_point:.0f} °C · spread "
          f"{meteo.surface_temperature - meteo.surface_dew_point:.0f} K"),
-        ("cloudbase", f"{meteo.cloudbase:,.0f} m".replace(",", " "), "from the surface spread"),
+        # The caption names the arithmetic, not a tile beside it. It read "from the surface
+        # spread" — which is true, and points at a number the reader can only find by
+        # reading the tile to its left and doing the subtraction themselves.
+        ("cloudbase", f"{meteo.cloudbase:,.0f} m".replace(",", " "),
+         f"{meteo.surface_temperature - meteo.surface_dew_point:.0f} K spread, lifted "
+         f"until it closes"),
     ]
     if meteo.thermal_top:
         chips.append(
@@ -1488,8 +1670,12 @@ def _meteo_section(analysis: Analysis, meteo, uid: str = "") -> str:
         )
     if meteo.boundary_layer_top:
         chips.append(
+            # Not "model mixing depth", and not "how deep the model mixes the day's
+            # thermals" either — both name the mechanism to a reader who wants the
+            # consequence. What a pilot is looking at is a ceiling: the height the
+            # surface heating reaches, above which the model has no thermals left.
             ("boundary layer", f"{meteo.boundary_layer_top:,.0f} m".replace(",", " "),
-             "model mixing depth")
+             "as high as the day's heating reaches")
         )
     # "you reached" is deliberately not a chip any more. It was the same number as the
     # MAX ALTITUDE stat tile, printed twice, 2 000 px apart, in two different stat rows.
@@ -1531,12 +1717,14 @@ def _meteo_section(analysis: Analysis, meteo, uid: str = "") -> str:
         verdict = (
             f"{abs(difference):.0f} m above" if difference > 0 else f"{abs(difference):.0f} m below"
         )
+        # The lapse rate above the thermal top, measured from this flight's own sounding.
+        # It used to read "above ~2 080 m the profile only cools 4 K/km" on every report
+        # ever produced — the reference flight's numbers, typed into the template, printed
+        # as a fact about whatever day was being looked at.
         ceiling_note = (
             f"<p>The sounding puts the dry thermal top at "
             f"{meteo.thermal_top:,.0f}&nbsp;m".replace(",", " ")
-            + f" and you topped out {verdict} it. Above ~2 080&nbsp;m the profile only cools "
-            f"4&nbsp;K/km — a stable layer, which is what a day that caps out feels like from "
-            f"the harness.</p>"
+            + f" and you topped out {verdict} it.{_cap_note(meteo)}</p>"
         )
 
     return f"""
@@ -1643,7 +1831,59 @@ def _verdict_strip(result, analysis=None, archive=None, peers=None) -> str:
   </div>"""
 
 
-def _debrief_cards(result, uid: str, sample: list[int], context: str = "") -> str:
+def _other_note(analysis: Analysis) -> str:
+    """The unclassified slice, split into the three things it is actually made of.
+
+    "40 min unclassified" names a gap in the analysis rather than anything the flight
+    did. The three parts are the flight: sink flown straight is what a glide costs,
+    turning without climbing is a thermal that did not work, and rising air outside any
+    phase is mostly the run-in the climb rule deliberately trims off — which is why the
+    slice is often *profitable* and must never be summed up as a loss.
+    """
+    slice_ = analysis.other
+    if slice_ is None or not slice_.seconds:
+        return ""
+    net = slice_.net_altitude
+    # Minutes, not "0 m 07 s". These three are always the small numbers on the page, and
+    # `_duration`'s seconds field makes a seven-second sliver look like a measurement.
+    def minutes(seconds: int) -> str:
+        return f"{seconds / 60:.0f} min" if seconds >= 30 else "under a minute"
+
+    return (
+        f" That last part is {minutes(slice_.straight_sink)} of straight sink, "
+        f"{minutes(slice_.scratching)} turning without climbing and "
+        f"{minutes(slice_.rising)} of rising air no phase claimed — a net "
+        f"{abs(net)} m {'gained' if net > 0 else 'lost'} over the whole of it."
+    )
+
+
+def _meteo_reason(analysis: Analysis) -> str:
+    """Why this flight has no sounding, in terms of the flight rather than the build.
+
+    Open-Meteo's operational archive keeps pressure levels for roughly `RECENT_DAYS`; the
+    ERA5 reanalysis behind it answers older dates with surface fields and nulls on every
+    level. So for an old flight there is nothing to fetch and never will be, which is a
+    different sentence from "this build did not ask for it" — and it is the answer to the
+    question the old wording provoked, that the weather is downloaded for every flight.
+    """
+    from . import meteo as meteo_module
+
+    try:
+        flown = analysis.flight.time[0].astype("datetime64[D]").astype(object)
+    except (AttributeError, IndexError, ValueError):
+        return ""
+    age = (dt.date.today() - flown).days
+    if age > meteo_module.RECENT_DAYS:
+        return (
+            f"this flight is {age // 30} months old and the weather archive keeps a "
+            f"vertical profile for about {meteo_module.RECENT_DAYS} days, so the day's "
+            f"sounding can no longer be fetched"
+        )
+    return "the day's sounding was not fetched when this report was built"
+
+
+def _debrief_cards(result, uid: str, sample: list[int], context: str = "",
+                   meteo_reason: str = "") -> str:
     """The findings, immediately under the instrument they point into.
 
     Each card is a measurement plus a link, never an imperative — the phrasing is
@@ -1663,17 +1903,7 @@ def _debrief_cards(result, uid: str, sample: list[int], context: str = "") -> st
             footer.append(f'<span class="finding-when">{charts.escape(finding.at)}</span>')
         link = ""
         if finding.cursor is not None and sample:
-            # A finding's `cursor` is a *fix* index; the charts are drawn over the
-            # sampled subset, and the cursor arrays are indexed by sample position. Map
-            # it here rather than in the page — the sample list is right here, and the
-            # alternative is shipping it a second time just to do the same search in JS.
-            position = bisect.bisect_left(sample, finding.cursor)
-            if position >= len(sample):
-                position = len(sample) - 1
-            elif position and abs(sample[position - 1] - finding.cursor) <= abs(
-                sample[position] - finding.cursor
-            ):
-                position -= 1
+            position = _sample_position(sample, finding.cursor)
             link = (
                 f'<button type="button" class="finding-link" '
                 f'data-finding-cursor="{position}">show me &rarr;</button>'
@@ -1688,12 +1918,18 @@ def _debrief_cards(result, uid: str, sample: list[int], context: str = "") -> st
             f"</article>"
         )
 
-    # Why the list is short, when it is short. "Degrade, do not blank" cuts both ways:
-    # a reader who knows the ceiling findings need `--meteo` is better served than one
-    # left wondering why a card is missing.
+    # Why the list is short, when it is short. "Degrade, do not blank" cuts both ways: a
+    # reader told why a card is missing is better served than one left wondering.
+    #
+    # These name what is absent, not the switch that would have fetched it. `--meteo` and
+    # `--terrain` are arguments to a command the reader of a published page never ran and
+    # cannot run, and quoting them invited exactly the right question — "isn't the weather
+    # always downloaded?" — with no answer on the page. `meteo_reason` answers it, because
+    # the commonest cause is not a missing flag at all: past about two months there is no
+    # sounding to fetch.
     reasons = {
-        "terrain": "ground clearance needs --terrain",
-        "meteo": "the ceiling findings need --meteo",
+        "terrain": "ground clearance needs an elevation model, which this report has none of",
+        "meteo": meteo_reason or "the day's sounding is not in this report",
         "route": "the route findings need a scored route",
         "sampling": "this track is too coarse to count circles",
     }
@@ -1821,7 +2057,7 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
             f"({f'{tow.swept_turns:.1f} turns of heading' if tow.swept_turns is not None else 'nearly straight'}). "
             f"It is kept out of the thermal statistics and out of the "
             f"wind estimate, where a straight climb would have measured the glider's own "
-            f"track rather than the air. igc2kmz counts it as thermal number one.</p>"
+            f"track rather than the air.</p>"
         )
 
     view3d_section = ""
@@ -1867,17 +2103,25 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
     if performance is not None:
         curve = airmass.polar(analysis, wind_field)
         best = (
-            f" The best bin of the measured polar sits at {curve.best_glide[0]:.0f} km/h"
-            f" for {curve.best_glide[1]:.1f}:1."
+            f" Your best glides came at about {curve.best_glide[0]:.0f} km/h through the"
+            f" air, where the wing returned {curve.best_glide[1]:.1f}:1."
             if curve and curve.best_glide
             else ""
         )
+        # One clause per idea, in the order a reader needs them: what the wing did, what
+        # the ground said, and only then how the two were reconciled. The old sentence
+        # opened on "through the air the median is 8.7:1 against 8.0:1 over the ground, at
+        # a median 36 km/h airspeed \u2014 corrected with the wind measured by 9 circled climbs
+        # (confidence 0.51)", which put the correction, its evidence and its uncertainty
+        # into one trailing clause and asked the reader to hold all three.
         air_note = (
-            f" Through the air the median is <strong>{performance.air_ld:.1f}:1</strong>"
-            f" against {performance.ground_ld:.1f}:1 over the ground, at a median"
-            f" {performance.median_airspeed:.0f} km/h airspeed \u2014 corrected with the"
-            f" wind measured by {len(wind_field.soundings)} circled climbs"
-            f" (confidence {performance.confidence:.2f}).{best}"
+            f" Taking the wind out of it, the wing's own median glide was"
+            f" <strong>{performance.air_ld:.1f}:1</strong> at"
+            f" {performance.median_airspeed:.0f} km/h through the air, against"
+            f" {performance.ground_ld:.1f}:1 measured over the ground. The wind subtracted"
+            f" is the one sounded from {len(wind_field.soundings)} circled climbs, which"
+            f" this flight supports to about"
+            f" {performance.confidence:.0%}.{best}"
         )
 
     # The debrief is computed here and baked in: findings are sentences, and there is no
@@ -1891,6 +2135,7 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
     debrief_section = _debrief_cards(
         debrief_result, uid, sample,
         context=f"{_clearance_note(clearance)} {_trigger_note(analysis, terrain)}",
+        meteo_reason=_meteo_reason(analysis) if meteo is None else "",
     )
 
     compare_values = {
@@ -1924,8 +2169,11 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
   <section>
     <div class="section-head">
       <h2>Side view and top view</h2>
-      <p>The same flight twice. Hover either and the marker appears in both — and in the
-         3D view above — so you can see where on the ground any moment happened.</p>
+      <p>Hovering a moment in one chart marks the same moment in the other and in the 3D
+         view above, so a point on the climb trace can be found on the ground. Click to
+         keep it there while you look; click again, or press <kbd>Esc</kbd>, to let go. A
+         row in the climbs or glides table below does the same for where that phase
+         began.</p>
     </div>
     <div class="toggle" role="group" aria-label="Ground axis for the side view">
       <button type="button" class="toggle-button is-on" data-profile="flown" aria-pressed="true">
@@ -1978,7 +2226,8 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
     <div class="section-head">
       <h2>Where the time went</h2>
       <p>{_duration(budget.thermalling)} climbing across {len(thermals)} thermals,
-        {_duration(budget.gliding)} gliding, {_duration(budget.other)} unclassified.</p>
+        {_duration(budget.gliding)} gliding, and {_duration(budget.other)} that was
+        neither.{_other_note(analysis)}</p>
     </div>
     <div class="panel" style="padding:18px 20px 12px">
       {charts.budget_bar(analysis, width=1040)}
@@ -2016,15 +2265,11 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
   <section>
     <div class="section-head">
       <h2>Climbs</h2>
-      <p><strong>Turns</strong> is <em>full circles</em>: the heading coming all the way round,
-         in one direction. Swinging the nose does not count, so a wingover — 180&#176; out and
-         180&#176; back — is nothing here, and a climb worked both ways adds up the circles from
-         each rather than cancelling them out. A part circle scores zero.
-         <strong>m/turn</strong> is what a circle buys you: height gained per circle,
-         so a thermal worked tightly in the core shows more metres per turn than the same
-         average climb ground out in wide circles. <strong>Eff</strong> is mean climb over the
-         best 20&nbsp;s of the same climb — the closest single number to &ldquo;did you stay in
-         the core&rdquo;. Reversals and radius say how tidily it was flown.{" This track is sampled every " + f"{summary.sample_interval:.0f}" + " s, which is too coarse to resolve a circle, so the turn columns are blank." if coarse else ""}</p>
+      <p><strong>Eff</strong> is mean climb over the best 20&nbsp;s of the same climb — the
+         closest single number to &ldquo;did you stay in the core&rdquo;. <strong>Rev</strong>
+         counts reversals: the times the turn changed direction mid-climb, so a thermal
+         circled one way throughout reads zero. With <strong>radius</strong> it says how
+         tidily the climb was flown.{" This track is sampled every " + f"{summary.sample_interval:.0f}" + " s, which is too coarse to resolve a circle, so the turn columns are blank." if coarse else ""}</p>
     </div>
     <div class="toggle toggle-small" role="group" aria-label="Circling detail columns">
       <button type="button" class="toggle-button" data-detail="circling" aria-pressed="false">
@@ -2037,11 +2282,12 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
             <th>#</th><th>start</th><th>time</th><th>gain m</th><th>top m</th>
             <th>avg m/s</th><th>eff</th>
             <th class="circling-detail">turns</th><th class="circling-detail">m/turn</th>
-            <th class="circling-detail">dir</th><th class="circling-detail">s/turn</th>
+            <th class="circling-detail">dir</th><th class="circling-detail">rev</th>
+            <th class="circling-detail">s/turn</th>
             <th class="circling-detail">radius m</th>
             <th>over time &rarr;</th>
           </tr></thead>
-          <tbody>{_thermal_rows(analysis)}</tbody>
+          <tbody>{_thermal_rows(analysis, sample)}</tbody>
         </table>
       </div>
     </div>
@@ -2050,9 +2296,8 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
   <section>
     <div class="section-head">
       <h2>Glides</h2>
-      <p>Glide ratio here is what was achieved over the ground, so it beats the wing's
-         still-air figure whenever the line was working. Bar length and shade both carry
-         the ratio.{air_note}</p>
+      <p>Glide ratio in this table is over the ground, so it carries whatever the wind was
+         doing as well as the wing.{air_note}</p>
     </div>
     <ul class="legend" style="margin:0 0 12px">
       <li class="legend-title">glide ratio:</li>
@@ -2067,7 +2312,7 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
         <table>
           <thead><tr><th>#</th><th>start</th><th>time</th><th>km</th>
             <th>glide</th><th>km/h</th></tr></thead>
-          <tbody>{_glide_rows(analysis)}</tbody>
+          <tbody>{_glide_rows(analysis, sample)}</tbody>
         </table>
       </div>
     </div>
@@ -2091,17 +2336,13 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
         'recovered — they are left blank rather than guessed, and distance flown reads low '
         'because the sampling cuts the corners off every turn. Analyse the IGC instead of a KML '
         'where you have it.</p>' % summary.sample_interval if coarse else ''}
-      <p><strong>Phases</strong> come from comparing progress — straight-line distance over
-        distance flown in a 20&nbsp;s window — against climb rate. Above 0.9 is gliding; below
-        it with lift is a climb. The heuristic is Tom Payne's, from igc2kmz.</p>
+      <p><strong>A climb is the circling, not the run-in to it.</strong> A climb is time
+        spent turning in lift and a glide is time spent going somewhere without it. The
+        straight run into a thermal is neither, and lands in the unclassified time
+        below.</p>
       <p><strong>Wind is inferred, not measured.</strong> While circling, the glider's own
         airspeed averages out and the track drifts with the air. Climbs flown fewer than two
         full turns, or in both directions, are excluded — they measure the pilot, not the wind.</p>
-      <p><strong>Cross-checked against igc2kmz</strong> on this same file: it finds the same
-        {len(thermals) + (1 if tow else 0)} climbs and {len(analysis.glides)} glides, with start
-        times within 4&nbsp;s.{" Its altitude figures run higher because it prefers GPS "
-        "altitude where this reads baro." if summary.altitude_source == "baro" else
-        " Both read the same GPS altitude here, so the heights agree."}</p>
       <p>The {len(analysis.glides)} glides and {len(thermals)} climbs account for
         {(1 - budget.fractions()["other"]) * 100:.0f}% of airtime. The rest is transitions too
         short or too ambiguous to call, which is honest rather than tidy.</p>
@@ -2111,7 +2352,7 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
   <footer>
     <span>{summary.fixes:,} fixes at {summary.duration / summary.fixes:.1f} s · timezone from
       {charts.escape(summary.timezone or "UTC")}</span>
-    <span>tracklog viewer · analysis rendered locally, no external requests</span>
+    <span>tracklog viewer · your track is analysed in this page and never uploaded</span>
   </footer>
   <script type="application/json" class="cursor-data">{json.dumps(_cursor_data(analysis))}</script>
 </article>

@@ -213,3 +213,130 @@ def test_rotation_is_the_same_gesture_on_a_retina_screen():
     assert retina["ratio"] == 2 and ordinary["ratio"] == 1, "the fixture did not scale"
     assert retina["yaw"] == pytest.approx(ordinary["yaw"], abs=1e-6)
     assert retina["pitch"] == pytest.approx(ordinary["pitch"], abs=1e-6)
+
+
+# The keyboard, measured the same way as the pointer. Which modifier carries which action
+# cannot be read off the source either — `SHIFT_ACTS` beside `KEY_ACTS` looks right
+# whichever way round it is written — and the direction a key turns the ground is the same
+# three-convention problem the twist has.
+_KEYS = """
+var h = window.__handle;
+var canvas = document.querySelector('canvas.view3d');
+%s
+function reset() {
+  h.view.yaw = 0; h.view.pitch = 0.6; h.view.zoom = 1;
+  h.view.panX = 0; h.view.panY = 0;
+  h.redraw();
+}
+function press(key, shift) {
+  reset();
+  var before = bearing();
+  canvas.dispatchEvent(new KeyboardEvent('keydown', {
+    key: key, shiftKey: !!shift, bubbles: true, cancelable: true
+  }));
+  h.redraw();
+  return { yaw: h.view.yaw, pitch: h.view.pitch,
+           panX: h.view.panX, panY: h.view.panY,
+           scene: settle(bearing() - before) };
+}
+return {
+  left: press('ArrowLeft', false),
+  right: press('ArrowRight', false),
+  up: press('ArrowUp', false),
+  shiftLeft: press('ArrowLeft', true),
+  shiftRight: press('ArrowRight', true),
+  shiftUp: press('ArrowUp', true)
+};
+""" % _BEARING
+
+
+@needs_chrome
+def test_bare_arrows_pan_and_shifted_arrows_turn():
+    """The keyboard agrees with the pointer about what shift means.
+
+    A plain drag pans and a modified drag rotates, so a plain arrow has to pan and a
+    shifted one has to rotate. It was the other way round, which made shift mean
+    "rotate instead of pan" on the mouse and "pan instead of rotate" on the keyboard —
+    on the same panel, at the same time.
+    """
+    keys = _probe(_scene(basemap=False), _KEYS)
+
+    for name in ("left", "right", "up"):
+        step = keys[name]
+        assert step["yaw"] == 0 and step["pitch"] == pytest.approx(0.6), (
+            f"a bare {name} arrow moved the camera instead of panning: {step}")
+    assert keys["left"]["panX"] != 0 and keys["right"]["panX"] != 0, "arrows did not pan"
+    assert keys["left"]["panX"] == -keys["right"]["panX"], "left and right pan differently"
+    assert keys["up"]["panY"] != 0, "the up arrow did not pan"
+
+    # A shifted arrow moves the camera. It moves the pan as well, and that is not a pan:
+    # a turn is anchored through `holdGround` so the ground under the middle of the view
+    # stays under it, exactly as the orbit drag does, and that costs a pan offset.
+    assert keys["shiftLeft"]["yaw"] != 0 and keys["shiftRight"]["yaw"] != 0, (
+        "shift + left/right did not turn the camera")
+    assert keys["shiftLeft"]["yaw"] == -keys["shiftRight"]["yaw"], (
+        "shift + left and shift + right turn by different amounts")
+    assert keys["shiftUp"]["pitch"] > 0.6, "shift + up did not tilt up"
+    assert keys["shiftUp"]["yaw"] == 0, "shift + up turned as well as tilting"
+
+
+@needs_chrome
+def test_shift_left_turns_the_ground_to_the_left():
+    """The map turns the way the key points, which is *not* the orbit drag's sense.
+
+    Taking the sign from the drag reads as obviously right and is backwards: a drag is
+    direct manipulation of a grabbed point, so pushing left walks the camera and spins the
+    world the other way. A key grabs nothing. Reported as "left/right arrows turn the
+    other direction", and it is the same class of error the twist gesture carried for its
+    whole life.
+    """
+    keys = _probe(_scene(basemap=False), _KEYS)
+    # Counter-clockwise on screen is a rising bearing, which is what "to the left" means
+    # for a map that is not being grabbed.
+    assert keys["shiftLeft"]["scene"] > 0.02, (
+        "shift + left turned the ground clockwise: the scene moved "
+        f"{keys['shiftLeft']['scene']:+.3f} rad")
+    assert keys["shiftRight"]["scene"] < -0.02, (
+        "shift + right turned the ground counter-clockwise: the scene moved "
+        f"{keys['shiftRight']['scene']:+.3f} rad")
+
+
+# Marking a moment that is off the edge of the panel. `revealCursor` answers whether it
+# had to move the view, which is the only part of "the reader can now see it" a test can
+# hold without looking at pixels.
+_REVEAL = """
+var h = window.__handle;
+h.view.yaw = 0; h.view.pitch = 0.6; h.view.zoom = 1;
+h.view.panX = 0; h.view.panY = 0;
+h.redraw();
+
+var out = {};
+out.visible = h.revealCursor(3);          // already on screen: nothing to do
+out.restX = h.view.panX;
+
+h.view.panX = -4000;                      // shove the flight off to the left
+h.redraw();
+out.offscreen = h.revealCursor(3);
+out.afterX = h.view.panX;
+out.settled = h.revealCursor(3);          // and it is on screen now
+return out;
+"""
+
+
+@needs_chrome
+def test_marking_an_offscreen_moment_brings_it_into_view():
+    """A click on a chart can name a point the panel is not looking at.
+
+    The marker was drawn correctly and off the edge of the canvas, so the reader asked
+    "where was this on the ground" and the map did not move. Panning is enough — this
+    projection has no behind-the-camera case — and it is all that happens, because
+    turning the view unasked throws away the orientation the reader had just built up.
+    """
+    from tests.test_view3d_sun import CURSOR
+
+    answer = _probe(_scene(basemap=False, cursor=CURSOR), _REVEAL)
+    assert answer["visible"] is False, "a point already in view was panned to anyway"
+    assert answer["restX"] == 0, "the resting view was moved for nothing"
+    assert answer["offscreen"] is True, "an off-screen point was left off screen"
+    assert answer["afterX"] > -4000, "the view did not pan towards the marker"
+    assert answer["settled"] is False, "the pan did not actually bring it into view"

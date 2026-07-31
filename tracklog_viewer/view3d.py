@@ -258,11 +258,13 @@ def panel(payload: dict, uid: str, *, kmz_uri: str | None = None,
            gives it a ring for free. -->
       <canvas class="view3d" id="view3d-{uid}" tabindex="0"
               aria-label="Interactive three-dimensional view of the flight over terrain.
-                          Arrow keys turn and tilt; press question mark for the key list.">
+                          Arrow keys pan and shift with them turns and tilts; press
+                          question mark for the key list.">
       </canvas>
       {earth}
       <p class="view3d-credit">{credit}</p>
-      <p class="view3d-hint" hidden>arrows turn and tilt &middot; <kbd>?</kbd> for keys</p>
+      <p class="view3d-hint" hidden>arrows pan &middot; shift + arrows turn and tilt &middot;
+        <kbd>?</kbd> for keys</p>
       <div class="view3d-loading" hidden>
         <span class="view3d-spin"></span><span class="view3d-loading-text"></span>
       </div>
@@ -276,9 +278,9 @@ def panel(payload: dict, uid: str, *, kmz_uri: str | None = None,
         </dl>
         <p class="view3d-keys-head">Keys, once the view has focus</p>
         <dl>
-          <dt>&larr; &rarr;</dt><dd>rotate</dd>
-          <dt>&uarr; &darr;</dt><dd>tilt</dd>
-          <dt>shift + arrows</dt><dd>pan</dd>
+          <dt>arrows</dt><dd>pan</dd>
+          <dt>shift + &larr; &rarr;</dt><dd>rotate</dd>
+          <dt>shift + &uarr; &darr;</dt><dd>tilt</dd>
           <dt>+ &minus;</dt><dd>zoom</dd>
           <dt>1 2 4</dt><dd>exaggeration</dd>
           <dt>s m r</dt><dd>satellite, map, relief</dd>
@@ -2050,8 +2052,14 @@ function initView3d(root, cursorTrack) {
     var centre = box();
     var buttonHold = ('rotate-left rotate-right tilt-up tilt-down'.indexOf(act) >= 0)
       ? groundUnder(centre.cx, centre.cy) : null;
-    if (act === 'rotate-left') view.yaw -= 0.35;
-    else if (act === 'rotate-right') view.yaw += 0.35;
+    // The map turns the way the key points: `rotate-left` swings the ground — and the
+    // compass rose with it — anticlockwise, which is `yaw` *increasing*. Reading the sign
+    // off the orbit drag gets this backwards, and did: a drag is direct manipulation of a
+    // grabbed point, so pushing left spins the world clockwise, exactly as the twist
+    // gesture is deliberately opposite to the drag. A key grabs nothing, so it follows the
+    // map, not the hand.
+    if (act === 'rotate-left') view.yaw += 0.35;
+    else if (act === 'rotate-right') view.yaw -= 0.35;
     else if (act === 'tilt-up') view.pitch = Math.min(1.45, view.pitch + 0.15);
     else if (act === 'tilt-down') view.pitch = Math.max(0.18, view.pitch - 0.15);
     if (buttonHold) holdGround(buttonHold, centre.cx, centre.cy);
@@ -2102,15 +2110,20 @@ function initView3d(root, cursorTrack) {
   //
   // `1 2 4` and `S M R` address a state directly, which a cycling button could never do —
   // an independent argument for the segmented controls above.
+  //
+  // Bare arrows pan and shift + arrows rotate, which is the way round the pointer already
+  // works: a plain drag pans and a modified drag rotates. It was the other way round, so
+  // holding shift changed a turn into a pan on the keyboard and a pan into a turn on the
+  // mouse — the same modifier meaning opposite things on the same panel.
   var KEY_ACTS = {
-    ArrowLeft: 'rotate-left', ArrowRight: 'rotate-right',
-    ArrowUp: 'tilt-up', ArrowDown: 'tilt-down',
+    ArrowLeft: 'pan-left', ArrowRight: 'pan-right',
+    ArrowUp: 'pan-up', ArrowDown: 'pan-down',
     '+': 'zoom-in', '=': 'zoom-in', '-': 'zoom-out', '_': 'zoom-out',
     f: 'fullscreen', F: 'fullscreen', '0': 'reset'
   };
   var SHIFT_ACTS = {
-    ArrowLeft: 'pan-left', ArrowRight: 'pan-right',
-    ArrowUp: 'pan-up', ArrowDown: 'pan-down'
+    ArrowLeft: 'rotate-left', ArrowRight: 'rotate-right',
+    ArrowUp: 'tilt-up', ArrowDown: 'tilt-down'
   };
   var KEY_STYLES = { s: 'satellite', S: 'satellite', m: 'map', M: 'map',
                      r: 'off', R: 'off' };
@@ -2288,9 +2301,52 @@ function initView3d(root, cursorTrack) {
       if (minute === null) { draw(); return; }
       sunTo(minute);
     },
+    // The marker goes; the light stays where the reader last put it.
+    //
+    // Snapping the sun back to mid-flight on every mouse-out was a full re-light and a
+    // visible colour swing across the whole terrain, fired by nothing more deliberate
+    // than the pointer leaving a chart on its way somewhere else — and it undid the
+    // comparison the reader had just set up, which is usually the moment they were about
+    // to look at the ground for. Holding the last time costs nothing: `sunMinute` is
+    // already where they left it, so this only has to stop moving it. Mid-flight remains
+    // the *initial* light, for a panel nobody has hovered yet.
     clearCursor: function () {
       cursorIndex = null;
-      if (sunTrack) sunTo(sunTrack.at); else draw();
+      draw();
+    },
+    // Mark a moment *and* make sure it can be seen. Clicking a chart point that projects
+    // off the edge of the panel used to mark it invisibly: the reader asked "where was
+    // this on the ground" and the map did not move. The pan is nudged until the marker
+    // sits inside a comfortable inset of the canvas.
+    //
+    // Pan only, deliberately. This projection has no behind-the-camera case, so shifting
+    // always suffices to bring a point on screen, and turning the view unasked moves the
+    // ground the reader was orienting against — the one thing they had just built up.
+    // Answers whether it had to move, which is what a test can hold it to.
+    revealCursor: function (index) {
+      cursorIndex = index;
+      var minute = cursorMinute(index);
+      if (minute === null) draw(); else sunTo(minute);
+      if (!cursorTrack || index === null || index === undefined) return false;
+      var i = Math.min(index, cursorTrack.lon.length - 1);
+      var m = toMetres(cursorTrack.lon[i], cursorTrack.lat[i]);
+      // `project` answers in backing-store pixels, which is also what `panX`/`panY` are
+      // in, so the correction is the shortfall itself with no unit conversion.
+      var p = project(m[0], m[1], cursorTrack.alt[i]);
+      // A pixel of slack, because `panX += (padX - p)` does not land p back on `padX`
+      // exactly: floating-point addition leaves it a hair short, so a strict comparison
+      // reports the point as still outside and asks for another correction every time it
+      // is called. Below a pixel there is nothing to see anyway.
+      var padX = W * 0.15, padY = H * 0.15, slack = 1, dx = 0, dy = 0;
+      if (p[0] < padX - slack) dx = padX - p[0];
+      else if (p[0] > W - padX + slack) dx = (W - padX) - p[0];
+      if (p[1] < padY - slack) dy = padY - p[1];
+      else if (p[1] > H - padY + slack) dy = (H - padY) - p[1];
+      if (!dx && !dy) return false;
+      view.panX += dx;
+      view.panY += dy;
+      draw();
+      return true;
     },
     // Exposed for tests: driving the camera from a headless browser is the only way to
     // check that a gesture does what it claims.

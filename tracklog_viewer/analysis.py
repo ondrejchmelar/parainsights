@@ -1,8 +1,13 @@
 """Flight analysis: phases, per-thermal and per-glide statistics, wind, time budget.
 
-The phase heuristic is igc2kmz's and is documented in its HACKING.md: compare the
-*progress* (straight-line distance over distance flown, in a 20 s window) with the
-climb rate. Flying straight gives progress near 1; circling drives it towards 0.
+*Progress* — straight-line distance over distance flown, in a 20 s window — is where the
+phase detection starts, and that much is igc2kmz's, documented in its HACKING.md: flying
+straight gives progress near 1, circling drives it towards 0.
+
+It is no longer the whole rule. A climb needs rising air **and** one of low progress, low
+ground speed or sustained circling, and the phase is then trimmed to the circling itself,
+because a straight run-in measured as drift wrecks the wind estimate. Tow is a fourth
+phase built separately over the launch climb. See `classify` and `_launch_climb`.
 
 Everything here returns plain dataclasses so both renderers can serialise them.
 """

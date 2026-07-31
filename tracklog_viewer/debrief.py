@@ -70,8 +70,6 @@ THRESHOLDS = {
     "band_ratio": 0.75,
     # Ceiling use: below this fraction of the modelled cloudbase is worth a card.
     "ceiling_used": 0.85,
-    # Track distance over scored distance.
-    "detour_ratio": 2.0,
     # How close the triangle came to closing, as a fraction of its perimeter, before the
     # near miss is worth printing. `xc.MAX_CLOSING` is the rule; this is "nearly".
     "near_close": 0.35,
@@ -290,33 +288,28 @@ def _low_point(analysis: Analysis, clearance) -> Finding | None:
     if lowest > THRESHOLDS["low_clearance"]:
         return None
 
-    when = analysis.flight.local_time(index).strftime("%H:%M:%S")
+    # A negative clearance is not a low save, it is the DEM losing an argument with the
+    # GPS, so there is no card at all. Printing one that explains why its own headline
+    # number is wrong was worse than saying nothing: the reader met "the elevation model
+    # puts you underground at 15:35:38" at the top of a ranked list of things the flight
+    # did, and the disclaimer underneath could not undo the framing. The grid is about a
+    # kilometre per cell over a big flight — enough to average a valley floor in with the
+    # ridges beside it — which is a fact about the model, not about the day.
     if lowest < 0:
-        below = int((agl[lo:hi] < 0).sum())
-        title = f"The elevation model puts you underground at {when}"
-        sentence = (
-            f"It reads {lowest:.0f} m above ground there, which means the model disagrees "
-            f"with your GPS rather than that you were in a tunnel: {below} of {hi - lo} "
-            f"airborne fixes come out below it. Over a flight this size each grid cell is "
-            f"about a kilometre across, so a valley floor gets averaged in with the ridges "
-            f"beside it. The moment is real; the number is not."
-        )
-    else:
-        title = f"You came within {lowest:.0f} m of the ground"
-        sentence = (
+        return None
+
+    when = analysis.flight.local_time(index).strftime("%H:%M:%S")
+    return Finding(
+        id="low-point",
+        title=f"You came within {lowest:.0f} m of the ground",
+        sentence=(
             f"That was at {when}. For most of the flight you had about {_num(median)} m "
             f"underneath you. Launch and landing are left out of this, or they would win "
             f"every time."
-        )
-
-    return Finding(
-        id="low-point",
-        title=title,
-        sentence=sentence,
+        ),
         cost=_metres(max(median - lowest, 0.0), analysis),
         at=when,
         cursor=index,
-        confidence=0.5 if lowest < 0 else 1.0,
         evidence={"lowest": round(lowest), "median": round(median),
                   "from": lo, "to": hi},
     )
@@ -389,8 +382,13 @@ def _working_band(analysis: Analysis) -> Finding | None:
     if band is None:
         return None
     total = sum(band.seconds) or 1
-    top_share = band.seconds[2] / total
-    if top_share < THRESHOLDS["band_share"]:
+    # Every third has to be sampled, not just the top one. `best` is an argmax over three
+    # mean climb rates, and a third holding a minute of circling produces a mean as
+    # confidently as one holding twenty — so a band the flight barely touched could be
+    # declared the best lift of the day. The guard used to read `band.seconds[2]` alone,
+    # from when this finding only ever said "the top band was slow"; once it started
+    # naming a winner it needed to hold for whichever third won.
+    if min(band.seconds) / total < THRESHOLDS["band_share"]:
         return None
     strongest = max(band.climbs)
     if not strongest or band.climbs[2] / strongest > THRESHOLDS["band_ratio"]:
@@ -403,12 +401,16 @@ def _working_band(analysis: Analysis) -> Finding | None:
             f"The lift was best "
             f"{'down low' if band.best == 0 else 'in the middle of the band' if band.best == 1 else 'up high'}"
         ),
+        # Each third's circling time is quoted beside its climb rate, because a mean climb
+        # rate is only as good as the minutes under it and the reader cannot otherwise
+        # tell which of the three is worth believing.
         sentence=(
             f"Split into thirds between {_num(band.edges[0])} m and "
             f"{_num(band.edges[3])} m, your climbs averaged {band.climbs[0]:+.2f}, "
-            f"{band.climbs[1]:+.2f} and {band.climbs[2]:+.2f} m/s. The top "
-            f"{_num(height)} m gave {band.climbs[2]:+.2f} for "
-            f"{band.seconds[2] / 60:.0f} min of circling."
+            f"{band.climbs[1]:+.2f} and {band.climbs[2]:+.2f} m/s, over "
+            f"{band.seconds[0] / 60:.0f}, {band.seconds[1] / 60:.0f} and "
+            f"{band.seconds[2] / 60:.0f} minutes of circling. The top "
+            f"{_num(height)} m gave {band.climbs[2]:+.2f}."
         ),
         # The cost is the circling done in the weakest band, which is the time the shape
         # of this profile actually charged for.
@@ -519,24 +521,13 @@ def _close_that_wasnt(analysis: Analysis, route) -> Finding | None:
     )
 
 
-def _detour(analysis: Analysis, route) -> Finding | None:
-    """Tier 1. Both numbers are on the page and neither is framed as a cost."""
-    ratio = metrics.detour(analysis, route)
-    if ratio is None or ratio.ratio < THRESHOLDS["detour_ratio"]:
-        return None
-
-    extra = (ratio.track_km - ratio.scored_km) * 1000.0
-    return Finding(
-        id="detour",
-        title=f"You flew {ratio.track_km:.0f} km to score {ratio.scored_km:.2f} km",
-        sentence=(
-            f"Every scored kilometre took {ratio.ratio:.2f} km of flying — climbs, "
-            f"detours and all."
-        ),
-        cost=_metres(extra, analysis),
-        evidence={"ratio": ratio.ratio, "track_km": ratio.track_km,
-                  "scored_km": ratio.scored_km},
-    )
+# There is deliberately no detour card. "You flew 121 km to score 48.64 km" is a
+# restatement of how XContest scores a flight, not something this flight did: a scored
+# route is three turnpoints through a track that also had to climb, and the ratio between
+# the two is near-constant for the discipline. Charging the difference as a cost in metres
+# made a rule of the sport read as a mistake the pilot made. `metrics.detour` stays —
+# `baseline.py` keeps the ratio per flight, where a percentile across the archive can say
+# something a single flight's ratio cannot.
 
 
 def _plan_departure(analysis: Analysis, flight_plan) -> Finding | None:
@@ -730,7 +721,6 @@ def build(
         ("ceiling-used", lambda: _ceiling_used(analysis, weather)),
         ("other-slice", lambda: _other_slice(analysis)),
         ("near-close", lambda: _close_that_wasnt(analysis, route)),
-        ("detour", lambda: _detour(analysis, route)),
         # Plan findings fire only when there is a plan, which is the whole point: no
         # plan means today's debrief, unchanged.
         ("plan-departure", lambda: _plan_departure(analysis, flight_plan)),
