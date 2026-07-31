@@ -15,7 +15,7 @@ import json
 import math
 from pathlib import Path
 
-from . import charts, debrief, quicklook, terrain as terrain_module, view3d, view3d_gl
+from . import charts, debrief, metrics, quicklook, terrain as terrain_module, view3d, view3d_gl
 from numpy import median as np_median
 from .analysis import TURN_RESOLUTION_LIMIT, Analysis, Phase
 
@@ -539,6 +539,17 @@ footer { margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--rule);
   gap: 16px; flex-wrap: wrap; }
 
 :focus-visible { outline: 2px solid var(--climb); outline-offset: 2px; }
+/* The climbs table is eight columns, not sixteen. At a true 390 px viewport the old one
+   was 1 023 px in a 340 px container — three screens of horizontal scrolling, with
+   nothing on screen to say it scrolled. `turns m/turn dir s/turn radius` are five columns
+   of circling mechanics: a whole sub-story and a specialist one, so they fold away rather
+   than being deleted — the working-band and centring findings cite them as their
+   receipts. `best m/s` went (peak of a noisy series, already eff's denominator), `wind`
+   went (the wind chart is directly above and says it better), and the `rates` sparkline
+   went (a duplicate of the big histogram at 60 px wide). */
+.circling-detail { display: none; }
+.table-climbs.show-circling .circling-detail { display: table-cell; }
+
 /* Verdict strip and debrief ------------------------------------------------
 
    The strip sits between the masthead and the 3D view, and the cards immediately under
@@ -835,6 +846,20 @@ function initFlight(root) {
     });
   });
 
+  // The circling columns fold away by default. A single button rather than a two-state
+  // pair, because there is nothing to compare against: it is showing five extra columns
+  // or not showing them.
+  root.querySelectorAll('.toggle-button[data-detail]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      var on = button.getAttribute('aria-pressed') !== 'true';
+      button.setAttribute('aria-pressed', on ? 'true' : 'false');
+      button.classList.toggle('is-on', on);
+      root.querySelectorAll('.table-climbs').forEach(function (table) {
+        table.classList.toggle('show-circling', on);
+      });
+    });
+  });
+
   root.querySelectorAll('.toggle-button[data-circles]').forEach(function (button) {
     button.addEventListener('click', function () {
       var wanted = button.dataset.circles;
@@ -983,6 +1008,24 @@ def _stat(key: str, value: str, unit: str = "", sub: str = "") -> str:
     )
 
 
+def _ceiling_tile(analysis: Analysis, meteo, peak_time: str, offset: float) -> tuple:
+    """`ceiling used`, or the bare height when there is no model to compare against.
+
+    3 774 / 3 954 = 95% is one number where the report used to print three: MAX ALTITUDE,
+    YOU REACHED (the same figure, 2 000 px away, in a different stat row) and CLOUDBASE.
+    """
+    summary = analysis.summary
+    use = metrics.ceiling_use(analysis, meteo)
+    if use is None:
+        return ("max altitude", f"{summary.max_altitude:,.0f}".replace(",", " "), " m",
+                f"at {peak_time}"
+                + (f" · {summary.max_altitude + offset:,.0f} m GPS".replace(",", " ")
+                   if offset else ""))
+    return ("ceiling used", f"{use.fraction:.0%}", "",
+            f"{use.reached:,.0f} m of a modelled {use.ceiling:,.0f} m "
+            f"{use.source.replace('_', ' ')}".replace(",", " "))
+
+
 def _thermal_rows(analysis: Analysis) -> str:
     rows = []
     number = 0
@@ -1026,16 +1069,14 @@ def _thermal_rows(analysis: Analysis) -> str:
             f"<td>{segment.finish_altitude:.0f}</td>"
             f'<td><span class="bar-cell">{segment.average_climb:+.2f}'
             f'<span class="bar" style="width:{width:.0f}px"></span></span></td>'
-            f"<td>{segment.maximum_climb:+.1f}</td>"
             f"<td>{efficiency}</td>"
-            f"<td>{turns}</td>"
-            f"<td>{per_turn}</td>"
-            f"<td>{direction}</td>"
-            f"<td>{circle}</td>"
-            f"<td>{radius}</td>"
-            f"<td>{wind}</td>"
-            f'<td class="spark-cell">'
-            f'{charts.climb_spark(analysis.series, segment.start, segment.stop)}</td>'
+            # Five columns of circling mechanics: a whole sub-story, and a specialist one.
+            # Kept, because a finding cites radius as its receipt, but folded away.
+            f'<td class="circling-detail">{turns}</td>'
+            f'<td class="circling-detail">{per_turn}</td>'
+            f'<td class="circling-detail">{direction}</td>'
+            f'<td class="circling-detail">{circle}</td>'
+            f'<td class="circling-detail">{radius}</td>'
             f'<td class="spark-cell">'
             f'{charts.climb_trend(analysis.series, segment.start, segment.stop)}</td>'
             f"</tr>"
@@ -1054,7 +1095,7 @@ def _glide_rows(analysis: Analysis) -> str:
             f"<td>{segment.start_time}</td>"
             f"<td>{_short_duration(segment.duration)}</td>"
             f"<td>{segment.distance / 1000:.1f}</td>"
-            f"<td>{segment.altitude_change:+.0f}</td>"
+            # `height m` dropped: it is km x glide, and the ratio is the point of the row.
             f'<td><span class="bar-cell">{ld}'
             f'{charts.ld_bar(segment.average_ld, best=best)}</span></td>'
             f"<td>{segment.average_speed:.0f}</td>"
@@ -1192,8 +1233,11 @@ def _meteo_section(analysis: Analysis, meteo, uid: str = "") -> str:
             ("boundary layer", f"{meteo.boundary_layer_top:,.0f} m".replace(",", " "),
              "model mixing depth")
         )
-    chips.append(("you reached", f"{flight_top:,.0f} m".replace(",", " "),
-                  "highest point, GPS datum"))
+    # "you reached" is deliberately not a chip any more. It was the same number as the
+    # MAX ALTITUDE stat tile, printed twice, 2 000 px apart, in two different stat rows.
+    # The `ceiling used` tile above folds both into the one number that means something —
+    # the fraction of the modelled column that was actually used — and the rest of the
+    # sounding stays here, where it belongs.
     if meteo.cape is not None:
         chips.append(("cape", f"{meteo.cape:.0f} J/kg",
                       f"low cloud {meteo.cloud_cover_low:.0f}%"
@@ -1451,14 +1495,18 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
               f"{SHAPE_LABEL.get(route.shape, 'open distance')} · "
               f"{summary.track_distance / 1000:.0f} km flown, "
               f"{summary.straight_distance / 1000:.0f} km straight" if route else ""),
-        _stat("max altitude", f"{summary.max_altitude:,.0f}".replace(",", " "), " m",
-              f"at {peak_time}"
-              + (f" · {summary.max_altitude + offset:,.0f} m GPS".replace(",", " ") if offset else "")),
         _stat("height gained", f"{summary.total_gain:,.0f}".replace(",", " "), " m",
               f"best single climb {summary.max_gain:.0f} m"),
-        _stat("climbs", str(len(thermals)), "",
-              (f"{total_turns:.0f} turns · " if not coarse else "")
-              + f"{climb_rate:+.2f} m/s mean"),
+        # MEAN CLIMB replaces the CLIMBS count, which is now its sub-line: the rate is
+        # the number that describes the day, and the count only qualifies it.
+        _stat("mean climb", f"{climb_rate:+.2f}", " m/s",
+              f"{len(thermals)} climbs"
+              + (f" · {total_turns:.0f} turns" if not coarse else "")),
+        # CEILING USED folds MAX ALTITUDE, YOU REACHED and CLOUDBASE into the one number
+        # that means something, and kills the duplicate that was printed twice 2 000 px
+        # apart. Without --meteo there is no ceiling to compare against, so the tile falls
+        # back to the bare height rather than disappearing and leaving five tiles.
+        _stat(*_ceiling_tile(analysis, meteo, peak_time, offset)),
         _stat("wind", f"{analysis.wind.kmh:.0f}" if analysis.wind else "—", " km/h",
               f"from {analysis.wind.cardinal} · averaged over "
               f"{len([s for s in thermals if s.wind])} climbs" if analysis.wind else ""),
@@ -1510,10 +1558,11 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
   <section>
     <div class="section-head">
       <h2>The flight over the ground</h2>
-      <p>Drag to pan, right-drag or ctrl-drag to rotate and tilt, scroll to zoom. The
-         terrain is a real DEM carried inside this page; the Satellite button switches
-         between imagery, a map and bare relief. Hovering the charts below moves the
-         marker here too.</p>
+      <p>Drag to pan, right-drag or ctrl-drag to rotate and tilt, scroll to zoom. Click
+         the view and the arrow keys turn and tilt it, <kbd>1</kbd> <kbd>2</kbd>
+         <kbd>4</kbd> set the exaggeration and <kbd>?</kbd> lists the rest. The terrain is
+         a real DEM carried inside this page; the buttons under it switch between imagery,
+         a map and bare relief. Hovering the charts below moves the marker here too.</p>
     </div>
     {view3d.panel(payload, uid, kmz_uri=kmz_uri,
                   kmz_name=f"{summary.date}-{(summary.site or 'flight').replace(' ', '-')}.kmz")}
@@ -1657,14 +1706,20 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
          best 20&nbsp;s of the same climb — the closest single number to &ldquo;did you stay in
          the core&rdquo;. Reversals and radius say how tidily it was flown.{" This track is sampled every " + f"{summary.sample_interval:.0f}" + " s, which is too coarse to resolve a circle, so the turn columns are blank." if coarse else ""}</p>
     </div>
+    <div class="toggle toggle-small" role="group" aria-label="Circling detail columns">
+      <button type="button" class="toggle-button" data-detail="circling" aria-pressed="false">
+        &#8853; circling detail</button>
+    </div>
     <div class="panel" style="padding:14px 16px 4px">
       <div class="table-scroll">
-        <table>
+        <table class="table-climbs">
           <thead><tr>
             <th>#</th><th>start</th><th>time</th><th>gain m</th><th>top m</th>
-            <th>avg m/s</th><th>best m/s</th><th>eff</th><th>turns</th><th>m/turn</th>
-            <th>dir</th><th>s/turn</th><th>radius m</th><th>wind km/h</th>
-            <th>rates</th><th>over time &rarr;</th>
+            <th>avg m/s</th><th>eff</th>
+            <th class="circling-detail">turns</th><th class="circling-detail">m/turn</th>
+            <th class="circling-detail">dir</th><th class="circling-detail">s/turn</th>
+            <th class="circling-detail">radius m</th>
+            <th>over time &rarr;</th>
           </tr></thead>
           <tbody>{_thermal_rows(analysis)}</tbody>
         </table>
@@ -1690,7 +1745,7 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
     <div class="panel" style="padding:14px 16px 4px">
       <div class="table-scroll">
         <table>
-          <thead><tr><th>#</th><th>start</th><th>time</th><th>km</th><th>height m</th>
+          <thead><tr><th>#</th><th>start</th><th>time</th><th>km</th>
             <th>glide</th><th>km/h</th></tr></thead>
           <tbody>{_glide_rows(analysis)}</tbody>
         </table>

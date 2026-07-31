@@ -147,15 +147,33 @@ class TestView3dPayload:
         assert set(both["basemaps"]) == {"satellite", "map"}
         assert both["tiles"] is None
 
-    def test_the_basemap_button_names_the_style_it_is_showing(self, ramp, tmp_path):
+    def test_the_basemap_control_shows_which_style_is_on(self, ramp, tmp_path):
+        """This replaces a test that asserted the *cycle* button relabelled itself.
+
+        Naming what is on screen is right for a two-state toggle and wrong for three:
+        with a cycle you cannot see the options, cannot tell how many presses reach the
+        one you want, and cannot jump. The segmented control answers the same question —
+        which style am I looking at — by pressing the segment instead, which is also what
+        lets the keyboard address a style directly.
+        """
+        import re
+
+        from tests.test_analysis import build, circling
         from tracklog_viewer import igc, view3d
         from tracklog_viewer.analysis import analyse
-        from tests.test_analysis import build, circling
 
         analysis = analyse(igc.parse(build(tmp_path / "t.igc", circling(200))))
         markup = view3d.panel(view3d.data(analysis, ramp), "x")
-        button = markup[markup.index('data-view3d-act="basemap"'):]
-        assert button[:button.index("</button>")].endswith(">Satellite")
+
+        segments = re.findall(
+            r'data-view3d-act="basemap-set" data-style="(\w+)" aria-pressed="(\w+)"',
+            markup,
+        )
+        assert segments, "no basemap segments in the panel"
+        pressed = [style for style, on in segments if on == "true"]
+        assert pressed == ["satellite"], f"expected satellite pressed, got {pressed}"
+        # Every style the document can show, plus bare relief.
+        assert "off" in [style for style, _ in segments]
 
     def test_cursor_track_matches_sample_length(self, ramp, tmp_path):
         from tracklog_viewer import igc, view3d

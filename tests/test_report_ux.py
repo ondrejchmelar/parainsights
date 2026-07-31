@@ -90,15 +90,18 @@ class TestMapButtonNames:
     appears on touch at all, so on a phone those six glyphs were the entire affordance.
     """
 
-    GLYPH_ACTS = ("rotate-left", "rotate-right", "tilt-up", "tilt-down",
-                  "zoom-in", "zoom-out")
+    # The four rotate/tilt nudges are gone by design (phase 2): they duplicated a drag,
+    # a ctrl-drag and a right-drag that the caption above the panel already teaches, and
+    # they were the slots pushing the bar onto a second row. What remains still has to be
+    # nameable — zoom and reset are glyphs, and a glyph is not an accessible name.
+    GLYPH_ACTS = ("zoom-in", "zoom-out", "reset")
 
     def _panel(self):
         return view3d.panel({"bounds": {}}, "uid")
 
     def test_every_control_carries_an_aria_label(self):
         html = self._panel()
-        for act in self.GLYPH_ACTS + ("basemap", "exaggerate", "fullscreen", "reset"):
+        for act in self.GLYPH_ACTS + ("fullscreen",):
             button = re.search(
                 rf'<button[^>]*data-view3d-act="{act}"[^>]*>', html, re.S
             )
@@ -117,6 +120,63 @@ class TestMapButtonNames:
             assert len(label.group(1)) > 2, (
                 f"{act} is still named by a glyph: {label.group(1)!r}"
             )
+
+    def test_the_nudge_buttons_that_duplicate_gestures_are_gone(self):
+        html = self._panel()
+        for act in ("rotate-left", "rotate-right", "tilt-up", "tilt-down"):
+            assert f'data-view3d-act="{act}"' not in html, (
+                f"{act} is back; it duplicates a gesture the caption teaches"
+            )
+
+    def test_the_exaggeration_segments_are_named_individually(self):
+        """`x1 height` at rest was a button announcing that nothing is happening."""
+        html = self._panel()
+        labels = re.findall(
+            r'data-view3d-act="exaggerate-set"[^>]*aria-label="([^"]+)"', html, re.S
+        )
+        assert len(labels) == 3, f"expected three exaggeration segments, got {labels}"
+
+
+class TestKeyboardControl:
+    """Phase 2: the keyboard is what lets the nudge buttons go."""
+
+    def test_the_canvas_is_focusable(self):
+        assert 'tabindex="0"' in view3d.panel({"bounds": {}}, "uid")
+
+    def test_keys_are_bound_to_act_names_not_camera_fields(self):
+        """One code path rather than two that drift — and it is why a held arrow
+        anchors through `holdGround` exactly as a held button does."""
+        assert "KEY_ACTS" in view3d.SCRIPT
+        assert "runAct(act)" in view3d.SCRIPT
+
+    def test_the_view_keys_are_bound_to_the_canvas_not_the_document(self):
+        """A report holds several flights, each with its own panel. A document-level
+        keydown drives whichever panel the code finds first — a bug this file already
+        carries a comment about for buttons.
+
+        Escape is the one legitimate exception and it predates this: leaving full screen
+        has to work wherever focus is, and it is the Fullscreen API's own contract. So the
+        rule is not "no document handler", it is "the document handler does nothing but
+        Escape" — which is what this asserts.
+        """
+        assert "canvas.addEventListener('keydown'" in view3d.SCRIPT
+
+        for match in re.finditer(
+            r"document\.addEventListener\('keydown', function \(event\) \{(.{0,120})",
+            view3d.SCRIPT, re.S,
+        ):
+            assert "Escape" in match.group(1), (
+                "a document-level keydown that is not the Escape guard: it will drive "
+                f"another flight's panel — {match.group(1)!r}"
+            )
+
+    def test_arrow_keys_do_not_scroll_the_page(self):
+        assert "event.preventDefault()" in view3d.SCRIPT
+
+    def test_state_keys_address_a_state_directly(self):
+        """`1 2 4` and `S M R` are what a cycle could never offer."""
+        assert "KEY_STYLES" in view3d.SCRIPT
+        assert "'exaggerate-set'" in view3d.SCRIPT
 
 
 class TestDebriefRendering:

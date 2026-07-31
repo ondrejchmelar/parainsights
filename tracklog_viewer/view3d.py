@@ -217,42 +217,84 @@ def panel(payload: dict, uid: str, *, kmz_uri: str | None = None,
             f'title="Download the KMZ and open it in Google Earth">'
             f'{GLOBE_ICON}<span>Open in Earth</span></a>'
         )
-    # The button names what is on screen, not what comes next: cycling through several
-    # styles, a fixed "Map" label says nothing about where you are.
+    # A segmented control rather than a cycle. The code's old comment defended naming what
+    # is on screen rather than what comes next, and for a *two*-state toggle that is right
+    # — but basemap is three states and exaggeration is three. With a cycle you cannot see
+    # the options, cannot tell how many presses reach the one you want, and cannot jump;
+    # `x1 height` at rest is a button announcing that nothing is happening. The segments
+    # double as a legend for what is available, and they agree with the keyboard, which
+    # can address a state directly and so could never match a cycle.
     available = {**(payload.get("tiles") or {}), **(payload.get("basemaps") or {})}
     initial_style = "satellite" if "satellite" in available else next(iter(available), "")
-    basemap_label = TILE_SOURCES.get(initial_style, {}).get("label", "Map")
     credit = (available.get(initial_style) or {}).get("attribution", "")
+
+    # One segment per style the document can actually show, then bare relief. A document
+    # carrying a single style degrades to a two-segment control by itself.
+    styles = [key for key in ("satellite", "map") if key in available]
+    styles += [key for key in available if key not in styles]
+    segments = "".join(
+        f'<button type="button" data-view3d-act="basemap-set" data-style="{key}" '
+        f'aria-pressed="{"true" if key == initial_style else "false"}"'
+        f'{" class=is-on" if key == initial_style else ""}>'
+        f'{TILE_SOURCES.get(key, {}).get("label", key)}</button>'
+        for key in styles
+    )
+    segments += (
+        '<button type="button" data-view3d-act="basemap-set" data-style="off" '
+        'aria-pressed="false">relief</button>'
+    )
+    exaggeration = "".join(
+        f'<button type="button" data-view3d-act="exaggerate-set" data-vertical="{level}" '
+        f'aria-pressed="{"true" if level == 1 else "false"}"'
+        f'{" class=is-on" if level == 1 else ""} '
+        f'aria-label="Vertical exaggeration &#215;{level}">&#215;{level}</button>'
+        for level in (1, 2, 4)
+    )
     return f"""
     <div class="panel view3d-panel">
-      <canvas class="view3d" id="view3d-{uid}"
-              aria-label="Interactive three-dimensional view of the flight over terrain">
+      <!-- `tabindex` is what makes the view itself reachable. Without it the only
+           keyboard route into the panel was the button row, and tab order walked all ten
+           before reaching the next section. The page's existing `:focus-visible` rule
+           gives it a ring for free. -->
+      <canvas class="view3d" id="view3d-{uid}" tabindex="0"
+              aria-label="Interactive three-dimensional view of the flight over terrain.
+                          Arrow keys turn and tilt; press question mark for the key list.">
       </canvas>
       {earth}
       <p class="view3d-credit">{credit}</p>
+      <p class="view3d-hint" hidden>arrows turn and tilt &middot; <kbd>?</kbd> for keys</p>
+      <div class="view3d-keys" hidden>
+        <dl>
+          <dt>&larr; &rarr;</dt><dd>rotate</dd>
+          <dt>&uarr; &darr;</dt><dd>tilt</dd>
+          <dt>shift + arrows</dt><dd>pan</dd>
+          <dt>+ &minus;</dt><dd>zoom</dd>
+          <dt>1 2 4</dt><dd>exaggeration</dd>
+          <dt>s m r</dt><dd>satellite, map, relief</dd>
+          <dt>f</dt><dd>full screen</dd>
+          <dt>0</dt><dd>reset view</dd>
+        </dl>
+      </div>
       <div class="view3d-controls">
-        <button type="button" data-view3d-act="rotate-left"
-                title="Rotate left" aria-label="Rotate left">&#8630;</button>
-        <button type="button" data-view3d-act="rotate-right"
-                title="Rotate right" aria-label="Rotate right">&#8631;</button>
-        <button type="button" data-view3d-act="tilt-up"
-                title="Tilt up" aria-label="Tilt up">&#8593;</button>
-        <button type="button" data-view3d-act="tilt-down"
-                title="Tilt down" aria-label="Tilt down">&#8595;</button>
-        <button type="button" data-view3d-act="zoom-in"
-                title="Zoom in" aria-label="Zoom in">+</button>
-        <button type="button" data-view3d-act="zoom-out"
-                title="Zoom out" aria-label="Zoom out">&minus;</button>
-        <button type="button" data-view3d-act="basemap" class="is-on"
-                title="Satellite, map or bare terrain"
-                aria-label="Basemap: satellite, map or bare terrain">{basemap_label}</button>
-        <button type="button" data-view3d-act="exaggerate"
-                title="Vertical exaggeration" aria-label="Vertical exaggeration">
-          &#215;1 height</button>
+        <div class="view3d-seg" role="group" aria-label="What the ground is">{segments}</div>
+        <div class="view3d-seg view3d-vert" role="group"
+             aria-label="Vertical exaggeration">{exaggeration}</div>
+        <!-- The zoom pair survives on a desktop because pinch is the one gesture that is
+             genuinely awkward on a trackpad. Rotate and tilt do not: they are a drag, a
+             ctrl-drag and a right-drag, the caption above teaches exactly that, and they
+             were the slots pushing the bar onto a second row. On a phone even zoom goes —
+             pinch, drag and twist are all native there. -->
+        <div class="view3d-seg view3d-zoom" role="group" aria-label="Zoom">
+          <button type="button" data-view3d-act="zoom-out"
+                  title="Zoom out" aria-label="Zoom out">&minus;</button>
+          <button type="button" data-view3d-act="zoom-in"
+                  title="Zoom in" aria-label="Zoom in">+</button>
+        </div>
         <button type="button" data-view3d-act="fullscreen"
                 title="Full screen" aria-label="Full screen">
           {EXPAND_ICON}</button>
-        <button type="button" data-view3d-act="reset" aria-label="Reset view">Reset view</button>
+        <button type="button" class="view3d-reset" data-view3d-act="reset"
+                title="Reset view" aria-label="Reset view">&#8634;</button>
       </div>
       <script type="application/json" class="view3d-data">{json.dumps(payload)}</script>
     </div>"""
@@ -325,13 +367,81 @@ canvas.view3d.is-dragging { cursor: grabbing; }
    follows the chart cursor, so the time comes from wherever the reader is pointing. */
 .view3d-controls { position: absolute; right: 10px; bottom: 10px; left: 10px; display: flex;
   gap: 5px; flex-wrap: wrap; justify-content: flex-end; }
-/* This media query used to reduce padding to `5px 7px` and type to 10.5 px — shrinking
-   the targets on the one device where a finger replaces a mouse, which is backwards. On
-   a phone the controls get *more* room, not less, and the type sits on the 12 px mobile
-   floor rather than under the 11 px desktop one. */
+/* Three kinds of control, and they no longer share one undifferentiated style: a
+   segmented group carries state, a bare button is a one-shot action. Nothing used to
+   signal that RESET VIEW throws away the camera you just set up while SATELLITE is a
+   mode. Size follows frequency too — reset was the *widest* button at 87 px, in the prime
+   thumb position, for the action taken least often. It is an icon now. */
+.view3d-seg { display: flex; gap: 0; }
+.view3d-seg button { border-radius: 0; }
+.view3d-seg button + button { margin-left: -1px; }
+.view3d-seg button:first-child { border-top-left-radius: 2px; border-bottom-left-radius: 2px; }
+.view3d-seg button:last-child { border-top-right-radius: 2px; border-bottom-right-radius: 2px; }
+.view3d-reset { font-size: 15px; line-height: 1; }
+
+/* A fifth of the map was chrome on the device with the least map: at 390 x 844 the panel
+   is 390 x 295 and the bar was 370 x 60 — 20.2% of the panel height — with the rose in
+   the same canvas below it. Dropping the four rotate/tilt nudges and the zoom pair takes
+   the bar to one row. Exaggeration deliberately *stays*: a 295 px map is exactly where
+   relief is hardest to read, so x2 earns its place more on a phone than on a desktop.
+
+   This media query used to reduce padding to `5px 7px` and type to 10.5 px, shrinking
+   the targets on the one device where a finger replaces a mouse. It now grows them, and
+   the type sits on the 12 px mobile floor. */
 @media (max-width: 640px) {
-  .view3d-controls { gap: 4px; }
+  .view3d-controls { gap: 4px; flex-wrap: nowrap; }
   .view3d-controls button { padding: 8px 10px; font-size: 12px; }
+  .view3d-zoom { display: none; }
+  .view3d-reset { display: none; }
+}
+
+/* The rose moves to the top right and the attribution to the top left.
+   `render_map.py:274` already puts navigation top-right by MapLibre's own default, and
+   two viewers of the same flights should not disagree about where north lives. But the
+   corner was occupied, and the Esri/Maxar attribution is required rather than optional —
+   so the move is a reallocation, not an addition. Top-left for the credit rather than
+   bottom-left: on a 360 px phone the control bar is 327 px of the 340 available, so
+   anything else along the bottom edge collides with it, and top-left needs no media
+   query to get out of the way. */
+.view3d-credit { right: auto; left: 12px; text-align: left; }
+
+.view3d-hint {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  margin: 0;
+  font-size: 11px;
+  color: var(--ink-2);
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  padding: 4px 8px;
+  border-radius: 2px;
+  pointer-events: none;
+}
+.view3d-keys {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  border: 1px solid var(--rule-strong);
+  padding: 14px 18px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.view3d-keys dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 4px 16px;
+}
+.view3d-keys dt { color: var(--ink); font-family: ui-monospace, monospace; }
+.view3d-keys dd { margin: 0; color: var(--ink-2); }
+.view3d-hint[hidden], .view3d-keys[hidden] { display: none; }
+.view3d-hint kbd {
+  font-family: ui-monospace, monospace;
+  border: 1px solid var(--rule-strong);
+  border-radius: 2px;
+  padding: 0 3px;
 }
 .view3d-controls button {
   font: inherit;
@@ -528,20 +638,27 @@ function initView3d(root, cursorTrack) {
   // mosaic once it has been fetched. Switching back to one is then instant.
   var ready = {};
 
-  function labelFor(name) {
-    if (name === 'off') return 'Basemap';
-    var source = (scene.tiles && scene.tiles[name]) || {};
-    return source.label || (name === 'satellite' ? 'Satellite' : 'Map');
+  // A segment shows which state is current by being pressed, not by relabelling itself.
+  // `aria-pressed` and the `is-on` class move together, so the keyboard, the buttons and
+  // a screen reader all agree about what the view is showing.
+  function pressSegment(selector, matches) {
+    root.querySelectorAll(selector).forEach(function (button) {
+      var on = matches(button);
+      button.classList.toggle('is-on', on);
+      button.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
   }
 
-  function basemapButtons() {
-    return root.querySelectorAll('[data-view3d-act="basemap"]');
+  function setVertical(level) {
+    view.vertical = level;
+    pressSegment('[data-view3d-act="exaggerate-set"]', function (button) {
+      return parseFloat(button.dataset.vertical) === level;
+    });
   }
 
   function setBasemapStyle(next) {
-    basemapButtons().forEach(function (button) {
-      button.textContent = labelFor(next);
-      button.classList.toggle('is-on', next !== 'off');
+    pressSegment('[data-view3d-act="basemap-set"]', function (button) {
+      return button.dataset.style === next;
     });
     if (next === 'off') { view.map = false; draw(); return; }
     view.map = true;
@@ -633,8 +750,8 @@ function initView3d(root, cursorTrack) {
         })[0];
         if (fallback) { setBasemapStyle(fallback); return; }
         showCredit('Map imagery unavailable here — hillshade only');
-        basemapButtons().forEach(function (button) {
-          button.classList.remove('is-on');
+        pressSegment('[data-view3d-act="basemap-set"]', function (button) {
+          return button.dataset.style === 'off';
         });
         view.map = false;
         draw();
@@ -1341,7 +1458,9 @@ function initView3d(root, cursorTrack) {
     var wind = scene.wind || null;
     var sunNow = sunTrack ? sunAt(sunMinute) : null;
     if (!wind && !sunNow) return;
-    // Bottom left: the controls own the bottom right and the credit the top right.
+    // Top right. `render_map.py` already puts navigation top-right by MapLibre's own
+    // default, and two viewers of the same flights should not disagree about where north
+    // lives. The credit moved to the top left to make room; the controls keep the bottom.
     // Scaled off the backing store so it is the same size on a phone, in the panel and
     // full screen, where W changes by a factor of three.
     var scale = Math.max(0.75, Math.min(1.6, W / 1280));
@@ -1357,8 +1476,8 @@ function initView3d(root, cursorTrack) {
     // and the text afterwards clipped the second line off the bottom of a 21:9 panel.
     var lineHeight = 13 * scale;
     var textBlock = lines.length * lineHeight;
-    var cx = 16 * scale + radius;
-    var cy = H - (14 * scale + textBlock + radius);
+    var cx = W - (16 * scale + radius);
+    var cy = 14 * scale + radius;
 
     ctx.save();
     ctx.font = (11 * scale).toFixed(0) + 'px ui-sans-serif, sans-serif';
@@ -1411,15 +1530,19 @@ function initView3d(root, cursorTrack) {
     // Drawn with a dark stroke behind the fill rather than a box: the rose sits over
     // whatever the terrain happens to be, and white text alone disappears against a
     // limestone face or a snowfield.
-    ctx.textAlign = 'left';
+    // Right-aligned to the canvas edge, not left-aligned from the circle. With the rose
+    // in the top *left* the labels could run rightwards into open canvas; against the
+    // right edge the same code ran them off it, and "Wind 6 km/h from WSW" lost its last
+    // two words. The anchor has to follow the corner the rose moved to.
+    ctx.textAlign = 'right';
     ctx.lineJoin = 'round';
     ctx.lineWidth = 3 * scale;
     ctx.strokeStyle = 'rgba(12,14,18,0.85)';
     ctx.fillStyle = 'rgba(255,255,255,0.95)';
     lines.forEach(function (line, i) {
       var y = cy + radius + (10 + i * 13) * scale;
-      ctx.strokeText(line, cx - radius, y);
-      ctx.fillText(line, cx - radius, y);
+      ctx.strokeText(line, cx + radius, y);
+      ctx.fillText(line, cx + radius, y);
     });
     ctx.restore();
   }
@@ -1806,52 +1929,113 @@ function initView3d(root, cursorTrack) {
 
   if (sunTrack && sunTrack.track && sunTrack.track.az) relight();
 
+  // One code path for the buttons and the keyboard. Binding keys to *act names* rather
+  // than to camera fields is what keeps a held arrow anchored exactly as a held button is
+  // — through `holdGround` — instead of drifting, and it means a new control cannot
+  // acquire behaviour the keyboard does not have.
+  function runAct(act, options) {
+    options = options || {};
+    moving();
+    var centre = box();
+    var buttonHold = ('rotate-left rotate-right tilt-up tilt-down'.indexOf(act) >= 0)
+      ? groundUnder(centre.cx, centre.cy) : null;
+    if (act === 'rotate-left') view.yaw -= 0.35;
+    else if (act === 'rotate-right') view.yaw += 0.35;
+    else if (act === 'tilt-up') view.pitch = Math.min(1.45, view.pitch + 0.15);
+    else if (act === 'tilt-down') view.pitch = Math.max(0.18, view.pitch - 0.15);
+    if (buttonHold) holdGround(buttonHold, centre.cx, centre.cy);
+    else if (act === 'pan-left') view.panX += 40;
+    else if (act === 'pan-right') view.panX -= 40;
+    else if (act === 'pan-up') view.panY += 40;
+    else if (act === 'pan-down') view.panY -= 40;
+    else if (act === 'fullscreen') {
+      toggleMaximise();
+      return;   // the resize path redraws once the box has its new size
+    }
+    else if (act === 'zoom-in') zoomAt(1.25, box().cx, box().cy);
+    else if (act === 'zoom-out') zoomAt(1 / 1.25, box().cx, box().cy);
+    else if (act === 'exaggerate-set') {
+      // True scale is the default because it is the only setting you can read height
+      // above ground from. But a 90 km flight through 2 km of air is 2 % of its own
+      // width, so the multiples are here for when the shape of the climbs matters
+      // more than their absolute height.
+      setVertical(parseFloat(options.vertical));
+    } else if (act === 'basemap-set') {
+      setBasemapStyle(options.style);
+    } else if (act === 'reset') {
+      view.yaw = -0.42; view.pitch = 0.46; view.zoom = 1; view.panX = 0; view.panY = 0;
+      setVertical(baseVertical);
+      if (order.length) setBasemapStyle(order[0]);
+    }
+    draw();
+  }
+
   root.querySelectorAll('[data-view3d-act]').forEach(function (button) {
     button.addEventListener('click', function () {
-      var act = button.dataset.view3dAct;
-      moving();
-      var centre = box();
-      var buttonHold = ('rotate-left rotate-right tilt-up tilt-down'.indexOf(act) >= 0)
-        ? groundUnder(centre.cx, centre.cy) : null;
-      if (act === 'rotate-left') view.yaw -= 0.35;
-      else if (act === 'rotate-right') view.yaw += 0.35;
-      else if (act === 'tilt-up') view.pitch = Math.min(1.45, view.pitch + 0.15);
-      else if (act === 'tilt-down') view.pitch = Math.max(0.18, view.pitch - 0.15);
-      if (buttonHold) holdGround(buttonHold, centre.cx, centre.cy);
-      else if (act === 'fullscreen') {
-        toggleMaximise();
-        return;   // the resize path redraws once the box has its new size
-      }
-      else if (act === 'zoom-in') zoomAt(1.25, box().cx, box().cy);
-      else if (act === 'zoom-out') zoomAt(1 / 1.25, box().cx, box().cy);
-      else if (act === 'exaggerate') {
-        // True scale is the default because it is the only setting you can read height
-        // above ground from. But a 90 km flight through 2 km of air is 2 % of its own
-        // width, so the multiples are here for when the shape of the climbs matters
-        // more than their absolute height.
-        var ladder = [1, 2, 4];
-        var at = ladder.indexOf(view.vertical);
-        var next = ladder[(at + 1) % ladder.length];
-        view.vertical = next;
-        button.classList.toggle('is-on', next !== 1);
-        button.innerHTML = '&#215;' + next + ' height';
-      } else if (act === 'basemap') {
-        // Every style the document can show, then bare relief, then round again — so a
-        // document carrying one style degrades to a plain on/off toggle by itself.
-        var cycle = order.concat(['off']);
-        var at = cycle.indexOf(view.map ? style : 'off');
-        setBasemapStyle(cycle[(at + 1) % cycle.length]);
-      } else if (act === 'reset') {
-        view.yaw = -0.42; view.pitch = 0.46; view.zoom = 1; view.vertical = baseVertical;
-        view.panX = 0; view.panY = 0;
-        if (order.length) setBasemapStyle(order[0]);
-        root.querySelectorAll('[data-view3d-act="exaggerate"]').forEach(function (b) {
-          b.classList.remove('is-on');
-          b.innerHTML = '&#215;1 height';
-        });
-      }
-      draw();
+      runAct(button.dataset.view3dAct, button.dataset);
     });
+  });
+
+  // Keyboard control of the view.
+  //
+  // Three traps, all of them load-bearing. The handler is bound to the **canvas**, never
+  // to the document: a report holds several flights, each with its own panel, and a
+  // document-level keydown would drive whichever panel the code found first — the exact
+  // bug this file already carries a comment about for buttons. `preventDefault` fires
+  // only for keys actually bound and only while the canvas has focus, or tilting the
+  // terrain would scroll the report out from under it. And every key goes through
+  // `runAct`, so a held arrow anchors through `holdGround` exactly as a held button does.
+  //
+  // `1 2 4` and `S M R` address a state directly, which a cycling button could never do —
+  // an independent argument for the segmented controls above.
+  var KEY_ACTS = {
+    ArrowLeft: 'rotate-left', ArrowRight: 'rotate-right',
+    ArrowUp: 'tilt-up', ArrowDown: 'tilt-down',
+    '+': 'zoom-in', '=': 'zoom-in', '-': 'zoom-out', '_': 'zoom-out',
+    f: 'fullscreen', F: 'fullscreen', '0': 'reset'
+  };
+  var SHIFT_ACTS = {
+    ArrowLeft: 'pan-left', ArrowRight: 'pan-right',
+    ArrowUp: 'pan-up', ArrowDown: 'pan-down'
+  };
+  var KEY_STYLES = { s: 'satellite', S: 'satellite', m: 'map', M: 'map',
+                     r: 'off', R: 'off' };
+
+  canvas.addEventListener('keydown', function (event) {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    var key = event.key;
+    if (key === '?') { toggleKeyHelp(); event.preventDefault(); return; }
+    if (key === '1' || key === '2' || key === '4') {
+      runAct('exaggerate-set', { vertical: key });
+      event.preventDefault();
+      return;
+    }
+    if (KEY_STYLES[key] !== undefined) {
+      runAct('basemap-set', { style: KEY_STYLES[key] });
+      event.preventDefault();
+      return;
+    }
+    var act = (event.shiftKey && SHIFT_ACTS[key]) || KEY_ACTS[key];
+    if (!act) return;          // an unbound key keeps its normal meaning
+    runAct(act);
+    event.preventDefault();
+  });
+
+  // A keyboard affordance nobody knows about is worth little, so the panel says so when
+  // it takes focus and `?` opens the list.
+  function toggleKeyHelp() {
+    var help = root.querySelector('.view3d-keys');
+    if (help) help.hidden = !help.hidden;
+  }
+  canvas.addEventListener('focus', function () {
+    var hint = root.querySelector('.view3d-hint');
+    if (hint) hint.hidden = false;
+  });
+  canvas.addEventListener('blur', function () {
+    var hint = root.querySelector('.view3d-hint');
+    if (hint) hint.hidden = true;
+    var help = root.querySelector('.view3d-keys');
+    if (help) help.hidden = true;
   });
 
   // Full screen is the real Fullscreen API, with the in-page maximise as the fallback.
