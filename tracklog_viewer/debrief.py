@@ -77,6 +77,17 @@ THRESHOLDS = {
 }
 
 
+def _num(value: float) -> str:
+    """A metre count with a thin thousands gap: 3656 -> "3 656".
+
+    A helper rather than `.replace(",", " ")` on the finished sentence, which is what this
+    replaced: applied to the whole string it eats the sentence's own commas too, and the
+    cards read "left at 2 176 m  620 m below the 2 796 m reached later". The separator has
+    to be applied to the number, not to the prose around it.
+    """
+    return f"{value:,.0f}".replace(",", " ")
+
+
 @dataclass
 class Cost:
     """What a finding cost, and how big that is against this flight.
@@ -94,7 +105,7 @@ class Cost:
     def label(self) -> str:
         if self.unit == "min":
             return f"{self.value:.0f} min"
-        return f"{self.value:,.0f} m".replace(",", " ")
+        return f"{_num(self.value)} m"
 
 
 @dataclass
@@ -187,9 +198,9 @@ def _best_climb_left(analysis: Analysis) -> Finding | None:
         title=f"Left the day's strongest climb {under:.0f} m under the day's best height",
         sentence=(
             f"Climb {index + 1} ran at {best.average_climb:+.2f} m/s and it was left at "
-            f"{best.finish_altitude:,.0f} m, {under:.0f} m below the {ceiling:,.0f} m "
+            f"{_num(best.finish_altitude)} m, {under:.0f} m below the {_num(ceiling)} m "
             f"reached later. The next climb took {gap / 60:.0f} min to find and averaged "
-            f"{following.average_climb:+.2f} m/s.".replace(",", " ")
+            f"{following.average_climb:+.2f} m/s."
         ),
         cost=_minutes(gap, analysis),
         at=best.finish_time,
@@ -220,11 +231,12 @@ def _expensive_gap(analysis: Analysis) -> Finding | None:
         title=f"{gaps.longest / 60:.0f} min between climbs, against a median of {gaps.median / 60:.0f}",
         sentence=(
             f"The longest stretch without a climb started at {gaps.longest_at} and ran "
-            f"{gaps.longest / 60:.0f} min, losing {abs(gaps.longest_loss):,.0f} m. The "
-            f"day's median gap was {gaps.median / 60:.0f} min.".replace(",", " ")
+            f"{gaps.longest / 60:.0f} min, losing {_num(abs(gaps.longest_loss))} m. The "
+            f"day's median gap was {gaps.median / 60:.0f} min."
         ),
         cost=_minutes(gaps.longest - gaps.median, analysis),
         at=gaps.longest_at,
+        cursor=gaps.longest_index,
         evidence={
             "longest_seconds": gaps.longest,
             "median_seconds": gaps.median,
@@ -258,7 +270,7 @@ def _low_point(analysis: Analysis, clearance) -> Finding | None:
         title=f"Lowest ground clearance of the flight was {lowest:.0f} m",
         sentence=(
             f"At {when} the track passed {lowest:.0f} m above the terrain, against a "
-            f"median of {median:,.0f} m for the flight.".replace(",", " ")
+            f"median of {_num(median)} m for the flight."
         ),
         cost=_metres(max(median - lowest, 0.0), analysis),
         at=when,
@@ -273,6 +285,11 @@ def _climb_selection(analysis: Analysis) -> Finding | None:
     if selection is None or selection.fraction < THRESHOLDS["weak_climb_share"]:
         return None
 
+    # Link to the longest of the weak climbs rather than the weakest: it is the one that
+    # actually spent the time the cost is measured in, so it is the one worth looking at.
+    weak = [s for s in analysis.thermals if s.average_climb < selection.threshold]
+    worst = max(weak, key=lambda s: s.duration) if weak else None
+
     return Finding(
         id="climb-selection",
         title=(
@@ -284,6 +301,8 @@ def _climb_selection(analysis: Analysis) -> Finding | None:
             f"{selection.threshold:+.2f} m/s, on a day that offered {selection.best:+.2f}."
         ),
         cost=_minutes(selection.weak_seconds, analysis),
+        at=worst.start_time if worst else None,
+        cursor=worst.start if worst else None,
         evidence={
             "weak_seconds": selection.weak_seconds,
             "total_seconds": selection.total_seconds,
@@ -337,15 +356,15 @@ def _working_band(analysis: Analysis) -> Finding | None:
     return Finding(
         id="working-band",
         title=(
-            f"The top {height:,.0f} m gave {band.climbs[2]:+.2f} m/s for "
-            f"{band.seconds[2] / 60:.0f} min of circling".replace(",", " ")
+            f"The top {_num(height)} m gave {band.climbs[2]:+.2f} m/s for "
+            f"{band.seconds[2] / 60:.0f} min of circling"
         ),
         sentence=(
-            f"Between {band.edges[0]:,.0f} m and {band.edges[3]:,.0f} m the climbs "
+            f"Between {_num(band.edges[0])} m and {_num(band.edges[3])} m the climbs "
             f"averaged {band.climbs[0]:+.2f}, {band.climbs[1]:+.2f} and "
             f"{band.climbs[2]:+.2f} m/s by altitude third. The best band was the "
             f"{'lowest' if band.best == 0 else 'middle' if band.best == 1 else 'top'} "
-            f"one.".replace(",", " ")
+            f"one."
         ),
         # The cost is the circling done in the weakest band, which is the time the shape
         # of this profile actually charged for.
@@ -365,9 +384,9 @@ def _ceiling_used(analysis: Analysis, weather) -> Finding | None:
         id="ceiling-used",
         title=f"Topped out at {use.fraction:.0%} of the modelled {use.source.replace('_', ' ')}",
         sentence=(
-            f"The highest point of the flight was {use.reached:,.0f} m against a modelled "
-            f"{use.ceiling:,.0f} m — {use.ceiling - use.reached:,.0f} m of the column was "
-            f"never used.".replace(",", " ")
+            f"The highest point of the flight was {_num(use.reached)} m against a modelled "
+            f"{_num(use.ceiling)} m — {_num(use.ceiling - use.reached)} m of the column was "
+            f"never used."
         ),
         cost=_metres(use.ceiling - use.reached, analysis),
         evidence={"reached": use.reached, "ceiling": use.ceiling,
@@ -396,7 +415,7 @@ def _other_slice(analysis: Analysis) -> Finding | None:
         id="other-slice",
         title=(
             f"{slice_.seconds / 60:.0f} min was neither climbing nor gliding, and it "
-            f"{direction} {abs(net):,.0f} m".replace(",", " ")
+            f"{direction} {_num(abs(net))} m"
         ),
         sentence=(
             f"{slice_.straight_sink / 60:.0f} min of it was straight sink — the price of "
@@ -530,7 +549,7 @@ def _verdict(analysis: Analysis, route, weather) -> Verdict | None:
         headline.append({"value": f"{use.fraction:.0%}", "label": "of cloudbase"})
     else:
         headline.append(
-            {"value": f"{summary.max_altitude:,.0f} m".replace(",", " "),
+            {"value": f"{_num(summary.max_altitude)} m",
              "label": "highest"}
         )
 

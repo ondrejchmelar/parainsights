@@ -9,12 +9,13 @@ A second renderer using MapLibre + deck.gl over a terrain DEM is planned for the
 interactive 3D view; it needs network tiles, so it cannot replace this one.
 """
 
+import bisect
 import base64
 import json
 import math
 from pathlib import Path
 
-from . import charts, quicklook, terrain as terrain_module, view3d, view3d_gl
+from . import charts, debrief, quicklook, terrain as terrain_module, view3d, view3d_gl
 from numpy import median as np_median
 from .analysis import TURN_RESOLUTION_LIMIT, Analysis, Phase
 
@@ -538,6 +539,115 @@ footer { margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--rule);
   gap: 16px; flex-wrap: wrap; }
 
 :focus-visible { outline: 2px solid var(--climb); outline-offset: 2px; }
+/* Verdict strip and debrief ------------------------------------------------
+
+   The strip sits between the masthead and the 3D view, and the cards immediately under
+   it. That ordering is the whole point: the 3D view keeps its place as the hero image,
+   but a reader used to scroll ~1 200 px before meeting a single number, and one compact
+   line at the top answers the question the report exists to answer. The cards then sit
+   next to the instrument they point into, so "show me" moves the marker in the view
+   directly above with little or no scrolling on a desktop. */
+.verdict {
+  border: 1px solid var(--rule-strong);
+  border-left: 3px solid var(--climb);
+  background: var(--panel);
+  padding: 16px 20px 14px;
+  margin: 0 0 26px;
+}
+.verdict-line {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.45;
+  color: var(--ink);
+  max-width: 68ch;
+}
+.verdict-figures { display: flex; flex-wrap: wrap; gap: 28px; margin-top: 12px; }
+.verdict-figure { display: flex; flex-direction: column; gap: 1px; }
+.verdict-value {
+  font-size: 20px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.verdict-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+}
+
+/* Three across the desktop width, stacked on a phone. `auto-fit` rather than a fixed
+   three: with two findings the cards fill the row instead of leaving a hole, and with
+   one the card does not stretch to the full width and read as a banner. */
+.findings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+}
+.finding {
+  border: 1px solid var(--rule);
+  background: var(--panel);
+  padding: 14px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.finding h3 {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.35;
+  color: var(--ink);
+  font-weight: 600;
+}
+.finding-body { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink-2); }
+.finding-cost {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--ink-3);
+}
+/* The dot carries the climb ramp already in the design system, so cost reads as colour
+   before it reads as text. */
+.finding-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--climb);
+  flex: none;
+}
+.finding-foot {
+  margin: auto 0 0;
+  padding-top: 6px;
+  border-top: 1px solid var(--rule);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.finding-link {
+  border: 0;
+  background: none;
+  padding: 4px 0;
+  color: var(--climb);
+  font: inherit;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+.finding-link:hover { color: var(--climb-3); }
+.debrief-note { margin-top: 12px; }
+@media (hover: none) {
+  /* 44 px minimum where a finger replaces a mouse. */
+  .finding-link { padding: 12px 0; min-height: 44px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
@@ -674,6 +784,31 @@ function initFlight(root) {
     view.hit.addEventListener('touchmove', function (event) {
       if (event.touches.length) { show(event.touches[0]); event.preventDefault(); }
     }, { passive: false });
+  });
+
+  // "show me" on a debrief card drives the cursor the charts already share, rather than
+  // scrolling to a section and hoping. That is what makes the card a measurement *plus a
+  // link*: the sentence names a moment, and the button puts the marker on it in the side
+  // view, the top view and the 3D view at once.
+  //
+  // Scoped to `root` like everything else here — a document holds several flights, and a
+  // document-level query would move another flight's cursor.
+  root.querySelectorAll('[data-finding-cursor]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      var index = parseInt(button.getAttribute('data-finding-cursor'), 10);
+      if (isNaN(index)) return;
+      // A hidden profile variant has no layout box and `place` skips it, so pick a view
+      // that is actually on screen — otherwise the tooltip is positioned from nothing.
+      var view = null;
+      for (var i = 0; i < views.length; i++) {
+        if (views[i].svg.getClientRects().length) { view = views[i]; break; }
+      }
+      if (!view) return;
+      index = Math.max(0, Math.min(index, view.px.length - 1));
+      place(index, view,
+            { box: view.svg.getBoundingClientRect(), vb: view.svg.viewBox.baseVal });
+      view.svg.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
   });
 
   function highlight(key) {
@@ -1159,6 +1294,104 @@ def _meteo_profile(analysis: Analysis, meteo, uid: str, rows: list[str]) -> str:
     </div>"""
 
 
+def _verdict_strip(result) -> str:
+    """The flight in one line, above the 3D view.
+
+    A reader currently scrolls ~1 200 px before meeting a single number. The 3D view
+    keeps its place as the hero image — it is the reason people stay — so the answer to
+    "how did it go" goes above it, in one compact line, and the evidence goes below.
+    """
+    if result is None or result.verdict is None:
+        return ""
+    verdict = result.verdict
+    numbers = "".join(
+        f'<div class="verdict-figure"><span class="verdict-value">'
+        f'{charts.escape(item["value"])}</span>'
+        f'<span class="verdict-label">{charts.escape(item["label"])}</span></div>'
+        for item in verdict.headline
+    )
+    return f"""
+  <div class="verdict">
+    <p class="verdict-line">{charts.escape(verdict.sentence)}</p>
+    <div class="verdict-figures">{numbers}</div>
+  </div>"""
+
+
+def _debrief_cards(result, uid: str, sample: list[int]) -> str:
+    """The findings, immediately under the instrument they point into.
+
+    Each card is a measurement plus a link, never an imperative — the phrasing is
+    `debrief.py`'s job and is tested there. What this function must not do is add a verb:
+    "show me" moves the existing linked cursor, it does not offer an opinion.
+
+    The cost dot carries the climb ramp already in the design system, so cost reads as
+    colour before it reads as text.
+    """
+    if result is None or not result.findings:
+        return ""
+
+    cards = []
+    for finding in result.findings:
+        footer = []
+        if finding.at:
+            footer.append(f'<span class="finding-when">{charts.escape(finding.at)}</span>')
+        link = ""
+        if finding.cursor is not None and sample:
+            # A finding's `cursor` is a *fix* index; the charts are drawn over the
+            # sampled subset, and the cursor arrays are indexed by sample position. Map
+            # it here rather than in the page — the sample list is right here, and the
+            # alternative is shipping it a second time just to do the same search in JS.
+            position = bisect.bisect_left(sample, finding.cursor)
+            if position >= len(sample):
+                position = len(sample) - 1
+            elif position and abs(sample[position - 1] - finding.cursor) <= abs(
+                sample[position] - finding.cursor
+            ):
+                position -= 1
+            link = (
+                f'<button type="button" class="finding-link" '
+                f'data-finding-cursor="{position}">show me &rarr;</button>'
+            )
+        cards.append(
+            f'<article class="finding" data-finding="{charts.escape(finding.id)}">'
+            f'<p class="finding-cost"><span class="finding-dot"></span>'
+            f'cost {charts.escape(finding.cost.label)}</p>'
+            f'<h3>{charts.escape(finding.title)}</h3>'
+            f'<p class="finding-body">{charts.escape(finding.sentence)}</p>'
+            f'<p class="finding-foot">{"".join(footer)}{link}</p>'
+            f"</article>"
+        )
+
+    # Why the list is short, when it is short. "Degrade, do not blank" cuts both ways:
+    # a reader who knows the ceiling findings need `--meteo` is better served than one
+    # left wondering why a card is missing.
+    reasons = {
+        "terrain": "ground clearance needs --terrain",
+        "meteo": "the ceiling findings need --meteo",
+        "route": "the route findings need a scored route",
+        "sampling": "this track is too coarse to count circles",
+    }
+    missing = [reasons[key] for key in result.suppressed if key in reasons]
+    note = (
+        f'<p class="caption debrief-note">Some findings are not computed here: '
+        f'{charts.escape("; ".join(missing))}.</p>'
+        if missing
+        else ""
+    )
+
+    return f"""
+  <section id="debrief-{uid}">
+    <div class="section-head">
+      <h2>Debrief</h2>
+      <p>The measurements this flight supports, ranked by what they cost. Each one is a
+         number and where to find it — never advice: the tool cannot see the sky, the
+         gaggle, the airspace or the plan, and you were there.</p>
+    </div>
+    <div class="findings">{"".join(cards)}</div>
+    {note}
+  </section>"""
+
+
 def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
                  basemaps=None, fetch_tiles: bool = True,
                  kmz: bytes | None = None, uid: str = "f0",
@@ -1259,6 +1492,7 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
         )
 
     view3d_section = ""
+    clearance = None
     if terrain is not None:
         # A shared document carries several flights, so trade 3D track detail for size.
         payload = view3d.data(
@@ -1297,6 +1531,15 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
     histogram = charts.climb_histogram(analysis)
     meteo_section = _meteo_section(analysis, meteo, uid)
 
+    # The debrief is computed here and baked in: findings are sentences, and there is no
+    # network at view time. `clearance` is None without `--terrain`, `meteo` is None
+    # without `--meteo`, and the findings that rest on them simply do not exist.
+    debrief_result = debrief.build(
+        analysis, route=route, weather=meteo, clearance=clearance
+    )
+    verdict_strip = _verdict_strip(debrief_result)
+    debrief_section = _debrief_cards(debrief_result, uid, sample)
+
     return f"""<article class="flight" data-flight-report="{uid}"{" hidden" if hidden else ""}>
   <header class="masthead">
     <div>
@@ -1305,8 +1548,10 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
     </div>
     <div class="identity">{identity_html}</div>
   </header>
+{verdict_strip}
 
 {view3d_section}
+{debrief_section}
 
   <section>
     <div class="section-head">

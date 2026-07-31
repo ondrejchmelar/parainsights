@@ -284,6 +284,7 @@ class ClimbGaps:
     longest: int
     longest_at: str
     longest_loss: float
+    longest_index: int  # fix where the longest gap starts, so a card can link to it
 
 
 def climb_gaps(analysis: Analysis) -> ClimbGaps | None:
@@ -303,7 +304,7 @@ def climb_gaps(analysis: Analysis) -> ClimbGaps | None:
         if seconds <= 0:
             continue
         loss = float(series.alt[after.start] - series.alt[before.stop - 1])
-        gaps.append((seconds, loss, before.finish_time))
+        gaps.append((seconds, loss, before.finish_time, before.stop - 1))
     if len(gaps) < 2:
         return None
 
@@ -313,6 +314,7 @@ def climb_gaps(analysis: Analysis) -> ClimbGaps | None:
         longest=int(round(longest[0])),
         longest_at=longest[2],
         longest_loss=round(longest[1]),
+        longest_index=int(longest[3]),
     )
 
 
