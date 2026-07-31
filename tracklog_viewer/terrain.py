@@ -10,8 +10,6 @@ Terrarium encodes elevation in the RGB channels of an ordinary PNG:
     metres = R * 256 + G + B / 256 - 32768
 """
 
-from __future__ import annotations
-
 import hashlib
 import io
 import math

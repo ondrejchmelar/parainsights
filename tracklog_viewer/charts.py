@@ -6,8 +6,6 @@ output is now a broken image — the lesson being that a chart should not depend
 network service that outlives neither the flight nor the tool.
 """
 
-from __future__ import annotations
-
 import math
 from dataclasses import dataclass
 

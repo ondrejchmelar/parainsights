@@ -16,8 +16,6 @@ The flight is embedded as JSON, so the page is one file plus those network
 dependencies — no sidecar data to keep next to it.
 """
 
-from __future__ import annotations
-
 import json
 from pathlib import Path
 

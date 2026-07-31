@@ -1,7 +1,5 @@
 """Free-distance optimisation tests, on routes whose optimum is known by hand."""
 
-from __future__ import annotations
-
 import math
 
 import numpy as np

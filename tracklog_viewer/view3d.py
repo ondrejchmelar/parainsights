@@ -9,12 +9,12 @@ The heightfield is drawn back-to-front by walking the grid from the farthest cor
 which is exact for a regular grid seen from outside it — no depth sort, no z-buffer.
 """
 
-from __future__ import annotations
-
+import datetime as dt
 import json
 
 import numpy as np
 
+from . import sun
 from .analysis import Analysis, Phase
 from .charts import decimate
 from .render_map import RAMP_RGB, climb_rgb
@@ -117,6 +117,47 @@ def data(analysis: Analysis, terrain, *, tolerance: float | None = None,
             "lat": round(float(flight.lat[-1]), 5),
             "alt": int(altitude[-1]),
         },
+        "sun": _sun(analysis),
+    }
+
+
+def _sun(analysis: Analysis) -> dict:
+    """The day's sun over the middle of the flight, tabulated for the slider.
+
+    A table rather than the algorithm: porting `sun.py` into JavaScript would be a second
+    place for it to be wrong, and 144 pairs of numbers cannot drift. The browser
+    interpolates between samples, which is why `day_track` unwraps the azimuth.
+
+    Times are handled as UTC minutes throughout and turned into clock time only for the
+    label, using the offset the flight's own timezone had *that day* — one flight, one
+    place, one date, so a single offset is exact and a timezone database is not needed in
+    the page.
+    """
+    flight = analysis.flight
+    lat = float(np.median(flight.lat))
+    lon = float(np.median(flight.lon))
+    launch = flight.local_time(0)
+    day = launch.astimezone(dt.timezone.utc).date() if launch.tzinfo else launch.date()
+
+    def utc_minutes(index: int) -> int:
+        when = flight.time[index].astype("datetime64[s]").astype(object)
+        return when.hour * 60 + when.minute
+
+    offset = launch.utcoffset() or dt.timedelta(0)
+    rise, set_ = sun.rise_and_set(day, lat, lon)
+    start, finish = utc_minutes(0), utc_minutes(len(flight.time) - 1)
+    return {
+        "track": sun.day_track(day, lat, lon),
+        "date": day.isoformat(),
+        # Minutes to add to a UTC minute to read it as the pilot's own clock.
+        "offset": int(offset.total_seconds() // 60),
+        "launch": start,
+        "landing": finish,
+        # Mid-flight is what the view opens on: the light the day was actually worked in,
+        # rather than an hour nobody flew.
+        "at": (start + finish) // 2 if finish >= start else start,
+        "rise": round(rise) if rise is not None else None,
+        "set": round(set_) if set_ is not None else None,
     }
 
 
@@ -171,6 +212,16 @@ def panel(payload: dict, uid: str, *, kmz_uri: str | None = None,
       </canvas>
       {earth}
       <p class="view3d-credit">{credit}</p>
+      <!-- The sun. Hidden until the script finds a table in the payload, so a panel
+           built without one (an uploaded track, whose date may be unknown) simply does
+           not have it rather than showing a dead control. -->
+      <div class="view3d-sun" hidden>
+        <label class="view3d-sun-label" for="view3d-sun-{uid}">Sun</label>
+        <input class="view3d-sun-slider" id="view3d-sun-{uid}" type="range"
+               min="0" max="1439" step="5" value="720"
+               aria-label="Time of day the terrain is lit from">
+        <span class="view3d-sun-read" aria-live="off">—</span>
+      </div>
       <div class="view3d-controls">
         <button type="button" data-view3d-act="rotate-left" title="Rotate left">&#8630;</button>
         <button type="button" data-view3d-act="rotate-right" title="Rotate right">&#8631;</button>
@@ -210,8 +261,16 @@ STYLE = """
 canvas.view3d { display: block; width: 100%; aspect-ratio: 21 / 9; cursor: grab;
   background: linear-gradient(180deg, var(--panel-2) 0%, var(--panel) 62%); touch-action: none; }
 @media (max-width: 900px) { canvas.view3d { aspect-ratio: 4 / 3; } }
-.view3d-panel:fullscreen { width: 100vw; height: 100vh; margin: 0; }
-.view3d-panel:fullscreen canvas.view3d { height: 100vh; aspect-ratio: auto; }
+/* Real full screen, which is the path taken wherever the permission allows it. The UA
+   stylesheet already positions the element over the screen; all that is needed is to
+   undo the full-bleed sizing, which would otherwise keep the panel `--page` wide and
+   pulled left by half the difference. 100%/100% and not 100vw/100vh: the viewport units
+   are the *page's* viewport, and this element's containing block is the screen. */
+.view3d-panel:fullscreen { width: 100%; height: 100%; margin: 0; border: 0; }
+.view3d-panel:fullscreen canvas.view3d { width: 100%; height: 100%; aspect-ratio: auto; }
+/* The backdrop is black by default and shows for a frame at either edge of the
+   transition, which reads as a flash against a light report. */
+.view3d-panel::backdrop { background: var(--panel); }
 /* The fallback for an iframe that is not allowed real fullscreen. inset:0 with auto
    width and height fills the layout viewport exactly — 100vw/100vh would overshoot by
    the scrollbar and leave the canvas the wrong height. */
@@ -243,6 +302,23 @@ canvas.view3d { display: block; width: 100%; aspect-ratio: 21 / 9; cursor: grab;
   color: var(--ink-2); background: color-mix(in srgb, var(--panel) 78%, transparent);
   padding: 3px 7px; border-radius: 2px; max-width: 46%; text-align: right; }
 canvas.view3d.is-dragging { cursor: grabbing; }
+/* Top left under the Earth link, opposite the credit. Wide enough to drag an hour
+   accurately, and out of the control row, which on a phone already wraps. */
+.view3d-sun { position: absolute; left: 12px; top: 12px; display: flex; align-items: center;
+  gap: 8px; padding: 5px 10px; border-radius: 2px; border: 1px solid var(--rule-strong);
+  background: color-mix(in srgb, var(--panel) 88%, transparent); z-index: 3; }
+/* `display: flex` beats the UA stylesheet's `[hidden] { display: none }`, so a panel
+   with no sun in its payload — an uploaded track, whose date may be unknown — would
+   show the control anyway, dead. Say it here rather than relying on the attribute. */
+.view3d-sun[hidden] { display: none; }
+.view3d-earth ~ .view3d-sun { top: 56px; }
+.view3d-sun-label, .view3d-sun-read {
+  font-family: 'NarrowDisplay', "Liberation Sans Narrow", ui-sans-serif, sans-serif;
+  font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-2); }
+.view3d-sun-read { min-width: 12ch; text-align: right; color: var(--ink); }
+.view3d-sun-slider { width: 150px; accent-color: var(--climb); }
+@media (max-width: 640px) { .view3d-sun-slider { width: 96px; }
+  .view3d-sun-read { min-width: 10ch; } }
 .view3d-controls { position: absolute; right: 10px; bottom: 10px; left: 10px; display: flex;
   gap: 5px; flex-wrap: wrap; justify-content: flex-end; }
 @media (max-width: 640px) {
@@ -685,7 +761,8 @@ function initView3d(root, cursorTrack) {
   // nothing at all — which is how a road map came out looking like a flat sheet. Stretch
   // the observed range instead, so relief reads at whatever scale the ground has.
   var litMid = 0.86, litSpread = 0;
-  (function measureLit() {
+  function measureLit() {
+    litMid = 0.86; litSpread = 0;
     var lo = Infinity, hi = -Infinity;
     for (var r = 0; r < rows; r += 2) {
       for (var c = 0; c < cols; c += 2) {
@@ -697,7 +774,8 @@ function initView3d(root, cursorTrack) {
     if (!isFinite(lo) || hi - lo < 0.01) return;   // genuinely flat: leave it unshaded
     litMid = (lo + hi) / 2;
     litSpread = (hi - lo) / 2;
-  })();
+  }
+  measureLit();
 
   // The heightfield is the only part of this that a depth buffer changes, so it is the
   // only part a backend may replace. `view3d_gl.py` registers one; with nothing
@@ -731,6 +809,25 @@ function initView3d(root, cursorTrack) {
     fallback: function () { renderer = null; sampleCellColours(); draw(); }
   }) : null;
 
+  // Where the light comes from, in the frame the gradients below are computed in: x
+  // east, y *south* (rows run north to south), z up. The default is the fixed direction
+  // this always used; `setLight` replaces it with the real sun when the payload carries
+  // a day track, which is what makes "which slopes were lit, and when" a question the
+  // view can answer rather than a decoration.
+  var lightX = -0.55, lightY = 0.55, lightZ = 0.63;
+
+  function setLight(azimuth, elevation) {
+    // A sun on the horizon lights nothing and the hillshade collapses to a silhouette,
+    // so hold it a few degrees up. Below the horizon the terrain is drawn by the same
+    // rule — there is no night mode; the label says the sun is down and the shading
+    // shows the last light it had.
+    var el = Math.max(elevation, 3) * Math.PI / 180;
+    var az = azimuth * Math.PI / 180;
+    lightX = Math.cos(el) * Math.sin(az);
+    lightY = -Math.cos(el) * Math.cos(az);   // north in the payload, south in this frame
+    lightZ = Math.sin(el);
+  }
+
   function shadeFactor(r, c) {
     var i = r * cols + c;
     var here = dem.z[i];
@@ -740,7 +837,7 @@ function initView3d(root, cursorTrack) {
     var dzdx = (right - here) / cellX, dzdy = (below - here) / cellY;
     var nx = -dzdx, ny = -dzdy, nz = 1;
     var len = Math.sqrt(nx * nx + ny * ny + nz * nz);
-    var light = (nx * -0.55 + ny * 0.55 + nz * 0.63) / len;
+    var light = (nx * lightX + ny * lightY + nz * lightZ) / len;
     return Math.max(0.25, Math.min(1.15, 0.55 + light * 0.65));
   }
 
@@ -1438,6 +1535,83 @@ function initView3d(root, cursorTrack) {
     return { cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
   }
 
+  // ---- the sun ---------------------------------------------------------------------
+  //
+  // The payload carries the whole day sampled every ten minutes rather than the
+  // algorithm, so there is no second implementation of solar position to drift out of
+  // step with `sun.py`. Interpolation between samples is linear and the azimuth arrives
+  // unwrapped, so the light never sweeps the long way round the compass.
+  var sunTrack = scene.sun || null;
+  var sunMinute = sunTrack ? sunTrack.at : null;
+
+  function sunAt(minute) {
+    var track = sunTrack.track;
+    var span = track.az.length * track.step;
+    var at = ((minute % span) + span) % span / track.step;
+    var i = Math.floor(at), f = at - i;
+    var j = (i + 1) % track.az.length;
+    // The wrap at midnight is the one place the unwrapped azimuth has a real step in it;
+    // ignore the fraction there rather than interpolate across a day boundary.
+    if (j === 0) return { az: track.az[i], el: track.el[i] };
+    return { az: track.az[i] + (track.az[j] - track.az[i]) * f,
+             el: track.el[i] + (track.el[j] - track.el[i]) * f };
+  }
+
+  function clock(minute) {
+    var local = ((Math.round(minute) + sunTrack.offset) % 1440 + 1440) % 1440;
+    return String(Math.floor(local / 60)).padStart(2, '0') + ':' +
+           String(local % 60).padStart(2, '0');
+  }
+
+  // Re-lighting is not free and does not have to be: the sun moves when a reader drags a
+  // slider, never during a gesture or a frame. The whole cost is one pass over the grid
+  // for the lit range, one over the vertex colours (WebGL) and one over the draped
+  // texture, and the draped one is the reason this is not done per animation frame.
+  function relight() {
+    if (!sunTrack) return;
+    var where = sunAt(sunMinute);
+    setLight(where.az, where.el);
+    measureLit();
+    Object.keys(ready).forEach(function (name) {
+      if (ready[name].image) ready[name].shaded = shadedTexture(ready[name].image,
+                                                               ready[name].box);
+    });
+    if (style && ready[style]) basemap = ready[style].shaded || ready[style].image;
+    if (renderer && renderer.relight) renderer.relight();
+    sampleCellColours();
+    var read = root.querySelector('.view3d-sun-read');
+    if (read) {
+      read.textContent = clock(sunMinute) + ' · ' +
+        (where.el > 0 ? Math.round(where.el) + '° ' + compass(where.az) : 'sun down');
+    }
+    draw();
+  }
+
+  function compass(azimuth) {
+    var names = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
+                 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+    return names[Math.round((((azimuth % 360) + 360) % 360) / 22.5) % 16];
+  }
+
+  (function wireSun() {
+    var host = root.querySelector('.view3d-sun');
+    var slider = root.querySelector('.view3d-sun-slider');
+    if (!host || !slider) return;
+    if (!sunTrack || !sunTrack.track || !sunTrack.track.az) return;   // no date, no sun
+    host.hidden = false;
+    // The slider runs in the pilot's own clock so the numbers under it are the times in
+    // the report's tables; the sun is computed in UTC, and `offset` is the one place
+    // those two meet.
+    slider.min = 0;
+    slider.max = 1435;
+    slider.value = ((sunMinute + sunTrack.offset) % 1440 + 1440) % 1440;
+    slider.addEventListener('input', function () {
+      sunMinute = Number(slider.value) - sunTrack.offset;
+      relight();
+    });
+    relight();
+  })();
+
   root.querySelectorAll('[data-view3d-act]').forEach(function (button) {
     button.addEventListener('click', function () {
       var act = button.dataset.view3dAct;
@@ -1486,48 +1660,103 @@ function initView3d(root, cursorTrack) {
     });
   });
 
-  // In-page maximise, deliberately *not* the Fullscreen API. The primary target is a
-  // page embedded in an iframe that is not granted fullscreen permission, where
-  // requestFullscreen throws synchronously without a user activation and rejects without
-  // the permission — two failure modes that between them made the button do nothing at
-  // all. position: fixed over the viewport needs no permission and behaves identically
-  // everywhere, which also makes it testable.
+  // Full screen is the real Fullscreen API, with the in-page maximise as the fallback.
+  //
+  // The API is what a reader means by full screen — it takes the browser chrome with it
+  // and the OS knows the window is presenting — and where the report is served from a
+  // host it is granted. But it fails two ways at once inside an iframe without the
+  // permission: `requestFullscreen` throws synchronously without a user activation, and
+  // rejects without the permission. So the fallback is not decoration, it is the path a
+  // published artifact takes, and it must be exercised. Both end in the same state as far
+  // as everything else here is concerned — `panelIsFull()` is the one question asked.
+  function panelIsFull(panel) {
+    return panel.classList.contains('is-maximised') ||
+           document.fullscreenElement === panel ||
+           document.webkitFullscreenElement === panel;
+  }
+
   // Percentage height on a canvas resolves against a parent whose own height is being
   // established in the same pass, and it did not settle before the redraw — the CSS box
   // read 100 % of the viewport while the backing store kept the aspect-ratio height. An
   // explicit pixel size removes the dependency entirely.
+  // Measured from the panel, never from a global. Maximised or truly full screen, the
+  // panel's own box *is* the space to fill, and it is the same box the GL canvas
+  // underneath gets from `inset: 0` — two measurements that cannot disagree.
+  // `document.documentElement.clientWidth/clientHeight` looked equivalent and is not:
+  // in quirks mode clientHeight is the height of the whole *document*, so a report five
+  // screens long maximised to a 4 316 px canvas inside an 813 px panel. The report has
+  // a doctype now, but a viewer that renders it another way — an iframe, an email
+  // client, a page that embeds the panel in something taller — must not be able to do
+  // that again.
   function applyMaximisedSize() {
     var panel = canvas.closest('.view3d-panel');
-    if (panel.classList.contains('is-maximised')) {
-      canvas.style.width = document.documentElement.clientWidth + 'px';
-      canvas.style.height = document.documentElement.clientHeight + 'px';
+    if (panelIsFull(panel)) {
+      // clientWidth/clientHeight, not getBoundingClientRect: the panel keeps a 1 px
+      // border top and bottom, and `inset: 0` on the GL canvas resolves against the
+      // padding box. This is the same box, to the pixel.
+      canvas.style.width = panel.clientWidth + 'px';
+      canvas.style.height = panel.clientHeight + 'px';
     } else {
       canvas.style.width = '';
       canvas.style.height = '';
     }
   }
 
-  function toggleMaximise() {
-    var panel = canvas.closest('.view3d-panel');
-    panel.classList.toggle('is-maximised');
+  // The new box is not measurable immediately, and one follow-up frame was not enough:
+  // measured with __view3d.metrics(), the box read 713 px while the backing store was
+  // still 508 until an explicit later redraw. A short ladder of redraws costs nothing on
+  // a toggle and is not sensitive to how long layout takes. Real full screen needs it
+  // more than the in-page path, not less: the box changes when the compositor says so.
+  function settleSize() {
     applyMaximisedSize();
-    // Force the redraw past the layout change rather than waiting for an observer: the
-    // box changes in the same frame as the class, and a single rAF sometimes runs before
-    // the new geometry is available.
     view.panX = 0;
     view.panY = 0;
-    // The new box is not measurable immediately, and one follow-up frame was not
-    // enough: measured with __view3d.metrics(), the box read 713 px while the backing
-    // store was still 508 until an explicit later redraw. A short ladder of redraws
-    // costs nothing on a toggle and is not sensitive to how long layout takes.
     [0, 80, 200, 500].forEach(function (delay) {
-      setTimeout(function () { resize(); draw(); }, delay);
+      setTimeout(function () { applyMaximisedSize(); resize(); draw(); }, delay);
     });
+  }
+
+  function maximiseInPage(panel) {
+    panel.classList.add('is-maximised');
+    settleSize();
+  }
+
+  function toggleMaximise() {
+    var panel = canvas.closest('.view3d-panel');
+    var full = document.fullscreenElement === panel ||
+               document.webkitFullscreenElement === panel;
+    if (full) {
+      // Leaving is symmetrical, and the fullscreenchange handler does the resizing.
+      (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      return;
+    }
+    if (panel.classList.contains('is-maximised')) {
+      panel.classList.remove('is-maximised');
+      settleSize();
+      return;
+    }
+    var request = panel.requestFullscreen || panel.webkitRequestFullscreen;
+    if (!request) return maximiseInPage(panel);
+    // Three ways this can fail and only one of them is a rejected promise: a synchronous
+    // throw with no user activation, a rejection without the permission, and an older
+    // implementation that returns undefined and simply does nothing. The check after a
+    // tick catches the third, which no amount of promise handling would.
+    try {
+      var pending = request.call(panel);
+      if (pending && pending.catch) pending.catch(function () { maximiseInPage(panel); });
+    } catch (error) {
+      return maximiseInPage(panel);
+    }
+    setTimeout(function () {
+      if (!panelIsFull(panel)) maximiseInPage(panel);
+    }, 120);
   }
 
   document.addEventListener('keydown', function (event) {
     if (event.key !== 'Escape') return;
     var panel = canvas.closest('.view3d-panel');
+    // Real full screen exits on Escape by itself, and taking the key from it would only
+    // race the browser. This is the in-page path, which has nobody else to do it.
     if (panel.classList.contains('is-maximised')) toggleMaximise();
   });
 
@@ -1545,7 +1774,15 @@ function initView3d(root, cursorTrack) {
     draw();
   }
   window.addEventListener('resize', refresh);
-  document.addEventListener('fullscreenchange', refresh);
+  // Entering or leaving real full screen is the same event either way, including the
+  // browser's own Escape. `settleSize` rather than `refresh`: the screen-sized box is not
+  // measurable in the frame the event arrives in, which is the whole reason for the
+  // ladder. Both spellings, because Safari still fires only the prefixed one.
+  ['fullscreenchange', 'webkitfullscreenchange'].forEach(function (name) {
+    document.addEventListener(name, function () {
+      if (canvas.closest('.view3d-panel')) settleSize();
+    });
+  });
   if (window.ResizeObserver) new ResizeObserver(refresh).observe(canvas);
 
   draw();

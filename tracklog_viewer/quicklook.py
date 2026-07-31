@@ -15,8 +15,6 @@ basemap, the weather profile, or XC optimisation. Those need the CLI. The panel 
 so rather than quietly presenting a thinner analysis as the whole thing.
 """
 
-from __future__ import annotations
-
 from . import view3d
 from .render_map import RAMP_RGB
 
@@ -74,9 +72,10 @@ def panel() -> str:
         <div class="section-head" style="margin-top:30px">
           <h2>The flight in three dimensions</h2>
           <p>Drag to pan, right-drag or ctrl-drag to rotate and tilt, scroll to zoom. The
-             ground is one flat plane: an elevation model has to be fetched, and a published
-             page is not allowed to. Imagery is tried anyway — it arrives if this page can
-             reach the network. The altitudes are your own, at true vertical scale.</p>
+             terrain and the imagery are fetched when this page opens — served from a host
+             they arrive; inside a published artifact, which may reach no host at all, the
+             ground falls back to a flat plane and the caption says so. The altitudes are
+             your own either way, at true vertical scale.</p>
         </div>
         {view3d.panel(dict(tiles=view3d.TILE_SOURCES), "own")}
         <p class="caption ql-3d-note"></p>
@@ -375,6 +374,29 @@ SCRIPT = r"""
       heading.push(heading[h - 1] + delta);
     }
 
+    // Full revolutions between two fixes, the same way `analysis._revolutions` counts
+    // them: split the unwrapped heading into runs of one turn direction — a run ends
+    // only where the heading backs up by more than REVERSAL_HYSTERESIS, so noise and
+    // the wander inside a circle extend it — and count only the runs that came all the
+    // way round. Summing |dheading| instead scores a wingover as most of a turn, and
+    // taking the net rotation (what this used to do) cancels a climb flown both ways.
+    var REVERSAL_HYSTERESIS = 60;
+    function revolutions(from, to) {
+      var last = heading[from], way = 0, total = 0, run = 0;
+      for (var r = from + 1; r < to; r++) {
+        var step = heading[r] - last;
+        if (way && step * way > 0) {
+          run += step; last = heading[r];
+        } else if (Math.abs(step) >= REVERSAL_HYSTERESIS) {
+          if (Math.abs(run) >= 360) total += Math.abs(run) / 360;
+          way = step > 0 ? 1 : -1;
+          run = step; last = heading[r];
+        }
+      }
+      if (Math.abs(run) >= 360) total += Math.abs(run) / 360;
+      return total;
+    }
+
     var phases = new Array(t.length).fill('cruise');
     function mark(test, name, minGap) {
       var run = null;
@@ -406,8 +428,7 @@ SCRIPT = r"""
         if (duration >= 60 && gain > 50) {
           var best = -Infinity;
           for (var b2 = current; b2 < stop; b2++) best = Math.max(best, climb[b2]);
-          var turns = median <= 5
-            ? Math.abs(heading[stop] - heading[current]) / 360 : null;
+          var turns = median <= 5 ? revolutions(current, stop) : null;
           climbs.push({
             start: current, stop: stop, duration: duration, gain: gain,
             average: gain / duration, best: best, turns: turns,
@@ -682,11 +703,162 @@ SCRIPT = r"""
       (sub ? '<span class="sub">' + sub + '</span>' : '') + '</div>';
   }
 
-  // The 3D view, driven by the same initView3d the built reports use. What we cannot
-  // supply here is the elevation model — that is a tile fetch, which a published page is
-  // not allowed to make — so the ground is one flat plane at the lowest point of the
-  // flight. The shape of the flight in the air is the part worth seeing anyway, and it
-  // is exact: altitudes are the track's own.
+  // The 3D view, driven by the same initView3d the built reports use.
+  //
+  // The elevation model is fetched here, in the page, from the same keyless terrarium
+  // DEM `terrain.py` uses — the tiles are CORS-open, so a browser may read their pixels.
+  // Served from a host that works and an uploaded track gets real ground. Inside a
+  // published artifact every host is blocked, the fetch fails, and the ground falls back
+  // to one flat plane at the lowest point of the flight, which is what this always did.
+  // Either way the shape of the flight *in the air* is exact, because the altitudes are
+  // the track's own; what the DEM adds is the ground under it.
+  //
+  // Terrarium encodes metres in the RGB channels of an ordinary PNG:
+  //     metres = R * 256 + G + B / 256 - 32768
+  var DEM_TILE = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
+  var DEM_TILE_SIZE = 256;
+  // Fewer tiles than the CLI's 20: this is a fetch the reader waits through, not a build
+  // step, and every tile is a request against a donated service.
+  var DEM_MAX_TILES = 12;
+  // Long enough for a slow phone, short enough that a blocked page is not left staring at
+  // a spinner. A CSP refusal fires `onerror` immediately and never reaches this.
+  var DEM_TIMEOUT = 9000;
+  // Nodes in the grid. The CLI's 26 000 is a budget in *bytes*, because that grid is
+  // embedded in the document; this one is never serialised, so the only cost is the mesh
+  // itself — and the drape is budgeted separately from it.
+  var DEM_NODES = 16000;
+
+  function demTileXY(lat, lon, zoom) {
+    var n = Math.pow(2, zoom);
+    var radians = lat * Math.PI / 180;
+    return [(lon + 180) / 360 * n,
+            (1 - Math.log(Math.tan(radians) + 1 / Math.cos(radians)) / Math.PI) / 2 * n];
+  }
+
+  // Highest zoom whose tile count stays inside the budget — detail is wasted once the
+  // grid is coarser than the tiles, and an XC flight at z12 is hundreds of them.
+  function demZoom(box) {
+    for (var zoom = 12; zoom > 5; zoom--) {
+      var a = demTileXY(box.north, box.west, zoom);
+      var b = demTileXY(box.south, box.east, zoom);
+      var tiles = (Math.floor(b[0]) - Math.floor(a[0]) + 1) *
+                  (Math.floor(b[1]) - Math.floor(a[1]) + 1);
+      if (tiles <= DEM_MAX_TILES) return zoom;
+    }
+    return 6;
+  }
+
+  // Calls back with a grid in the shape `view3d` wants, or with null. Never throws and
+  // never leaves the caller waiting: a tile that fails is one tile, and the timeout
+  // settles with whatever arrived.
+  function loadDem(box, done) {
+    var zoom = demZoom(box);
+    var a = demTileXY(box.north, box.west, zoom);
+    var b = demTileXY(box.south, box.east, zoom);
+    var x0 = Math.floor(a[0]), y0 = Math.floor(a[1]);
+    var x1 = Math.floor(b[0]), y1 = Math.floor(b[1]);
+    var wide = x1 - x0 + 1, high = y1 - y0 + 1;
+    var mosaic = document.createElement('canvas');
+    mosaic.width = wide * DEM_TILE_SIZE;
+    mosaic.height = high * DEM_TILE_SIZE;
+    var ctx;
+    try {
+      ctx = mosaic.getContext('2d', { willReadFrequently: true });
+    } catch (error) {
+      return done(null);
+    }
+    if (!ctx) return done(null);
+
+    var pending = wide * high, arrived = 0, settled = false;
+    var timer = setTimeout(function () { finish(); }, DEM_TIMEOUT);
+
+    function finish() {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (!arrived) return done(null);
+      var pixels;
+      try {
+        pixels = ctx.getImageData(0, 0, mosaic.width, mosaic.height);
+      } catch (error) {
+        // A tile served without CORS headers taints the canvas and this throws. Better
+        // the flat plane than a broken page.
+        return done(null);
+      }
+      done(demGrid(box, zoom, x0, y0, pixels));
+    }
+
+    function count() { if (--pending <= 0) finish(); }
+
+    for (var ty = y0; ty <= y1; ty++) {
+      for (var tx = x0; tx <= x1; tx++) {
+        (function (tileX, tileY) {
+          var image = new Image();
+          // Required before the pixels can be read back, and the reason the tiles being
+          // CORS-open matters rather than merely being reachable.
+          image.crossOrigin = 'anonymous';
+          image.onload = function () {
+            try {
+              ctx.drawImage(image, (tileX - x0) * DEM_TILE_SIZE,
+                            (tileY - y0) * DEM_TILE_SIZE);
+              arrived++;
+            } catch (error) { /* one tile short is not a failure */ }
+            count();
+          };
+          image.onerror = count;
+          image.src = DEM_TILE.replace('{z}', zoom)
+                              .replace('{x}', tileX).replace('{y}', tileY);
+        })(tx, ty);
+      }
+    }
+  }
+
+  function demGrid(box, zoom, x0, y0, pixels) {
+    // Aspect-aware, so cells stay roughly square on the ground, then scaled to the node
+    // budget on both axes at once.
+    var mid = (box.north + box.south) / 2;
+    var wideM = (box.east - box.west) * 111320 * Math.cos(mid * Math.PI / 180);
+    var highM = (box.north - box.south) * 110540;
+    var cols = 240;
+    var rows = Math.max(Math.round(cols * highM / Math.max(wideM, 1)), 8);
+    rows = Math.min(rows, cols);
+    if (rows * cols > DEM_NODES) {
+      var shrink = Math.sqrt(DEM_NODES / (rows * cols));
+      cols = Math.max(Math.round(cols * shrink), 24);
+      rows = Math.max(Math.round(rows * shrink), 8);
+    }
+
+    var z = new Array(cols * rows);
+    var min = Infinity, max = -Infinity, found = 0;
+    for (var r = 0; r < rows; r++) {
+      var lat = box.north - (box.north - box.south) * r / (rows - 1);
+      var py = Math.min(Math.max(
+        Math.round((demTileXY(lat, box.west, zoom)[1] - y0) * DEM_TILE_SIZE), 0),
+        pixels.height - 1);
+      for (var c = 0; c < cols; c++) {
+        var lon = box.west + (box.east - box.west) * c / (cols - 1);
+        var px = Math.min(Math.max(
+          Math.round((demTileXY(lat, lon, zoom)[0] - x0) * DEM_TILE_SIZE), 0),
+          pixels.width - 1);
+        var at = (py * pixels.width + px) * 4;
+        // Alpha 0 is a tile that never arrived: leave a hole and fill it below rather
+        // than reading -32768 m of "sea" into the middle of the mesh.
+        if (pixels.data[at + 3] === 0) { z[r * cols + c] = null; continue; }
+        var metres = pixels.data[at] * 256 + pixels.data[at + 1] +
+                     pixels.data[at + 2] / 256 - 32768;
+        metres = Math.round(metres);
+        z[r * cols + c] = metres;
+        if (metres < min) min = metres;
+        if (metres > max) max = metres;
+        found++;
+      }
+    }
+    if (!found) return null;
+    for (var i = 0; i < z.length; i++) if (z[i] === null) z[i] = min;
+    return { west: box.west, east: box.east, south: box.south, north: box.north,
+             rows: rows, cols: cols, min: min, max: max, z: z, zoom: zoom };
+  }
+
   // The tile templates are already in the template's markup; read them back rather than
   // repeating the URLs here, so there is one place they can be wrong.
   var TILES = (function () {
@@ -698,7 +870,18 @@ SCRIPT = r"""
     }
   })();
 
-  function scene3d(a) {
+  // The box the terrain covers. Padded for context the way `terrain.for_flight` pads it:
+  // a wider box costs nothing to draw, each cell simply covers more ground.
+  function demBox(a) {
+    var west = Math.min.apply(null, a.lon), east = Math.max.apply(null, a.lon);
+    var south = Math.min.apply(null, a.lat), north = Math.max.apply(null, a.lat);
+    var padX = Math.max((east - west) * 0.35, 0.06);
+    var padY = Math.max((north - south) * 0.35, 0.06);
+    return { west: west - padX, east: east + padX,
+             south: south - padY, north: north + padY };
+  }
+
+  function scene3d(a, dem) {
     var pad = 0.02;
     var west = Math.min.apply(null, a.lon) - pad, east = Math.max.apply(null, a.lon) + pad;
     var south = Math.min.apply(null, a.lat) - pad, north = Math.max.apply(null, a.lat) + pad;
@@ -730,8 +913,8 @@ SCRIPT = r"""
     });
 
     return {
-      terrain: { west: west, east: east, south: south, north: north,
-                 rows: rows, cols: cols, min: ground, max: ground, z: z },
+      terrain: dem || { west: west, east: east, south: south, north: north,
+                        rows: rows, cols: cols, min: ground, max: ground, z: z },
       trackTop: Math.round(a.altMax),
       track: track,
       climbs: climbs,
@@ -753,15 +936,29 @@ SCRIPT = r"""
     var host = root.querySelector('.ql-3d');
     var panel = host && host.querySelector('.view3d-panel');
     if (!panel || typeof initView3d !== 'function') return;
-    // Unique canvas id per flight: initView3d registers itself under it, and two panels
-    // sharing an id would leave the second unreachable.
-    panel.querySelector('canvas.view3d').id = 'view3d-' + uid;
-    panel.querySelector('.view3d-data').textContent = JSON.stringify(scene3d(a));
-    initView3d(panel, null);
-    root.querySelector('.ql-3d-note').textContent =
-      'Ground drawn as a flat plane at ' + Math.round(a.altMin - 30) + ' m — ' +
-      Math.round(a.altMin) + ' m was your lowest point. Heights are ' +
-      (a.useBaro ? 'pressure' : 'GPS') + ' altitude, at true vertical scale.';
+    var note = root.querySelector('.ql-3d-note');
+    var heights = 'Heights are ' + (a.useBaro ? 'pressure' : 'GPS') +
+                  ' altitude, at true vertical scale.';
+    note.textContent = 'Fetching terrain…';
+    // The DEM is fetched *before* initView3d rather than swapped in after it. Re-running
+    // initView3d on a live panel would bind a second set of pointer handlers to the same
+    // canvas and every gesture would count twice; there is no API for replacing the grid
+    // under a running view, and inventing one to save a second of waiting is the worse
+    // trade. The caption says what is happening meanwhile.
+    loadDem(demBox(a), function (dem) {
+      // Unique canvas id per flight: initView3d registers itself under it, and two panels
+      // sharing an id would leave the second unreachable.
+      panel.querySelector('canvas.view3d').id = 'view3d-' + uid;
+      panel.querySelector('.view3d-data').textContent = JSON.stringify(scene3d(a, dem));
+      initView3d(panel, null);
+      note.textContent = dem
+        ? 'Ground from the terrarium elevation model at zoom ' + dem.zoom + ' (' +
+          dem.cols + '×' + dem.rows + ' nodes, ' + dem.min + '–' + dem.max + ' m). ' +
+          heights
+        : 'Ground drawn as a flat plane at ' + Math.round(a.altMin - 30) + ' m — ' +
+          Math.round(a.altMin) + ' m was your lowest point, and the elevation model ' +
+          'could not be fetched from here. ' + heights;
+    });
   }
 
   function present(root, a, name, uid) {

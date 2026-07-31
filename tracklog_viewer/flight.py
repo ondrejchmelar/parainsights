@@ -6,8 +6,6 @@ snapping makes the window length vary with the sample rate and quietly biases cl
 rates.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 
 import numpy as np

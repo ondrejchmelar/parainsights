@@ -11,8 +11,6 @@ optimiser is our own, on the FAI sphere, over a sampled track: expect agreement
 with XContest's own number to within a few tenths of a percent, not exactly.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 
 import numpy as np

@@ -8,7 +8,7 @@ parainsights/
 ├── CLAUDE.md              this file
 ├── pyproject.toml         one project, one venv, one test suite
 ├── tracklog_viewer/       the tool: IGC/KML/KMZ → analysis → HTML, KMZ, 3D map
-├── tests/                 pytest, 155 tests, no network
+├── tests/                 pytest, 209 tests, no network
 └── docs/
     ├── formats.md         IGC and KML/KMZ format research, measured on real files
     └── plan.md            scope, decisions and status
@@ -20,22 +20,32 @@ rather than importing across tools.
 
 ## Getting set up
 
+The environment is [uv](https://docs.astral.sh/uv/)'s. It installs the interpreter as well
+as the packages, so there is nothing to line up by hand:
+
 ```bash
-python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'
-.venv/bin/python -m pytest -c pyproject.toml        # 155 tests, ~100 s, no network
+uv sync --extra dev          # creates .venv on the pinned Python, from uv.lock
+uv run pytest -c pyproject.toml     # 209 tests, ~2 min, no network
 ```
 
 `-c pyproject.toml` matters when the repo sits inside another project — pytest otherwise
 walks up and adopts the enclosing config.
 
+**The installed set is a fact, not a coincidence.** `uv.lock` is committed and CI runs
+`uv sync --locked`, which fails rather than silently resolving something new — so an
+upstream release cannot turn the pipeline red on its own, and when a bump is wanted it is
+`uv lock --upgrade` and a commit you can point at. `.python-version` pins the interpreter;
+uv refuses to build a venv that violates `requires-python`, which is what previously let a
+3.11 venv sit under a `>=3.12` floor unnoticed.
+
 Run it:
 
 ```bash
-.venv/bin/python -m tracklog_viewer.cli FLIGHT.igc --html out.html
-.venv/bin/python -m tracklog_viewer.cli FLIGHT.igc --meteo --terrain --html out.html
-.venv/bin/python -m tracklog_viewer.cli a.igc b.kmz c.igc --html all.html   # flight picker
-.venv/bin/python -m tracklog_viewer.cli FLIGHT.igc --kmz flight.kmz         # Google Earth
-.venv/bin/python -m tracklog_viewer.cli FLIGHT.igc --map map.html           # 3D map
+uv run python -m tracklog_viewer.cli FLIGHT.igc --html out.html
+uv run python -m tracklog_viewer.cli FLIGHT.igc --meteo --terrain --html out.html
+uv run python -m tracklog_viewer.cli a.igc b.kmz c.igc --html all.html   # flight picker
+uv run python -m tracklog_viewer.cli FLIGHT.igc --kmz flight.kmz         # Google Earth
+uv run python -m tracklog_viewer.cli FLIGHT.igc --map map.html           # 3D map
 ```
 
 Only `--meteo` and `--terrain` touch the network. Everything else is offline.
@@ -48,7 +58,7 @@ Three destinations, and the differences are not cosmetic:
 |---|---|---|---|
 | can fetch anything | **no** | yes | yes |
 | imagery | must be embedded | fetched, sharp | fetched, sharp |
-| terrain for an *uploaded* track | flat plane | real DEM possible | real DEM possible |
+| terrain for an *uploaded* track | flat plane | fetched at view time | fetched at view time |
 | weather for an uploaded track | fails, says so | works | works |
 | report size (reference flight) | 1.1 MB | 0.5 MB | 0.5 MB |
 
@@ -58,13 +68,13 @@ embedded imagery, the local charts, the canvas 3D view and the inlined font.
 
 Build for a host instead with `--online`: nothing is baked in, the 3D view fetches tiles at
 zoom 12–13 (10–20 m/px against the ~45 m/px an embedded image can afford), and the file is
-half the size. To put it on GitHub Pages:
+half the size. **That is the primary home** — the site is GitLab Pages, published from
+`public/` by the `pages` job in `.gitlab-ci.yml`:
 
 ```bash
-.venv/bin/python -m tracklog_viewer.cli FLIGHT.igc --terrain --meteo --online \
-  --html docs/index.html
-git add docs/index.html && git commit -m "Publish flight" && git push
-# then: repository Settings → Pages → Source: main /docs
+uv run python -m tracklog_viewer.cli FLIGHT.igc --terrain --meteo --online \
+  --html public/index.html
+git add public/index.html && git commit -m "Publish flight" && git push
 ```
 
 Nothing server-side is involved — it is one static HTML file. The same file opened over
@@ -96,6 +106,7 @@ geometry in a renderer, no rendering in the analysis.
 | `terrain.py` | DEM grid + height above terrain (AWS terrarium, keyless) |
 | `basemap.py` | Satellite (Esri) or OSM tiles stitched to one embedded JPEG |
 | `meteo.py` | The day's vertical profile (Open-Meteo) |
+| `sun.py` | Solar position (NOAA), and the day tabulated for the 3D view |
 | `charts.py` | All SVG charts, rendered locally |
 | `view3d.py` | The 3D view: camera, gestures, tiles, track overlay — and a canvas 2D heightfield as the fallback |
 | `view3d_gl.py` | WebGL heightfield, registered as a backend for `view3d.py` |
@@ -166,13 +177,27 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   for `_condense` to bridge. On the Dolomites flight this takes every per-thermal wind
   into 0.7–9.7 km/h with no outliers, at the cost of 18 climbs becoming 13 — the ones
   dropped were 1–2 turn straight-ish bumps that were never really thermals.
+- **A turn is a full revolution; how far the nose swung is a different number.**
+  `turns` counts heading advancing through 360° in *one* direction (`_revolutions`), so a
+  wingover — 180° out, 180° back — is no longer most of a turn, and a climb circled both
+  ways contributes the circles from each rather than cancelling to nothing. Runs are cut
+  only where the heading backs up by more than `REVERSAL_HYSTERESIS` (60°), because a
+  smaller threshold chops one circle into pieces that never reach 360° and the climb
+  reads as zero. Across the 50 sample flights this takes 9 175 counted turns to 8 122
+  (−11.5%) and 513 wind-trusted climbs to 509. **The total heading swept is kept as
+  `swept_turns`** and is what tow detection asks for, because "was it flown straight" is
+  a question about heading change, not about circles closing: pointing that test at
+  revolutions called three foot launches in the sample set a winch launch. Circle time
+  comes from the seconds spent *turning inside the counted revolutions* — dividing the
+  phase duration by the count charges the circles for the scratching between them — which
+  put 86 of 691 climbs outside a 12–30 s circle where the old measure put 143 of 704.
 - **A tow can legitimately contain a 180.** The reference tow on `2020-07-12` is a
   *two-stage* launch — a pull, a 180° turn, then a second pull — which is why the climb
-  carries 2.9 turns and why judging the launch on a turny fragment of itself gets it
-  wrong. This is the case `TOW_MAX_TURNS_PER_MINUTE` has to survive: over the whole 138 s
-  it reads 1.26 turns/min against the 1.5 limit, but over the 60 s circling fragment
-  inside it, 2.8. Any change to tow detection has to keep a deliberate 180 (and a
-  two-stage launch) on the tow side of the line.
+  sweeps 3.3 turns of heading (and completes **no** revolution) and why judging the launch
+  on a turny fragment of itself gets it wrong. This is the case `TOW_MAX_TURNS_PER_MINUTE`
+  has to survive: over the whole 138 s it reads 1.43 turns/min against the 1.5 limit, but
+  over the circling fragment inside it, far more. Any change to tow detection has to keep
+  a deliberate 180 (and a two-stage launch) on the tow side of the line.
 - **A tow is built separately, over the whole launch climb, and replaces what it
   overlaps.** It is the one straight climb that *is* a phase, so it cannot come from the
   rule above — `_launch_climb()` constructs it from `climb > TOW_MIN_CLIMB` instead.
@@ -305,6 +330,58 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   clipped. JS sets `--scrollbar` and the panel is `calc(100vw - var(--scrollbar))`. Note
   that `scrollWidth` reports the ink extent even when clipping prevents scrolling — test
   by calling `scrollTo(300, 0)` and reading `scrollX` back.
+- **The hillshade is the real sun, and the day travels as a table.** The light was a
+  fixed north-west lamp, which is a direction the sun is never in anywhere in the northern
+  hemisphere, so the shading answered nothing a pilot asks. `sun.py` is the NOAA solar
+  position algorithm; the payload carries the flight day sampled every ten minutes —
+  under 2 KB — and the panel interpolates it behind a slider that opens on **mid-flight**,
+  the light the day was actually worked in. A table rather than a JavaScript port on
+  purpose: `quicklook.py` already duplicates thresholds that can drift, and 144 pairs of
+  numbers cannot. The azimuth is **unwrapped** in the table, or interpolating across 360
+  sweeps the light the long way round the compass. Re-lighting is a slider event, never a
+  frame: it re-measures the lit range, re-bakes the draped texture on the host side and
+  calls `renderer.relight()` to rebuild the vertex colours in WebGL. A sun below the
+  horizon is held 3° up and labelled "sun down" rather than drawing a black panel.
+- **An uploaded track fetches its own DEM, and CORS is why it can.** `quicklook.py`
+  mosaics the terrarium tiles onto a canvas, reads the pixels back and decodes
+  `R * 256 + G + B / 256 - 32768` — the same formula as `terrain.py`, written twice
+  because there is no shared source between Python and the page. It works because the
+  tiles carry `Access-Control-Allow-Origin: *`; without that the canvas is tainted and
+  `getImageData` throws, which the code treats as *no DEM* rather than as an error, along
+  with every other way a tile can fail. Budgets differ from the CLI's on purpose: 12 tiles
+  rather than 20 (a reader waits through this one, and at ~320 m node spacing a zoom-10
+  tile already over-samples the grid) and 16 000 nodes rather than 26 000 (that budget is
+  bytes in a document; this grid is never serialised). Fetched **before** `initView3d`,
+  because re-running it on a live panel binds a second set of pointer handlers and every
+  gesture counts twice.
+- **Full screen is the real Fullscreen API, and the in-page maximise is its fallback.**
+  It used to be the fallback only, because `requestFullscreen` fails two ways at once in
+  an iframe without the permission — a synchronous throw with no user activation, and a
+  rejection without the permission — and the button appeared to do nothing. That reasoning
+  held for a published artifact and stopped holding when Pages became the primary home:
+  served from a host the API is granted, and it is what a reader means by full screen. So
+  the button asks for it, and falls back to `.is-maximised` on a throw, on a rejection,
+  *and* on an implementation that returns undefined and quietly does nothing — the third
+  needs a check after a tick, which no amount of promise handling would catch. Everything
+  downstream asks `panelIsFull()` and does not care which path won. A synthetic click is
+  not a user activation, so a test can only reach the granted path by stubbing the API —
+  which means the fallback is what a browser test exercises by default, and both are
+  pinned in `tests/test_view3d_fullscreen.py`.
+- **The report declares a doctype, and the full-screen canvas is measured from its
+  panel.** These are one bug. Without a doctype the page is in **quirks mode**, where
+  `document.documentElement.clientHeight` is the height of the whole *document* rather
+  than of the viewport — and that is what `applyMaximisedSize()` sized the maximised
+  canvas from. On a 4 316 px report, full screen produced a 4 316 px canvas inside an
+  813 px panel: terrain drawn for a viewport five times too tall, the track overlay
+  registered against a projection the GL canvas underneath did not share, and every
+  gesture anchored through the wrong one. The controls stayed exactly where CSS put them
+  and did nothing sensible, which is how it was reported. Both halves are fixed, and the
+  second is the one that matters: the canvas is sized from `panel.clientWidth/Height` —
+  the panel's padding box, which is the same box `inset: 0` gives the GL canvas — so no
+  global can ever mean something different again. The panel is embeddable and does not
+  own the document it lands in. `tests/test_view3d_fullscreen.py` runs the maximise
+  probe in **both** modes for that reason; against the old code the quirks case reports
+  a 3 021 px canvas in an 813 px panel.
 - **Twist rotates the map, the orbit drag rotates the camera, and the two are opposite
   on purpose.** A twist is direct manipulation — the ground follows the fingers, so
   `view.yaw -= angleDelta(...)`. The minus is the whole point and it looks wrong: the
@@ -418,85 +495,29 @@ published artifact runs under a policy that blocks every external host.
 
 Written up with a plan in `docs/plan.md`:
 
-- **GitHub Pages, not a published artifact, as the primary home.** The artifact CSP is
-  what forces embedded imagery, an embedded DEM and a flat plane for uploaded tracks, and
-  it costs a real fullscreen too. On a host the report can fetch: `--online` already
-  builds for that (zoom 12–13 imagery at 10–20 m/px against ~45, and half the file size),
-  the terrarium DEM is CORS-open so an *uploaded* track could get real terrain, and
-  Open-Meteo would work for it as well. Keep the embedded path — it is what makes the
-  file work offline — but stop treating it as the default.
-- **Move some charts to the client.** Inline SVG is **34% of the document** (1.16 MB of
-  3.39 MB): 605 KB in 9 altitude profiles, 279 KB in 238 sparklines, 161 KB in 3 plan
-  views. The trade is data against CPU, and for the profile it is close to free — the 3D
-  payload *already* ships lon/lat/alt/climb per fix (338 KB), so the profile's polyline is
-  a second encoding of data that is in the file twice. Sparklines are the opposite case:
-  238 little charts would each need their own slice. Measure before moving anything.
-- **Count turns as full revolutions.** `turns = total heading change / 360` counts a
-  wingover as most of a turn, because it sums |Δheading| and never asks whether the glider
-  came back to where it started. Count revolutions instead — heading advancing through
-  360° in one direction and returning to its initial bearing. `Segment.net_rotation` is
-  already computed and is the better starting point. This feeds the ≥2-turn wind filter,
-  so it changes which climbs are trusted.
-- **Fix the controls in the full-screen 3D view.** Reported broken. Not yet diagnosed, so
-  these are suspects to measure rather than a cause — and the first one is a regression I
-  may have introduced with the WebGL backend:
-  **The two canvases are sized by different mechanisms when maximised.**
-  `applyMaximisedSize()` sets the 2D canvas to an explicit
-  `document.documentElement.clientWidth/clientHeight` in pixels, while the GL canvas
-  underneath it is sized purely by CSS (`position: absolute; inset: 0`). Everywhere else
-  those agree because both fill the panel; in the maximised state they are two different
-  measurements of "the viewport", and `clientWidth` excludes the scrollbar where a fixed
-  `inset: 0` box need not. If they disagree the track overlay sits offset from the
-  terrain, and anything anchored to the panel's right edge — which is the control row —
-  lands in the wrong place.
-  **`--scrollbar` may be stale.** It is measured once and only re-measured on a *width*
-  change; entering full screen removes the page scrollbar, and the panel's width is
-  `calc(100vw - var(--scrollbar))`. The CSS already warns that anything anchored to the
-  right edge gets clipped when that is wrong.
-  **There are two full-screen paths and only one is exercised.** `toggleMaximise()`
-  deliberately avoids the Fullscreen API in favour of an in-page `.is-maximised`, because
-  an iframe may not be granted real full screen — but `:fullscreen` rules exist in the
-  stylesheet too, and the two set width/height differently. **On GitLab Pages the real
-  Fullscreen API is available**, so this is worth revisiting rather than patching: see the
-  Pages item above.
-  Measure it with `__view3d.metrics()` before and after the toggle — it already reports
-  the box against the backing store, and it is what caught the last sizing bug of this
-  shape (713 px box against a 508 px backing store).
-- **Use `uv`** for the environment, and commit a lockfile with it. Two concrete problems
-  it fixes here, both already bitten:
-  **Nothing is pinned.** Every dependency floats with no ceiling (`numpy>=1.26`,
-  `timezonefinder>=6`, `pytest>=8`, `pillow>=10`) and there is no lockfile, so an
-  upstream release can turn CI red with no change in this repository and no way to tell
-  the two apart. `uv sync` against a committed `uv.lock` makes the installed set a fact
-  rather than a coincidence — which is the same class of fault as the Pillow failure,
-  where the environment and the declaration disagreed and only CI noticed.
-  **It is the mechanism for the 3.14 move below.** `uv python install 3.14` and
-  `uv venv --python 3.14` manage the interpreter itself, and uv refuses to build a venv
-  that violates `requires-python` — exactly the drift recorded there, a 3.11.6 venv
-  under a `>=3.12` floor.
-  Also worth having: it would largely retire the pip cache added to `.gitlab-ci.yml`
-  (`timezonefinder` is not a quick install), and `uv run` removes the `.venv/bin/python`
-  prefix from every command in this file.
-  The honest cost: a toolchain dependency where today the repo needs nothing but
-  `python3 -m venv`, and a lockfile is worse than none if it is allowed to go stale.
-- **Move to Python 3.14** — and fix the version drift it exposed on the way. Three
-  Pythons are in play right now and no two agree: the working venv is **3.11.6**,
-  `requires-python` says **>=3.12**, and CI runs **3.12-slim**. The venv is below the
-  project's own declared floor, which means anything 3.12-only would pass CI and fail on
-  the machine it was written on — that is worth fixing before the 3.14 bump, not after.
-  What 3.14 actually buys here: PEP 649/749 makes deferred annotation evaluation the
-  default, so the `from __future__ import annotations` line at the top of **27 files**
-  becomes dead; the interpreter is faster on the numpy-light glue around the analysis;
-  and the error messages are better. Free-threading is *not* a draw — there is no
-  threading in the codebase, and the tile fetches that could use it are in the browser.
-  Order: bring the venv up to the declared floor, bump `requires-python` and the CI
-  image together, run the suite, then drop the `__future__` imports as a separate change
-  so a regression is attributable.
-- **The sun during the flight** — which slopes were lit and when they switched off. Cheap to
-  compute and it answers questions a pilot actually has. Now cheaper than when it was
-  written: with the heightfield in WebGL the illumination belongs in the fragment shader,
-  which makes the time of day a slider rather than a rebuild. The hillshade still lights
-  from the north-west, which is never where the sun is in the northern hemisphere.
+- **Move some charts to the client.** Measured again on the current `public/index.html`
+  (three flights, `--online`), because the earlier figures predate both the online build
+  and the WebGL view — the share went **up**, not down:
+
+  | | count | bytes | share of 2.27 MB |
+  |---|---|---|---|
+  | `chart` SVGs (side and top views) | 21 | 800 KB | 35% |
+  | sparklines | 208 | 268 KB | 12% |
+  | L/D bars | 119 | 30 KB | 1% |
+  | **all inline SVG** | 352 | **1.10 MB** | **48%** |
+  | 3D payloads | 4 | 641 KB | 28% |
+  | cursor data | 3 | 236 KB | 10% |
+
+  The 21 big charts are the target and they are not one shape: the largest is 99 KB and
+  1 015 shapes, and side views and top views are roughly half each. The trade is data
+  against CPU, and for the side view it is close to free — the 3D payload *already* ships
+  lon/lat/alt/climb per fix, so its polyline is a second encoding of data the file
+  carries twice. Sparklines are the opposite case: 208 little charts would each need
+  their own slice. **Not attempted yet**: it means a JavaScript renderer for the profile
+  and plan views carrying the phase bands, the ground fill, both axis modes, both themes
+  and the linked cursor — a real refactor of the two charts most looked at, which wants a
+  session that can iterate on how it looks rather than one that can only check that it
+  parses.
 
 ## Known gaps
 
@@ -510,11 +531,11 @@ Written up with a plan in `docs/plan.md`:
   that as an epoch put every uploaded IGC flight on 1 January 1970 — which the weather
   lookup then fetched the real 1970 weather for and presented as "the air that day".
   A file with no `HFDTE` is marked undated and the weather is refused rather than guessed.
-- An uploaded track gets the same 3D view, but over a **flat plane**: the DEM is a tile
-  fetch and a published page cannot make one. Imagery is attempted and arrives only when
-  the page is opened somewhere with a network. Altitudes are the track's own, so the shape
-  of the flight in the air is exact; height above ground is simply not available. Fetching
-  and decoding the terrarium DEM in the browser would fix this for a hosted page — the
-  tiles are CORS-open (`Access-Control-Allow-Origin: *`) — and is not written yet.
+- An uploaded track gets real terrain **where the page can fetch it**, and a flat plane
+  where it cannot. `quicklook.py` fetches and decodes the terrarium DEM itself; inside a
+  published artifact every host is blocked, the tiles fail, and the ground falls back to
+  one plane at the flight's lowest point with the caption saying so. Height above ground
+  is still not reported for an uploaded track — the DEM is there, the clearance series is
+  not written.
 - Times in the quicklook tables are **UTC**. The Python side resolves a timezone from the
   logger headers or the coordinates; the browser version does not.

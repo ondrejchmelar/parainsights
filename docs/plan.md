@@ -59,10 +59,11 @@ Parity with igc2kmz, plus the insights it lacks. In order:
 5. **Per-thermal stats** — igc2kmz's set (altitude gain, average/max/peak climb,
    efficiency = avg ÷ max climb, duration, start/finish altitude and time,
    accumulated gain/loss, drift direction) **plus**:
-   - **number of turns** — integrate unwrapped heading change over the thermal,
-     `turns = Σ|Δheading| / 360`; also turn direction (L/R), how many direction
-     reversals, mean circle period and radius. Cheap once turn rate exists, and it is
-     the number that tells you whether a climb was worked cleanly or scratched around.
+   - **number of turns** — full revolutions of the unwrapped heading (not `Σ|Δheading| /
+     360`, which counts a wingover; see *What turn count does and does not say*); also
+     turn direction (L/R), how many direction reversals, mean circle period and radius.
+     Cheap once turn rate exists, and it is the number that tells you whether a climb was
+     worked cleanly or scratched around.
    - **wind at thermal altitude** from circle drift: fit the drift of successive circle
      centres → speed and direction, per thermal → a wind profile for the flight.
 6. **Per-glide stats** — distance, average L/D, average speed, height lost, plus
@@ -186,28 +187,54 @@ live one — after a context loss they are what the reader gets — and there is
 says so.
 
 
-### Wanted: the sun during the flight
+### The sun during the flight
 
-Where the sun was, minute by minute. It is cheap to compute — solar position from date,
-time and latitude/longitude is closed-form, no data source needed — and it answers
-questions a pilot actually has:
+**Done.** `sun.py` — the NOAA solar position algorithm — plus a slider in the 3D view that
+re-lights the terrain from any time of day. The hillshade was a fixed north-west lamp,
+which is a direction the sun is never in anywhere in the northern hemisphere, so it
+answered none of the questions a pilot actually has:
 
 - **which slopes were being lit**, and when they switched off. The east faces work first
   and die by mid-afternoon; the classic mistake is arriving at a west face an hour before
-  it starts working. With the DEM already in hand, sun elevation and azimuth give the
-  angle of incidence on every grid cell, so the 3D view could shade the ground by *solar*
-  illumination at a chosen time rather than by a fixed north-west light — and animate it.
+  it starts working. Dragging the slider is the answer, and the caption under the view
+  states sunrise, sunset, and where the sun stood at launch and at landing.
 - **whether a climb was thermic or convergence**: a good climb on a slope that had been in
   shadow for two hours is not sun-driven.
-- **how much of the day was left**, against the flight's own clock. Sunset at the landing
-  field, and the last hour before it, is what decides whether a final glide is on.
+- **how much of the day was left**, against the flight's own clock.
 
-Notes for whoever builds it: the timezone is already resolved (`igc.py`), so local solar
-time is available; the shading normalisation in `view3d.py` (`litMid`/`litSpread`) is
-where a solar light vector would replace the fixed one; and the hillshade currently lights
-from the north-west, which is *never* where the sun is in the northern hemisphere — worth
-fixing at the same time, or at least labelling as artificial light. If the WebGL view lands
-first, do this in the fragment shader instead and the time of day becomes a slider.
+**The day travels as a table, not as an algorithm.** 144 samples of azimuth and elevation,
+one every ten minutes, under 2 KB. Porting the solar position into JavaScript would put a
+second implementation in the document, and `quicklook.py` is the standing lesson in what
+that costs — every threshold duplicated there is a thing that can drift. A table cannot
+drift. The page interpolates linearly between samples, which is why `day_track` **unwraps**
+the azimuth: interpolating across a wrap at 360 sweeps the light the long way round the
+compass, and on a slider that reads as the sun bolting backwards through the whole sky.
+
+**The default is mid-flight**, not noon and not the old fixed lamp: the light the day was
+actually worked in. The slider runs in the pilot's own clock — the report's tables are
+local time and the sun is computed in UTC, so the payload carries the one offset where
+those meet.
+
+**Re-lighting is a slider event, never a frame.** Moving the sun re-measures `litMid`/
+`litSpread` against the new light, re-bakes the draped texture on the host side, and calls
+`renderer.relight()` so the WebGL backend rebuilds its vertex colours through
+`bufferSubData`. All of it is a pass or two over the grid, which is cheap once per drag
+event and would not be cheap per animation frame. Below the horizon the sun is held 3° up
+and the label says "sun down" — there is no night mode, because a black panel answers
+nothing.
+
+Two omissions, both deliberate: no atmospheric refraction (half a degree at the horizon,
+nothing above 10°, and this is a geometric question), and no topographic horizon — the sun
+"rises" when it clears the sea horizon, not when it clears the ridge to your east. A real
+answer to the second would march the DEM along the bearing, and the view already draws the
+terrain's own shadows.
+
+Validated against a second algorithm rather than against itself: `tests/test_sun.py`
+carries the Astronomical Almanac's low-precision solar position, which goes through right
+ascension and sidereal time where `sun.py` goes through the equation of time, and the two
+agree within half a degree at five places from Prague to Sydney. The geometry is pinned
+separately — equinox noon at 90° minus your latitude, the solstices a tilt either side,
+the sun in the eastern half of the sky before noon, a polar day with no sunrise at all.
 
 ## Weather
 
@@ -350,7 +377,7 @@ the columns are blank rather than printing a number that is wrong.
 
 ## Status
 
-Done and tested (160 tests):
+Done and tested (209 tests):
 
 - `igc.py` — parser + fix cleanup. All 61 sample files parse, no failures, no warnings,
   timezone resolved 61/61.
@@ -545,19 +572,72 @@ imprecise pinch spun the camera. Now the pan follows the centroid, `zoomAt` hand
 scale about that point, and there is no twist. Measured from a headless browser driving
 synthetic touch events: `pinch 1.00->2.00 yaw=-0.42`, the yaw unchanged from its start.
 
-### Full screen without the Fullscreen API
+### Full screen: the API, with the in-page maximise behind it
 
-The expand button maximises the panel *in the page* (a fixed-position class) rather than
-calling `requestFullscreen`. The target is a page inside an iframe that has not been
-granted the fullscreen permission, where the API fails two ways at once — it throws
-synchronously without a user activation and rejects without the permission — and the
-button visibly did nothing.
+The expand button calls `requestFullscreen` and maximises the panel *in the page* (a
+fixed-position class) only when that fails. It was the other way round for as long as a
+published artifact was the primary destination: inside an iframe without the fullscreen
+permission the API fails two ways at once — it throws synchronously without a user
+activation and rejects without the permission — and the button visibly did nothing. On a
+host that permission is granted, and real full screen is what a reader means by the word:
+the browser chrome goes with it, and the OS knows the window is presenting.
+
+There is a third failure the promise does not describe: an implementation that returns
+`undefined` and quietly does nothing. So the fallback is armed from a `catch`, from a
+rejected promise, *and* from a check 120 ms later that asks whether the panel actually
+became the fullscreen element. Everything downstream — sizing, the redraw ladder, the
+Escape key — asks `panelIsFull()`, which is true for either path, so there is one state
+machine rather than two.
+
+Escape is deliberately not intercepted in real full screen: the browser already exits on
+it, and taking the key would only race. The in-page path has nobody else to do it, so
+there it is handled.
+
+Testing this needed a stub. `requestFullscreen` requires a user activation and a
+synthetic `click()` is not one, so a browser test reaches the *fallback* for free and can
+only reach the granted path by standing in for the browser — recording the request,
+reporting the panel as `document.fullscreenElement`, and firing `fullscreenchange`. Both
+paths are pinned, along with leaving full screen again and not stranding the in-page
+class on the way out.
 
 The canvas then needed explicit pixel sizing: a percentage height does not resolve to
 anything the backing store can match until layout settles, so the first redraw came out at
 the old size. `applyMaximisedSize()` writes px, and a redraw ladder at 0/80/200/500 ms
 catches whatever the browser settles late. Verified:
 `maximised box=1185x713 backing=1185x713 match=true | restored box=1185x508 backing=1185x508`.
+
+**Which pixels, though — the bug that made the controls useless.** Those px came from
+`document.documentElement.clientWidth/clientHeight`, which is the viewport in standards
+mode and the *whole document* in quirks mode. The report had no doctype, so it was in
+quirks mode, and maximising a 4 316 px report gave a 4 316 px canvas inside an 813 px
+panel. What that looks like from the reader's chair: the terrain is drawn for a viewport
+five times too tall, so the visible strip is a fragment of a picture composed somewhere
+off-screen; the track overlay and the GL heightfield disagree, because the GL canvas is
+sized by `inset: 0` and got the panel's real height; and the controls sit exactly where
+CSS puts them and appear to do nothing, because the projection every gesture and every
+button anchors through belongs to a canvas five times the size of the one on screen.
+
+Measured on the real report, before and after:
+
+| | panel | 2D canvas | GL canvas | GL backing store |
+|---|---|---|---|---|
+| before | 1265×813 | 1265×**4316** | 1265×811 | 1265×**4316** |
+| after | 1265×813 | 1265×811 | 1265×811 | 1265×811 |
+
+Two fixes, and the second is the durable one. The report now emits `<!doctype html>` —
+it should have all along; quirks mode was never intended and nothing else in the layout
+had noticed. And the canvas is sized from **`panel.clientWidth/clientHeight`**: the
+panel is `position: fixed; inset: 0` when maximised, so its own padding box *is* the
+space to fill, and it is the identical box the GL canvas resolves `inset: 0` against.
+Two measurements that cannot disagree, against two globals that did. The panel is
+embeddable and does not own the document it lands in, so it must not depend on the mode
+that document is parsed in.
+
+`tests/test_view3d_fullscreen.py` maximises the panel in a browser and measures the
+result in **both** modes — including `document.elementFromPoint` at each control's own
+centre, which is the question a click actually asks. Against the old code the quirks case
+fails at 3 021 px of canvas in an 813 px panel; the standards case passes, which is
+exactly why a single-mode test would have been worthless.
 
 ### Image quality is set by the tile budget
 
@@ -768,12 +848,41 @@ file with no `HFDTE` is marked undated so the weather is refused instead of gues
 
 ### A 3D view for an uploaded track
 
-The same `initView3d`, given a synthetic one-level DEM: 61 × 25 nodes at 30 m below the
-flight's lowest point. The elevation model is a tile fetch and a published page cannot make
-one, so there is no ground shape to show — but the altitudes are the track's own, so the
-*flight* is exact and rotatable, which is most of what the view is for. Imagery is
-attempted through the same tile path and arrives only when the page has a network; without
-it the plane stays bare and the credit says so.
+The same `initView3d`, and — where the page can reach a host — the same terrain as a built
+report. `quicklook.py` fetches the terrarium tiles itself, mosaics them onto a canvas,
+reads the pixels back and decodes `R * 256 + G + B / 256 - 32768`. That is allowed because
+the tiles are CORS-open (`Access-Control-Allow-Origin: *`), which is the difference between
+"reachable" and "readable": without those headers the canvas is tainted and `getImageData`
+throws, and the code treats that as no DEM rather than as an error.
+
+Three numbers differ from the CLI's on purpose. **Twelve tiles**, not twenty: this is a
+fetch a reader waits through and a request against a donated service, and it is enough —
+at the node spacing this grid ends up with (~320 m on a cross-country box) a zoom-10 tile
+already over-samples it, so the extra tiles would buy detail the mesh cannot hold. **16 000
+nodes**, not 26 000, and for the opposite reason to the CLI's: that budget is bytes in a
+document, this one is never serialised, so the only cost is the mesh. **A 9 s timeout**,
+after which it settles with whatever arrived — a CSP refusal fires `onerror` immediately
+and never gets there, but a slow phone on a mountain must not be left staring at a spinner.
+
+Measured against `terrain.py` on the same flight and the same box: the browser builds
+139×115 nodes spanning −22 to 1449 m at zoom 10, where Python builds 139×114 spanning −3
+to 1456 m at zoom 11. The spread is the deliberate tile budget, not a decode difference.
+
+Where no host can be reached — a published artifact, which is blocked from every one — the
+ground falls back to what it always was: one flat plane of 61 × 25 nodes at 30 m below the
+flight's lowest point, with the caption saying which it is. The altitudes are the track's
+own either way, so the *flight* is exact and rotatable, which is most of what the view is
+for. Imagery follows the same rule and the credit says so.
+
+The DEM is fetched **before** `initView3d`, not swapped in after it. There is no API for
+replacing the grid under a running view, and re-running `initView3d` would bind a second
+set of pointer handlers to the same canvas — every gesture counted twice. Inventing a
+swap-in path to save a second of waiting is the worse trade; the caption reads
+"Fetching terrain…" meanwhile.
+
+Tested without a network: `tests/test_quicklook_terrain.py` rewrites the tile URL to a
+data URI carrying a tile it encodes itself, with two known elevations in it, and asserts
+both come back to the metre — plus the flat-plane fallback when every tile fails.
 
 The panel is rebuilt from its original markup on every upload rather than re-initialised:
 `initView3d` attaches its own listeners, and a second set on the same canvas would move
@@ -856,6 +965,31 @@ the module that owns the chart; nothing is re-derived in JavaScript, which is ho
 cursors normally drift away from the thing they point at.
 
 ### What turn count does and does not say
+
+A turn is a **full revolution**: the heading advancing through 360° in one direction.
+Summing |Δheading| and dividing by 360 — what this used to do — counts anything that
+swings the nose, so a wingover scores most of a turn without a circle ever being flown,
+and it is 11.5% of the turns counted across the 50 sample flights. Taking the *net*
+rotation instead (what `quicklook.py` did) has the opposite fault: a climb circled six
+times right and six times left cancels to zero. `_revolutions` splits the unwrapped
+heading into runs of one direction, cutting a run only where the heading backs up by more
+than 60°, and counts the runs that reach a full circle. The hysteresis is what makes it
+usable on real data: 1 Hz GPS heading jitters, and a pilot holding a circle wanders more
+than a few degrees, so a tight threshold chops one circle into pieces that never reach
+360° and a good climb reads as zero turns.
+
+The total swept heading is still computed, as `swept_turns`, because **tow detection
+needs it**. "Was the launch flown straight" is a question about how far the nose moved,
+not about circles closing; pointing `TOW_MAX_TURNS_PER_MINUTE` at revolutions labelled
+three foot launches in the sample set as winch launches, and the reference two-stage tow
+completes no revolution at all (it sweeps 3.3 turns of heading over 138 s, 1.43/min
+against the 1.5 limit).
+
+Circle time follows the same reasoning: it is the time spent *turning inside the counted
+revolutions*, divided by the count. Dividing the whole phase duration by the count
+charges the circles for every second of scratching straight between them, which reads as
+one slow wide turn — 143 of 704 climbs landed outside a 12–30 s circle that way, against
+86 of 691 now.
 
 Turns alone say how many circles a climb took, nothing about quality — the report used to
 imply otherwise. Quality lives in **m/turn** (height per circle), **efficiency** (mean

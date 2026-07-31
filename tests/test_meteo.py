@@ -1,7 +1,5 @@
 """Meteo parsing and derived-quantity tests. No network: the payload is a fixture."""
 
-from __future__ import annotations
-
 import datetime as dt
 
 import pytest

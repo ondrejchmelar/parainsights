@@ -7,8 +7,6 @@ climb rate. Flying straight gives progress near 1; circling drives it towards 0.
 Everything here returns plain dataclasses so both renderers can serialise them.
 """
 
-from __future__ import annotations
-
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 
@@ -36,6 +34,12 @@ TURN_ONSET_SECONDS = 5.0
 # reconstruct the turn — the heading change between fixes aliases, and the count comes
 # out low and confident. KML exports are typically 15 s, so this matters in practice.
 TURN_RESOLUTION_LIMIT = 5.0  # seconds between fixes
+# How far the heading has to run back before that counts as a change of direction rather
+# than wander inside one. 1 Hz GPS heading jitters a few degrees a second and a pilot
+# holding a circle drifts more than that while adjusting, so a small threshold chops one
+# circle into pieces that never reach 360° and the climb reads as zero revolutions. A
+# wingover reverses by 180 and an S-turn by 90, both well clear of this.
+REVERSAL_HYSTERESIS = 60.0  # degrees
 
 # A tow is the launch, not a thermal: it starts with the flight, climbs steadily,
 # and is flown essentially straight. A thermal turns ~3 times a minute (20 s per
@@ -96,7 +100,11 @@ class Segment:
     accumulated_loss: float
     efficiency: float | None = None  # average climb / maximum climb, %
     average_ld: float | None = None  # glide ratio
-    turns: float | None = None  # number of 360s flown
+    turns: float | None = None  # full revolutions flown
+    # Total heading swung, in circles: what `turns` used to be. Not a count of circles —
+    # a wingover scores most of one — but it is the right measure of *how much the nose
+    # moved*, which is what tow detection asks. Kept off the report for that reason.
+    swept_turns: float | None = None
     turn_direction: str | None = None  # "left", "right" or "mixed"
     reversals: int | None = None  # changes of turn direction
     circle_seconds: float | None = None  # mean time for one 360
@@ -370,12 +378,48 @@ def sample_interval(series: Series) -> float:
     return float(np.median(np.diff(series.t)))
 
 
+def _monotone_runs(
+    heading: np.ndarray, hysteresis: float = REVERSAL_HYSTERESIS
+) -> list[tuple[int, int, float]]:
+    """Split an unwrapped heading into runs of one turn direction: (start, stop, degrees).
+
+    A run ends only when the heading backs up by more than `hysteresis`, so noise and
+    the wander inside a circle extend the run rather than breaking it. The runs are what
+    make a *revolution* countable: their amplitudes are how far the glider actually got
+    round before it changed its mind, and their index spans are how long that took.
+    """
+    if len(heading) < 2:
+        return []
+    pivots = [(0, float(heading[0]))]
+    direction = 0
+    for i, value in enumerate(heading[1:], 1):
+        step = float(value) - pivots[-1][1]
+        if direction and step * direction > 0:
+            pivots[-1] = (i, float(value))  # still going the same way: extend the run
+        elif abs(step) >= hysteresis:
+            direction = 1 if step > 0 else -1
+            pivots.append((i, float(value)))
+    return [(a[0], b[0], b[1] - a[1]) for a, b in zip(pivots, pivots[1:])]
+
+
+def _revolutions(heading: np.ndarray) -> list[tuple[int, int, float]]:
+    """The runs of `heading` that came all the way round, at least once.
+
+    Summing |Δheading| and dividing by 360 counts anything that swings the nose — a
+    wingover is 180° out and 180° back, which reads as a whole turn without the glider
+    ever completing a circle. A revolution is heading advancing through 360° in *one*
+    direction, so only runs that reach a full circle are counted, and a climb flown in
+    both directions contributes its circles from each.
+    """
+    return [run for run in _monotone_runs(heading) if abs(run[2]) >= 360.0]
+
+
 def _turn_stats(series: Series, start: int, stop: int) -> dict:
     """Count the 360s in a climb, and how tidily they were flown.
 
-    The number of turns is the total heading change divided by 360. Turn direction,
-    reversals and circle time say whether the climb was cored smoothly or scratched
-    around — which is what you actually want to know when reviewing a thermal.
+    Turns are full revolutions (see `_revolutions`). Turn direction, reversals and
+    circle time say whether the climb was cored smoothly or scratched around — which is
+    what you actually want to know when reviewing a thermal.
     """
     heading = series.heading[start:stop]
     rate = series.turn_rate[start:stop]
@@ -384,8 +428,9 @@ def _turn_stats(series: Series, start: int, stop: int) -> dict:
         return {}
 
     net = float(heading[-1] - heading[0])
-    total = float(np.abs(np.diff(heading)).sum())
-    turns = total / 360.0
+    swept = float(np.abs(np.diff(heading)).sum()) / 360.0
+    circles = _revolutions(heading)
+    turns = sum(abs(run[2]) for run in circles) / 360.0
 
     turning = np.abs(rate) > TURNING_THRESHOLD
     signs = np.sign(rate[turning])
@@ -396,8 +441,14 @@ def _turn_stats(series: Series, start: int, stop: int) -> dict:
     else:
         direction, reversals = None, 0
 
-    duration = float(t[-1] - t[0])
-    circle_seconds = duration / turns if turns >= 0.5 else None
+    # Circle time is the time spent *turning* inside the counted revolutions, not the
+    # phase duration divided by the count. Two things get charged to the circles
+    # otherwise, and both read as one slow wide turn: the seconds scratching straight
+    # between climbs, and — because a run ends only at a real reversal — the slow
+    # one-way heading drift of a straight glide, which extends a run without circling.
+    steps = np.diff(t)
+    circling = sum(float(steps[a:b][turning[a:b]].sum()) for a, b, _ in circles)
+    circle_seconds = circling / turns if turns >= 0.5 and circling else None
     # Radius from the circle period and the speed actually flown while turning.
     radius = None
     if circle_seconds:
@@ -407,6 +458,7 @@ def _turn_stats(series: Series, start: int, stop: int) -> dict:
 
     return {
         "turns": round(turns, 1),
+        "swept_turns": round(swept, 1),
         "turn_direction": direction,
         "reversals": reversals,
         "circle_seconds": round(circle_seconds, 1) if circle_seconds else None,
@@ -526,7 +578,7 @@ def _reclassify_tow(series: Series, segments: list[Segment]) -> None:
             continue
         if segment.average_climb < TOW_MIN_CLIMB:
             continue
-        if segment.turns is None:
+        if segment.swept_turns is None:
             # Sampling too coarse to count turns, so ask the progress series instead:
             # a tow is flown close to straight, a thermal is not. Treating unknown
             # turns as zero would label every coarse soarable launch a tow.
@@ -534,8 +586,12 @@ def _reclassify_tow(series: Series, segments: list[Segment]) -> None:
             if straightness < 0.55:
                 continue
         else:
+            # Swept turns, not revolutions. The question here is whether the launch was
+            # flown straight, and that is total heading change — a climb scratched round
+            # in half-circles never completes one, so counting revolutions reads it as
+            # straight and calls three foot launches in the sample set a winch.
             minutes = segment.duration / 60 or 1
-            if segment.turns / minutes > TOW_MAX_TURNS_PER_MINUTE:
+            if segment.swept_turns / minutes > TOW_MAX_TURNS_PER_MINUTE:
                 continue  # it was circled: a thermal straight off launch
         segment.phase = Phase.TOW
         segment.efficiency = None  # thermal efficiency is meaningless under tow

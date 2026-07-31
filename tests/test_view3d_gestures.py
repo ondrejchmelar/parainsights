@@ -12,8 +12,6 @@ duplicated, in the same way `test_terrain` borrows its flight builders from
 `test_analysis`.
 """
 
-from __future__ import annotations
-
 from tests.test_view3d_gl import _probe, _scene, needs_chrome
 
 # A vector between two fixed world points, in a frame the reader would recognise: right

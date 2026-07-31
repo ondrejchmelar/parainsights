@@ -10,8 +10,6 @@ dozen at most per flight) to stay a polite consumer of a donated service. Attrib
 is not optional: every report that uses this credits OpenStreetMap contributors.
 """
 
-from __future__ import annotations
-
 import base64
 import hashlib
 import io

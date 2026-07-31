@@ -1,7 +1,5 @@
 """Input handling: KML/KMZ reading, dispatch, and XContest page recognition."""
 
-from __future__ import annotations
-
 import datetime as dt
 import zipfile
 

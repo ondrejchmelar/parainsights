@@ -4,7 +4,7 @@
 # files, and flight tracks stay out of this repository (`*.igc` is ignored). Reports are
 # built locally and the output is committed under `public/`:
 #
-#   .venv/bin/python -m tracklog_viewer.cli FLIGHT.igc [...] \
+#   uv run python -m tracklog_viewer.cli FLIGHT.igc [...] \
 #       --terrain --meteo --online --html public/index.html
 #
 # `--online` is the reason for being on Pages at all. A published artifact runs under a
@@ -16,31 +16,42 @@
 
 stages: [test, deploy]
 
-# Patch updates to 3.12 are wanted here, so this is deliberately not pinned harder.
-# `requires-python` is >=3.12.
-tests:
-  stage: test
-  image: python:3.12-slim
+# The image carries uv and no Python at all — deliberately. Pinning an interpreter here
+# as well as in `requires-python` is what let three versions drift apart (a 3.11 venv, a
+# `>=3.12` floor, a 3.12 image, no two agreeing). `uv sync` reads `.python-version`,
+# downloads that interpreter and refuses to build a venv that violates `requires-python`,
+# so the version lives in one place and CI cannot disagree with a developer's machine.
+#
+# `--locked` is the other half: it fails if `uv.lock` does not match `pyproject.toml`
+# rather than quietly resolving something newer. An upstream release can no longer turn
+# this pipeline red on its own.
+.uv:
+  image: ghcr.io/astral-sh/uv:bookworm-slim
   interruptible: true
-  before_script:
-    - python -m venv .venv
-    - .venv/bin/pip install --quiet --upgrade pip
-    - .venv/bin/pip install --quiet -e '.[dev]'
+  variables:
+    UV_CACHE_DIR: "$CI_PROJECT_DIR/.cache/uv"
+    UV_PYTHON_INSTALL_DIR: "$CI_PROJECT_DIR/.cache/python"
+  cache:
+    key: "uv-$CI_COMMIT_REF_SLUG"
+    paths: [.cache/uv, .cache/python]
+  after_script:
+    - uv cache prune --ci
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+tests:
+  extends: .uv
+  stage: test
   script:
+    - uv sync --locked --extra dev
+    - uv run python --version
     # `-c pyproject.toml` matters: pytest otherwise walks up and adopts an enclosing
     # project's config. The 3D view's tests drive headless Chrome, which is not in this
     # image, so they skip themselves rather than fail — everything else runs.
     # -rs so skips are named in the log. A silently skipped test is a test you
     # think you have.
-    - .venv/bin/python -m pytest -c pyproject.toml -rs
-  cache:
-    key: "pip-$CI_COMMIT_REF_SLUG"
-    paths: [.cache/pip]
-  variables:
-    PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - uv run pytest -c pyproject.toml -rs
 
 # The 3D view's tests drive a real browser, so `tests` above skips 16 of them for want
 # of one. That is not a rounding error: those 16 are the entire regression suite for the
@@ -54,26 +65,20 @@ tests:
 # `google-chrome` or `chromium` on PATH, and Debian's package is the smaller way to get
 # one. Software rendering is forced in the test flags, so no GPU is needed.
 browser-tests:
+  extends: .uv
   stage: test
-  image: python:3.12-slim
-  interruptible: true
   before_script:
     - apt-get update -qq
     - apt-get install -y -qq --no-install-recommends chromium
-    - python -m venv .venv
-    - .venv/bin/pip install --quiet --upgrade pip
-    - .venv/bin/pip install --quiet -e '.[dev]'
   script:
     - chromium --version
-    - .venv/bin/python -m pytest -c pyproject.toml -rs
+    - uv sync --locked --extra dev
+    - uv run pytest -c pyproject.toml -rs
         tests/test_view3d_gl.py tests/test_view3d_gestures.py
   # Not yet proven on a runner, and a browser job that is flaky on its first day must not
   # be what stops the site deploying. Flip this off once it has gone green a few times —
   # a permanently-allowed-to-fail test job is decoration.
   allow_failure: true
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
 # The job has to be called `pages`, and what it publishes has to be the `public/`
 # artifact — that pairing is the whole contract. It runs after `tests` because of the
