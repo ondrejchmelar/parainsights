@@ -8,7 +8,7 @@ parainsights/
 ├── CLAUDE.md              this file
 ├── pyproject.toml         one project, one venv, one test suite
 ├── tracklog_viewer/       the tool: IGC/KML/KMZ → analysis → HTML, KMZ, 3D map
-├── tests/                 pytest, 217 tests, no network
+├── tests/                 pytest, 339 tests, no network
 └── docs/
     ├── formats.md         IGC and KML/KMZ format research, measured on real files
     ├── plan.md            scope, decisions and status
@@ -27,7 +27,7 @@ as the packages, so there is nothing to line up by hand:
 
 ```bash
 uv sync --extra dev          # creates .venv on the pinned Python, from uv.lock
-uv run pytest -c pyproject.toml     # 217 tests, ~2 min, no network
+uv run pytest -c pyproject.toml     # 339 tests, ~3 min, no network
 ```
 
 `-c pyproject.toml` matters when the repo sits inside another project — pytest otherwise
@@ -103,7 +103,13 @@ geometry in a renderer, no rendering in the analysis.
 | `sources.py` | One entry point: file, URL, or XContest page → `Flight` |
 | `geo.py` | FAI-sphere haversine distance, bearing, cardinals |
 | `flight.py` | Derived series over a 20 s interpolated window |
-| `analysis.py` | Phases, per-climb and per-glide stats, wind, time budget |
+| `analysis.py` | Phases, per-climb and per-glide stats, wind, time budget, the `other` decomposition |
+| `metrics.py` | Tier-1 measurements over an `Analysis`: climb selection, working band, centring, gaps, concentration, day envelope, detour, lowest save |
+| `debrief.py` | `Finding`, the ranking pass, and the one `THRESHOLDS` dict |
+| `airmass.py` | Wind field from the per-thermal soundings; corrected glides, circle wander, the empirical polar |
+| `insolation.py` | Slope, aspect and sun incidence from the DEM and `sun.py` |
+| `baseline.py` | The pilot's archive: summary JSON per flight, percentiles behind `--archive` |
+| `plan.py` | The declared task or a sidecar plan, and what the flight did against it |
 | `xc.py` | Free distance through ≤3 turnpoints (own dynamic program) |
 | `terrain.py` | DEM grid + height above terrain (AWS terrarium, keyless) |
 | `basemap.py` | Satellite (Esri) or OSM tiles stitched to one embedded JPEG |
@@ -535,40 +541,56 @@ Written up with a plan in `docs/plan.md`:
   session that can iterate on how it looks rather than one that can only check that it
   parses.
 
-Written up in `docs/ux-review.md` and `docs/analysis-plan.md`:
+Both `docs/ux-review.md` and `docs/analysis-plan.md` are now **implemented** — every phase
+of each. What they describe is what the code does, so read them for the reasoning and this
+section for what is left.
 
-- **The debrief.** The report is an instrument panel: 191 numeric tokens in one flight
-  article and not one sentence saying whether the flight went well. A verdict strip and
-  3–5 ranked finding cards over the numbers already there. **A finding is a measurement
-  plus a link, never an imperative**, and it carries a cost in metres or minutes.
-- **The analysis under it.** New measurements the data supports, in three tiers by cost —
-  climb selection, working band, centring index, day envelope (tier 1, existing
-  dataclasses); the air-mass frame and an empirical polar (tier 2, gated on the wind, whose
-  flight-level confidence measures 0.36–0.39); insolation from the DEM gradient against
-  `sun.py`'s tables (tier 3, no new data). Note the measured correction: the `other` slice
-  is **not** where the losses are — on the reference flight it nets **+385 m** and is
-  rising in 56% of its samples, so it wants a three-way decomposition, not blame.
-- **The flight plan, remembered — the join between planning and analysis.** The pilot's
-  intent is the one thing the tool cannot see that the pilot can simply supply, and it is
-  the reference frame the debrief is missing: with a plan, "the flight turned 31 km short
-  of the planned goal, at 14:10" is a measurement rather than advice. Three levels — a
-  declared task, an intent, an expected day — one optional `Plan` dataclass, stored as a
-  sidecar JSON, a remembered plans directory, or `localStorage` for a track uploaded into
-  the page. **The cheapest first version throws nothing away that is not already parsed**:
-  10 of the 50 sample IGCs carry `C` task records, one of them a full 12-point task with
-  names, `igc.py` parses them into `Flight.task`, and the only reference to `.task` in the
-  whole tree is the constructor. A plan carries `made_at` and is frozen at takeoff — a plan
-  written after landing is a story, so it is labelled *reconstructed intent* and its
-  findings are downgraded. The same object makes a pre-flight mode possible later.
+- **The debrief.** A verdict strip above the 3D view and 3–5 finding cards under it, ranked
+  by cost measured against the flight's own budget. Three rules live in code, not in
+  review: no finding is an imperative (a test greps for "should have"), every finding
+  carries a cost in metres or minutes or it does not ship, and a finding whose data is
+  missing returns `None` rather than an empty card. *Show me* drives the linked cursor.
+- **The corrections.** The `other` slice is decomposed three ways and never published as a
+  loss — on the reference flight it nets +385 m. Dolphin flying is measured over all
+  straight flight, cross-country speed over the scored route, glide ratio as a median.
+- **The air-mass frame, the DEM findings, the archive, the flight plan.** All four landed;
+  see the module table. Two of them are deliberately *not* debrief cards — a wind-corrected
+  glide ratio and a lit slope are context, not costs — so they sit beside the sections they
+  describe. That is the "no cost, no card" rule doing its job rather than being worked
+  around.
+
+Still wanted:
+
+- **Move some charts to the client.** Unchanged and still not attempted: 352 inline SVGs
+  are 1.10 MB, 48% of the document, and the 21 big charts are the target. It wants a
+  session that can iterate on how it looks rather than one that can only check that it
+  parses.
+- **Calibrate `THRESHOLDS` against a real archive.** See the known gap below — this is the
+  one piece of both plans that could not be finished here.
 
 ## Known gaps
 
+- **`debrief.THRESHOLDS` is provisional and has never been calibrated.** The analysis plan
+  is explicit that *"a metric that fires on most flights is not a finding, it is a
+  constant"* and that thresholds come from the distribution over the archive. Doing that
+  needs the 50-file archive, and `*.igc` is gitignored — no tracklogs are in this
+  repository, so the values are seeded from the three flights measured in
+  `docs/analysis-plan.md` and marked as such in the code. `--archive` is the machinery for
+  fixing this: point it at the real files and check which findings fire on more than a
+  third of them.
+- **`public/index.html` is a committed build artifact and was not regenerated.** Every
+  renderer change since it was built — the debrief, the table cuts, the segmented map bar
+  — is absent from the published site until someone rebuilds it locally, which needs the
+  IGC files and the network.
 - FAI/flat triangle scoring with multipliers is not implemented; `xc.py` does free
   distance only.
 - Historical weather is surface-only: the ERA5 archive returns nulls on every pressure
   level, so flights older than ~60 days get no sounding.
 - `quicklook.py` duplicates a subset of the analysis in JavaScript. If the Python
-  thresholds change, change them there too — there is no shared source for them.
+  thresholds change, change them there too. **Half-fixed:** `debrief.THRESHOLDS` is now
+  serialised into the page with the debrief payload, so a shared source exists — but
+  `quicklook.py` does not read it yet and still holds its own copies. Finishing that is
+  cheap and is the remaining half of this gap.
   It also has to parse `HFDTE` itself: B records carry only a time of day, and treating
   that as an epoch put every uploaded IGC flight on 1 January 1970 — which the weather
   lookup then fetched the real 1970 weather for and presented as "the air that day".
