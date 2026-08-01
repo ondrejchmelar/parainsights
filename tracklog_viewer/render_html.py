@@ -2416,7 +2416,18 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
         below.</p>
       <p><strong>Wind is inferred, not measured.</strong> While circling, the glider's own
         airspeed averages out and the track drifts with the air. Climbs flown fewer than two
-        full turns, or in both directions, are excluded — they measure the pilot, not the wind.</p>
+        full turns, or in both directions, are excluded — they measure the pilot, not the
+        wind. On a track sampled too coarsely to count turns at all, a climb of two minutes
+        or more is used instead: the drift is still the air's, and there is nothing better.</p>
+      <p><strong>"Ridge" is three measurements agreeing, and "thermal" is everything
+        else.</strong> A climb is called ridge when the ground under it was steeper than
+        {insolation.RIDGE_SLOPE:.0f}°, the glider stayed within
+        {insolation.RIDGE_CLEARANCE:.0f} m of it, and the track beat along the slope
+        rather than closing circles — hover a label to see all three for that climb.
+        Convergence is deliberately not a label: its honest signature is a climb drifting
+        differently from the air around it, and one tracklog cannot tell that from a ridge
+        climb holding station or a badly sounded wind. Without terrain there is nothing to
+        check and the column shows a dash rather than guessing.</p>
       <p>The {len(analysis.glides)} glides and {len(thermals)} climbs account for
         {(1 - budget.fractions()["other"]) * 100:.0f}% of airtime. The rest is transitions too
         short or too ambiguous to call, which is honest rather than tidy.</p>

@@ -8,7 +8,7 @@ parainsights/
 ├── CLAUDE.md              this file
 ├── pyproject.toml         one project, one venv, one test suite
 ├── tracklog_viewer/       the tool: IGC/KML/KMZ → analysis → HTML, KMZ, 3D map
-├── tests/                 pytest, 392 tests, no network
+├── tests/                 pytest, 395 tests, no network
 └── docs/
     ├── formats.md         IGC and KML/KMZ format research, measured on real files
     ├── plan.md            scope, decisions and status
@@ -27,7 +27,7 @@ as the packages, so there is nothing to line up by hand:
 
 ```bash
 uv sync --extra dev          # creates .venv on the pinned Python, from uv.lock
-uv run pytest -c pyproject.toml     # 392 tests, ~4 min, no network
+uv run pytest -c pyproject.toml     # 395 tests, ~4 min, no network
 ```
 
 `-c pyproject.toml` matters when the repo sits inside another project — pytest otherwise
@@ -223,6 +223,10 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   Current scores: 3/3 ridge on `021734`, 2/20 on `20210703XCTOND01` (both late afternoon,
   low on a 37°/14° south-west face with the wind within 59°), and 0 on the four thermal
   cross-countries — 5 climbs out of 138, which is a finding rather than a constant.
+  "How to read this" states the rule and its three thresholds, and **interpolates them
+  from the module** rather than typing them. A hand-written "12°" goes stale the moment
+  `RIDGE_SLOPE` moves, in the one section of the report that exists to be exact about its
+  own limits — `tests/test_insolation.py` holds both the values and that shape.
 - **A tow can legitimately contain a 180.** The reference tow on `2020-07-12` is a
   *two-stage* launch — a pull, a 180° turn, then a second pull — which is why the climb
   sweeps 3.3 turns of heading (and completes **no** revolution) and why judging the launch

@@ -284,3 +284,56 @@ class TestWhatHeldTheClimbUp:
         assert source.label == "ridge", source
         assert source.confident is True
         assert source.offset is None
+
+
+class TestTheReportExplainsTheLabel:
+    """"How to read this, and what to distrust" makes claims about the rule.
+
+    The section is where a reader goes to find out whether to believe a number, so a
+    sentence in it that has drifted from the code is worse than no sentence — it is the
+    one place the report promises to be exact about its own limits. The thresholds are
+    interpolated from the module rather than typed, and this holds that: a hand-typed
+    "12°" would have gone stale the moment `RIDGE_SLOPE` moved, silently and in the
+    section least likely to be re-read.
+    """
+
+    def _report(self, tmp_path):
+        from tests.test_debrief import a_day
+        from tracklog_viewer import render_html
+
+        analysis = a_day(tmp_path, "notes.igc",
+                         [(300, 2.5), (300, 2.0), (300, 1.4)], glide=700)
+        return render_html.render(analysis, terrain=None)
+
+    def test_the_thresholds_in_the_prose_are_the_ones_the_code_uses(self, tmp_path):
+        html = self._report(tmp_path)
+        # Matched with the words that follow rather than those before: the whitespace
+        # ahead of each number is the template's line wrap and would make this brittle
+        # for no gain.
+        assert f"{insolation.RIDGE_SLOPE:.0f}°, the glider stayed within" in html, (
+            "the slope threshold in the note is not the one the classifier uses")
+        assert f"{insolation.RIDGE_CLEARANCE:.0f} m of it" in html, (
+            "the clearance threshold in the note is not the one the classifier uses")
+
+    def test_the_prose_reads_the_constants_rather_than_repeating_them(self):
+        """The regression this exists for: someone moves a threshold and not the note.
+
+        The test above catches a mismatch only because both sides are evaluated in the
+        same run. This catches the *shape*, which is the thing that actually rots: a
+        hand-typed "12°" is stale the moment `RIDGE_SLOPE` moves, in the section of
+        the report least likely to be re-read.
+        """
+        import pathlib
+
+        from tracklog_viewer import render_html
+
+        source = pathlib.Path(render_html.__file__).read_text(encoding="utf-8")
+        start = source.index('"Ridge" is three measurements')
+        paragraph = source[start:source.index("</p>", start)]
+        assert "insolation.RIDGE_SLOPE" in paragraph
+        assert "insolation.RIDGE_CLEARANCE" in paragraph
+
+    def test_convergence_is_named_as_a_deliberate_omission(self, tmp_path):
+        """A reader who knows the sky will ask where convergence went, and "we did not
+        bother" and "one tracklog cannot support it" are different answers."""
+        assert "Convergence is deliberately not a label" in self._report(tmp_path)
