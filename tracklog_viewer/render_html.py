@@ -16,8 +16,9 @@ import json
 import math
 from pathlib import Path
 
-from . import airmass, charts, debrief, insolation, metrics, quicklook, terrain as terrain_module, view3d, view3d_gl
-from numpy import median as np_median
+from . import (airmass, charts, debrief, geo, insolation, metrics, quicklook,
+               terrain as terrain_module, view3d, view3d_gl)
+from numpy import asarray as np_asarray, median as np_median
 from .analysis import TURN_RESOLUTION_LIMIT, Analysis, Phase
 
 FONT_PATH = Path(__file__).parent / "assets" / "display.woff2.b64"
@@ -1327,7 +1328,10 @@ def _clearance_note(clearance) -> str:
     if window is None:
         return ""
     low, high = window
-    inside = clearance[low:high]
+    # Coerced like `airborne_window` already does: callers reasonably hand this a list,
+    # and `terrain.clearance()` returning an ndarray is a happy accident rather than a
+    # contract this function should depend on.
+    inside = np_asarray(clearance, dtype=float)[low:high]
     median = float(np_median(inside))
     if inside.min() < 0:
         # The DEM has put part of the track under the ground, so the *lowest* clearance is

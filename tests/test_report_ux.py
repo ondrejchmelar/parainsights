@@ -428,3 +428,54 @@ class TestBasemapSpinner:
         carries the message."""
         assert "view3d-loading-text" in self._panel()
         assert "prefers-reduced-motion" in view3d.STYLE
+
+
+class TestRendersWithTerrain:
+    """The report was broken for a week and every test passed.
+
+    `_trigger_note` and `_clearance_note` only run when there *is* terrain, and every
+    other test in this file renders with `terrain=None` — so a `NameError` in the
+    insolation sentence went unnoticed until a site rebuild crashed on it. Rendering the
+    terrain path at least once is the cheap guard.
+    """
+
+    def _analysis(self, tmp_path):
+        from tests.test_debrief import a_day
+
+        return a_day(tmp_path, "terrain.igc",
+                     [(300, 2.5), (300, 2.0), (300, 1.4), (300, 0.8)], glide=700)
+
+    def _terrain(self, analysis):
+        import numpy as np
+
+        from tracklog_viewer.terrain import Terrain
+
+        lat, lon = analysis.flight.lat, analysis.flight.lon
+        pad = 0.02
+        size = 48
+        # A ridged grid, so slopes have a real aspect and the insolation sentence runs.
+        rows = np.linspace(0, 1, size)
+        grid = (np.sin(rows * 9)[:, None] * np.cos(rows * 7)[None, :]) * 600 + 1500
+        return Terrain(
+            west=float(lon.min()) - pad, east=float(lon.max()) + pad,
+            south=float(lat.min()) - pad, north=float(lat.max()) + pad,
+            elevations=grid,
+        )
+
+    def test_a_report_renders_with_terrain(self, tmp_path):
+        analysis = self._analysis(tmp_path)
+        html = render_html._flight_body(analysis, terrain=self._terrain(analysis))
+        assert "<article" in html
+        assert "view3d" in html
+
+    def test_the_insolation_sentence_renders(self, tmp_path):
+        """The exact line that crashed: it calls `geo.cardinal`, and `render_html` did
+        not import `geo`."""
+        analysis = self._analysis(tmp_path)
+        note = render_html._trigger_note(analysis, self._terrain(analysis))
+        assert isinstance(note, str)
+
+    def test_the_clearance_sentence_renders(self, tmp_path):
+        analysis = self._analysis(tmp_path)
+        clearance = [500.0] * len(analysis.series)
+        assert isinstance(render_html._clearance_note(clearance), str)
