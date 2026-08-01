@@ -299,7 +299,10 @@ def panel(payload: dict, uid: str, *, kmz_uri: str | None = None,
       <div class="view3d-loading" hidden>
         <span class="view3d-spin"></span><span class="view3d-loading-text"></span>
       </div>
-      <div class="view3d-keys" hidden>
+      <!-- Click anywhere on it to close. The panel covers the control bar, `?` included,
+           so the button that opened it is not available to close it — and a reader who
+           opened the list by clicking has no reason to know Escape works. -->
+      <div class="view3d-keys" hidden data-view3d-act="help">
         <p class="view3d-keys-head">Mouse and touch</p>
         <dl>
           <dt>drag</dt><dd>pan</dd>
@@ -318,7 +321,8 @@ def panel(payload: dict, uid: str, *, kmz_uri: str | None = None,
           <dt>f</dt><dd>full screen</dd>
           <dt>0</dt><dd>reset view</dd>
         </dl>
-        <p class="view3d-keys-foot">Hovering the charts moves the marker here too.</p>
+        <p class="view3d-keys-foot">Hovering the charts moves the marker here too.
+          Click this list to close it.</p>
       </div>
       <div class="view3d-controls">
         <div class="view3d-seg" role="group" aria-label="What the ground is">{segments}</div>
@@ -478,16 +482,37 @@ canvas.view3d.is-dragging { cursor: grabbing; }
   border-radius: 2px;
   pointer-events: none;
 }
+/* Everything over the canvas is a positioned sibling, so paint order was DOM order and
+   nothing said which layer was which. The control bar comes last in the markup and so
+   drew *over* the key list — on a 390 px phone the SATELLITE/MAP/RELIEF row sat across
+   the "s m r" line describing it. The stack is stated here instead: badges at the bottom,
+   then the loading spinner, then the controls, and the help list over all of it, because
+   it is the one overlay a reader opens deliberately and expects to obscure the view. */
+.view3d-earth, .view3d-credit, .view3d-hint { z-index: 1; }
+.view3d-loading { z-index: 2; }
+.view3d-controls { z-index: 3; }
+.view3d-keys { z-index: 4; }
+
 .view3d-keys {
   position: absolute;
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  /* Opaque, not 94%: it now covers the satellite imagery, and a light aerial behind
+     12 px type is the one background this list cannot be read against. */
+  background: var(--panel);
   border: 1px solid var(--rule-strong);
   padding: 14px 18px;
   border-radius: 3px;
   font-size: 12px;
+  /* The panel clips its overflow, so a list taller than the canvas loses its first rows
+     off the top — on a phone the whole "Mouse and touch" section vanished, silently.
+     Cap it to the box and let it scroll instead. */
+  max-height: calc(100% - 20px);
+  max-width: calc(100% - 20px);
+  overflow: auto;
+  box-sizing: border-box;
+  cursor: pointer;
 }
 .view3d-keys dl {
   margin: 0;
@@ -499,7 +524,10 @@ canvas.view3d.is-dragging { cursor: grabbing; }
   letter-spacing: 0.08em; color: var(--ink-3); }
 .view3d-keys dl + .view3d-keys-head { margin-top: 11px; }
 .view3d-keys-foot { margin: 11px 0 0; font-size: 11px; color: var(--ink-3); }
-.view3d-keys dt { color: var(--ink); font-family: ui-monospace, monospace; }
+/* `shift + <- ->` is one key combination and wrapped into two lines the moment the grid
+   was squeezed, which read as two separate bindings with the second one blank. */
+.view3d-keys dt { color: var(--ink); font-family: ui-monospace, monospace;
+  white-space: nowrap; }
 .view3d-keys dd { margin: 0; color: var(--ink-2); }
 .view3d-hint[hidden], .view3d-keys[hidden] { display: none; }
 .view3d-loading[hidden] { display: none; }

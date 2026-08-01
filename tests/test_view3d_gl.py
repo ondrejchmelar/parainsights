@@ -174,12 +174,17 @@ window.addEventListener('load', function () {
 
 
 def _probe(scene: dict, body: str, *, gl: bool = True, page_extra: str = "",
-           doctype: bool = True, device_scale: float | None = None) -> dict:
+           doctype: bool = True, device_scale: float | None = None,
+           window: tuple[int, int] | None = None) -> dict:
     """Render a panel carrying `scene`, run `body` in it, and return what it answered.
 
     `page_extra` is markup appended after the panel. The real report is several screens
     tall, so the document has a scrollbar from the first layout — which is a fact the
     full-bleed panel is sized against, and a short probe page does not have one.
+
+    `window` replaces the default 1280 x 900 viewport. It has to be the real window and
+    not a narrowed wrapper: the panel is full-bleed to `100vw` and its own layout rules
+    are media queries, so a phone layout only exists at a phone-sized viewport.
 
     `doctype=False` renders the page in quirks mode, which the report itself did until
     the full-screen bug was traced to it. It is kept as a switch because the panel is
@@ -210,6 +215,9 @@ def _probe(scene: dict, body: str, *, gl: bool = True, page_extra: str = "",
         + _HARNESS % (view3d.SCRIPT, script, body)
     )
     flags = list(CHROME_FLAGS)
+    if window is not None:
+        flags = [f for f in flags if not f.startswith("--window-size=")]
+        flags.append(f"--window-size={window[0]},{window[1]}")
     if device_scale is not None:
         flags.append(f"--force-device-scale-factor={device_scale}")
     with tempfile.TemporaryDirectory() as folder:
