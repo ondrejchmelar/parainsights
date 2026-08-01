@@ -6,13 +6,16 @@ only way to let someone drop their own flight onto the page is to do the work in
 browser, and this is a deliberately reduced version of it:
 
 * reads IGC, KML and KMZ (the ZIP is inflated with ``DecompressionStream``)
-* derives climb, progress and the phase split with the same thresholds as
-  :mod:`tracklog_viewer.analysis`
-* draws a side view and a top view, and lists the climbs
+* derives climb, progress and the phase split with the same thresholds *and the same
+  condensing* as :mod:`tracklog_viewer.analysis` — see ``mark``, where they once differed
+* draws a side view and a top view, lists the climbs and the glides, and links all of
+  them to the 3D map through one cursor (``linkCharts``)
 
-What it does not do — because the inputs simply are not there — is terrain, the
-basemap, the weather profile, or XC optimisation. Those need the CLI. The panel says
-so rather than quietly presenting a thinner analysis as the whole thing.
+What it does not do — because the inputs simply are not there — is the basemap, the
+weather profile, or XC optimisation. Those need the CLI. The panel says so rather than
+quietly presenting a thinner analysis as the whole thing. Terrain is the exception it
+used to share: the DEM is fetched here now, wherever the page is allowed to reach a
+host, and falls back to a flat plane where it is not.
 """
 
 from . import view3d
@@ -182,11 +185,52 @@ SCRIPT = r"""
 
   // Both syntaxes in the wild: HFDTE290523 and HFDTEDATE:280918,01.
   var DATE_RE = /^HFDTE(?:DATE:)?(\d{2})(\d{2})(\d{2})/;
+  // SkyDrop and friends: HFTZNTIMEZONE:+2.0. B records are UTC, and a report that says
+  // a climb started at 15:43 when the pilot remembers 17:43 is describing someone
+  // else's flight. The Python side resolves this out of the header too (`igc.py`), and
+  // an upload showing a different clock than a built report of the same file is the
+  // kind of disagreement that makes a reader distrust both.
+  var TZ_RE = /^HFTZN(?:TIMEZONE:)?\s*([-+]?\d+(?:\.\d+)?)/;
+  // XCTrack writes no HFTZN and instead hides an IANA zone name inside a base64 JSON
+  // blob split across dozens of L records. `Intl` speaks IANA natively, so the browser
+  // can use it directly — and a named zone beats a fixed offset, because it knows about
+  // the day's daylight saving where a number does not.
+  var DEVICE_RE = /^L(?:XCT)?DEVICE\s?(.*)$/;
+
+  // The IANA zone out of XCTrack's device blob, or null. Every step here can fail on a
+  // file that merely looks like XCTrack's — the chunking drops base64 padding, older
+  // versions carry no `os.timezone` at all (three of six sample files), and `Intl`
+  // rejects a name it does not know — so each failure returns null and the clock falls
+  // back rather than throwing on load.
+  function deviceZone(chunks) {
+    if (!chunks.length) return null;
+    try {
+      // The chunking drops padding, and `atob` — unlike Python's `b64decode` with
+      // `validate=False` — throws on the wrong *amount* of it rather than ignoring the
+      // excess, which is what a blind `+ '=='` gives on a payload that was already a
+      // multiple of four. So it is rebuilt exactly: strip what survived, pad to four.
+      // Getting this wrong is silent, because the catch below turns it into "no
+      // timezone" and the table quietly goes on printing UTC.
+      var payload = chunks.join('').replace(/[\s=]+/g, '');
+      while (payload.length % 4) payload += '=';
+      var raw = atob(payload);
+      var bytes = new Uint8Array(raw.length);
+      for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+      var name = JSON.parse(new TextDecoder().decode(bytes)).os.timezone;
+      if (!name) return null;
+      // Ask Intl whether it knows the zone before trusting it to format times later.
+      new Intl.DateTimeFormat('en-GB', { timeZone: name });
+      return name;
+    } catch (error) {
+      return null;
+    }
+  }
 
   function parseIgc(text) {
     var lines = text.split(/\r?\n/);
     var fixes = [];
-    var day = 0, previous = null, baroSeen = false;
+    var day = 0, previous = null, baroSeen = false, offset = 0;
+    var device = [];
     // Midnight of the flight's date, in Unix seconds. Fixes carry absolute times, as the
     // ones read out of a KML already do: B records give only a time of day, and treating
     // that as an epoch put every IGC flight on 1 January 1970 — which the weather lookup
@@ -200,6 +244,10 @@ SCRIPT = r"""
         base = Date.UTC(yy < 80 ? 2000 + yy : 1900 + yy, +d[2] - 1, +d[1]) / 1000;
         continue;
       }
+      var z = TZ_RE.exec(line);
+      if (z) { offset = Math.round(parseFloat(z[1]) * 3600); continue; }
+      var dev = DEVICE_RE.exec(line);
+      if (dev) { device.push(dev[1]); continue; }
       var m = B_RE.exec(line);
       if (!m) continue;
       var seconds = +m[1] * 3600 + +m[2] * 60 + +m[3];
@@ -213,7 +261,8 @@ SCRIPT = r"""
       fixes.push({ t: (base || 0) + seconds + day, lat: lat, lon: lon,
                    baro: baro, gps: gps });
     }
-    return { fixes: fixes, baro: baroSeen, kind: 'IGC', dated: base !== null };
+    return { fixes: fixes, baro: baroSeen, kind: 'IGC', dated: base !== null,
+             offset: offset, zone: deviceZone(device) };
   }
 
   function parseKmlText(text) {
@@ -398,24 +447,36 @@ SCRIPT = r"""
     }
 
     var phases = new Array(t.length).fill('cruise');
-    function mark(test, name, minGap) {
-      var run = null;
+    // Runs of `test`, bridged across gaps shorter than `bridge` seconds and then kept
+    // only where what is left lasts `least`. The bridging half was missing, and it is
+    // not a refinement: `analysis.py` has always condensed first, because a thermal
+    // briefly left and re-entered is one thermal (`_condense`, CONDENSE_THERMAL). A
+    // climb gains height in surges, so `climb > 0` breaks every twenty seconds, and
+    // demanding one unbroken minute meant a ridge-soaring upload reported "No climbs
+    // met the thresholds" while the Python analysis of the same file found three.
+    function mark(test, name, least, bridge) {
+      var runs = [], run = null;
       for (var i2 = 0; i2 <= t.length; i2++) {
         var on = i2 < t.length && test(i2);
         if (on && run === null) run = i2;
-        if (!on && run !== null) {
-          if (t[i2 - 1] - t[run] >= minGap) {
-            for (var f2 = run; f2 < i2; f2++) phases[f2] = name;
-          }
-          run = null;
-        }
+        if (!on && run !== null) { runs.push([run, i2]); run = null; }
+      }
+      var merged = [];
+      for (var r = 0; r < runs.length; r++) {
+        var last = merged[merged.length - 1];
+        if (last && t[runs[r][0]] - t[last[1] - 1] < bridge) last[1] = runs[r][1];
+        else merged.push([runs[r][0], runs[r][1]]);
+      }
+      for (var m = 0; m < merged.length; m++) {
+        if (t[merged[m][1] - 1] - t[merged[m][0]] < least) continue;
+        for (var f2 = merged[m][0]; f2 < merged[m][1]; f2++) phases[f2] = name;
       }
     }
-    mark(function (i2) { return progress[i2] >= GLIDE_PROGRESS; }, 'glide', 120);
+    mark(function (i2) { return progress[i2] >= GLIDE_PROGRESS; }, 'glide', 120, 60);
     mark(function (i2) {
       return (progress[i2] < GLIDE_PROGRESS && climb[i2] > 0) ||
              (speed[i2] < 10 && climb[i2] > 0) || climb[i2] > 1;
-    }, 'thermal', 60);
+    }, 'thermal', 60, 60);
 
     var climbs = [];
     var current = null;
@@ -513,6 +574,12 @@ SCRIPT = r"""
       t: t, alt: alt, s: s, x: x, y: y, climb: climb, phases: phases, climbs: climbs,
       median: median, useBaro: useBaro, kind: track.kind, dated: !!track.dated,
       epoch: fixes[0].t,
+      // Where the flight's clock comes from. `zone` is an IANA name and wins when it is
+      // there, because it knows the day's daylight saving; `offset` is seconds east of
+      // UTC from a plain header. Neither, and the clock reads UTC — which a KML always
+      // does, and which is honest rather than a guess from the reader's own machine.
+      offset: track.offset || 0,
+      zone: track.zone || null,
       duration: t[t.length - 1],
       flown: s[s.length - 1],
       straight: distance(lat[0], lon[0], lat[lat.length - 1], lon[lon.length - 1]),
@@ -602,9 +669,43 @@ SCRIPT = r"""
     return { ink: probe.color };
   }
 
+  // The charts are drawn once into an offscreen canvas and then blitted, so the linked
+  // cursor can repaint on every pointer move without re-running the track loop. A
+  // five-hour flight is thousands of coloured segments and redrawing them at pointer
+  // rate is exactly what makes a canvas chart feel heavy; a blit and one circle does not.
+  function baseOf(canvas) {
+    var base = canvas.__base;
+    if (!base || base.width !== canvas.width || base.height !== canvas.height) {
+      base = document.createElement('canvas');
+      base.width = canvas.width;
+      base.height = canvas.height;
+      canvas.__base = base;
+    }
+    return base;
+  }
+
+  // `fix` is an index into the *full* track, which is what a climb, a glide and a
+  // pointer all naturally point at; the 3D view is indexed by position in the decimated
+  // sample instead, and `linkCharts` is the one place that converts between them.
+  function paint(canvas, fix) {
+    var ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (canvas.__base) ctx.drawImage(canvas.__base, 0, 0);
+    if (fix === null || fix === undefined || !canvas.__at) return;
+    var at = canvas.__at(fix);
+    if (!at) return;
+    ctx.beginPath();
+    ctx.arc(at[0], at[1], 6, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.95)';
+    ctx.fill();
+    ctx.lineWidth = 2.4;
+    ctx.strokeStyle = 'rgba(235,104,52,0.98)';
+    ctx.stroke();
+  }
+
   function drawSide(root, a) {
     var canvas = root.querySelector('.ql-side');
-    var ctx = canvas.getContext('2d');
+    var ctx = baseOf(canvas).getContext('2d');
     var W = canvas.width, H = canvas.height;
     var left = 54, right = 16, top = 14, bottom = 30;
     ctx.clearRect(0, 0, W, H);
@@ -646,6 +747,22 @@ SCRIPT = r"""
       var mid = (climb.start + climb.stop) >> 1;
       markerAt(ctx, sx(a.s[mid]), sy(a.alt[mid]), String(index + 1));
     });
+
+    // How to place the cursor here, and how to read one off a pointer. Kept on the
+    // element rather than in a closure the linker cannot see, so the two charts can be
+    // driven identically without either of them knowing about the other.
+    canvas.__at = function (fix) { return [sx(a.s[fix]), sy(a.alt[fix])]; };
+    canvas.__nearest = function (px) {
+      var want = (px - left) / Math.max(W - left - right, 1) * Math.max(a.flown, 1);
+      var low = 0, high = a.s.length - 1;
+      while (low < high) {
+        var mid = (low + high) >> 1;
+        if (a.s[mid] < want) low = mid + 1; else high = mid;
+      }
+      if (low > 0 && Math.abs(a.s[low - 1] - want) <= Math.abs(a.s[low] - want)) low -= 1;
+      return low;
+    };
+    paint(canvas, null);
   }
 
   function markerAt(ctx, cx, cy, label) {
@@ -666,7 +783,7 @@ SCRIPT = r"""
 
   function drawPlan(root, a) {
     var canvas = root.querySelector('.ql-plan');
-    var ctx = canvas.getContext('2d');
+    var ctx = baseOf(canvas).getContext('2d');
     var W = canvas.width, H = canvas.height;
     var pad = 24;
     ctx.clearRect(0, 0, W, H);
@@ -689,11 +806,146 @@ SCRIPT = r"""
       var mid = (climb.start + climb.stop) >> 1;
       markerAt(ctx, px(a.x[mid]), py(a.y[mid]), String(index + 1));
     });
+
+    canvas.__at = function (fix) { return [px(a.x[fix]), py(a.y[fix])]; };
+    // Nearest in the plane rather than along the track: a top view crosses itself, and
+    // "which point is under the pointer" has no answer in one dimension. Every fix, not
+    // the decimated sample — the loop is a few thousand squared distances and runs on a
+    // pointer move, which is nothing beside the blit it precedes.
+    canvas.__nearest = function (pointerX, pointerY) {
+      var best = 0, bestGap = Infinity;
+      for (var i = 0; i < a.x.length; i++) {
+        var dx = px(a.x[i]) - pointerX, dy = py(a.y[i]) - pointerY;
+        var gap = dx * dx + dy * dy;
+        if (gap < bestGap) { bestGap = gap; best = i; }
+      }
+      return best;
+    };
+    paint(canvas, null);
+  }
+
+  // Every fifth fix or so: the 3D view redraws the whole track on each frame of a drag,
+  // and 1 Hz for a five-hour flight is more points than the canvas can resolve. The
+  // cursor track has to be sampled *identically*, because `initView3d` indexes it by
+  // position and the charts point at fixes.
+  function sampleIndices(a) {
+    var step = Math.max(Math.round(a.t.length / 1400), 1);
+    var sample = [];
+    for (var k = 0; k < a.t.length; k += step) sample.push(k);
+    return sample;
+  }
+
+  function samplePosition(sample, fix) {
+    var low = 0, high = sample.length - 1;
+    while (low < high) {
+      var mid = (low + high) >> 1;
+      if (sample[mid] < fix) low = mid + 1; else high = mid;
+    }
+    if (low > 0 && Math.abs(sample[low - 1] - fix) <= Math.abs(sample[low] - fix)) low -= 1;
+    return low;
+  }
+
+  // One cursor across the side view, the top view and the 3D map, plus the tables that
+  // list the same moments. A built report has had this for a while; an upload had none
+  // of it — `initView3d` was handed a null cursor track, so the map could not follow
+  // anything, and the rows carried no position to point at.
+  //
+  // Same behaviour as `render_html`'s linked cursor, reduced to what a canvas chart can
+  // carry — no tooltip and no band highlight — but the part that matters is kept: hover
+  // previews, a click *pins*, and leaving the chart returns to the pin rather than
+  // clearing. Hover alone takes the marker away at exactly the moment the reader wants
+  // it, which is when they have found something and are about to look at the map.
+  //
+  // A pin uses `revealCursor` rather than `setCursor`, so the map pans until the marker
+  // is on screen. Marking a point that projects off the edge of the panel is the same
+  // as not marking it: the reader asked where this was on the ground and the map did
+  // not move.
+  function linkCharts(root, a, sample, view) {
+    var charts = [root.querySelector('.ql-side'), root.querySelector('.ql-plan')];
+    var pinned = null;
+
+    function show(fix, pin) {
+      charts.forEach(function (canvas) { if (canvas) paint(canvas, fix); });
+      if (!view) return;
+      if (fix === null) { view.clearCursor(); return; }
+      var position = samplePosition(sample, fix);
+      if (pin && view.revealCursor) view.revealCursor(position);
+      else view.setCursor(position);
+    }
+
+    function preview(fix) { show(fix, false); }
+    function restore() { show(pinned, pinned !== null); }
+
+    function pin(fix) {
+      pinned = (fix === pinned) ? null : fix;
+      restore();
+      return pinned !== null;
+    }
+
+    charts.forEach(function (canvas) {
+      if (!canvas || !canvas.__nearest) return;
+      canvas.style.cursor = 'crosshair';
+      function fixUnder(event) {
+        var box = canvas.getBoundingClientRect();
+        // The canvas has a fixed backing size and CSS scales it, so a client coordinate
+        // has to come back through that scale before the projections can invert it.
+        var scaleX = canvas.width / Math.max(box.width, 1);
+        var scaleY = canvas.height / Math.max(box.height, 1);
+        return canvas.__nearest((event.clientX - box.left) * scaleX,
+                                (event.clientY - box.top) * scaleY);
+      }
+      canvas.addEventListener('pointermove', function (event) {
+        preview(fixUnder(event));
+      });
+      canvas.addEventListener('pointerleave', restore);
+      canvas.addEventListener('click', function (event) { pin(fixUnder(event)); });
+    });
+
+    root.querySelectorAll('tr[data-cursor]').forEach(function (row) {
+      row.classList.add('is-linked');
+      row.tabIndex = 0;
+      row.addEventListener('mouseenter', function () {
+        preview(parseInt(row.dataset.cursor, 10));
+      });
+      row.addEventListener('mouseleave', restore);
+      function go() {
+        var fix = parseInt(row.dataset.cursor, 10);
+        if (isNaN(fix)) return;
+        var panel = root.querySelector('.ql-3d .view3d-panel');
+        // Only on the pin, never on the release: scrolling the reader back to the map
+        // they have just finished with is the wrong half of a toggle.
+        if (pin(fix) && panel) {
+          panel.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }
+      }
+      row.addEventListener('click', go);
+      row.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter' || event.key === ' ') { go(); event.preventDefault(); }
+      });
+    });
   }
 
   // ---- presentation ----------------------------------------------------------
+  // Local time where the flight happened, not the reader's and not UTC. `toISOString`
+  // is UTC, so the offset is added to the instant and the result still read as UTC —
+  // which is the standard trick and the reason this takes a comment.
+  var clockFormat = null, clockZone = null;
   function clock(a, seconds) {
-    var date = new Date((a.epoch + seconds) * 1000);
+    if (a.zone) {
+      if (clockZone !== a.zone) {
+        // Built once and cached: `Intl.DateTimeFormat` is expensive to construct and
+        // this is called per table row.
+        clockFormat = new Intl.DateTimeFormat('en-GB', {
+          timeZone: a.zone, hourCycle: 'h23',
+          hour: '2-digit', minute: '2-digit', second: '2-digit'
+        });
+        clockZone = a.zone;
+      }
+      return clockFormat.format(new Date((a.epoch + seconds) * 1000));
+    }
+    // `toISOString` is UTC, so a fixed offset is added to the instant and the result
+    // still read as UTC. That is the standard trick and the reason this takes a comment.
+    var date = new Date((a.epoch + seconds + (a.offset || 0)) * 1000);
     return date.toISOString().substr(11, 8);
   }
 
@@ -881,7 +1133,7 @@ SCRIPT = r"""
              south: south - padY, north: north + padY };
   }
 
-  function scene3d(a, dem) {
+  function scene3d(a, dem, sample) {
     var pad = 0.02;
     var west = Math.min.apply(null, a.lon) - pad, east = Math.max.apply(null, a.lon) + pad;
     var south = Math.min.apply(null, a.lat) - pad, north = Math.max.apply(null, a.lat) + pad;
@@ -892,16 +1144,16 @@ SCRIPT = r"""
     var z = new Array(cols * rows);
     for (var i = 0; i < z.length; i++) z[i] = ground;
 
-    // Every fixth fix: the view redraws the whole track on each frame of a drag, and
-    // 1 Hz for a five-hour flight is more points than the canvas can resolve anyway.
-    var step = Math.max(Math.round(a.t.length / 1400), 1);
+    // The decimated sample comes in rather than being recomputed here: the cursor track
+    // is indexed by position in it, so the two must be the same list or the marker lands
+    // on a different moment than the one being pointed at.
     var track = { lon: [], lat: [], alt: [], c: [] };
-    for (var k = 0; k < a.t.length; k += step) {
+    sample.forEach(function (k) {
       track.lon.push(+a.lon[k].toFixed(5));
       track.lat.push(+a.lat[k].toFixed(5));
       track.alt.push(Math.round(a.alt[k]));
       track.c.push(bandIndex(a.climb[k]));
-    }
+    });
 
     var climbs = a.climbs.map(function (climb, index) {
       var middle = (climb.start + climb.stop) >> 1;
@@ -932,10 +1184,15 @@ SCRIPT = r"""
     return RAMP.length - 1;
   }
 
-  function show3d(root, a, uid) {
+  function show3d(root, a, uid, sample) {
     var host = root.querySelector('.ql-3d');
     var panel = host && host.querySelector('.view3d-panel');
-    if (!panel || typeof initView3d !== 'function') return;
+    // The charts still link to each other when there is no 3D view to link to — that is
+    // the whole of "degrade, do not blank", and it is why `linkCharts` runs either way.
+    if (!panel || typeof initView3d !== 'function') {
+      linkCharts(root, a, sample, null);
+      return;
+    }
     var note = root.querySelector('.ql-3d-note');
     var heights = 'Heights are ' + (a.useBaro ? 'pressure' : 'GPS') +
                   ' altitude, at true vertical scale.';
@@ -949,8 +1206,20 @@ SCRIPT = r"""
       // Unique canvas id per flight: initView3d registers itself under it, and two panels
       // sharing an id would leave the second unreachable.
       panel.querySelector('canvas.view3d').id = 'view3d-' + uid;
-      panel.querySelector('.view3d-data').textContent = JSON.stringify(scene3d(a, dem));
-      initView3d(panel, null);
+      panel.querySelector('.view3d-data').textContent =
+        JSON.stringify(scene3d(a, dem, sample));
+      // The cursor track the map follows, over the same sample the scene's track uses.
+      // `min` is the UTC minute per sample, which is what walks the sun with the cursor;
+      // without it the light stays frozen wherever the flight's midpoint put it.
+      var cursorTrack = { lon: [], lat: [], alt: [], min: [] };
+      sample.forEach(function (k) {
+        cursorTrack.lon.push(+a.lon[k].toFixed(5));
+        cursorTrack.lat.push(+a.lat[k].toFixed(5));
+        cursorTrack.alt.push(Math.round(a.alt[k]));
+        var when = new Date((a.epoch + a.t[k]) * 1000);
+        cursorTrack.min.push(when.getUTCHours() * 60 + when.getUTCMinutes());
+      });
+      linkCharts(root, a, sample, initView3d(panel, cursorTrack));
       note.textContent = dem
         ? 'Ground from the terrarium elevation model at zoom ' + dem.zoom + ' (' +
           dem.cols + '×' + dem.rows + ' nodes, ' + dem.min + '–' + dem.max + ' m). ' +
@@ -1004,7 +1273,8 @@ SCRIPT = r"""
       var perTurn = (climb.turns && climb.turns >= 0.5)
         ? Math.round(climb.gain / climb.turns) : '—';
       var m = Math.floor(climb.duration / 60), sec = Math.round(climb.duration % 60);
-      return '<tr><td>' + (index + 1) + '</td><td>' + clock(a, a.t[climb.start]) +
+      return '<tr data-cursor="' + climb.start + '"><td>' + (index + 1) +
+        '</td><td>' + clock(a, a.t[climb.start]) +
         '</td><td>' + m + ':' + (sec < 10 ? '0' : '') + sec +
         '</td><td>+' + Math.round(climb.gain) +
         '</td><td>' + climb.average.toFixed(2) +
@@ -1018,7 +1288,8 @@ SCRIPT = r"""
 
     root.querySelector('.ql-glides tbody').innerHTML = a.glides.map(function (g, i) {
       var m2 = Math.floor(g.duration / 60), s2 = Math.round(g.duration % 60);
-      return '<tr><td>' + (i + 1) + '</td><td>' + clock(a, a.t[g.start]) + '</td><td>' +
+      return '<tr data-cursor="' + g.start + '"><td>' + (i + 1) + '</td><td>' +
+        clock(a, a.t[g.start]) + '</td><td>' +
         m2 + ':' + (s2 < 10 ? '0' : '') + s2 + '</td><td>' + (g.distance / 1000).toFixed(1) +
         '</td><td>' + Math.round(g.height) + '</td><td>' +
         (g.ld ? g.ld.toFixed(1) : '—') + '</td><td>' + Math.round(g.speed) + '</td></tr>';
@@ -1033,7 +1304,9 @@ SCRIPT = r"""
 
     drawSide(root, a);
     drawPlan(root, a);
-    show3d(root, a, uid);
+    // After the tables, because `linkCharts` binds the rows it finds and they are
+    // written above; before the meteo fetch, because that resolves whenever it resolves.
+    show3d(root, a, uid, sampleIndices(a));
 
     // Always attempted. It was a checkbox, on the reasoning that a request which cannot
     // succeed in a published page should not be made silently — but the failure message

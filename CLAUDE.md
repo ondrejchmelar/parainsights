@@ -8,7 +8,7 @@ parainsights/
 ├── CLAUDE.md              this file
 ├── pyproject.toml         one project, one venv, one test suite
 ├── tracklog_viewer/       the tool: IGC/KML/KMZ → analysis → HTML, KMZ, 3D map
-├── tests/                 pytest, 379 tests, no network
+├── tests/                 pytest, 392 tests, no network
 └── docs/
     ├── formats.md         IGC and KML/KMZ format research, measured on real files
     ├── plan.md            scope, decisions and status
@@ -27,7 +27,7 @@ as the packages, so there is nothing to line up by hand:
 
 ```bash
 uv sync --extra dev          # creates .venv on the pinned Python, from uv.lock
-uv run pytest -c pyproject.toml     # 379 tests, ~3 min, no network
+uv run pytest -c pyproject.toml     # 392 tests, ~4 min, no network
 ```
 
 `-c pyproject.toml` matters when the repo sits inside another project — pytest otherwise
@@ -121,7 +121,7 @@ geometry in a renderer, no rendering in the analysis.
 | `render_kmz.py` | Google Earth KMZ: LOD folders, balloons, animation, local charts |
 | `render_map.py` | Richer 3D map (MapLibre + deck.gl); needs network at view time |
 | `render_html.py` | The report; `quicklook.py` is its in-browser sibling |
-| `quicklook.py` | Reduced analysis in JavaScript, for a track the reader supplies |
+| `quicklook.py` | Reduced analysis in JavaScript, for a track the reader supplies; its own DEM fetch and linked cursor |
 | `cli.py` | Argument handling and orchestration |
 
 ## Decisions, and the reasons behind them
@@ -404,6 +404,22 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   bytes in a document; this grid is never serialised). Fetched **before** `initView3d`,
   because re-running it on a live panel binds a second set of pointer handlers and every
   gesture counts twice.
+- **An uploaded track carries the same linked cursor a built report does.** It carried
+  none: `initView3d` was handed a *null* cursor track, so the 3D map had nothing to
+  follow, and the climb and glide rows had no position on them, so clicking one did
+  nothing. "A lot of features don't work when I upload my own IGC" was mostly that one
+  argument. `linkCharts` in `quicklook.py` now drives the side view, the top view and
+  the map from one index, with the same behaviour as `render_html`: hover previews, a
+  click *pins*, leaving a chart returns to the pin rather than clearing, and a pin uses
+  `revealCursor` so the map pans until the marker is on screen.
+  Two things do not carry over and are not oversights. The tooltip and the band
+  highlight need the SVG charts; quicklook's are **canvas**, which is also why the
+  charts are drawn once into an offscreen canvas and blitted — the cursor repaints on
+  every pointer move, and re-running a five-hour track's segment loop at that rate is
+  what makes a canvas chart feel heavy. And the decimated sample has to be built **once**
+  and shared: `initView3d` indexes its cursor track by position in it while the charts
+  and the table rows point at fixes, so two independently-computed samples put the
+  marker on a different moment than the one under the pointer.
 - **Full screen is the real Fullscreen API, and the in-page maximise is its fallback.**
   It used to be the fallback only, because `requestFullscreen` fails two ways at once in
   an iframe without the permission — a synchronous throw with no user activation, and a
@@ -687,6 +703,15 @@ Still wanted:
   serialised into the page with the debrief payload, so a shared source exists — but
   `quicklook.py` does not read it yet and still holds its own copies. Finishing that is
   cheap and is the remaining half of this gap.
+  This is not hypothetical: the two had already drifted on *shape* rather than on a
+  number. `analysis.py` condenses runs separated by less than `CONDENSE_THERMAL` before
+  applying the minimum — a thermal briefly left and re-entered is one thermal — and the
+  browser demanded one unbroken run instead. A climb gains height in surges, so an
+  evening spent working a ridge printed "No climbs met the thresholds" in the page while
+  the same file gave three climbs on the command line. `tests/test_quicklook_analysis.py`
+  now uploads a surging climb and checks *both* implementations find it, which is the
+  shape this gap wants: a fixture whose answer is asserted against Python, not a second
+  copy of the rule.
   It also has to parse `HFDTE` itself: B records carry only a time of day, and treating
   that as an epoch put every uploaded IGC flight on 1 January 1970 — which the weather
   lookup then fetched the real 1970 weather for and presented as "the air that day".
@@ -697,5 +722,20 @@ Still wanted:
   one plane at the flight's lowest point with the caption saying so. Height above ground
   is still not reported for an uploaded track — the DEM is there, the clearance series is
   not written.
-- Times in the quicklook tables are **UTC**. The Python side resolves a timezone from the
-  logger headers or the coordinates; the browser version does not.
+- Times in the quicklook tables now follow the flight's own clock, so an upload and a
+  built report of the same file agree — they disagreed by the offset, 15:43 against
+  17:43 on a Czech evening, which makes a reader distrust both. Two of the Python side's
+  three sources are available in the browser: `HFTZN`, and the IANA name XCTrack hides
+  in a base64 JSON blob split across dozens of `L` records, which `Intl` can use
+  directly and which beats a fixed offset because it knows the day's daylight saving.
+  **The third is not, and this is the remaining gap:** resolving a zone from the
+  take-off coordinates needs `timezonefinder`'s dataset, which is not going in a page.
+  That is the common case — XCTrack only started writing `os.timezone` in 0.9.12, and
+  three of six sample files predate it — so those still read UTC. Honest, but wrong by
+  an hour or two, and there is no browser API that fixes it. Do not be tempted by
+  `lon / 15`.
+  One trap worth keeping: the `L` chunking drops base64 padding, and `atob` throws on
+  the wrong *amount* of it where Python's `b64decode(validate=False)` ignores the
+  excess — so a blind `+ '=='` fails on any payload already a multiple of four. It
+  fails *silently*, because the zone lookup catches everything and the table simply goes
+  on printing UTC.

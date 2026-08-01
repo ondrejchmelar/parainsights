@@ -2452,6 +2452,10 @@ function initView3d(root, cursorTrack) {
       cursorIndex = null;
       draw();
     },
+    // Exposed for tests, like `basemap()` below: whether the map is actually following
+    // the charts is not readable from the DOM — the marker is drawn into the canvas —
+    // and "the click did nothing" is precisely the regression worth catching.
+    cursor: function () { return cursorIndex; },
     // Mark a moment *and* make sure it can be seen. Clicking a chart point that projects
     // off the edge of the panel used to mark it invisibly: the reader asked "where was
     // this on the ground" and the map did not move. The pan is nudged until the marker
