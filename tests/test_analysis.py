@@ -57,19 +57,59 @@ def circling(duration, *, radius=40.0, period=20.0, climb=2.0, drift=(0.0, 0.0),
     return points
 
 
-def slalom(duration, *, radius=40.0, period=20.0, climb=2.0, t0=0.0, alt0=1000.0):
+def slalom(duration, *, radius=40.0, period=20.0, climb=2.0, t0=0.0, alt0=1000.0,
+           x0=0.0, y0=0.0):
     """Fixes for a glider swinging the nose without ever completing a circle.
 
     Half a circle one way, half a circle back, for as long as you like: the heading
     sweeps 180° at a time and comes back, which is the shape of a wingover or a slalom
     along a ridge. Summing |Δheading| calls this a turn every 20 s; no circle is flown.
+
+    `x0`/`y0` place it, which matters the moment the ground under it does: the terrain
+    tests fly this over a synthetic slope and the answer depends on which part of the
+    slope it is over.
     """
     speed = 2 * math.pi * radius / period
-    points, heading, x, y = [], 0.0, 0.0, 0.0
+    points, heading, x, y = [], 0.0, x0, y0
     for second in range(int(duration) + 1):
         points.append((t0 + second, x, y, alt0 + climb * second))
         way = 1 if int(second // (period / 2)) % 2 == 0 else -1
         heading += way * 2 * math.pi / period
+        x += speed * math.sin(heading)
+        y += speed * math.cos(heading)
+    return points
+
+
+def beat(duration, *, bearing=0.0, leg=45.0, radius=25.0, speed=11.0, climb=0.8,
+         t0=0.0, alt0=1000.0, x0=0.0, y0=0.0):
+    """Fixes for a glider working a ridge: a straight beat, a 180, a beat back.
+
+    This is what ridge soaring looks like from above and `circling` is what thermalling
+    looks like, and the difference between them is the whole of what the climb classifier
+    reads. The 180s alternate hands — a pilot turns *away* from the hill at each end —
+    which matters to the measurement rather than only to the picture: two same-handed
+    180s either side of a straight leg are one stretched circle, and `_revolutions` is
+    right to count them as one. Alternating, no run of heading ever reaches 360, and the
+    climb scores no complete turns at all.
+
+    The alternation costs a slow sideways walk of about `4 * radius` per cycle, which is
+    real — a glider that turns away from the slope at both ends does drift off it, and a
+    pilot spends the beat correcting back in. The fixtures keep `duration` short enough
+    that the walk stays inside the hill it is flown over.
+    """
+    half = math.pi * radius / speed        # seconds to swing 180° at this radius
+    cycle = 2 * (leg + half)
+    points, heading, x, y = [], math.radians(bearing), x0, y0
+    for second in range(int(duration) + 1):
+        points.append((t0 + second, x, y, alt0 + climb * second))
+        at = second % cycle
+        if at < leg or leg + half <= at < 2 * leg + half:
+            rate = 0.0                      # straight along the ridge
+        elif at < leg + half:
+            rate = math.pi / half           # the turn at one end
+        else:
+            rate = -math.pi / half          # and the other way at the other
+        heading += rate
         x += speed * math.sin(heading)
         y += speed * math.cos(heading)
     return points

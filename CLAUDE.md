@@ -8,7 +8,7 @@ parainsights/
 ├── CLAUDE.md              this file
 ├── pyproject.toml         one project, one venv, one test suite
 ├── tracklog_viewer/       the tool: IGC/KML/KMZ → analysis → HTML, KMZ, 3D map
-├── tests/                 pytest, 360 tests, no network
+├── tests/                 pytest, 379 tests, no network
 └── docs/
     ├── formats.md         IGC and KML/KMZ format research, measured on real files
     ├── plan.md            scope, decisions and status
@@ -27,7 +27,7 @@ as the packages, so there is nothing to line up by hand:
 
 ```bash
 uv sync --extra dev          # creates .venv on the pinned Python, from uv.lock
-uv run pytest -c pyproject.toml     # 360 tests, ~3 min, no network
+uv run pytest -c pyproject.toml     # 379 tests, ~3 min, no network
 ```
 
 `-c pyproject.toml` matters when the repo sits inside another project — pytest otherwise
@@ -199,6 +199,30 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   comes from the seconds spent *turning inside the counted revolutions* — dividing the
   phase duration by the count charges the circles for the scratching between them — which
   put 86 of 691 climbs outside a 12–30 s circle where the old measure put 143 of 704.
+- **Ridge lift is recognised by the manoeuvre, not by the wind.** `insolation.sources`
+  needs three measurements to agree — the ground is steeper than 12°, the climb's median
+  height above it is under 250 m, and it scored under half a complete circle per minute.
+  The third does the work: a thermal is a thing you turn inside of and a ridge is a slope
+  you fly along and come back, and across the six real flights on hand every thermal ran
+  above 1.2 circles a minute while every ridge beat scored none. The separation is a
+  different manoeuvre, not a tuned threshold.
+  The rule it replaced asked instead whether the *wind* ran into the face, above 12 km/h
+  and within 60° of its aspect, and found ridge lift on **no flight at all**. Two
+  structural reasons, both worth keeping in mind before anyone reaches for the wind
+  again. The wind estimate is derived from *circling drift* — so an evening spent beating
+  a ridge produces no estimate whatsoever (`analysis.wind` is None on `021734`, and the
+  per-climb figures that do exist read 1.6–3.2 km/h, one of them 116° off a face the
+  glider was demonstrably working). The one test that could have recognised the flight
+  was disabled by the very behaviour it was looking for. And on the cross-country flights
+  the flight-level average sat *just* under 12 km/h while individual climbs ran three
+  times it, so the gate was unreachable for a whole day at a time. The offset is still
+  measured and still shown in the row's tooltip; it no longer vetoes.
+  Clearance is the **median over the climb** rather than the altitude at its first fix:
+  one fix is one sample of a disagreement between a 60 m DEM cell and a GPS altitude, and
+  on `021734` every climb reported a *negative* start clearance with medians of 32–89 m.
+  Current scores: 3/3 ridge on `021734`, 2/20 on `20210703XCTOND01` (both late afternoon,
+  low on a 37°/14° south-west face with the wind within 59°), and 0 on the four thermal
+  cross-countries — 5 climbs out of 138, which is a finding rather than a constant.
 - **A tow can legitimately contain a 180.** The reference tow on `2020-07-12` is a
   *two-stage* launch — a pull, a 180° turn, then a second pull — which is why the climb
   sweeps 3.3 turns of heading (and completes **no** revolution) and why judging the launch
@@ -446,7 +470,7 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   because the framing lands and the disclaimer does not. `insolation.sources` carries the
   same rule as a flag — `confident` is false where the label is a fallback rather than a
   finding, and the table prints a dash, since "thermal because there was nothing to check"
-  is not the claim "thermal because the ground was flat and out of the wind".
+  is not the claim "thermal because the ground was flat".
 - **Twist rotates the map, the orbit drag rotates the camera, and the two are opposite
   on purpose.** A twist is direct manipulation — the ground follows the fingers, so
   `view.yaw -= angleDelta(...)`. The minus is the whole point and it looks wrong: the

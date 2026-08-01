@@ -125,90 +125,162 @@ class TestTriggersAndWind:
 class TestWhatHeldTheClimbUp:
     """Ridge against thermal, on a slope whose aspect is known by construction.
 
-    The classifier needs three things to agree before it says ridge, so each test moves
-    exactly one of them and checks the label follows. Nothing here checks *convergence* —
-    it is deliberately not a label, because one tracklog cannot separate it from a ridge
-    climb holding station or a badly sounded wind.
+    The classifier needs three things to agree before it says ridge — steep ground, a
+    climb that stayed on it, and a track that beat along it instead of circling — so each
+    test moves exactly one of them and checks the label follows. The third is the one
+    that carries the claim, and it is the one the old rule did not have: it asked whether
+    the wind ran into the face instead, which found ridge lift on no real flight at all.
+
+    Nothing here checks *convergence* — it is deliberately not a label, because one
+    tracklog cannot separate it from a ridge climb holding station or a badly sounded
+    wind.
+
+    The flights are flown at the middle of the ramp rather than at the origin of the test
+    projection, which is the ramp's south-west *corner*. Placing them mattered more than
+    it looks: with the track in the corner and the segment's centre reassigned by hand to
+    the middle, `face_at` read one part of the hill and the ground clearance another, and
+    a fixture built to sit 80 m over the slope measured 778.
     """
 
-    def _analysis(self, tmp_path, *, alt0, wind_from, wind_kmh, name="c.igc"):
-        from tests.test_analysis import build, circling
+    # 1400 m of relief over the box rather than 800: a 12.3° ramp is a coin-toss against
+    # a 12° threshold, and a test should not be one bad rounding from the other answer.
+    RELIEF = 1400.0
+    # Metres from the ramp's south-west corner to its middle, at 49°N.
+    MID_X, MID_Y = 1825.0, 2780.0
+
+    def _analysis(self, tmp_path, points, *, wind_from=270.0, wind_kmh=25.0, name="c.igc"):
+        from tests.test_analysis import build
         from tracklog_viewer import igc
         from tracklog_viewer.analysis import Wind, analyse
 
-        # Centred in the ramp, so the face under the climb is the one `ramp` built.
-        analysis = analyse(igc.parse(build(
-            tmp_path / name, circling(400, climb=1.5, alt0=alt0))))
-        analysis.wind = Wind(speed=wind_kmh / 3.6, direction=wind_from,
-                             cardinal=geo.cardinal(wind_from), confidence=1.0)
-        # `circling` is built around the origin of the test projection; put the climb in
-        # the middle of the ramp so `face_at` and `terrain.at` both have ground under it.
+        analysis = analyse(igc.parse(build(tmp_path / name, points)))
+        wind = Wind(speed=wind_kmh / 3.6, direction=wind_from,
+                    cardinal=geo.cardinal(wind_from), confidence=1.0)
+        # Both, because `sources` prefers the climb's own drift and falls back to the
+        # flight's: setting only one leaves the fixture's wind unused and the test
+        # asserting against whatever the synthetic track happened to drift.
+        analysis.wind = wind
         for segment in analysis.thermals:
-            segment.centre = (49.025, 14.025)
+            segment.wind = wind
         return analysis
+
+    def _beat(self, tmp_path, *, over, climb=0.8, duration=300, **kw):
+        """A glider working back and forth along the slope, `over` metres above it."""
+        from tests.test_analysis import beat
+
+        return self._analysis(tmp_path, beat(
+            duration, climb=climb, alt0=self._ground() + over,
+            x0=self.MID_X, y0=self.MID_Y), **kw)
+
+    def _circle(self, tmp_path, *, over, climb=1.5, duration=200, **kw):
+        """A glider turning inside a core, `over` metres above the same slope."""
+        from tests.test_analysis import circling
+
+        return self._analysis(tmp_path, circling(
+            duration, climb=climb, alt0=self._ground() + over,
+            x0=self.MID_X, y0=self.MID_Y), **kw)
+
+    def _hill(self, direction="west"):
+        return ramp(direction, relief=self.RELIEF)
+
+    def _ground(self, direction="west"):
+        return float(self._hill(direction).at(49.025, 14.025))
 
     def _label(self, analysis, terrain):
         found = insolation.sources(analysis, terrain)
         assert found, "no climbs were classified"
         return found[1]
 
-    def test_a_windward_face_worked_close_in_is_ridge(self, tmp_path):
-        """A west-facing slope with the wind out of the west, worked just above it."""
-        hill = ramp("west")
-        ground = float(hill.at(49.025, 14.025))
-        analysis = self._analysis(tmp_path, alt0=ground + 80, wind_from=270.0,
-                                  wind_kmh=25.0)
+    def test_a_steep_slope_beaten_close_in_is_ridge(self, tmp_path):
+        """The whole signature: steep ground, stayed on it, never closed a circle."""
+        source = self._label(self._beat(tmp_path, over=60), self._hill())
 
-        source = self._label(analysis, hill)
         assert source.label == "ridge", source
         assert source.confident is True
-        assert source.clearance == pytest.approx(80, abs=30)
-        assert source.offset < insolation.RIDGE_TOLERANCE
+        assert source.slope >= insolation.RIDGE_SLOPE
+        assert source.clearance <= insolation.RIDGE_CLEARANCE
+        assert source.turn_rate <= insolation.RIDGE_TURN_RATE
 
-    def test_the_same_face_worked_high_above_it_is_a_thermal(self, tmp_path):
-        """Ridge lift does not reach; height above the slope is what tells them apart."""
-        hill = ramp("west")
-        ground = float(hill.at(49.025, 14.025))
-        analysis = self._analysis(tmp_path, alt0=ground + 1200, wind_from=270.0,
-                                  wind_kmh=25.0, name="high.igc")
+    def test_the_same_slope_worked_high_above_it_is_a_thermal(self, tmp_path):
+        """Ridge lift does not reach. Height above the slope is a hard separator."""
+        source = self._label(
+            self._beat(tmp_path, over=1200, name="high.igc"), self._hill())
 
-        source = self._label(analysis, hill)
         assert source.label == "thermal", source
         assert source.clearance > insolation.RIDGE_CLEARANCE
 
-    def test_a_lee_face_is_never_ridge_however_close(self, tmp_path):
-        """The wind has to run *into* the slope. Behind it is the one place it does not."""
-        hill = ramp("west")           # faces west
-        ground = float(hill.at(49.025, 14.025))
-        analysis = self._analysis(tmp_path, alt0=ground + 80, wind_from=90.0,
-                                  wind_kmh=25.0, name="lee.igc")
+    def test_a_climb_circled_low_over_the_slope_is_still_a_thermal(self, tmp_path):
+        """The measurement the old rule did not have, and the one that does the work.
 
-        source = self._label(analysis, hill)
+        Same hill, same height above it, same wind — only the manoeuvre differs. A pilot
+        turning complete circles is in a core, whatever is under them; ridge lift is
+        beaten, because there is no room to turn.
+        """
+        source = self._label(
+            self._circle(tmp_path, over=60, name="cored.igc"), self._hill())
+
         assert source.label == "thermal", source
-        assert source.offset > insolation.RIDGE_TOLERANCE
+        assert source.clearance <= insolation.RIDGE_CLEARANCE, (
+            "the fixture is meant to be low over the slope, so height is not what "
+            "settled this")
+        assert source.turn_rate > insolation.RIDGE_TURN_RATE
 
-    def test_a_calm_day_has_no_ridge_lift(self, tmp_path):
-        hill = ramp("west")
-        ground = float(hill.at(49.025, 14.025))
-        analysis = self._analysis(tmp_path, alt0=ground + 80, wind_from=270.0,
-                                  wind_kmh=3.0, name="calm.igc")
+    def test_flat_ground_beaten_close_in_is_not_ridge(self, tmp_path):
+        """Beating along nothing is not ridge soaring — there has to be a hill."""
+        from tests.test_analysis import beat
 
-        assert self._label(analysis, hill).label == "thermal"
+        flat = Terrain(west=14.0, east=14.05, south=49.0, north=49.05,
+                       elevations=np.full((41, 41), 500.0))
+        analysis = self._analysis(
+            tmp_path,
+            beat(300, climb=0.8, alt0=560.0, x0=self.MID_X, y0=self.MID_Y),
+            name="flat.igc")
+
+        source = self._label(analysis, flat)
+        assert source.label == "thermal", source
+        assert source.slope < insolation.RIDGE_SLOPE
+
+    def test_the_wind_no_longer_vetoes_the_label(self, tmp_path):
+        """A ridge worked in a wind the flight measured as coming off the back of it.
+
+        This is not a hypothetical. On the flight that prompted the rewrite every climb
+        reported a wind under 3 km/h, one of them 116° off the face — because the wind
+        estimate is derived from *circling drift*, and a pilot who spends the evening
+        beating a ridge never circles. The estimate that would have vetoed the label is
+        an artifact of the very behaviour being classified.
+        """
+        source = self._label(
+            self._beat(tmp_path, over=60, wind_from=90.0, name="lee.igc"), self._hill())
+
+        assert source.label == "ridge", source
+        assert source.offset > insolation.RIDGE_TOLERANCE, (
+            "the fixture is meant to put the wind off the back of the hill")
+
+    def test_the_wind_offset_is_still_reported(self, tmp_path):
+        """Demoted from a gate to a measurement, not deleted: it goes in the tooltip."""
+        source = self._label(self._beat(tmp_path, over=60, wind_from=270.0), self._hill())
+        assert source.offset is not None
+        assert source.offset < insolation.RIDGE_TOLERANCE
 
     def test_without_terrain_the_label_is_offered_but_not_claimed(self, tmp_path):
         """"Thermal because there was nothing to check" is not the same claim as
-        "thermal because the ground was flat and out of the wind", and the report shows
-        a dash rather than the fallback."""
-        analysis = self._analysis(tmp_path, alt0=1000, wind_from=270.0, wind_kmh=25.0,
-                                  name="noterrain.igc")
+        "thermal because the ground was flat", and the report shows a dash rather than
+        the fallback."""
+        source = self._label(self._beat(tmp_path, over=60, name="noterrain.igc"), None)
 
-        source = self._label(analysis, None)
         assert source.label == "thermal"
         assert source.confident is False
 
-    def test_without_a_wind_nothing_is_claimed_either(self, tmp_path):
-        analysis = self._analysis(tmp_path, alt0=1000, wind_from=270.0, wind_kmh=25.0,
-                                  name="nowind.igc")
+    def test_without_a_wind_the_label_still_stands(self, tmp_path):
+        """Nothing in the rule needs one any more, so a missing wind costs the offset
+        and nothing else. It must not quietly become a number: a face `0°` off a wind
+        that was never measured is a fabrication."""
+        analysis = self._beat(tmp_path, over=60, name="nowind.igc")
         analysis.wind = None
+        for segment in analysis.thermals:
+            segment.wind = None
 
-        assert self._label(analysis, ramp("west")).confident is False
+        source = self._label(analysis, self._hill())
+        assert source.label == "ridge", source
+        assert source.confident is True
+        assert source.offset is None

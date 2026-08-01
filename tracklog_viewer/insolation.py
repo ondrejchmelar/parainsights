@@ -169,14 +169,19 @@ def triggers(analysis, terrain, *, limit: int | None = None) -> list[Trigger]:
 # Ridge lift only exists near the slope making it, so height above the ground is what
 # separates a climb the hill was producing from a thermal that happened to trigger on a
 # windward face. 250 m is generous for a paraglider working a ridge and well inside the
-# height a thermal is normally centred at.
-RIDGE_CLEARANCE = 250.0  # metres above the ground under the climb
+# height a thermal is normally centred at. Measured as the *median* over the climb: the
+# first fix is a single sample and the DEM disagrees with GPS by tens of metres in
+# either direction, which is how a climb worked at 90 m came to report −29.
+RIDGE_CLEARANCE = 250.0  # metres above the ground, median over the climb
 # Flatter than this and there is no ridge, whatever the wind is doing.
 RIDGE_SLOPE = 12.0  # degrees
-# A slope within this of the wind's bearing is the one the air runs up.
+# Complete circles per minute. A thermal is circled — every thermal across the six real
+# flights this was measured on runs above 1.2 — and a ridge is beaten, back and forth
+# along the slope, which scores essentially none. Half a circle a minute sits in the gap.
+RIDGE_TURN_RATE = 0.5  # revolutions per minute
+# A slope within this of the wind's bearing is the one the air runs up. Reported, not
+# required: see `sources`.
 RIDGE_TOLERANCE = 60.0  # degrees
-# Below this the air is not doing enough for a slope's aspect to matter.
-RIDGE_WIND = 12.0  # km/h
 
 
 @dataclass
@@ -184,9 +189,10 @@ class Source:
     """What appears to have been holding one climb up.
 
     Two labels, and deliberately not three. **Ridge** is claimable because it needs three
-    things to agree that a thermal does not need at all — a steep face, the wind running
-    into it, and the glider staying within a couple of hundred metres of the slope — and
-    the absence of any one of them settles it. **Thermal** is the rest.
+    things to agree that a thermal does not need at all — a steep face, the glider staying
+    within a couple of hundred metres of it, and a track that beats along the slope rather
+    than turning inside a core — and the absence of any one of them settles it.
+    **Thermal** is the rest.
 
     *Convergence is not a label here.* Its honest signature is a climb whose drift departs
     from the surrounding air, and one tracklog cannot separate that from a ridge climb
@@ -195,49 +201,93 @@ class Source:
     several gliders on the same day or a wind field with a real discontinuity in it.
 
     `confident` is False where the label is the fallback rather than a finding: no terrain,
-    no wind, or a climb the flight never located.
+    or a climb the flight never located.
     """
 
     climb: int
     at: str
     label: str  # "ridge" | "thermal"
     confident: bool
-    clearance: float | None = None  # metres above the ground where the climb began
+    clearance: float | None = None  # metres above the ground, median over the climb
+    slope: float | None = None  # degrees, the ground under the climb
+    turn_rate: float | None = None  # complete circles per minute
     offset: float | None = None  # degrees between the face and the wind it came from
+
+
+def _ground_clearance(analysis, terrain, segment) -> float | None:
+    """Median height above the DEM over a climb, or None if it cannot be measured.
+
+    The median rather than the first fix or the minimum: one fix is one sample of a
+    disagreement between a 60 m DEM cell and a GPS altitude that is worth tens of metres
+    on its own, and the minimum is whatever the worst of those was. On the ridge flight
+    every climb reported a *negative* start clearance while its median sat at 32–89 m,
+    which is the number a pilot would recognise.
+    """
+    flight = analysis.flight
+    start, stop = segment.start, max(segment.stop, segment.start + 1)
+    lat = flight.lat[start:stop]
+    lon = flight.lon[start:stop]
+    if len(lat) == 0:
+        return None
+    altitude = flight.alt_gps if np.any(flight.alt_gps) else analysis.series.alt
+    ground = terrain.at(lat, lon)
+    if ground is None:
+        return None
+    return float(np.median(np.asarray(altitude[start:stop], dtype=float) - ground))
 
 
 def sources(analysis, terrain) -> dict[int, Source]:
     """Classify each climb by what was most likely holding it up, keyed by climb number.
 
-    The wind is the flight's own, not the climb's: a climb's drift *is* the measurement,
-    so testing a face against it would be checking the evidence against itself. The
-    flight-level estimate is the day's air, which is what a ridge faces into.
+    Three measurements have to agree before this says ridge, and all three come off the
+    tracklog and the DEM: the ground is **steep**, the climb **stayed on it**, and it was
+    **beaten rather than circled**. The last is the one that carries the claim. A thermal
+    is a thing you turn inside of; a ridge is a slope you fly along and come back. Across
+    the six real flights this was measured on, every thermal ran above 1.2 complete
+    circles a minute and every ridge beat scored none at all — the separation is not
+    marginal, it is a different manoeuvre.
+
+    **The wind does not gate the label**, and that is a correction rather than a
+    simplification. It used to: a climb was ridge only if the flight's wind exceeded
+    12 km/h and ran into the face. That rule found ridge lift on none of the six flights,
+    for two reasons that are both structural. On a soaring flight the wind estimate is
+    *derived from circling drift* — so a pilot who spends the evening beating a ridge and
+    never circles produces no wind estimate at all, and the one test that could have
+    recognised the flight was disabled by the very behaviour it was looking for. And on
+    the cross-country flights the flight-level average sat just under the threshold while
+    individual climbs ran three times it. The offset is still measured and still
+    reported, because it is worth seeing; it is no longer allowed to veto.
     """
     wind = getattr(analysis, "wind", None)
     found: dict[int, Source] = {}
     for number, segment in enumerate(analysis.thermals, start=1):
         at = segment.start_time
-        if terrain is None or wind is None or segment.centre is None:
+        if terrain is None or segment.centre is None:
             found[number] = Source(number, at, "thermal", confident=False)
             continue
 
         lat, lon = segment.centre
         when = analysis.flight.local_time(segment.start)
         face = face_at(terrain, sun.position(when, lat, lon), lat, lon)
-        ground = terrain.at(lat, lon)
-        clearance = (
-            float(segment.start_altitude) - float(ground) if ground is not None else None
-        )
+        clearance = _ground_clearance(analysis, terrain, segment)
         if face is None or clearance is None:
             found[number] = Source(number, at, "thermal", confident=False)
             continue
 
-        offset = abs(((face.aspect - wind.direction + 540) % 360) - 180)
+        minutes = max(segment.duration / 60.0, 1 / 60.0)
+        turn_rate = (segment.turns or 0.0) / minutes
         ridge = (
-            wind.kmh >= RIDGE_WIND
-            and face.slope >= RIDGE_SLOPE
-            and offset <= RIDGE_TOLERANCE
+            face.slope >= RIDGE_SLOPE
             and clearance <= RIDGE_CLEARANCE
+            and turn_rate <= RIDGE_TURN_RATE
+        )
+        # The climb's own drift where it has one, the flight's otherwise. Neither decides
+        # anything here, so the weaker estimate costs nothing beyond a number in a tooltip.
+        against = segment.wind or wind
+        offset = (
+            abs(((face.aspect - against.direction + 540) % 360) - 180)
+            if against is not None
+            else None
         )
         found[number] = Source(
             climb=number,
@@ -245,7 +295,9 @@ def sources(analysis, terrain) -> dict[int, Source]:
             label="ridge" if ridge else "thermal",
             confident=True,
             clearance=round(clearance),
-            offset=round(offset),
+            slope=face.slope,
+            turn_rate=round(turn_rate, 2),
+            offset=None if offset is None else round(offset),
         )
     return found
 

@@ -527,7 +527,6 @@ tr.is-tow td:first-child { color: var(--tow); }
    that gets a colour; thermal is the ordinary case and stays quiet. */
 .tag-ridge { color: var(--climb-3); }
 .tag-thermal { color: var(--ink-3); }
-.tag-thermal { color: var(--climb); }
 .tag-glide { color: var(--sink); }
 .bar-cell { display: flex; align-items: center; gap: 7px; justify-content: flex-end; }
 .bar-cell .bar { height: 7px; border-radius: 1px; background: var(--climb); flex: none; }
@@ -1316,6 +1315,24 @@ def _stat(key: str, value: str, unit: str = "", sub: str = "") -> str:
     )
 
 
+def _source_title(source) -> str:
+    """The three measurements behind a climb's label, for its tooltip.
+
+    Every one of them is a number the reader can check against the row it sits in, which
+    is the point: "ridge" on its own is an assertion, and "ridge, 32 m over a 18° slope,
+    no complete circles" is the evidence for it. The wind offset joins only when there is
+    a wind — a flight spent beating a ridge never circles, so it often has none, and
+    `0° off the wind` would be a fabrication rather than a measurement.
+    """
+    parts = [
+        f"{source.clearance:.0f} m above the ground",
+        f"{source.slope:.0f}° slope" if source.slope is not None else "",
+        f"{source.turn_rate:.1f} circles a minute" if source.turn_rate is not None else "",
+        f"face {source.offset:.0f}° off the wind" if source.offset is not None else "",
+    ]
+    return ", ".join(part for part in parts if part)
+
+
 def _clearance_note(clearance) -> str:
     """Ground clearance, with the launch and the landing left out of it.
 
@@ -1452,9 +1469,8 @@ def _thermal_rows(analysis: Analysis, sample: list[int] | None = None,
         # "thermal" because the ground under it was flat and out of the wind.
         source = sources.get(number) if sources and segment.phase is Phase.THERMAL else None
         source_html = (
-            f'<span class="tag tag-{source.label}" title="'
-            f'{source.clearance:.0f} m above the ground, face {source.offset:.0f}° off the '
-            f'wind">{source.label}</span>'
+            f'<span class="tag tag-{source.label}" title="{_source_title(source)}">'
+            f"{source.label}</span>"
             if source is not None and source.confident
             else "<span class='dir'>—</span>"
         )
