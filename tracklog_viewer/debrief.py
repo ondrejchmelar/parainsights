@@ -571,8 +571,78 @@ def _minutes(seconds: float) -> str:
     return f"{seconds / 60:.0f} min"
 
 
+def _against_the_plan(analysis: Analysis, m: Metrics, add, *, adherence) -> None:
+    """The flight against what the pilot said they were going to do.
+
+    This is the one comparison that is allowed to sound like a judgement without being
+    one, because the standard being missed is the pilot's own. "The flight turned 31 km
+    short of the planned goal, at 14:10" is a measurement; the same sentence about an
+    ideal flight nobody declared would be advice.
+
+    A plan with no `made_at` is *reconstructed intent* — written after landing, which
+    makes it a story about the flight rather than a plan — so its findings say so and
+    are ranked lower.
+    """
+    if adherence is None or not adherence.reached:
+        return
+    plan = adherence.plan
+    reconstructed = plan.reconstructed
+    label = " Reconstructed intent, recorded after the flight." if reconstructed else ""
+
+    if adherence.shortfall and adherence.shortfall > 3000:
+        last = adherence.last_reached
+        where = (
+            f"The last turnpoint reached was {charts_escape(last.name)} at {last.time}"
+            if last and last.time else "No turnpoint was reached"
+        )
+        departure = ""
+        if adherence.departure_time:
+            departure = (
+                f" The track first left the planned line by more than "
+                f"{plan_departure_km():.0f} km at {adherence.departure_time}, which is "
+                f"the decision point as the data can see it."
+            )
+        add(
+            "plan-shortfall",
+            f"The flight covered {adherence.flown_km:.0f} km of a "
+            f"{adherence.planned_km:.0f} km plan",
+            f"{where}. {adherence.shortfall / 1000:.0f} km of the declared line was not "
+            f"flown.{departure}{label}",
+            # Priced in the height it would have taken to fly the rest at this flight's
+            # own measured glide — its own numbers, not a book figure.
+            metres=(adherence.shortfall / m.median_ld) if m.median_ld else None,
+            index=adherence.departure_index,
+            note="A plan is what the pilot meant to do, not what the day allowed. "
+                 "The tool cannot see the sky, the gaggle or the airspace."
+                 if not reconstructed else
+                 "Recorded after landing, so it is a reconstruction of the intent "
+                 "rather than a plan frozen at takeoff.",
+        )
+    elif adherence.completed:
+        add(
+            "plan-complete",
+            f"Every turnpoint of the {adherence.planned_km:.0f} km plan was reached",
+            f"{len(adherence.reached)} turnpoints, in order, the last at "
+            f"{adherence.last_reached.time}.{label}",
+            metres=adherence.planned_km * 1000 / (m.median_ld or 8) * 0.05,
+        )
+
+
+def charts_escape(text) -> str:
+    """The renderer's escaping, without importing the renderer into the analysis."""
+    return (
+        str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    )
+
+
+def plan_departure_km() -> float:
+    from .plan import DEPARTURE
+
+    return DEPARTURE / 1000
+
+
 def findings(analysis: Analysis, metrics: Metrics, *, meteo=None, route=None,
-             shape: str = "") -> list[Finding]:
+             shape: str = "", adherence=None) -> list[Finding]:
     """The flight's findings, ranked by cost, longest list first and then trimmed.
 
     Everything here is a sentence about a number in `metrics`. Nothing computes; nothing
@@ -615,6 +685,7 @@ def findings(analysis: Analysis, metrics: Metrics, *, meteo=None, route=None,
     _the_save(analysis, metrics, add)
     _day_envelope(analysis, metrics, add)
     _the_wind_on_glides(analysis, metrics, add)
+    _against_the_plan(analysis, metrics, add, adherence=adherence)
 
     out.sort(key=lambda f: f.cost_seconds, reverse=True)
     return out[: THRESHOLDS["max_findings"]]

@@ -8,11 +8,11 @@ parainsights/
 ├── CLAUDE.md              this file
 ├── pyproject.toml         one project, one venv, one test suite
 ├── tracklog_viewer/       the tool: IGC/KML/KMZ → analysis → HTML, KMZ, 3D map
-├── tests/                 pytest, 217 tests, no network
+├── tests/                 pytest, 268 tests, no network
 └── docs/
     ├── formats.md         IGC and KML/KMZ format research, measured on real files
     ├── plan.md            scope, decisions and status
-    ├── ux-review.md       the report's UX, measured; the debrief layer, planned
+    ├── ux-review.md       the report's UX, measured; the debrief layer, built
     └── analysis-plan.md   what more the data can say, and what data would help
 ```
 
@@ -27,7 +27,7 @@ as the packages, so there is nothing to line up by hand:
 
 ```bash
 uv sync --extra dev          # creates .venv on the pinned Python, from uv.lock
-uv run pytest -c pyproject.toml     # 217 tests, ~2 min, no network
+uv run pytest -c pyproject.toml     # 268 tests, ~4 min, no network
 ```
 
 `-c pyproject.toml` matters when the repo sits inside another project — pytest otherwise
@@ -48,6 +48,7 @@ uv run python -m tracklog_viewer.cli FLIGHT.igc --meteo --terrain --html out.htm
 uv run python -m tracklog_viewer.cli a.igc b.kmz c.igc --html all.html   # flight picker
 uv run python -m tracklog_viewer.cli FLIGHT.igc --kmz flight.kmz         # Google Earth
 uv run python -m tracklog_viewer.cli FLIGHT.igc --map map.html           # 3D map
+uv run python -m tracklog_viewer.cli FLIGHT.igc --plan FLIGHT.plan.json  # against a plan
 ```
 
 Only `--meteo` and `--terrain` touch the network. Everything else is offline.
@@ -104,6 +105,10 @@ geometry in a renderer, no rendering in the analysis.
 | `geo.py` | FAI-sphere haversine distance, bearing, cardinals |
 | `flight.py` | Derived series over a 20 s interpolated window |
 | `analysis.py` | Phases, per-climb and per-glide stats, wind, time budget |
+| `debrief.py` | `measure()` is arithmetic over the analysis; `findings()` ranks it into cards. `THRESHOLDS` lives here |
+| `airmass.py` | The wind field, and the flight in the air's frame: corrected glides, circle wander, an empirical polar |
+| `insolation.py` | Slope and aspect out of the DEM, against `sun.py`: what the light was doing to the ground each climb triggered over |
+| `plan.py` | The pilot's intent — a declared task or a sidecar — and the flight measured against it |
 | `xc.py` | Free distance through ≤3 turnpoints (own dynamic program) |
 | `terrain.py` | DEM grid + height above terrain (AWS terrarium, keyless) |
 | `basemap.py` | Satellite (Esri) or OSM tiles stitched to one embedded JPEG |
@@ -122,6 +127,78 @@ geometry in a renderer, no rendering in the analysis.
 
 Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
 
+- **A finding is a measurement plus a link, never an imperative.** The debrief is the
+  layer the report was missing — 191 numeric tokens in one flight article and not one
+  sentence saying whether the flight went well — and the rule above is what keeps it
+  from spending the credibility the numbers earned. Past tense, about this flight, no
+  "should": the tool cannot see the sky, the gaggle, the airspace or the pilot's plan,
+  and one confident *"you should have stayed in that thermal"* that happens to be wrong
+  undoes everything around it. Two consequences: **every finding carries a cost** in
+  metres or minutes, and one that cannot state a cost does not ship; and **no finding
+  fires on data that cannot support it** — turn-derived ones are gated at
+  `TURN_RESOLUTION_LIMIT`, ground ones need `--terrain`, ceiling ones need `--meteo`.
+  Absent, the finding does not exist. It is not an empty card.
+- **A metric that fires on most flights is a constant, not a finding.** Thresholds come
+  from the distribution over the 50 sample flights, not from round numbers: the first
+  pass had `expensive-gap` at 82%, `other-time` at 72% and `climb-selection` at 70%, and
+  every one is now under a third. `tests/test_debrief.py` asserts the distribution over
+  the archive, so loosening a threshold fails the suite rather than quietly filling the
+  page. Getting a flight to 3–5 cards is a job for **more kinds of finding**, not looser
+  ones.
+- **Metres and minutes are ranked in one currency, and the flight supplies it.** Metres
+  divided by the day's own mean climb are the seconds it took to get them back, so a
+  height cost and a time cost are comparable *on this day* without importing a constant.
+  Watch what that does to a big number: the detour ratio is a real measurement — 121 km
+  flown to score 48.64 — and pricing the difference at the flight's own glide values it
+  over 9 000 m, which would top the list on every triangle ever flown because the
+  circling is in the numerator. It is a verdict-strip figure, not a card.
+- **`other` is decomposed, never blamed.** On the reference flight the unclassified slice
+  nets **+392 m** and 23 of its 40 minutes are rising, because the thermal rule pushes
+  the straight run-in to a climb out of the phase on purpose. Straight sink is the price
+  of the glide, scratching is the price of being low, and rising-uncounted is mostly
+  ridge and street flying the phase model has no name for. Publishing the slice as a loss
+  would have been the report's first confidently wrong sentence.
+- **Dolphin flying is measured over all straight flight, not inside `Phase.GLIDE`.** A
+  glide ends where the air gives something back, so the good parts are reclassified out
+  by construction and the share reads 5–8% on two good XC days. Over straight flight,
+  Rodella's rising portions are worth +299 m inside glides and +385 m outside them.
+- **XC speed comes off the scored route, and glide ratio is a median.**
+  `summary.straight_distance` is 1.7 km on a flight that scored 48.64 km FAI, which reads
+  0.5 km/h. And the *best* glide reads 116.2 — a glide that crossed lift, not a
+  measurement of a wing — so anything L/D-based takes a median over glides longer than a
+  minute.
+- **The air frame does not use `Analysis.wind`, and that is the point.** The flight-level
+  estimate measures 0.36–0.39 on both reference flights: correcting a glide with it
+  publishes an uncorrected number wearing a correction. `airmass.py` interpolates the
+  *per-thermal* winds over time and height, falls back to `meteo.wind_at()`, and refuses
+  below `MIN_CONFIDENCE` rather than guessing. Circle-centre wander is the payoff
+  `circle_radius` cannot give: over the ground a thermal's circles march downwind and the
+  "wander" is exactly the drift — 75 m on the windy flight against 38 m through the air,
+  41 against 37 on the calm one. **Take the centre over whole 360s only**; averaging over
+  a run of 1.5 circles displaces it by most of a radius and read 240 m.
+- **A one-flight polar measures the day at least as much as the wing, so it refuses
+  itself.** The tow flight's curve comes out *inverted* — 1.40 m/s down at 32 km/h and
+  0.80 at 42 — which is a pilot who flew fast in the good air. `Polar.usable` requires
+  monotone sink, and the chart is still drawn when it fails, because the shape is the
+  evidence for the refusal.
+- **Insolation is relative, and a trigger is not a cause.** `cos θ` on bare geometry knows
+  nothing about cloud, ground cover or soil, so a cell only means anything next to
+  another cell on the same grid at the same minute. Two conventions to get right in
+  `insolation.py`: DEM row 0 is the *northern* edge, and a degree of longitude is a degree
+  of latitude times `cos(lat)` — ignoring the second rotates a south-west face into a
+  south one.
+- **A declared task the flight never approached is a leftover, not a plan.** Of the ten
+  sample files carrying `C` records, the two with a real task have turnpoints **29 km and
+  432 km** from anywhere the glider went: tasks left loaded in XCTrack from another site,
+  which the logger writes out because that is what is loaded. Scored, one reads "the
+  flight turned 478 km short of goal". `plan.STALE_LIMIT` refuses them. And **turnpoints
+  are taken in order** — an out-and-return whose far turnpoint was missed otherwise
+  "reaches" its finish, because the finish is back at the launch, and a 51.4 km plan
+  reported 51.4 km flown on a flight that turned 12 km short.
+- **A plan with no `made_at` is reconstructed intent, and its findings are downgraded.**
+  A plan written after landing is a story about the flight. Without this the feature
+  quietly becomes a tool for justifying whatever happened. A task out of `C` records is
+  exempt: it is in the tracklog, so it was written before takeoff.
 - **Pressure and GPS altitude are separate series.** Baro is smooth and is used for
   vertical analysis; GPS is geometric and is used for display and anything compared
   with terrain. `Flight.baro_offset` reports the ISA discrepancy. Never mix them.
@@ -398,6 +475,37 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   own the document it lands in. `tests/test_view3d_fullscreen.py` runs the maximise
   probe in **both** modes for that reason; against the old code the quirks case reports
   a 3 021 px canvas in an 813 px panel.
+- **A cycle that names its current state does not scale past two.** Naming what is on
+  screen is right for a two-state toggle and wrong for basemap (three states) and
+  exaggeration (three): with a cycle you cannot see the options, cannot tell how many
+  presses reach the one you want, and cannot jump. Both are segmented controls, which
+  double as a legend for what the document actually carries, and the keyboard agrees with
+  them — `1 2 4`, `s m r` — because a key can address a state directly and a cycle
+  cannot. Buttons and keys both go through **one `runAct`**, which is why a held key
+  anchors through the same `holdGround` a held button does.
+- **The map controls announce themselves, and a glyph is not a name.** Chrome's own name
+  computation returned `name='↶' from=contents` for six of the ten old buttons: for a
+  button the content wins over `title`, and `title` never appears on touch at all. Every
+  control carries an `aria-label` — the tab close buttons already did, so this was an
+  inconsistency rather than an oversight of principle.
+- **On touch the targets grow and the bar shrinks.** The old mobile rule made every
+  target *smaller* — `5px 7px` padding and 10.5 px type on the one device where a finger
+  replaces a mouse. Now 44 px minimum, the zoom pair gone (pinch, drag and twist are all
+  native there and the panel supports all three) and reset gone (least-used action, and
+  it was the widest button in the prime thumb position). Measured at a true 390 px device
+  viewport: the bar is 370×46, **15.6% of the panel against 20.2% before**.
+- **Measure the phone over the DevTools protocol, not with `--window-size`.**
+  `--window-size=390` is not device emulation: the page reports a 485 px CSS viewport,
+  25% wider than a real iPhone, and several numbers get *worse* under real metrics.
+  `Emulation.setDeviceMetricsOverride` at 390×844, dpr 3, `mobile: true` is the
+  measurement. Note that headless Chrome matches `(hover: none)`, so a browser test
+  exercises the touch branch by default.
+- **North lives top right, and attribution top left.** `render_map.py:274` already puts
+  MapLibre's navigation control top right by that library's default, and two viewers of
+  the same flights should not disagree about where north is. That corner held the
+  required Esri/Maxar credit, so the credit moved to the top left — the one corner
+  needing no media query, because on a 360 px phone the control bar is 327 px of the 340
+  available and anything along the bottom edge collides with it.
 - **Twist rotates the map, the orbit drag rotates the camera, and the two are opposite
   on purpose.** A twist is direct manipulation — the ground follows the fingers, so
   `view.yaw -= angleDelta(...)`. The minus is the whole point and it looks wrong: the
@@ -535,31 +643,30 @@ Written up with a plan in `docs/plan.md`:
   session that can iterate on how it looks rather than one that can only check that it
   parses.
 
-Written up in `docs/ux-review.md` and `docs/analysis-plan.md`:
+The debrief, the air-mass frame, the DEM findings and the declared task are **built** —
+see the decisions above and `docs/ux-review.md` / `docs/analysis-plan.md` for what each
+phase covered. What those two documents still list as unbuilt:
 
-- **The debrief.** The report is an instrument panel: 191 numeric tokens in one flight
-  article and not one sentence saying whether the flight went well. A verdict strip and
-  3–5 ranked finding cards over the numbers already there. **A finding is a measurement
-  plus a link, never an imperative**, and it carries a cost in metres or minutes.
-- **The analysis under it.** New measurements the data supports, in three tiers by cost —
-  climb selection, working band, centring index, day envelope (tier 1, existing
-  dataclasses); the air-mass frame and an empirical polar (tier 2, gated on the wind, whose
-  flight-level confidence measures 0.36–0.39); insolation from the DEM gradient against
-  `sun.py`'s tables (tier 3, no new data). Note the measured correction: the `other` slice
-  is **not** where the losses are — on the reference flight it nets **+385 m** and is
-  rising in 56% of its samples, so it wants a three-way decomposition, not blame.
-- **The flight plan, remembered — the join between planning and analysis.** The pilot's
-  intent is the one thing the tool cannot see that the pilot can simply supply, and it is
-  the reference frame the debrief is missing: with a plan, "the flight turned 31 km short
-  of the planned goal, at 14:10" is a measurement rather than advice. Three levels — a
-  declared task, an intent, an expected day — one optional `Plan` dataclass, stored as a
-  sidecar JSON, a remembered plans directory, or `localStorage` for a track uploaded into
-  the page. **The cheapest first version throws nothing away that is not already parsed**:
-  10 of the 50 sample IGCs carry `C` task records, one of them a full 12-point task with
-  names, `igc.py` parses them into `Flight.task`, and the only reference to `.task` in the
-  whole tree is the constructor. A plan carries `made_at` and is frozen at takeoff — a plan
-  written after landing is a story, so it is labelled *reconstructed intent* and its
-  findings are downgraded. The same object makes a pre-flight mode possible later.
+- **The archive.** `--archive DIR` and a `baseline.py` of cached per-flight summaries,
+  which is what turns every threshold in `debrief.THRESHOLDS` from an observation about
+  50 files into a percentile about *this pilot* — "your weakest climb selection in 12
+  flights" rather than "under two thirds". It is the single biggest remaining win, and
+  it is the one thing no single flight can supply. Cold-start problem: one flight, no
+  context.
+- **Speed-to-fly and the MacCready comparison.** Waiting on the polar being trustworthy,
+  which on one flight it usually is not (`Polar.usable` refuses two of the three
+  reference flights). The archive is what fixes that too.
+- **Reachable ground at the low point.** A glide cone over the DEM at the measured L/D.
+  It reports *reachable ground*, never "landable" — terrain is not a field.
+- **A plan typed into the page**, in `localStorage` keyed by the flight uid, with an
+  export to the same JSON `--plan` reads. And the pre-flight mode the same `Plan` object
+  makes possible: given a route, a forecast and the pilot's own measured climb rates,
+  what does the day support.
+- **Open-Meteo fields not currently requested** — `shortwave_radiation`, `lifted_index`,
+  `convective_inhibition`, `wind_gusts_10m`, `surface_pressure`, `freezing_level_height`.
+  Same endpoint, same call, no new dependency: the cheapest data on the list. Radiation
+  is the missing *cause* for the day envelope that `debrief.py` currently states without
+  one.
 
 ## Known gaps
 
@@ -567,8 +674,10 @@ Written up in `docs/ux-review.md` and `docs/analysis-plan.md`:
   distance only.
 - Historical weather is surface-only: the ERA5 archive returns nulls on every pressure
   level, so flights older than ~60 days get no sounding.
-- `quicklook.py` duplicates a subset of the analysis in JavaScript. If the Python
-  thresholds change, change them there too — there is no shared source for them.
+- `quicklook.py` duplicates a subset of the analysis in JavaScript. `debrief.THRESHOLDS`
+  is the shared source for the numbers it needs, and is serialised into the page — but
+  the browser side does not yet read it, so for now: if the Python thresholds change,
+  change them there too.
   It also has to parse `HFDTE` itself: B records carry only a time of day, and treating
   that as an epoch put every uploaded IGC flight on 1 January 1970 — which the weather
   lookup then fetched the real 1970 weather for and presented as "the air that day".
@@ -579,5 +688,9 @@ Written up in `docs/ux-review.md` and `docs/analysis-plan.md`:
   one plane at the flight's lowest point with the caption saying so. Height above ground
   is still not reported for an uploaded track — the DEM is there, the clearance series is
   not written.
+- An uploaded track gets no debrief. `debrief.py` is Python and the findings are baked
+  into the page at build time, so a track dropped into the report keeps the quicklook's
+  reduced analysis and none of the cards. Porting the ranking is a bigger seam than the
+  documented one and is not attempted.
 - Times in the quicklook tables are **UTC**. The Python side resolves a timezone from the
   logger headers or the coordinates; the browser version does not.

@@ -1,11 +1,35 @@
 # Flight analysis — what more the data can say
 
-Written 2026-07-31. Nothing here is implemented. Every number below was measured in this
-worktree against `~/Downloads/*.igc` with the current `analysis.py`, on three flights that
+Written 2026-07-31. Every number below was measured against `~/Downloads/*.igc` with the
+current `analysis.py`, on three flights that
 between them cover the range the tool sees: an alpine triangle (`2018-09-28`, Col Rodella,
 3 h 39 m, 13 climbs), a flatland day (`2020-08-16`, 2 h 38 m, 13 climbs) and a short tow
 flight (`2020-07-12`, 1 h 34 m, 6 climbs). Probe scripts are throwaway; the numbers are
 reproducible from the modules as they stand.
+
+**Status, 2026-08-07: phases A, B, C, D and F are built** — `debrief.py`, `airmass.py`,
+`insolation.py` and `plan.py`, with `tests/test_debrief.py`, `tests/test_airmass.py`,
+`tests/test_insolation.py` and `tests/test_plan.py`. **Phase E — the archive — is not**,
+and it is the one that matters most next: it is what turns every threshold in
+`debrief.THRESHOLDS` from an observation about 50 files into a percentile about this
+pilot.
+
+Three things the implementation learned that this document did not know:
+
+1. **Thresholds had to be tightened hard.** The first pass at tier 1 fired
+   `expensive-gap` on 82% of flights, `other-time` on 72% and `climb-selection` on 70%.
+   The rule at the top of this document — a metric that fires on most flights is a
+   constant — is now a test over the archive, and every finding is under a third. The
+   consequence is that a flight gets 1–3 cards, not 5, and getting to 5 wants more kinds
+   of finding rather than looser ones.
+2. **The empirical polar refuses itself on most single flights.** Of the three reference
+   flights, only the flatland day yields a monotone curve; the tow day's is *inverted*.
+   That is the day being measured, not the wing, and it is the strongest argument in this
+   document for phase E.
+3. **Every declared task in the archive is stale.** Both files with a real task carry
+   turnpoints 29 km and 432 km from the flight — tasks left loaded in XCTrack. Phase F's
+   "cheapest first version" is therefore mostly a *refusal*, and the sidecar path is what
+   actually delivers a plan today. See `plan.STALE_LIMIT`.
 
 ## Where this sits next to the UX review
 

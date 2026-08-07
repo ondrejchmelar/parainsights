@@ -1,8 +1,36 @@
 # UX review — the tracklog report
 
 Written 2026-07-31 against `public/index.html` (three flights, `--online`, 2.29 MB).
-Everything below was measured in headless Chrome, not estimated. Nothing here is
-implemented.
+Everything below was measured in headless Chrome, not estimated.
+
+**Status, 2026-08-07: phases 0, 1, 2 and most of 3 are built.** The diagnosis and the
+measurements below are kept as written — they are the argument for what was done, and
+the "today" column of every table is what the report was before. What actually shipped,
+and where it differs from what is proposed here:
+
+| Phase | State | Notes |
+|---|---|---|
+| 0 — the defects | built | tab close 19x19 → 44x44 hit area; 884 text nodes under 11 px → 0; `aria-label` on every map control |
+| 1 — the debrief | built | `debrief.py`. Verdict strip above the 3D view, cards below it, *show me* pinning the linked cursor |
+| 2 — the cuts | built | climbs 16 → 8 with circling detail behind a toggle, glides 7 → 6, tiles 10 → 6, segmented map controls, keyboard, table media query |
+| 3 — comparison | built | cross-flight deltas on the verdict figures rather than on the stat tiles |
+
+Four differences from the proposal, each for a measured reason:
+
+1. **The cross-flight comparison went on the verdict strip, not the stat tiles.** Once
+   the strip existed, the tiles were the wrong place: the strip already carries the four
+   figures worth comparing, and repeating them below it is the redundancy this document
+   complains about.
+2. **The proposed tile set changed.** `XC SCORE`, `HEIGHT GAINED` and `MEAN CLIMB` moved
+   *up* into the strip, so the six tiles are `AIRTIME · CEILING USED · CLIMBS · WIND ·
+   MEDIAN GLIDE · XC SPEED`. `CEILING USED` still folds the `MAX ALTITUDE` / `YOU
+   REACHED` duplicate, exactly as proposed.
+3. **Finding 5 (drifting out of the line) and finding 8 (the time budget) were rethought.**
+   The `other` slice is not a loss — see `docs/analysis-plan.md`, correction 1 — so it
+   became a three-way decomposition. And the detour ratio has no honest cost, so it is a
+   figure on the strip rather than a card.
+4. **The nudge buttons went further than proposed on touch.** Reset goes too: it was the
+   widest button in the prime thumb position for the least-used action.
 
 **On the widths.** 390 × 844 is the iPhone 12/13/14 viewport — 15/16 are 393, Pixel 5
 is 393, Galaxy S20 is 360, iPhone SE is 375. It is the most common phone width there is,

@@ -14,8 +14,8 @@ import json
 import math
 from pathlib import Path
 
-from . import airmass as airmass_module, charts, debrief, quicklook, \
-    terrain as terrain_module, view3d, view3d_gl
+from . import airmass as airmass_module, charts, debrief, insolation as insolation_module, \
+    plan as plan_module, quicklook, terrain as terrain_module, view3d, view3d_gl
 from numpy import median as np_median
 from .analysis import TURN_RESOLUTION_LIMIT, Analysis, Phase
 
@@ -1239,6 +1239,69 @@ def _airmass_section(analysis: Analysis, air, uid: str = "") -> str:
   </section>"""
 
 
+def _plan_section(adherence) -> str:
+    """The flight against the plan, when there is one.
+
+    Degrade, never blank: no plan means today's report, unchanged, with no empty box
+    inviting the reader to wonder what is missing.
+    """
+    if adherence is None or not adherence.reached:
+        return ""
+    plan = adherence.plan
+    rows = []
+    for reached in adherence.reached:
+        got = reached.index is not None
+        rows.append(
+            f'<tr{f" data-fix={reached.index}" if got else ""}>'
+            f"<td>{charts.escape(reached.name)}</td>"
+            f'<td>{reached.time if got else "&mdash;"}</td>'
+            f"<td>{reached.distance / 1000:.1f}</td>"
+            f'<td>{"reached" if got else "not reached"}</td></tr>'
+        )
+    provenance = {
+        "declared": "declared in the tracklog&rsquo;s own <code>C</code> records, which "
+                    "means it was written before takeoff",
+        "sidecar": "read from a plan file beside the tracklog",
+    }.get(plan.source, "supplied with the flight")
+    frozen = (
+        f"Recorded {charts.escape(plan.made_at)}."
+        if plan.made_at else
+        "<strong>Reconstructed intent</strong> &mdash; it carries no timestamp, so it "
+        "may have been written after landing. A plan written afterwards is a story about "
+        "the flight rather than a plan, and every finding from it is ranked accordingly."
+    )
+    departure = ""
+    if adherence.departure_time:
+        departure = (
+            f" The track first left the line by more than "
+            f"{plan_module.DEPARTURE / 1000:.0f}&nbsp;km at "
+            f"{adherence.departure_time}, sustained for at least "
+            f"{plan_module.DEPARTURE_SECONDS / 60:.0f} minutes &mdash; the decision "
+            f"point as the data can see it."
+        )
+    return f"""
+  <section>
+    <div class="section-head">
+      <h2>Against the plan</h2>
+      <p>The one thing the tool cannot see that the pilot can simply supply. With a plan,
+         &ldquo;the flight turned short&rdquo; is a measurement against something the
+         pilot signed rather than against an ideal nobody declared.</p>
+    </div>
+    <div class="panel" style="padding:14px 16px 4px">
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>turnpoint</th><th>reached</th><th>closest km</th>
+            <th></th></tr></thead>
+          <tbody>{"".join(rows)}</tbody>
+        </table>
+      </div>
+    </div>
+    <p class="caption">{adherence.planned_km:.1f}&nbsp;km planned,
+      {adherence.flown_km:.1f}&nbsp;km of it flown. The plan was {provenance}. {frozen}
+      {departure}</p>
+  </section>"""
+
+
 def _wind_shear_note(analysis: Analysis) -> str:
     """One sentence on how the measured wind changed with height."""
     sounded = [
@@ -1333,6 +1396,51 @@ def _sun_note(sun: dict | None) -> str:
         f"the view carries the sun and the wind as arrows that turn with it — which is "
         f"how to ask whether a face was still in the sun when you got there. It is the "
         f"real solar position, not a fixed north-west lamp."
+    )
+
+
+def _insolation_note(sunlight) -> str:
+    """What the sun was doing to the ground each climb triggered over.
+
+    Deliberately not a finding card: it carries no cost in metres or minutes, because
+    the pilot did not choose where the sun was. It belongs under the 3D view, next to
+    the hillshade that is drawn from the same solar position.
+    """
+    if sunlight is None or not sunlight.measured:
+        return ""
+    faces = sunlight.faces
+    steep = [f for f in faces if f.aspect is not None]
+    if not steep:
+        return (
+            f"The ground under these {len(faces)} climbs is flat enough that it has no "
+            f"aspect worth naming, so the sun's angle onto it was the same everywhere "
+            f"— which is itself the answer on a flatland day."
+        )
+    best = max(faces, key=lambda f: f.advantage)
+    lit = [f for f in faces if f.advantage >= 1.1]
+    aspect_note = (
+        f"the best-lit of them was a {best.slope:.0f}&#176; slope facing "
+        f"{charts.escape(_cardinal(best.aspect))}, taking {best.advantage:.2f}&#215; the "
+        f"light of the ground within a kilometre and a half of it"
+        if best.aspect is not None else "none of them had a slope worth naming"
+    )
+    windward = ""
+    if sunlight.windward is not None and sunlight.wind_from is not None:
+        windward = (
+            f" {sunlight.windward * 100:.0f}% of the sloped triggers faced within a "
+            f"quadrant of the {charts.escape(_cardinal(sunlight.wind_from))} wind, which "
+            f"is where ridge lift would have been if there was any."
+        )
+    return (
+        f" <strong>The faces that triggered.</strong> Slope and aspect come from this "
+        f"same DEM and the sun from the same table that lights it, so each climb can be "
+        f"asked what the light was doing to the ground it started over: across "
+        f"{len(faces)} climbs the trigger ground averaged "
+        f"{sunlight.mean_advantage:.2f}&#215; the light of its surroundings, "
+        f"{len(lit)} of them at 1.1&#215; or better, and {aspect_note}.{windward} This "
+        f"is the cosine of the angle to the sun on bare geometry — it knows nothing "
+        f"about cloud, ground cover or soil, so it compares one face with another and "
+        f"never claims a cause."
     )
 
 
@@ -1471,8 +1579,8 @@ def _meteo_profile(analysis: Analysis, meteo, uid: str, rows: list[str]) -> str:
 def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
                  basemaps=None, fetch_tiles: bool = True,
                  kmz: bytes | None = None, uid: str = "f0",
-                 hidden: bool = False, metrics=None, air=None, verdict=None,
-                 findings=None) -> str:
+                 hidden: bool = False, metrics=None, air=None, sunlight=None,
+                 verdict=None, findings=None, adherence=None) -> str:
     """One flight's sections, from masthead to footer.
 
     ``meteo`` and ``route`` are optional: the report degrades to the flight's own
@@ -1622,11 +1730,12 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
       {float(np_median(clearance)):.0f}&nbsp;m.
       {charts.escape("; ".join(sorted({b.attribution for b in (basemaps or {}).values()
                                        if b.attribution}))) or ""}
-      Elevation from the AWS terrarium DEM. {_sun_note(payload.get("sun"))}</p>
+      Elevation from the AWS terrarium DEM. {_sun_note(payload.get("sun"))}{_insolation_note(sunlight)}</p>
   </section>"""
 
     wind_chart = charts.wind_profile(analysis, meteo=meteo, uid=uid)
     airmass_section = _airmass_section(analysis, air, uid)
+    plan_section = _plan_section(adherence)
     histogram = charts.climb_histogram(analysis)
     meteo_section = _meteo_section(analysis, meteo, uid)
 
@@ -1797,6 +1906,8 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
     </div>
   </section>
 
+{plan_section}
+
 {airmass_section}
 
 {meteo_section}
@@ -1902,27 +2013,35 @@ ADD_TAB = (
 
 
 def _debrief_for(analysis: Analysis, *, meteo=None, route=None, terrain=None,
-                 shape: str = "") -> tuple:
+                 shape: str = "", plan=None) -> tuple:
     """Measure a flight and rank its findings, in one place for both renderers."""
     clearance = terrain_module.clearance(terrain, analysis) if terrain is not None else None
     air = airmass_module.analyse(analysis, meteo=meteo)
+    sunlight = (
+        insolation_module.for_flight(analysis, terrain, wind=analysis.wind)
+        if terrain is not None else None
+    )
     metrics = debrief.measure(analysis, meteo=meteo, route=route, clearance=clearance,
                               air=air)
+    adherence = plan_module.compare(analysis, plan) if plan is not None else None
     return (
         metrics,
         air,
+        sunlight,
         debrief.verdict(analysis, metrics, route=route, shape=shape, meteo=meteo),
-        debrief.findings(analysis, metrics, meteo=meteo, route=route, shape=shape),
+        debrief.findings(analysis, metrics, meteo=meteo, route=route, shape=shape,
+                         adherence=adherence),
+        adherence,
     )
 
 
 def render(analysis: Analysis, *, meteo=None, route=None, terrain=None,
            basemaps=None, fetch_tiles: bool = True, kmz: bytes | None = None,
-           shape: str = "") -> str:
+           shape: str = "", plan=None) -> str:
     """A report for a single flight, with the own-track picker alongside it."""
     summary = analysis.summary
-    metrics, air, verdict, findings = _debrief_for(
-        analysis, meteo=meteo, route=route, terrain=terrain, shape=shape
+    metrics, air, sunlight, verdict, findings, adherence = _debrief_for(
+        analysis, meteo=meteo, route=route, terrain=terrain, shape=shape, plan=plan
     )
     title = f"{summary.date} · {summary.site or 'flight'} — flight review"
     # Upload first: the bundled flight is a showcase, the reader's own track is the point.
@@ -1945,7 +2064,8 @@ def render(analysis: Analysis, *, meteo=None, route=None, terrain=None,
             _flight_body(
                 analysis, meteo=meteo, route=route, terrain=terrain,
                 basemaps=basemaps, fetch_tiles=fetch_tiles, kmz=kmz, uid="f0",
-                metrics=metrics, air=air, verdict=verdict, findings=findings,
+                metrics=metrics, air=air, sunlight=sunlight, verdict=verdict,
+                findings=findings, adherence=adherence,
             )
         ],
         tabs,
@@ -1967,10 +2087,11 @@ def render_multi(reports: list[dict]) -> str:
         _debrief_for(
             report["analysis"], meteo=report.get("meteo"), route=report.get("route"),
             terrain=report.get("terrain"), shape=report.get("shape") or "",
+            plan=report.get("plan"),
         )
         for report in reports
     ]
-    debrief.compare([verdict for _, _, verdict, _ in debriefs])
+    debrief.compare([one[3] for one in debriefs])
 
     bodies, buttons = [], []
     for index, report in enumerate(reports):
@@ -1990,8 +2111,10 @@ def render_multi(reports: list[dict]) -> str:
                 hidden=index > 0,
                 metrics=debriefs[index][0],
                 air=debriefs[index][1],
-                verdict=debriefs[index][2],
-                findings=debriefs[index][3],
+                sunlight=debriefs[index][2],
+                verdict=debriefs[index][3],
+                findings=debriefs[index][4],
+                adherence=debriefs[index][5],
             )
         )
         shape = report.get("shape") or ""
@@ -2035,12 +2158,12 @@ def render_multi(reports: list[dict]) -> str:
 
 def write(analysis: Analysis, path, *, meteo=None, route=None, terrain=None,
           basemaps=None, fetch_tiles: bool = True, kmz: bytes | None = None,
-          shape: str = "") -> Path:
+          shape: str = "", plan=None) -> Path:
     path = Path(path)
     path.write_text(
         render(analysis, meteo=meteo, route=route, terrain=terrain, basemaps=basemaps,
                fetch_tiles=fetch_tiles,
-               kmz=kmz, shape=shape),
+               kmz=kmz, shape=shape, plan=plan),
         encoding="utf-8",
     )
     return path

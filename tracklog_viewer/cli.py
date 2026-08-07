@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 from . import (
     basemap as basemap_module,
     kml,
+    plan as plan_module,
     meteo as meteo_module,
     render_html,
     render_kmz,
@@ -73,6 +74,13 @@ def main(argv: list[str] | None = None) -> int:
              "For flights whose logger recorded no pilot or launch.",
     )
     parser.add_argument(
+        "--plan", action="append", default=[], metavar="FILE",
+        help="a flight plan to measure the flight against, as JSON, one --plan per "
+             "flight in order. A `FLIGHT.plan.json` beside the tracklog is found "
+             "automatically, and a task declared in the IGC's own C records is used "
+             "when there is neither.",
+    )
+    parser.add_argument(
         "--terrain", action="store_true",
         help="fetch DEM tiles and embed a 3D terrain view in the report (uses the network)",
     )
@@ -99,7 +107,7 @@ def main(argv: list[str] | None = None) -> int:
                 meteo=reports[0]["meteo"], route=reports[0]["route"],
                 terrain=reports[0]["terrain"], basemaps=reports[0]["basemaps"],
                 fetch_tiles=reports[0]["fetch_tiles"], kmz=reports[0]["kmz"],
-                shape=reports[0]["shape"],
+                shape=reports[0]["shape"], plan=reports[0]["plan"],
             )
         else:
             render_html.write_multi(reports, args.html)
@@ -166,6 +174,28 @@ def _one(source: str, args, index: int = 0) -> dict:
     analysis = analyse(flight, window=args.window)
     summary = analysis.summary
     _annotate(summary, args.label[index] if index < len(args.label) else "")
+
+    # A plan, in order of how much it can be trusted: one the user named, a sidecar
+    # beside the tracklog, then the task the logger recorded. The last is refused unless
+    # the flight actually went near it — see `plan.STALE_LIMIT`.
+    intent = None
+    named = args.plan[index] if index < len(args.plan) else None
+    sidecar = named or plan_module.discover(source)
+    if sidecar:
+        try:
+            intent = plan_module.load(sidecar)
+            print(f"  plan: {Path(sidecar).name}, "
+                  f"{len(intent.turnpoints)} turnpoints, {intent.distance / 1000:.1f} km")
+        except (OSError, ValueError, KeyError) as error:
+            print(f"warning: could not read plan {sidecar}: {error}", file=sys.stderr)
+    if intent is None:
+        intent = plan_module.from_flight(flight)
+        if intent is not None:
+            print(f"  declared task: {len(intent.turnpoints)} turnpoints, "
+                  f"{intent.distance / 1000:.1f} km")
+        elif flight.task:
+            print(f"note: the {len(flight.task)} C records in this file are not a task "
+                  f"this flight flew", file=sys.stderr)
 
     route = None
     if not args.no_xc:
@@ -285,6 +315,7 @@ def _one(source: str, args, index: int = 0) -> dict:
         "meteo": weather,
         "route": route,
         "payload": payload,
+        "plan": intent,
         "terrain": ground,
         "basemaps": tiles if args.terrain and not args.no_basemap else None,
         # Templates for the styles that are not embedded. Suppressed by --no-basemap,
