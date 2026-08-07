@@ -49,6 +49,31 @@ from .igc import Turnpoint
 # 3 km wide of the line is a thermal drifting; four minutes of it is a decision.
 DEPARTURE_METRES = 3000.0
 DEPARTURE_SECONDS = 240.0
+# Beyond this the "plan" is not this flight's plan, and comparing against it is worse
+# than having no plan at all.
+#
+# This is the measured state of the archive, not a defensive guess. Ten of the fifty
+# sample files carry `C` records; the two that carry a *task* — `2020-08-16-XCT-ROP-01`
+# and `2021-07-06-XCT-ROP-01` — declare turnpoints 29 km and 432 km from anywhere the
+# glider went. They are tasks left loaded in XCTrack from another site on another day,
+# and the logger writes out whatever is loaded. Compared against, the second produced
+# the loudest card on that flight's report: *"cost 33 525 m — the track left the planned
+# line at 13:31:08"*, with a median distance from the line of 18 812 m. A flight whose
+# median cross-track error is eighteen kilometres has not departed from a plan; it is
+# being measured against somebody else's.
+#
+# The median is the right test rather than the closest approach: a flight that genuinely
+# flew most of a task and then bailed is still near the line for most of its length, and
+# refusing that case would throw away the findings the feature exists for.
+#
+# What this does *not* catch, and knowingly: `2020-08-16-XCT-ROP-01` carries a 12-point
+# task whose nearest real turnpoint is 29 km away, yet its median cross-track error is
+# 2 628 m — the long leg from the takeoff towards those turnpoints happens to run over
+# the flying area. That flight still reports "1 of 12 planned turnpoints reached", which
+# is *true*, and the task is labelled reconstructed intent because a `C` record carries
+# no `made_at`. Telling it apart from a genuinely abandoned task needs progress along
+# the line rather than distance from it, and two files is not enough to tune that on.
+STALE_MEDIAN_METRES = 10_000.0
 # A turnpoint is reached inside its radius; competition tasks declare one, a hand-written
 # plan usually does not, so this is the default cylinder.
 DEFAULT_RADIUS = 400.0
@@ -226,6 +251,22 @@ def _cross_track(plan: Plan, lat, lon) -> np.ndarray:
     return best
 
 
+def describes(analysis, plan: Plan | None) -> bool:
+    """Is this plan plausibly a plan *for this flight*?
+
+    Every comparison below goes through here, because a stale plan does not produce a
+    slightly wrong finding — it produces the most confident and most prominent card on
+    the page, about a flight nobody flew. See `STALE_MEDIAN_METRES` for the two files in
+    the archive that forced it.
+    """
+    if plan is None or not plan.declared:
+        return False
+    off = _cross_track(plan, analysis.flight.lat, analysis.flight.lon)
+    if not np.isfinite(off).any():
+        return False
+    return float(np.median(off)) <= STALE_MEDIAN_METRES
+
+
 @dataclass
 class Adherence:
     """How closely the flight followed the planned line, and where it left it."""
@@ -245,12 +286,10 @@ def adherence(analysis, plan: Plan | None) -> Adherence | None:
     `DEPARTURE_METRES` — rather than the first fix over the line, because a thermal drifts
     a kilometre off course without anyone deciding anything.
     """
-    if plan is None or not plan.declared:
+    if not describes(analysis, plan):
         return None
     flight = analysis.flight
     off = _cross_track(plan, flight.lat, flight.lon)
-    if not np.isfinite(off).any():
-        return None
 
     t = analysis.series.t
     outside = off > DEPARTURE_METRES
@@ -301,7 +340,7 @@ def turnpoints(analysis, plan: Plan | None) -> Turnpoints | None:
     In order on purpose — a task is a sequence, and a turnpoint clipped on the way home
     after skipping the one before it has not been reached in any sense that scores.
     """
-    if plan is None or not plan.declared:
+    if not describes(analysis, plan):
         return None
     flight = analysis.flight
     times: list[str | None] = []
@@ -343,7 +382,7 @@ class Budget:
 
 def budget(analysis, plan: Plan | None, route) -> Budget | None:
     """Planned against scored. Refused without both — a target and an achievement."""
-    if plan is None:
+    if plan is None or not describes(analysis, plan):
         return None
     planned = plan.goal_distance or (
         _leg_distance(plan.turnpoints) if plan.declared else None

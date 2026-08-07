@@ -2175,6 +2175,15 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
             if curve and curve.best_glide
             else ""
         )
+        # A refusal the reader can see the reason for. Silence here would be indistinct
+        # from having no curve at all, and the two mean different things.
+        if curve and not curve.monotone:
+            best = (
+                " No best-glide speed is given: over these glides the measured sink does"
+                " not rise steadily with airspeed, which a wing's does, so the curve is"
+                " describing the air they were flown in as much as the glider. One"
+                " flight is not a polar."
+            )
         # One clause per idea, in the order a reader needs them: what the wing did, what
         # the ground said, and only then how the two were reconciled. The old sentence
         # opened on "through the air the median is 8.7:1 against 8.0:1 over the ground, at

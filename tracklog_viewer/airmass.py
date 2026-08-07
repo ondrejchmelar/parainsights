@@ -297,8 +297,15 @@ class Polar:
     speeds: list[float]  # km/h, bin centres
     sink: list[float]  # m/s, negative
     counts: list[int]
-    best_glide: tuple[float, float] | None  # (km/h, L/D) at the best bin
+    best_glide: tuple[float, float] | None  # (km/h, L/D) at the best bin, or None
     confidence: float
+    # Does sink increase with airspeed, as a wing's must? When it does not, the curve is
+    # measuring the air the glides happened to be in rather than the glider, and
+    # `best_glide` is withheld. Measured on the 2020-07-12 tow flight, which published
+    # "best glide 10.3:1 at 38.8 km/h" off a curve running 1.30 m/s down at 22.5 km/h
+    # and 1.05 at 38.8 — a wing that sinks *less* the faster you fly it, all the way to
+    # the fastest bin, which then wins by construction.
+    monotone: bool = True
 
 
 def polar(analysis: Analysis, wind: WindField, *, bins: int = 6,
@@ -339,14 +346,20 @@ def polar(analysis: Analysis, wind: WindField, *, bins: int = 6,
     if len(centres) < 2:
         return None
 
+    # A wing sinks faster the faster it is flown. One bin's worth of noise is tolerated;
+    # a larger reversal is the day, not the glider, and nothing is claimed off it. The
+    # curve is still returned — its shape is the evidence for the refusal.
+    monotone = all(b <= a + 0.1 for a, b in zip(sinks, sinks[1:]))
+
     ratios = [
         (speed, speed / 3.6 / -rate) for speed, rate in zip(centres, sinks) if rate < 0
     ]
-    best = max(ratios, key=lambda pair: pair[1]) if ratios else None
+    best = max(ratios, key=lambda pair: pair[1]) if ratios and monotone else None
     return Polar(
         speeds=centres,
         sink=sinks,
         counts=counts,
         best_glide=(round(best[0], 1), round(best[1], 1)) if best else None,
         confidence=round(wind.confidence, 2),
+        monotone=monotone,
     )

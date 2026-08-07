@@ -536,6 +536,27 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   survived a green suite. There are now regression tests for each.
 - **Two 3D views on purpose.** `render_map.py` is better but needs network at view time;
   `view3d.py` gives up the basemap library to be embeddable. Both share the climb ramp.
+- **A declared task the flight did not fly is worse than no task at all.** A logger writes
+  out whatever task happens to be loaded, so a `C` record is evidence of what was in
+  XCTrack, not of what the pilot intended today. On `2021-07-06-XCT-ROP-01` the loaded
+  task's turnpoints are **432 km** away, and comparing against it produced the loudest
+  card on that flight's report — *"cost 33 525 m, the track left the planned line at
+  13:31:08"*, median distance from the line **18 812 m**. Every plan comparison now goes
+  through `plan.describes()`, which refuses a plan whose median cross-track error exceeds
+  `STALE_MEDIAN_METRES`. The test is the **median**, not the closest approach: a flight
+  that flew most of a task and then bailed sits near the line for most of its length, and
+  that is the case the feature exists for. It knowingly does not catch
+  `2020-08-16-XCT-ROP-01`, whose nearest real turnpoint is 29 km away but whose long
+  first leg runs over the flying area — separating that from a genuine abandonment needs
+  progress *along* the line, and two files is not enough to tune it on.
+- **A polar that is not monotone is measuring the day, not the wing.** Sink must rise with
+  airspeed; when it does not, the fastest bin wins the best-glide comparison by
+  construction. On `2020-07-12` the report published *"your best glides came at about
+  39 km/h, where the wing returned 10.3:1"* off a curve running 1.30 m/s down at 22.5 km/h
+  and 1.05 at 38.8 — a pilot who flew fast in the good air, not a wing. `Polar.monotone`
+  withholds `best_glide` and the report says why, rather than going silent: **18 of the 50
+  sample flights** produce an inverted curve, so this is the common case on one flight and
+  the strongest argument for calibrating against the archive.
 - **XContest flight pages cannot be scraped.** The page is a JavaScript shell behind
   Cloudflare Turnstile with the IGC link only present for a signed-in session. We read
   the public title (pilot, date, scored distance) and tell the user to pass the file.

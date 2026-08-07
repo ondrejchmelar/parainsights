@@ -147,6 +147,29 @@ class TestPolar:
         # All glides here are flown at exactly 12 m/s, so the speed spread is nil.
         assert airmass.polar(analysis, wind) is None
 
+    def test_an_inverted_curve_claims_no_best_glide(self):
+        """Less sink the faster you fly is the day, not the wing.
+
+        Measured on `2020-07-12`, which published *"best glides came at about 39 km/h,
+        where the wing returned 10.3:1"* off a curve running 1.30 m/s down at 22.5 km/h
+        and 1.05 at 38.8. The fastest bin wins by construction on a curve like that, so
+        the number is an artefact of a pilot who flew fast in the good air.
+        """
+        inverted = airmass.Polar(
+            speeds=[22.5, 29.0, 38.8], sink=[-1.30, -1.35, -1.05],
+            counts=[100, 100, 100], best_glide=None, confidence=0.9, monotone=False,
+        )
+        assert not inverted.monotone
+        assert inverted.best_glide is None
+
+    def test_a_wings_curve_keeps_its_best_glide(self):
+        wing = airmass.Polar(
+            speeds=[25.0, 30.0, 35.0], sink=[-0.90, -1.10, -1.50],
+            counts=[100, 100, 100], best_glide=(25.0, 7.7), confidence=0.9,
+        )
+        assert wing.monotone
+        assert wing.best_glide is not None
+
 
 class TestConventions:
     def test_the_wind_vector_points_where_the_air_is_going(self):

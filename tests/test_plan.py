@@ -157,6 +157,46 @@ class TestAdherence:
     def test_no_plan_means_no_adherence(self, tmp_path):
         assert plan.adherence(a_flight(tmp_path), None) is None
 
+    def test_a_plan_from_somewhere_else_is_not_this_flight_plan(self, tmp_path):
+        """The failure this gate exists for, and it was live on real files.
+
+        Ten of the fifty sample tracklogs carry `C` records; the two carrying a real
+        task declare turnpoints 29 km and 432 km from anywhere the glider went — tasks
+        left loaded in XCTrack from another site, which the logger writes out because
+        that is what is loaded. Compared against, `2021-07-06-XCT-ROP-01` produced the
+        loudest card on its own report: *"cost 33 525 m — the track left the planned
+        line at 13:31:08"*, with a median distance from the line of 18 812 m.
+
+        A stale plan is worse than no plan: it does not shade a finding slightly wrong,
+        it invents the most confident one on the page.
+        """
+        analysis = a_flight(tmp_path)          # runs east from the origin
+        elsewhere = plan.Plan(
+            made_at="2026-07-01T08:00:00",
+            turnpoints=[Turnpoint("far", *to_latlon(0, 400_000)),
+                        Turnpoint("farther", *to_latlon(0, 440_000))],
+        )
+        assert not plan.describes(analysis, elsewhere)
+        assert plan.adherence(analysis, elsewhere) is None
+        assert plan.turnpoints(analysis, elsewhere) is None
+        assert plan.budget(analysis, elsewhere, None) is None
+
+    def test_a_plan_this_flight_abandoned_keeps_its_findings(self, tmp_path):
+        """The case the gate must not swallow.
+
+        A flight that flew most of a task and then bailed still sits near the line for
+        most of its length — which is why the test is the *median* cross-track error and
+        not the closest approach or the maximum.
+        """
+        analysis = a_flight(tmp_path)          # 1200 s east at 12 m/s: about 14 km
+        along = plan.Plan(
+            made_at="2026-07-01T08:00:00",
+            turnpoints=[Turnpoint("start", *to_latlon(0, 0)),
+                        Turnpoint("east", *to_latlon(60_000, 0))],
+        )
+        assert plan.describes(analysis, along)
+        assert plan.adherence(analysis, along) is not None
+
 
 class TestTurnpoints:
     def test_reached_turnpoints_are_counted_in_order(self, tmp_path):
