@@ -99,6 +99,7 @@ def main(argv: list[str] | None = None) -> int:
                 meteo=reports[0]["meteo"], route=reports[0]["route"],
                 terrain=reports[0]["terrain"], basemaps=reports[0]["basemaps"],
                 fetch_tiles=reports[0]["fetch_tiles"], kmz=reports[0]["kmz"],
+                shape=reports[0]["shape"],
             )
         else:
             render_html.write_multi(reports, args.html)

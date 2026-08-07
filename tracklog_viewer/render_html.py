@@ -14,7 +14,7 @@ import json
 import math
 from pathlib import Path
 
-from . import charts, quicklook, terrain as terrain_module, view3d, view3d_gl
+from . import charts, debrief, quicklook, terrain as terrain_module, view3d, view3d_gl
 from numpy import median as np_median
 from .analysis import TURN_RESOLUTION_LIMIT, Analysis, Phase
 
@@ -261,6 +261,111 @@ section { margin-top: 34px; }
 .stat-value { font-size: 25px; line-height: 1.15; display: block; margin-top: 3px; }
 .stat-value small { font-size: 13px; color: var(--ink-3); margin-left: 2px; }
 .stat .sub { font-size: 12px; color: var(--ink-3); }
+
+/* Verdict strip ----------------------------------------------------------- */
+/* The flight in one line, above the 3D view. A reader currently scrolls ~1 200 px
+   before meeting a single number; this answers the question at the top and the finding
+   cards below the view carry the evidence. */
+.verdict {
+  margin-top: 18px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--climb);
+  background: var(--panel);
+  padding: 15px 18px 4px;
+}
+.verdict p {
+  margin: 0 0 12px;
+  font-family: 'NarrowDisplay', "Liberation Sans Narrow", ui-sans-serif, sans-serif;
+  font-size: clamp(17px, 2.4vw, 21px);
+  line-height: 1.32;
+  max-width: 66ch;
+  text-wrap: balance;
+}
+.verdict-figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 2px 22px;
+  border-top: 1px solid var(--rule);
+  padding-top: 11px;
+}
+.verdict-figures .stat { padding: 0 0 13px; }
+.verdict-figures .stat-value { font-size: 22px; }
+.verdict-figures .cmp { display: block; font-size: 11.5px; color: var(--ink-2); }
+
+/* Debrief ----------------------------------------------------------------- */
+.findings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(285px, 1fr));
+  gap: 16px;
+}
+.finding {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  padding: 13px 15px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.finding h3 {
+  margin: 0;
+  font-family: 'NarrowDisplay', "Liberation Sans Narrow", ui-sans-serif, sans-serif;
+  font-size: 16.5px;
+  font-weight: 400;
+  line-height: 1.28;
+  text-wrap: balance;
+}
+.finding p { margin: 0; font-size: 13.5px; color: var(--ink-2); }
+.finding .finding-note { font-size: 12px; color: var(--ink-3); }
+.finding-cost {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: 'NarrowDisplay', "Liberation Sans Narrow", ui-sans-serif, sans-serif;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  color: var(--ink-2);
+}
+/* Cost reads as colour before it reads as text, off the climb ramp the rest of the
+   report already uses. */
+.finding-cost::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--climb-1);
+}
+.finding.cost-2 .finding-cost::before { background: var(--climb-2); }
+.finding.cost-3 .finding-cost::before { background: var(--climb-3); }
+.finding-foot {
+  margin-top: auto;
+  padding-top: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.show-me {
+  font: inherit;
+  font-family: 'NarrowDisplay', "Liberation Sans Narrow", ui-sans-serif, sans-serif;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  background: var(--panel);
+  color: var(--ink-2);
+  padding: 7px 11px;
+  min-height: 34px;
+  cursor: pointer;
+}
+.show-me:hover { color: var(--ink); border-color: var(--ink-3); }
+.finding.is-pinned { border-color: var(--climb); }
 
 .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 22px; }
 .hero-grid { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr); gap: 16px; }
@@ -674,6 +779,35 @@ function initFlight(root) {
     });
   });
 
+  // "show me" on a finding card: park the cursor on the moment the finding is about,
+  // in every chart and in the 3D view at once, and scroll the view into sight. It is a
+  // *pin* rather than a hover — the reader has to be able to look away from the card and
+  // still see the marker — so `hide()` is not wired to it and a second click clears it.
+  var pinned = null;
+  function pin(button) {
+    var card = button.closest('.finding') || button;
+    var index = Number(button.dataset.sample);
+    if (!Number.isFinite(index) || index >= data.t.length) return;
+    if (pinned === card) { pinned = null; card.classList.remove('is-pinned'); hide(); return; }
+    if (pinned) pinned.classList.remove('is-pinned');
+    pinned = card;
+    card.classList.add('is-pinned');
+    // Place through the first visible chart, so the tooltip lands on something that has
+    // a layout box: a hidden profile variant reports a zero-sized rect.
+    var source = views.filter(function (view) {
+      return view.svg.getClientRects().length;
+    })[0];
+    if (!source) return;
+    var box = source.svg.getBoundingClientRect();
+    place(index, source, { box: box, vb: source.svg.viewBox.baseVal });
+    var panel = root.querySelector('.view3d-panel') || source.svg;
+    panel.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+
+  root.querySelectorAll('.show-me[data-sample]').forEach(function (button) {
+    button.addEventListener('click', function () { pin(button); });
+  });
+
   root.querySelectorAll('tr[data-segment]').forEach(function (row) {
     row.tabIndex = 0;
     row.addEventListener('mouseenter', function () { highlight(row.dataset.segment); });
@@ -797,6 +931,84 @@ def _cursor_data(analysis: Analysis) -> dict:
             ],
         },
     }
+
+
+def _verdict_strip(verdict) -> str:
+    """The flight in one line, with its headline numbers under it.
+
+    Goes above the 3D view, which keeps its place as the hero image: the strip answers
+    the question in one line, and the finding cards sit under the view so *show me* moves
+    a marker the reader can already see.
+    """
+    if verdict is None:
+        return ""
+    figures = "".join(
+        f'<div class="stat"><span class="key">{figure.key}</span>'
+        f'<span class="stat-value">{figure.value}'
+        + (f"<small>{figure.unit}</small>" if figure.unit else "")
+        + "</span>"
+        + (f'<span class="sub">{figure.sub}</span>' if figure.sub else "")
+        + (f'<span class="cmp">{figure.comparison}</span>' if figure.comparison else "")
+        + "</div>"
+        for figure in verdict.figures
+    )
+    return (
+        f'<div class="verdict">'
+        f"<p>{verdict.sentence}</p>"
+        f'<div class="verdict-figures">{figures}</div></div>'
+    )
+
+
+def _debrief_section(findings: list, samples: list[int]) -> str:
+    """The ranked findings, as cards under the 3D view.
+
+    Each card is a measurement, its evidence, and what it cost. *show me* carries a
+    position in the cursor sample array rather than a fix index, because the sampled
+    series is what every chart and the 3D marker are indexed by — resolving it here means
+    the page does not have to search for the nearest fix at click time.
+    """
+    if not findings:
+        return ""
+    cards = []
+    for rank, finding in enumerate(findings):
+        # Three steps of the ramp, by position in a list that is already sorted by cost.
+        weight = 3 if rank == 0 else 2 if rank < 3 else 1
+        sample = ""
+        if finding.index is not None and samples:
+            nearest = min(range(len(samples)), key=lambda i: abs(samples[i] - finding.index))
+            sample = f' data-sample="{nearest}"'
+        foot = []
+        if finding.when:
+            foot.append(f"<span>{finding.when}</span>")
+        else:
+            foot.append("<span></span>")
+        if sample:
+            foot.append(
+                f'<button type="button" class="show-me"{sample}>show me &rarr;</button>'
+            )
+        note = (
+            f'<p class="finding-note">{finding.note}</p>' if finding.note else ""
+        )
+        cards.append(
+            f'<article class="finding cost-{weight}">'
+            f'<span class="finding-cost">cost {finding.cost}</span>'
+            f"<h3>{finding.title}</h3>"
+            f"<p>{finding.detail}</p>{note}"
+            f'<div class="finding-foot">{"".join(foot)}</div>'
+            f"</article>"
+        )
+    return f"""
+  <section>
+    <div class="section-head">
+      <h2>Debrief</h2>
+      <p>What this flight measures most expensively, ranked by what it cost in height or
+         in time — {len(cards)} {"finding" if len(cards) == 1 else "findings"} here.
+         Every card is a measurement about what happened,
+         never an instruction about what to do — the tool cannot see the sky, the gaggle,
+         the airspace or the plan.</p>
+    </div>
+    <div class="findings">{"".join(cards)}</div>
+  </section>"""
 
 
 def _stat(key: str, value: str, unit: str = "", sub: str = "") -> str:
@@ -1122,12 +1334,16 @@ def _meteo_profile(analysis: Analysis, meteo, uid: str, rows: list[str]) -> str:
 def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
                  basemaps=None, fetch_tiles: bool = True,
                  kmz: bytes | None = None, uid: str = "f0",
-                 hidden: bool = False) -> str:
+                 hidden: bool = False, verdict=None, findings=None) -> str:
     """One flight's sections, from masthead to footer.
 
     ``meteo`` and ``route`` are optional: the report degrades to the flight's own
     data when the weather could not be fetched or optimisation was skipped. ``uid``
     keeps SVG element ids unique when several flights share one document.
+
+    ``verdict`` and ``findings`` come from `debrief.py` and are passed in rather than
+    computed here, because the cross-flight comparison on the verdict strip needs every
+    flight in the document before any of them can be rendered.
     """
     summary = analysis.summary
     flight = analysis.flight
@@ -1266,7 +1482,11 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
     <div class="identity">{identity_html}</div>
   </header>
 
+{_verdict_strip(verdict)}
+
 {view3d_section}
+
+{_debrief_section(findings or [], sample)}
 
   <section>
     <div class="section-head">
@@ -1515,10 +1735,25 @@ ADD_TAB = (
 )
 
 
+def _debrief_for(analysis: Analysis, *, meteo=None, route=None, terrain=None,
+                 shape: str = "") -> tuple:
+    """Measure a flight and rank its findings, in one place for both renderers."""
+    clearance = terrain_module.clearance(terrain, analysis) if terrain is not None else None
+    metrics = debrief.measure(analysis, meteo=meteo, route=route, clearance=clearance)
+    return (
+        debrief.verdict(analysis, metrics, route=route, shape=shape, meteo=meteo),
+        debrief.findings(analysis, metrics, meteo=meteo, route=route, shape=shape),
+    )
+
+
 def render(analysis: Analysis, *, meteo=None, route=None, terrain=None,
-           basemaps=None, fetch_tiles: bool = True, kmz: bytes | None = None) -> str:
+           basemaps=None, fetch_tiles: bool = True, kmz: bytes | None = None,
+           shape: str = "") -> str:
     """A report for a single flight, with the own-track picker alongside it."""
     summary = analysis.summary
+    verdict, findings = _debrief_for(
+        analysis, meteo=meteo, route=route, terrain=terrain, shape=shape
+    )
     title = f"{summary.date} · {summary.site or 'flight'} — flight review"
     # Upload first: the bundled flight is a showcase, the reader's own track is the point.
     tabs = (
@@ -1540,6 +1775,7 @@ def render(analysis: Analysis, *, meteo=None, route=None, terrain=None,
             _flight_body(
                 analysis, meteo=meteo, route=route, terrain=terrain,
                 basemaps=basemaps, fetch_tiles=fetch_tiles, kmz=kmz, uid="f0",
+                verdict=verdict, findings=findings,
             )
         ],
         tabs,
@@ -1553,6 +1789,19 @@ def render_multi(reports: list[dict]) -> str:
     present in the document and switched by hiding: it keeps the page a single
     self-contained file, which is the whole point of this renderer.
     """
+    # Measure every flight first: the verdict strip compares each figure against the same
+    # figure on the other flights in the document, which is not knowable one body at a
+    # time. The document holds three flights and never puts them side by side — free
+    # insight sitting on the table.
+    debriefs = [
+        _debrief_for(
+            report["analysis"], meteo=report.get("meteo"), route=report.get("route"),
+            terrain=report.get("terrain"), shape=report.get("shape") or "",
+        )
+        for report in reports
+    ]
+    debrief.compare([verdict for verdict, _ in debriefs])
+
     bodies, buttons = [], []
     for index, report in enumerate(reports):
         analysis = report["analysis"]
@@ -1569,6 +1818,8 @@ def render_multi(reports: list[dict]) -> str:
                 kmz=report.get("kmz"),
                 uid=uid,
                 hidden=index > 0,
+                verdict=debriefs[index][0],
+                findings=debriefs[index][1],
             )
         )
         shape = report.get("shape") or ""
@@ -1611,12 +1862,13 @@ def render_multi(reports: list[dict]) -> str:
 
 
 def write(analysis: Analysis, path, *, meteo=None, route=None, terrain=None,
-          basemaps=None, fetch_tiles: bool = True, kmz: bytes | None = None) -> Path:
+          basemaps=None, fetch_tiles: bool = True, kmz: bytes | None = None,
+          shape: str = "") -> Path:
     path = Path(path)
     path.write_text(
         render(analysis, meteo=meteo, route=route, terrain=terrain, basemaps=basemaps,
                fetch_tiles=fetch_tiles,
-               kmz=kmz),
+               kmz=kmz, shape=shape),
         encoding="utf-8",
     )
     return path
