@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from tracklog_viewer import debrief, sources, xc
+from tracklog_viewer import airmass, debrief, sources, xc
 from tracklog_viewer.analysis import analyse
 from tracklog_viewer.igc import parse
 
@@ -166,7 +166,8 @@ def fired():
         free = xc.optimise(flight.lat, flight.lon, times=clock)
         closed = xc.triangle(flight.lat, flight.lon, times=clock)
         route = closed if closed is not None and xc.score(closed) > free.km else free
-        metrics = debrief.measure(analysis, route=route)
+        metrics = debrief.measure(analysis, route=route,
+                                  air=airmass.analyse(analysis))
         found = debrief.findings(analysis, metrics, route=route)
         cards.append(len(found))
         for finding in found:

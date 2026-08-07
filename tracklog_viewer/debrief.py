@@ -74,6 +74,7 @@ THRESHOLDS = {
     "close_share": 0.2,           # XContest's closing rule, for the close that wasn't
     "band_advantage": 0.70,       # m/s between the best and worst altitude third
     "left_below": 150.0,          # metres under the day's best height before it counts
+    "wind_glide_share": 0.30,     # relative gap between the ground and air glide ratios
     "min_cost_seconds": 120.0,    # below this a finding is trivia and is dropped
     "max_findings": 5,
 }
@@ -200,6 +201,14 @@ class Metrics:
     ceiling: float | None = None            # metres, the day's cloudbase
     ceiling_used: float | None = None       # share of it reached
     best_index: int | None = None           # fix index of the day's strongest climb
+    # Air-frame, from `airmass.py`. All None when the wind is too weak to correct with,
+    # which is the case the whole module exists to keep off the page.
+    air_ld: float | None = None
+    airspeed: float | None = None
+    wind_confidence: float | None = None
+    wander: float | None = None
+    wander_climbs: int = 0
+    glide_distance: float = 0.0             # metres flown in glides, for the wind cost
 
 
 def _climb_rate(segments: list[Segment]) -> float:
@@ -389,7 +398,7 @@ def _closing_distance(route) -> float | None:
 
 
 def measure(analysis: Analysis, *, meteo=None, route=None,
-            clearance: np.ndarray | None = None) -> Metrics:
+            clearance: np.ndarray | None = None, air=None) -> Metrics:
     """Every number the debrief can state, measured from what already exists."""
     series = analysis.series
     thermals = analysis.thermals
@@ -473,6 +482,17 @@ def measure(analysis: Analysis, *, meteo=None, route=None,
             metrics.save_gain = save.altitude_change
             metrics.save_agl = round(float(clearance[save.start]))
             metrics.save_index = save.start
+
+    if air is not None:
+        metrics.wind_confidence = round(air.field.confidence, 2)
+        metrics.airspeed = air.airspeed
+        metrics.wander = air.wander
+        metrics.wander_climbs = air.wander_climbs
+        # Only when the field is trustworthy. `airmass` already refuses below its own
+        # threshold and leaves `air_ld` as None; carrying that through rather than
+        # substituting the ground figure is the point.
+        metrics.air_ld = air.air_ld
+        metrics.glide_distance = round(sum(s.distance for s in analysis.glides))
 
     if meteo is not None:
         offset = analysis.summary.baro_offset or 0
@@ -594,6 +614,7 @@ def findings(analysis: Analysis, metrics: Metrics, *, meteo=None, route=None,
     _other_time(analysis, metrics, add)
     _the_save(analysis, metrics, add)
     _day_envelope(analysis, metrics, add)
+    _the_wind_on_glides(analysis, metrics, add)
 
     out.sort(key=lambda f: f.cost_seconds, reverse=True)
     return out[: THRESHOLDS["max_findings"]]
@@ -789,16 +810,22 @@ def _low_point(analysis: Analysis, m: Metrics, add) -> None:
         return
     if m.low_seconds < 120:
         return
-    where = m.min_clearance
+    # A negative clearance is the DEM's error, not the flight's — a 30 m grid cuts the
+    # top off a ridge — so the headline is the time spent low, which is robust to it,
+    # and the lowest reading is reported in the detail where it can be qualified.
+    lowest = (
+        f"the lowest reading is {_m(m.min_clearance)}"
+        if m.min_clearance > 0
+        else f"the lowest reading is {_m(m.min_clearance)}, which is the DEM cutting the "
+             f"top off a ridge rather than the flight going underground"
+    )
     add(
         "low-point",
-        f"Lowest ground clearance was {_m(where)}, and "
         f"{_minutes(m.low_seconds)} were flown under "
         f"{THRESHOLDS['low_clearance']:.0f} m above the ground",
-        f"Height above the DEM, not above sea level. The flight spent "
-        f"{_minutes(m.low_seconds)} of its "
-        f"{_minutes(m.airtime)} under {THRESHOLDS['low_clearance']:.0f} m AGL, with the "
-        f"lowest point at {_clock(analysis, m.min_clearance_index)}.",
+        f"Height above the DEM, not above sea level: {_minutes(m.low_seconds)} of "
+        f"{_minutes(m.airtime)} under {THRESHOLDS['low_clearance']:.0f} m AGL, and "
+        f"{lowest}, at {_clock(analysis, m.min_clearance_index)}.",
         seconds=m.low_seconds,
         index=m.min_clearance_index,
         note="Terrain is a public DEM, not a survey, and it knows nothing about "
@@ -961,6 +988,43 @@ def _the_save(analysis: Analysis, m: Metrics, add) -> None:
         index=m.save_index,
         note="Reported as a measurement, not as a margin: the DEM is coarse and knows "
              "nothing about what was under the wing.",
+    )
+
+
+def _the_wind_on_glides(analysis: Analysis, m: Metrics, add) -> None:
+    """What the day's wind was worth on the glides, in height.
+
+    Only fires when the wind field is good enough to correct with — `airmass` leaves
+    `air_ld` as None below its own confidence threshold, and this reads that rather than
+    quietly substituting the ground figure. The difference is arithmetic on two measured
+    ratios: the same glide distance at the two ratios is two heights, and the gap between
+    them is what the air did.
+    """
+    if m.air_ld is None or m.median_ld is None or not m.glide_distance:
+        return
+    # On the *ratio*, relative — an absolute gap of half a point fires on three flights
+    # in four, because subtracting the wind moves the number on almost every flight that
+    # has any wind at all. What is worth a card is a correction big enough to change how
+    # the glides read, and that is a fraction, not a difference.
+    if abs(m.air_ld - m.median_ld) / max(m.air_ld, 1e-6) < THRESHOLDS["wind_glide_share"]:
+        return
+    metres = m.glide_distance * (1 / m.median_ld - 1 / m.air_ld)
+    helped = metres < 0
+    add(
+        "wind-on-glides",
+        f"Glides ran {m.median_ld:.1f} over the ground against {m.air_ld:.1f} through "
+        f"the air",
+        f"Over {m.glide_distance / 1000:.0f} km of glide, the difference between the two "
+        f"ratios is {_m(abs(metres))} of height &mdash; "
+        + ("gained from the air the glides were flown in"
+           if helped else "spent on the air the glides were flown in") + ". "
+        f"The air-frame ratio subtracts an interpolated wind field built from "
+        f"{'the day&rsquo;s circled climbs' if m.wind_confidence else 'the model'}, "
+        f"at confidence {m.wind_confidence:.2f}.",
+        metres=metres,
+        note="Airspeed is inferred, not measured: no file in the sample set records it, "
+             "so every through-the-air number inherits the wind estimate&rsquo;s "
+             "uncertainty.",
     )
 
 

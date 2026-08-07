@@ -159,7 +159,7 @@ html, body { margin: 0; height: 100%; background: #0d1013; color: #eef1f4;
 .hud .row { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px;
   padding: 2px 0; }
 .hud .row span:last-child { font-variant-numeric: tabular-nums; }
-.hud label { display: block; font-size: 10.5px; text-transform: uppercase;
+.hud label { display: block; font-size: 11px; text-transform: uppercase;
   letter-spacing: 0.1em; color: #737d88; margin: 12px 0 4px; }
 .hud input[type=range] { width: 100%; accent-color: #eb6834; }
 .controls { display: flex; gap: 7px; margin-top: 9px; }
@@ -171,7 +171,7 @@ html, body { margin: 0; height: 100%; background: #0d1013; color: #eef1f4;
 .controls button.is-on { background: #eb6834; border-color: #eb6834; color: #14171c; }
 .ramp { display: flex; gap: 2px; margin-top: 10px; }
 .ramp i { flex: 1; height: 8px; border-radius: 1px; }
-.ramp-labels { display: flex; justify-content: space-between; font-size: 10px;
+.ramp-labels { display: flex; justify-content: space-between; font-size: 11px;
   color: #737d88; margin-top: 3px; }
 .note { font-size: 11.5px; color: #737d88; margin-top: 12px; line-height: 1.45; }
 .maplibregl-popup-content { background: #171b21; color: #eef1f4; font-size: 12.5px;

@@ -830,6 +830,69 @@ def climb_histogram(analysis: Analysis, *, width: int = 460, height: int = 260) 
 SPARK_EDGES = [-2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0]
 
 
+def polar(air, *, width: int = 460, height: int = 260) -> str:
+    """Sink against airspeed, measured on this flight rather than read off a wing.
+
+    Drawn even when `air.polar.usable` is False, because the *shape* is the evidence for
+    the refusal: an inverted curve — less sink the faster you fly — is the day, not the
+    glider, and a reader who can see that understands why nothing is claimed from it.
+    The caption carries the verdict; the chart carries the reason.
+    """
+    if air is None or not air.polar or len(air.polar.points) < 2:
+        return ""
+    points = air.polar.points
+    left, right, top, bottom = 46, 18, 16, 40
+    plot_w, plot_h = width - left - right, height - top - bottom
+    speeds = [p.airspeed for p in points]
+    sinks = [p.sink for p in points]
+    lo_v, hi_v = min(speeds) - 4, max(speeds) + 4
+    floor = math.floor(min(sinks) * 2 - 1) / 2
+
+    def sx(v):
+        return left + plot_w * (v - lo_v) / max(hi_v - lo_v, 1e-6)
+
+    def sy(s):
+        return top + plot_h * (s / floor)
+
+    marks, ticks = [], []
+    for point in points:
+        x, y = sx(point.airspeed), sy(point.sink)
+        marks.append(
+            f'<circle cx="{x:.1f}" cy="{y:.1f}" r="4" fill="{climb_color(point.sink)}">'
+            f"<title>{point.airspeed:.0f} km/h — {point.sink:+.2f} m/s, "
+            f"{point.samples} samples, glide "
+            f"{(point.airspeed / 3.6) / max(-point.sink, 1e-6):.1f}</title></circle>"
+        )
+        ticks.append(
+            f'<text x="{x:.1f}" y="{top + plot_h + 16}" class="axis-label axis-x">'
+            f"{point.airspeed:.0f}</text>"
+        )
+    line = " ".join(f"{sx(p.airspeed):.1f},{sy(p.sink):.1f}" for p in points)
+
+    grid = []
+    step = 0.5
+    value = 0.0
+    while value >= floor:
+        y = sy(value)
+        grid.append(f'<line x1="{left}" y1="{y:.1f}" x2="{width - right}" y2="{y:.1f}" />')
+        grid.append(
+            f'<text x="{left - 8}" y="{y + 4:.1f}" class="axis-label axis-y">'
+            f"{value:.1f}</text>"
+        )
+        value -= step
+
+    return f"""<svg viewBox="0 0 {width} {height}" class="chart chart-polar" role="img"
+     aria-label="Sink rate against airspeed, measured over this flight's glides">
+  <g class="grid">{"".join(grid)}</g>
+  <g class="track"><polyline points="{line}" stroke="var(--sink)" /></g>
+  {"".join(marks)}
+  <g class="axes">{"".join(ticks)}
+    <text x="{left + plot_w / 2:.1f}" y="{height - 6}" class="axis-title">airspeed km/h
+      · sink m/s</text>
+  </g>
+</svg>"""
+
+
 def climb_spark(series, start: int, stop: int, *, width: int = 66, height: int = 18) -> str:
     """A thumbnail of one climb's own climb-rate distribution.
 

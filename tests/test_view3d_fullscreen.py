@@ -57,6 +57,11 @@ function snap() {
       return {
         act: button.getAttribute('data-view3d-act'),
         box: box(button),
+        // A control the media query has removed is not a control that is badly
+        // placed. Headless Chrome reports `(hover: none)`, which is the touch case,
+        // and there the zoom pair is deliberately gone — pinch, drag and twist are
+        // all native on a touch screen and the panel supports all three.
+        shown: r.width > 0 && r.height > 0,
         inViewport: r.left >= 0 && r.top >= 0 &&
                     r.right <= view.w && r.bottom <= view.h,
         hit: hit ? (hit.tagName + '.' + (hit.className || '')) : null,
@@ -287,9 +292,22 @@ class TestMaximised:
         overhangs the viewport is off the screen, and one under another element is
         unclickable while looking perfectly placed."""
         for state in ("before", "after"):
-            for button in maximised[state]["buttons"]:
+            shown = [b for b in maximised[state]["buttons"] if b["shown"]]
+            assert shown, state
+            for button in shown:
                 assert button["inViewport"], (state, button)
                 assert button["clickable"], (state, button)
+
+    def test_touch_gets_the_bigger_targets_and_loses_the_nudge_pair(self, maximised):
+        """The mobile rule used to make every target *smaller* — 5px 7px padding and
+        10.5px type on the one device where a finger replaces a mouse. Headless Chrome
+        reports `(hover: none)`, so this is the touch branch being measured: zoom is
+        gone, and everything still on screen clears 44 px."""
+        shown = [b for b in maximised["before"]["buttons"] if b["shown"]]
+        acts = {b["act"] for b in shown}
+        assert "zoom-in" not in acts and "zoom-out" not in acts
+        for button in shown:
+            assert button["box"]["h"] >= 44, button
 
     def test_the_backing_store_follows_the_box(self, maximised):
         """A stale backing store renders blurred and, worse, projects to the wrong

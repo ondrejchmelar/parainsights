@@ -198,6 +198,9 @@ GLOBE_ICON = (
     '<path d="M1.6 6.1h12.8M1.6 9.9h12.8" stroke="currentColor" stroke-width="1.1" '
     'fill="none"/></svg>'
 )
+# The short forms the phone bar uses. `Satellite` alone is 78 px of a 340 px row.
+SHORT_LABEL = {"satellite": "Sat", "map": "Map", "off": "Relief"}
+
 EXPAND_ICON = (
     '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false">'
     '<path d="M1.5 5.5v-4h4M14.5 10.5v4h-4M14.5 5.5v-4h-4M1.5 10.5v4h4" fill="none" '
@@ -217,33 +220,86 @@ def panel(payload: dict, uid: str, *, kmz_uri: str | None = None,
             f'title="Download the KMZ and open it in Google Earth">'
             f'{GLOBE_ICON}<span>Open in Earth</span></a>'
         )
-    # The button names what is on screen, not what comes next: cycling through several
-    # styles, a fixed "Map" label says nothing about where you are.
     available = {**(payload.get("tiles") or {}), **(payload.get("basemaps") or {})}
     initial_style = "satellite" if "satellite" in available else next(iter(available), "")
-    basemap_label = TILE_SOURCES.get(initial_style, {}).get("label", "Map")
     credit = (available.get(initial_style) or {}).get("attribution", "")
+
+    # A segmented control, not a cycle. The old buttons named the state they were in,
+    # which is right for a two-state toggle and wrong for these: basemap has three
+    # states and exaggeration has three, and with a cycle you cannot see the options,
+    # cannot tell how many presses reach the one you want, and cannot jump. The segments
+    # double as a legend for what the document actually carries — and they agree with the
+    # keyboard, which can always address a state directly.
+    # Two labels per segment, the short one for a phone. At a true 390 px viewport the
+    # bar has 340 px to work in and the long labels wrapped it onto a second row — which
+    # made the controls *taller* than the cycle buttons they replaced, on the device with
+    # the least map to spare. Only one of the two is ever displayed, so a screen reader
+    # computes one name from it.
+    styles = [
+        (key, TILE_SOURCES.get(key, {}).get("label", key.title()),
+         SHORT_LABEL.get(key, key[:3].title()))
+        for key in available
+    ]
+    styles.append(("off", "Relief", "Relief"))
+    basemap_segments = "".join(
+        f'<button type="button" data-view3d-act="basemap" data-style="{key}" '
+        f'aria-pressed="{"true" if key == initial_style else "false"}"'
+        f'{" class=is-on" if key == initial_style else ""}>'
+        f'<span class="lbl-long">{label}</span><span class="lbl-short">{short}</span>'
+        f"</button>"
+        for key, label, short in styles
+    )
+    # `height` meant two things in this panel — the button meant vertical exaggeration
+    # and the caption under it discusses height above the ground. The glyph says which.
+    exaggerate_segments = "".join(
+        f'<button type="button" data-view3d-act="exaggerate" data-vertical="{factor}" '
+        # `x2` is not a name. The group carries "vertical exaggeration" but a screen
+        # reader announces the button, and "button, x2" says nothing on its own.
+        f'aria-label="'
+        + ("True vertical scale" if factor == 1 else f"Exaggerate height {factor} times")
+        + '" '
+        f'aria-pressed="{"true" if factor == 1 else "false"}"'
+        f'{" class=is-on" if factor == 1 else ""}>&#215;{factor}</button>'
+        for factor in (1, 2, 4)
+    )
     return f"""
     <div class="panel view3d-panel">
-      <canvas class="view3d" id="view3d-{uid}"
-              aria-label="Interactive three-dimensional view of the flight over terrain">
+      <canvas class="view3d" id="view3d-{uid}" tabindex="0"
+              aria-label="Interactive three-dimensional view of the flight over terrain.
+                          Arrow keys turn and tilt, question mark lists the keys.">
       </canvas>
       {earth}
       <p class="view3d-credit">{credit}</p>
+      <div class="view3d-hint" hidden></div>
+      <div class="view3d-keys" hidden role="dialog" aria-label="Keyboard controls">
+        <table>
+          <tr><th>&larr; &rarr;</th><td>turn left and right</td></tr>
+          <tr><th>&uarr; &darr;</th><td>tilt</td></tr>
+          <tr><th>shift + arrows</th><td>pan</td></tr>
+          <tr><th>+ &minus;</th><td>zoom</td></tr>
+          <tr><th>1 2 4</th><td>vertical exaggeration</td></tr>
+          <tr><th>s m r</th><td>satellite, map, relief</td></tr>
+          <tr><th>f</th><td>full screen</td></tr>
+          <tr><th>0</th><td>reset the view</td></tr>
+        </table>
+      </div>
       <div class="view3d-controls">
-        <button type="button" data-view3d-act="rotate-left" title="Rotate left">&#8630;</button>
-        <button type="button" data-view3d-act="rotate-right" title="Rotate right">&#8631;</button>
-        <button type="button" data-view3d-act="tilt-up" title="Tilt up">&#8593;</button>
-        <button type="button" data-view3d-act="tilt-down" title="Tilt down">&#8595;</button>
-        <button type="button" data-view3d-act="zoom-in" title="Zoom in">+</button>
-        <button type="button" data-view3d-act="zoom-out" title="Zoom out">&minus;</button>
-        <button type="button" data-view3d-act="basemap" class="is-on"
-                title="Satellite, map or bare terrain">{basemap_label}</button>
-        <button type="button" data-view3d-act="exaggerate" title="Vertical exaggeration">
-          &#215;1 height</button>
-        <button type="button" data-view3d-act="fullscreen" title="Full screen">
-          {EXPAND_ICON}</button>
-        <button type="button" data-view3d-act="reset">Reset view</button>
+        <div class="view3d-group" role="group" aria-label="What the ground shows">
+          {basemap_segments}
+        </div>
+        <div class="view3d-group" role="group" aria-label="Vertical exaggeration">
+          {exaggerate_segments}
+        </div>
+        <div class="view3d-group view3d-nudge" role="group" aria-label="Zoom">
+          <button type="button" data-view3d-act="zoom-out" aria-label="Zoom out"
+                  title="Zoom out">&minus;</button>
+          <button type="button" data-view3d-act="zoom-in" aria-label="Zoom in"
+                  title="Zoom in">+</button>
+        </div>
+        <button type="button" data-view3d-act="fullscreen" aria-label="Full screen"
+                title="Full screen">{EXPAND_ICON}</button>
+        <button type="button" data-view3d-act="reset" aria-label="Reset the view"
+                title="Reset the view">&#8635;</button>
       </div>
       <script type="application/json" class="view3d-data">{json.dumps(payload)}</script>
     </div>"""
@@ -304,29 +360,53 @@ canvas.view3d { display: block; width: 100%; aspect-ratio: 21 / 9; cursor: grab;
   color: var(--ink);
 }
 .view3d-earth:hover { background: var(--climb); border-color: var(--climb); color: var(--paper); }
-/* Top right, opposite the Earth link: at the bottom it fought the control row, which
-   on a phone wraps into the same space. */
-.view3d-credit { position: absolute; right: 12px; top: 12px; margin: 0; font-size: 10.5px;
+/* Top *left*, and the corner assignment is the whole point. The rose belongs top right,
+   which is where `render_map.py:274` already puts MapLibre's navigation control — two
+   viewers of the same flights should not disagree about where north lives — and that
+   corner was occupied by the required Esri/Maxar attribution. Attribution to the top
+   left is the robust move: on a 360 px phone the control bar is 327 px of the 340
+   available, so anything along the bottom edge collides with it, and bottom-left would
+   need a media query that top-left does not. Where the Earth link is present it owns
+   the corner and the credit sits under it. */
+.view3d-credit { position: absolute; left: 12px; top: 12px; margin: 0; font-size: 11px;
   color: var(--ink-2); background: color-mix(in srgb, var(--panel) 78%, transparent);
-  padding: 3px 7px; border-radius: 2px; max-width: 46%; text-align: right; }
+  padding: 3px 7px; border-radius: 2px; max-width: 46%; }
+.view3d-earth ~ .view3d-credit { top: 48px; }
+
+/* The keyboard hint, shown once the canvas takes focus: an affordance nobody knows
+   about is worth very little, and the caption teaches the gestures but not the keys. */
+.view3d-hint { position: absolute; left: 12px; bottom: 62px; font-size: 11.5px;
+  color: var(--ink); background: color-mix(in srgb, var(--panel) 88%, transparent);
+  border: 1px solid var(--rule-strong); border-radius: 2px; padding: 4px 9px; }
+.view3d-hint[hidden] { display: none; }
+.view3d-keys { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  background: color-mix(in srgb, var(--panel) 94%, transparent); color: var(--ink);
+  border: 1px solid var(--rule-strong); border-radius: 3px; padding: 12px 16px;
+  font-size: 12.5px; z-index: 3; }
+.view3d-keys[hidden] { display: none; }
+.view3d-keys th { text-align: right; padding: 2px 12px 2px 0; font-weight: 400;
+  color: var(--ink-2); white-space: nowrap; font-size: 11.5px; }
+.view3d-keys td { padding: 2px 0; }
 canvas.view3d.is-dragging { cursor: grabbing; }
 /* The sun and the wind are drawn *on the canvas*, not in the DOM: both are geographic
    directions and have to turn with the view, which means living in the same coordinate
    system as the terrain they describe. There is no control here any more — the sun
    follows the chart cursor, so the time comes from wherever the reader is pointing. */
 .view3d-controls { position: absolute; right: 10px; bottom: 10px; left: 10px; display: flex;
-  gap: 5px; flex-wrap: wrap; justify-content: flex-end; }
-@media (max-width: 640px) {
-  .view3d-controls { gap: 4px; }
-  .view3d-controls button { padding: 5px 7px; font-size: 10.5px; }
-}
+  gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+/* A group is one control made of segments, so it gets one border and its buttons share
+   the inner rules. */
+.view3d-group { display: inline-flex; border: 1px solid var(--rule-strong);
+  border-radius: 2px; overflow: hidden; background: var(--panel); }
+.view3d-group button { border: 0; border-radius: 0; }
+.view3d-group button + button { border-left: 1px solid var(--rule-strong); }
 .view3d-controls button {
   font: inherit;
   font-size: 11.5px;
   font-family: 'NarrowDisplay', "Liberation Sans Narrow", ui-sans-serif, sans-serif;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  padding: 4px 9px;
+  padding: 5px 10px;
   border: 1px solid var(--rule-strong);
   border-radius: 2px;
   background: var(--panel);
@@ -337,6 +417,22 @@ canvas.view3d.is-dragging { cursor: grabbing; }
 .view3d-controls button.is-on { background: var(--climb); border-color: var(--climb);
   color: var(--paper); }
 .view3d-controls button svg { display: block; }
+/* Touch replaces the mouse with a finger, so the mobile rule used to make the targets
+   *smaller* — 5px 7px padding and 10.5px type on the one device where 44 px is the
+   minimum. Backwards, and this is the correction: bigger on touch, and the zoom pair
+   goes entirely, because pinch, drag and twist are all native there and the panel
+   supports all three. */
+.view3d-controls .lbl-short { display: none; }
+@media (hover: none) {
+  .view3d-controls button { min-height: 44px; padding: 5px 11px; font-size: 12px; }
+  .view3d-controls .lbl-long { display: none; }
+  .view3d-controls .lbl-short { display: inline; }
+  /* Zoom goes because pinch is native there; reset goes because it is the action taken
+     least often and it was the *widest* button in the bar, in the prime thumb position.
+     Size the targets by how often they are pressed. */
+  .view3d-nudge, [data-view3d-act="reset"] { display: none; }
+  .view3d-hint { display: none; }
+}
 """
 
 
@@ -526,9 +622,13 @@ function initView3d(root, cursorTrack) {
   }
 
   function setBasemapStyle(next) {
+    // The segments carry their own labels, so this only marks which one is current.
+    // A segmented control that named the state it was in would have nothing to say
+    // about the other two, which is exactly what the old cycle button could not do.
     basemapButtons().forEach(function (button) {
-      button.textContent = labelFor(next);
-      button.classList.toggle('is-on', next !== 'off');
+      var on = button.dataset.style === next;
+      button.classList.toggle('is-on', on);
+      button.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
     if (next === 'off') { view.map = false; draw(); return; }
     view.map = true;
@@ -1328,7 +1428,10 @@ function initView3d(root, cursorTrack) {
     var wind = scene.wind || null;
     var sunNow = sunTrack ? sunAt(sunMinute) : null;
     if (!wind && !sunNow) return;
-    // Bottom left: the controls own the bottom right and the credit the top right.
+    // Top right. `render_map.py` already puts MapLibre's navigation control there by
+    // that library's own default, and two viewers of the same flights should not
+    // disagree about where north lives — so the credit moved to the top left to make
+    // room, which is also the corner that needs no media query on a phone.
     // Scaled off the backing store so it is the same size on a phone, in the panel and
     // full screen, where W changes by a factor of three.
     var scale = Math.max(0.75, Math.min(1.6, W / 1280));
@@ -1344,8 +1447,8 @@ function initView3d(root, cursorTrack) {
     // and the text afterwards clipped the second line off the bottom of a 21:9 panel.
     var lineHeight = 13 * scale;
     var textBlock = lines.length * lineHeight;
-    var cx = 16 * scale + radius;
-    var cy = H - (14 * scale + textBlock + radius);
+    var cx = W - (16 * scale + radius);
+    var cy = 14 * scale + radius;
 
     ctx.save();
     ctx.font = (11 * scale).toFixed(0) + 'px ui-sans-serif, sans-serif';
@@ -1398,15 +1501,17 @@ function initView3d(root, cursorTrack) {
     // Drawn with a dark stroke behind the fill rather than a box: the rose sits over
     // whatever the terrain happens to be, and white text alone disappears against a
     // limestone face or a snowfield.
-    ctx.textAlign = 'left';
+    // Right-aligned now the rose is in the right-hand corner: left-aligned from the
+    // circle's left edge, the longer of the two lines ran off the canvas.
+    ctx.textAlign = 'right';
     ctx.lineJoin = 'round';
     ctx.lineWidth = 3 * scale;
     ctx.strokeStyle = 'rgba(12,14,18,0.85)';
     ctx.fillStyle = 'rgba(255,255,255,0.95)';
     lines.forEach(function (line, i) {
       var y = cy + radius + (10 + i * 13) * scale;
-      ctx.strokeText(line, cx - radius, y);
-      ctx.fillText(line, cx - radius, y);
+      ctx.strokeText(line, cx + radius, y);
+      ctx.fillText(line, cx + radius, y);
     });
     ctx.restore();
   }
@@ -1793,52 +1898,114 @@ function initView3d(root, cursorTrack) {
 
   if (sunTrack && sunTrack.track && sunTrack.track.az) relight();
 
+  function setVertical(next) {
+    // True scale is the default because it is the only setting you can read height
+    // above ground from. But a 90 km flight through 2 km of air is 2 % of its own
+    // width, so the multiples are here for when the shape of the climbs matters more
+    // than their absolute height.
+    view.vertical = next;
+    root.querySelectorAll('[data-view3d-act="exaggerate"]').forEach(function (b) {
+      var on = Number(b.dataset.vertical) === next;
+      b.classList.toggle('is-on', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }
+
+  // One dispatcher for the buttons and for the keyboard, which is the point of binding
+  // keys to *act names* rather than to camera fields: a held arrow then anchors through
+  // the same `holdGround` the buttons use instead of drifting, and there is one code
+  // path to keep right rather than two that drift apart.
+  function runAct(act, arg) {
+    moving();
+    var centre = box();
+    var anchor = ('rotate-left rotate-right tilt-up tilt-down pan'.indexOf(act) >= 0)
+      ? groundUnder(centre.cx, centre.cy) : null;
+    if (act === 'rotate-left') view.yaw -= 0.35;
+    else if (act === 'rotate-right') view.yaw += 0.35;
+    else if (act === 'tilt-up') view.pitch = Math.min(1.45, view.pitch + 0.15);
+    else if (act === 'tilt-down') view.pitch = Math.max(0.18, view.pitch - 0.15);
+    else if (act === 'pan') { view.panX += arg[0]; view.panY += arg[1]; anchor = null; }
+    if (anchor) holdGround(anchor, centre.cx, centre.cy);
+    else if (act === 'fullscreen') {
+      toggleMaximise();
+      return;   // the resize path redraws once the box has its new size
+    }
+    else if (act === 'zoom-in') zoomAt(1.25, box().cx, box().cy);
+    else if (act === 'zoom-out') zoomAt(1 / 1.25, box().cx, box().cy);
+    else if (act === 'exaggerate') setVertical(arg);
+    else if (act === 'basemap') setBasemapStyle(arg);
+    else if (act === 'reset') {
+      view.yaw = -0.42; view.pitch = 0.46; view.zoom = 1; view.panX = 0; view.panY = 0;
+      setVertical(baseVertical);
+      if (order.length) setBasemapStyle(order[0]);
+    }
+    draw();
+  }
+
   root.querySelectorAll('[data-view3d-act]').forEach(function (button) {
     button.addEventListener('click', function () {
       var act = button.dataset.view3dAct;
-      moving();
-      var centre = box();
-      var buttonHold = ('rotate-left rotate-right tilt-up tilt-down'.indexOf(act) >= 0)
-        ? groundUnder(centre.cx, centre.cy) : null;
-      if (act === 'rotate-left') view.yaw -= 0.35;
-      else if (act === 'rotate-right') view.yaw += 0.35;
-      else if (act === 'tilt-up') view.pitch = Math.min(1.45, view.pitch + 0.15);
-      else if (act === 'tilt-down') view.pitch = Math.max(0.18, view.pitch - 0.15);
-      if (buttonHold) holdGround(buttonHold, centre.cx, centre.cy);
-      else if (act === 'fullscreen') {
-        toggleMaximise();
-        return;   // the resize path redraws once the box has its new size
-      }
-      else if (act === 'zoom-in') zoomAt(1.25, box().cx, box().cy);
-      else if (act === 'zoom-out') zoomAt(1 / 1.25, box().cx, box().cy);
-      else if (act === 'exaggerate') {
-        // True scale is the default because it is the only setting you can read height
-        // above ground from. But a 90 km flight through 2 km of air is 2 % of its own
-        // width, so the multiples are here for when the shape of the climbs matters
-        // more than their absolute height.
-        var ladder = [1, 2, 4];
-        var at = ladder.indexOf(view.vertical);
-        var next = ladder[(at + 1) % ladder.length];
-        view.vertical = next;
-        button.classList.toggle('is-on', next !== 1);
-        button.innerHTML = '&#215;' + next + ' height';
-      } else if (act === 'basemap') {
-        // Every style the document can show, then bare relief, then round again — so a
-        // document carrying one style degrades to a plain on/off toggle by itself.
-        var cycle = order.concat(['off']);
-        var at = cycle.indexOf(view.map ? style : 'off');
-        setBasemapStyle(cycle[(at + 1) % cycle.length]);
-      } else if (act === 'reset') {
-        view.yaw = -0.42; view.pitch = 0.46; view.zoom = 1; view.vertical = baseVertical;
-        view.panX = 0; view.panY = 0;
-        if (order.length) setBasemapStyle(order[0]);
-        root.querySelectorAll('[data-view3d-act="exaggerate"]').forEach(function (b) {
-          b.classList.remove('is-on');
-          b.innerHTML = '&#215;1 height';
-        });
-      }
-      draw();
+      runAct(act, act === 'exaggerate' ? Number(button.dataset.vertical)
+                : act === 'basemap' ? button.dataset.style : null);
     });
+  });
+
+  // Keyboard control of the view itself, which is what lets the six nudge buttons go.
+  // Three things this has to get right, and each of them was a bug waiting to happen:
+  // the handler is on the *canvas*, not on the document — a report holds several panels
+  // and a document-level listener would drive whichever one it found first; arrow keys
+  // are prevented from scrolling, but only while the canvas holds focus, or tilting the
+  // terrain scrolls the report out from under it; and every binding goes through
+  // `runAct`, so a held key anchors exactly as a held button does.
+  var hint = root.querySelector('.view3d-hint');
+  var keysPanel = root.querySelector('.view3d-keys');
+  var PAN_STEP = 40;
+  var KEYS = {
+    ArrowLeft: ['rotate-left'], ArrowRight: ['rotate-right'],
+    ArrowUp: ['tilt-up'], ArrowDown: ['tilt-down'],
+    '+': ['zoom-in'], '=': ['zoom-in'], '-': ['zoom-out'], '_': ['zoom-out'],
+    '1': ['exaggerate', 1], '2': ['exaggerate', 2], '4': ['exaggerate', 4],
+    s: ['basemap', 'satellite'], m: ['basemap', 'map'], r: ['basemap', 'off'],
+    f: ['fullscreen'], '0': ['reset']
+  };
+  var SHIFT_PAN = {
+    ArrowLeft: [PAN_STEP, 0], ArrowRight: [-PAN_STEP, 0],
+    ArrowUp: [0, PAN_STEP], ArrowDown: [0, -PAN_STEP]
+  };
+
+  canvas.addEventListener('focus', function () {
+    if (hint) { hint.textContent = 'arrows turn and tilt · ? for keys'; hint.hidden = false; }
+  });
+  canvas.addEventListener('blur', function () {
+    if (hint) hint.hidden = true;
+    if (keysPanel) keysPanel.hidden = true;
+  });
+  canvas.addEventListener('keydown', function (event) {
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
+    if (event.key === '?' || (event.key === '/' && event.shiftKey)) {
+      if (keysPanel) keysPanel.hidden = !keysPanel.hidden;
+      event.preventDefault();
+      return;
+    }
+    if (event.key === 'Escape' && keysPanel && !keysPanel.hidden) {
+      keysPanel.hidden = true;
+      event.preventDefault();
+      return;
+    }
+    if (event.shiftKey && SHIFT_PAN[event.key]) {
+      runAct('pan', SHIFT_PAN[event.key]);
+      event.preventDefault();
+      return;
+    }
+    var binding = KEYS[event.key] || KEYS[event.key.toLowerCase()];
+    if (!binding) return;
+    // A basemap key naming a style this document does not carry does nothing rather
+    // than blanking the ground: an embedded report may hold one style only.
+    if (binding[0] === 'basemap' && binding[1] !== 'off' && order.indexOf(binding[1]) < 0) {
+      return;
+    }
+    runAct(binding[0], binding[1]);
+    event.preventDefault();
   });
 
   // Full screen is the real Fullscreen API, with the in-page maximise as the fallback.

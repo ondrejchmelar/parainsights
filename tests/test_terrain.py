@@ -1,5 +1,7 @@
 """Terrain grid arithmetic and the 3D payload. No network: the grid is synthetic."""
 
+import re
+
 import numpy as np
 import pytest
 
@@ -147,15 +149,30 @@ class TestView3dPayload:
         assert set(both["basemaps"]) == {"satellite", "map"}
         assert both["tiles"] is None
 
-    def test_the_basemap_button_names_the_style_it_is_showing(self, ramp, tmp_path):
+    def test_the_basemap_offers_one_segment_per_style_the_document_carries(
+        self, ramp, tmp_path
+    ):
+        """A cycle that names its current state does not scale past two.
+
+        The button used to name what was on screen, which is right for a two-state
+        toggle and wrong here: with three states you cannot see the options, cannot tell
+        how many presses reach the one you want, and cannot jump. The segments are also
+        a legend for what the document actually holds — so a report carrying imagery
+        only must not offer a Map segment that would blank the ground.
+        """
         from tracklog_viewer import igc, view3d
         from tracklog_viewer.analysis import analyse
         from tests.test_analysis import build, circling
 
         analysis = analyse(igc.parse(build(tmp_path / "t.igc", circling(200))))
-        markup = view3d.panel(view3d.data(analysis, ramp), "x")
-        button = markup[markup.index('data-view3d-act="basemap"'):]
-        assert button[:button.index("</button>")].endswith(">Satellite")
+        payload = view3d.data(analysis, ramp, basemaps={"satellite": _fake_basemap()},
+                              tiles=False)
+        markup = view3d.panel(payload, "x")
+        styles = re.findall(r'data-style="([a-z]+)"', markup)
+        assert styles == ["satellite", "off"]
+        # And the one it starts on is the one marked, in both the class and ARIA.
+        assert 'data-style="satellite" aria-pressed="true" class=is-on' in markup
+        assert 'data-style="off" aria-pressed="false"' in markup
 
     def test_cursor_track_matches_sample_length(self, ramp, tmp_path):
         from tracklog_viewer import igc, view3d

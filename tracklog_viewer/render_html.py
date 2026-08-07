@@ -14,7 +14,8 @@ import json
 import math
 from pathlib import Path
 
-from . import charts, debrief, quicklook, terrain as terrain_module, view3d, view3d_gl
+from . import airmass as airmass_module, charts, debrief, quicklook, \
+    terrain as terrain_module, view3d, view3d_gl
 from numpy import median as np_median
 from .analysis import TURN_RESOLUTION_LIMIT, Analysis, Phase
 
@@ -193,7 +194,7 @@ body {
 .identity { display: flex; gap: 26px; flex-wrap: wrap; }
 .identity div { display: flex; flex-direction: column; }
 .identity dt, .identity .key {
-  font-size: 10.5px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.12em;
   color: var(--ink-3);
@@ -240,7 +241,7 @@ section { margin-top: 34px; }
   flex-wrap: wrap; }
 .chart-head .chart-title { margin-bottom: 0; }
 .toggle-small { margin: 4px 6px 6px 0; }
-.toggle-small .toggle-button { font-size: 10.5px; padding: 4px 9px; }
+.toggle-small .toggle-button { font-size: 11px; padding: 5px 10px; }
 
 /* Stat tiles -------------------------------------------------------------- */
 .stats {
@@ -253,7 +254,7 @@ section { margin-top: 34px; }
 .stat { background: var(--panel); padding: 12px 14px 13px; }
 .stat .key {
   display: block;
-  font-size: 10.5px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.12em;
   color: var(--ink-3);
@@ -367,16 +368,23 @@ section { margin-top: 34px; }
 .show-me:hover { color: var(--ink); border-color: var(--ink-3); }
 .finding.is-pinned { border-color: var(--climb); }
 
+/* Five columns of circling mechanics — a whole sub-story, and a specialist one. Hidden
+   rather than dropped: some pilot somewhere wants m/turn, and the cost of keeping it is
+   a toggle. At a true 390 px viewport the 16-column table was 1 023 px in a 340 px
+   container, three screens of horizontal scrolling with nothing on screen to say so. */
+.col-circling { display: none; }
+.show-circling .col-circling { display: table-cell; }
+
 .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 22px; }
 .hero-grid { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr); gap: 16px; }
 @media (max-width: 780px) { .hero-grid { grid-template-columns: 1fr; } }
 
 /* Charts ------------------------------------------------------------------ */
 .chart { display: block; width: 100%; height: auto; }
-.chart .axis-label { font-size: 10.5px; fill: var(--ink-3); }
+.chart .axis-label { font-size: 11px; fill: var(--ink-3); }
 .chart .axis-y { text-anchor: end; }
 .chart .axis-x { text-anchor: middle; }
-.chart .axis-title { font-size: 10.5px; fill: var(--ink-3); text-anchor: middle;
+.chart .axis-title { font-size: 11px; fill: var(--ink-3); text-anchor: middle;
   text-transform: uppercase; letter-spacing: 0.1em; }
 .chart .grid line { stroke: var(--rule); stroke-width: 1; }
 .chart .axes line, .chart .axis { stroke: var(--rule-strong); stroke-width: 1; }
@@ -385,14 +393,14 @@ section { margin-top: 34px; }
 
 .chart-profile .drops line { stroke: var(--shadow-ink); stroke-width: 0.7; opacity: 0.45; }
 .chart-profile .endpoint { fill: var(--panel); stroke: var(--ink); stroke-width: 2; }
-.chart-profile .endpoint-label { font-size: 10.5px; fill: var(--ink-2); text-anchor: middle;
+.chart-profile .endpoint-label { font-size: 11px; fill: var(--ink-2); text-anchor: middle;
   text-transform: uppercase; letter-spacing: 0.1em; }
 .chart .mark circle { stroke-width: 2; }
-.chart .mark-label { font-size: 10.5px; fill: var(--ink); text-anchor: middle; }
+.chart .mark-label { font-size: 11px; fill: var(--ink); text-anchor: middle; }
 .chart .mark.active circle { fill: var(--climb); stroke: var(--panel); }
 
 .chart .reference { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 6 4; }
-.chart .reference-label { font-size: 10px; fill: var(--ink-3); text-anchor: end;
+.chart .reference-label { font-size: 11px; fill: var(--ink-3); text-anchor: end;
   text-transform: uppercase; letter-spacing: 0.07em; }
 .chart .reference-label.band-label { text-anchor: start; }
 
@@ -426,10 +434,10 @@ section { margin-top: 34px; }
 
 .chart-wind .wind-dot { fill: var(--panel); stroke: var(--sink); stroke-width: 2; }
 .chart-wind .wind-arrow { stroke: var(--sink); stroke-width: 1.6; }
-.chart-wind .wind-number { font-size: 10px; fill: var(--ink); text-anchor: middle;
+.chart-wind .wind-number { font-size: 11px; fill: var(--ink); text-anchor: middle;
   font-variant-numeric: tabular-nums; }
 .chart-wind .wind-point.active .wind-dot { fill: var(--climb); stroke: var(--panel); }
-.chart-wind .wind-time { font-size: 10px; fill: var(--ink-3); font-variant-numeric: tabular-nums; }
+.chart-wind .wind-time { font-size: 11px; fill: var(--ink-3); font-variant-numeric: tabular-nums; }
 .chart-wind .model polyline { fill: none; stroke: var(--neutral); stroke-width: 2;
   stroke-dasharray: 5 3; }
 .chart-wind .model .model-dot { fill: var(--neutral); }
@@ -450,7 +458,7 @@ section { margin-top: 34px; }
 .legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 12px 0 0; padding: 0; list-style: none; }
 .legend li { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink-2); }
 .legend .legend-title { color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.09em;
-  font-size: 10.5px; }
+  font-size: 11px; }
 
 /* Segmented control ------------------------------------------------------- */
 .toggle { display: inline-flex; margin-bottom: 12px; border: 1px solid var(--rule-strong);
@@ -493,6 +501,10 @@ section { margin-top: 34px; }
   flex-direction: column;
   gap: 1px;
 }
+/* The worst defect on the page: the control that *removes a flight from the document*
+   was 19 x 19 px — under half the minimum touch target — sitting immediately beside the
+   control you actually meant to press. The visible glyph stays small, and a ::before
+   pseudo-element grows the hit area to 44 x 44 without moving anything. */
 .tab-close {
   position: absolute;
   top: 3px;
@@ -510,6 +522,15 @@ section { margin-top: 34px; }
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.12s;
+}
+.tab-close::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  transform: translate(-50%, -50%);
 }
 .tab:hover .tab-close, .tab-close:focus-visible { opacity: 1; }
 .tab-close:hover { background: var(--climb); color: var(--paper); }
@@ -569,11 +590,11 @@ section { margin-top: 34px; }
 
 /* Tables ------------------------------------------------------------------ */
 .table-scroll { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th {
   text-align: right;
   font-weight: 400;
-  font-size: 10.5px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--ink-3);
@@ -589,7 +610,7 @@ tbody tr:hover, tbody tr:focus-visible { background: var(--panel-2); outline: no
 tr.is-tow td:first-child { color: var(--tow); }
 .tag {
   display: inline-block;
-  font-size: 10.5px;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.09em;
   padding: 1px 6px;
@@ -608,22 +629,39 @@ svg.ldbar { display: block; flex: none; }
 .dir { color: var(--ink-3); }
 
 /* Notes ------------------------------------------------------------------- */
-.notes { columns: 2 300px; column-gap: 34px; color: var(--ink-2); font-size: 13.5px; }
+.notes { columns: 2 300px; column-gap: 34px; color: var(--ink-2); font-size: 14px; }
 .notes p { margin: 0 0 11px; break-inside: avoid; }
 .notes strong { color: var(--ink); font-weight: 600; }
-code { font-family: ui-monospace, "DejaVu Sans Mono", monospace; font-size: 0.92em;
+code, kbd { font-family: ui-monospace, "DejaVu Sans Mono", monospace; font-size: 0.92em;
   background: var(--panel-2); padding: 1px 4px; border-radius: 2px; }
+kbd { border: 1px solid var(--rule-strong); }
 
 footer { margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--rule);
   color: var(--ink-3); font-size: 12.5px; display: flex; justify-content: space-between;
   gap: 16px; flex-wrap: wrap; }
 
 :focus-visible { outline: 2px solid var(--climb); outline-offset: 2px; }
+/* Touch: 44 px on every control, which is the minimum a finger hits reliably. The page
+   had 18 of its 22 buttons under it, typically 26-33 x 28 px. */
+@media (hover: none) {
+  .toggle-button, .show-me, .tab-open { min-height: 44px; }
+}
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+/* An 11 px floor on everything, and 12 px on a phone. Measured on the report as it
+   stood: 884 text nodes under 11 px, 757 of them at 10.5. Most of them are SVG axis
+   labels, which is an accessibility problem as well as a legibility one — SVG text does
+   not respond to the reader's own font-size preference, so a reader who has turned type
+   up gets no relief from it. Where an axis is crowded the fix is fewer ticks, never
+   smaller type. */
 @media (max-width: 620px) {
   .notes { columns: 1; }
+  body { font-size: 15px; }
+  .chart .axis-label, .chart .axis-title, .chart .mark-label,
+  .chart .reference-label, .chart-wind .wind-number, .chart-wind .wind-time,
+  .chart-profile .endpoint-label { font-size: 12px; }
+  th, .stat .key, .identity .key, .tag { font-size: 12px; }
   .masthead h1 { font-size: 30px; }
   /* Charts get the full width of the screen on a phone: the page padding costs more
      than it gives when the panel is the content. */
@@ -633,6 +671,13 @@ footer { margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--rule);
   .view3d-panel { margin-left: -8px; margin-right: -8px; }
   .section-head { flex-direction: column; gap: 4px; }
   .section-head p { max-width: none; }
+  /* The tables, which had no media query at all. Eight columns at desktop padding is
+     522 px in a 340 px container; tightened, and with the trend sparkline dropped, the
+     rows fit the screen. The sparkline is the one column that says nothing a number
+     could — it goes rather than the numbers around it. */
+  td { padding: 7px 5px; }
+  th { padding: 0 5px 7px; }
+  td.spark-cell, th.col-spark { display: none; }
 }
 """
 
@@ -806,6 +851,19 @@ function initFlight(root) {
 
   root.querySelectorAll('.show-me[data-sample]').forEach(function (button) {
     button.addEventListener('click', function () { pin(button); });
+  });
+
+  root.querySelectorAll('.toggle-button[data-columns]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      var on = !button.classList.contains('is-on');
+      button.classList.toggle('is-on', on);
+      button.setAttribute('aria-pressed', on ? 'true' : 'false');
+      button.innerHTML = (on ? '\u2296' : '\u2295') + ' circling detail';
+      // Scoped to this flight's table, not the document's: several flights share the
+      // page and each carries its own climbs table.
+      var table = button.parentNode.parentNode.querySelector('table');
+      if (table) table.classList.toggle('show-circling', on);
+    });
   });
 
   root.querySelectorAll('tr[data-segment]').forEach(function (row) {
@@ -1063,16 +1121,13 @@ def _thermal_rows(analysis: Analysis) -> str:
             f"<td>{segment.finish_altitude:.0f}</td>"
             f'<td><span class="bar-cell">{segment.average_climb:+.2f}'
             f'<span class="bar" style="width:{width:.0f}px"></span></span></td>'
-            f"<td>{segment.maximum_climb:+.1f}</td>"
             f"<td>{efficiency}</td>"
-            f"<td>{turns}</td>"
-            f"<td>{per_turn}</td>"
-            f"<td>{direction}</td>"
-            f"<td>{circle}</td>"
-            f"<td>{radius}</td>"
-            f"<td>{wind}</td>"
-            f'<td class="spark-cell">'
-            f'{charts.climb_spark(analysis.series, segment.start, segment.stop)}</td>'
+            f'<td class="col-circling">{turns}</td>'
+            f'<td class="col-circling">{per_turn}</td>'
+            f'<td class="col-circling">{direction}</td>'
+            f'<td class="col-circling">{circle}</td>'
+            f'<td class="col-circling">{radius}</td>'
+            f'<td class="col-circling">{wind}</td>'
             f'<td class="spark-cell">'
             f'{charts.climb_trend(analysis.series, segment.start, segment.stop)}</td>'
             f"</tr>"
@@ -1091,13 +1146,97 @@ def _glide_rows(analysis: Analysis) -> str:
             f"<td>{segment.start_time}</td>"
             f"<td>{_short_duration(segment.duration)}</td>"
             f"<td>{segment.distance / 1000:.1f}</td>"
-            f"<td>{segment.altitude_change:+.0f}</td>"
             f'<td><span class="bar-cell">{ld}'
             f'{charts.ld_bar(segment.average_ld, best=best)}</span></td>'
             f"<td>{segment.average_speed:.0f}</td>"
             f"</tr>"
         )
     return "".join(rows)
+
+
+def _airmass_section(analysis: Analysis, air, uid: str = "") -> str:
+    """The flight in the air's own frame: corrected glide, the polar, circle wander.
+
+    Everything here inherits the wind estimate's uncertainty and says so — there is no
+    airspeed anywhere in the sample set (49 of 50 files carry latitude and longitude
+    decimals and nothing else), so "through the air" is always inferred. The section
+    exists at all only when there is something measured to put in it.
+    """
+    if air is None:
+        return ""
+    chart = charts.polar(air)
+    rows = []
+    if air.ground_ld is not None:
+        rows.append(("glide over the ground", f"{air.ground_ld:.1f}",
+                     "median over glides longer than a minute"))
+    if air.air_ld is not None:
+        rows.append(("glide through the air", f"{air.air_ld:.1f}",
+                     "the same glides, with the wind field subtracted"))
+    if air.airspeed is not None:
+        rows.append(("airspeed", f"{air.airspeed:.0f} km/h",
+                     f"against {air.ground_speed:.0f} km/h over the ground"))
+    if air.wander is not None:
+        rows.append(("circle wander", f"{air.wander:.0f} m",
+                     f"centre to centre in the air frame, {air.wander_climbs} climbs"))
+    if not rows and not chart:
+        return ""
+
+    field = air.field
+    source = (
+        f"{len(field.soundings)} circled climbs"
+        if field.measured else "the model profile only"
+    )
+    verdict = (
+        "The glide through the air is not reported: the wind field measures "
+        f"{field.confidence:.2f} and below {airmass_module.MIN_CONFIDENCE:.2f} a "
+        "corrected number is really an uncorrected one wearing a correction."
+        if air.air_ld is None
+        else f"The field is interpolated from {source} in time and in height, at "
+             f"confidence {field.confidence:.2f}."
+    )
+    polar_note = ""
+    if air.polar and air.polar.points:
+        best = air.polar.best_glide
+        polar_note = (
+            f"The curve below is sink against airspeed over this flight's own glides, "
+            f"binned and taken as a median per bin. "
+            + (
+                f"It rises monotonically, which is what a wing does, and its best bin is "
+                f"{best[1]:.1f} at {best[0]:.0f} km/h."
+                if air.polar.usable
+                else "It is <strong>not</strong> monotone — sink does not increase "
+                     "steadily with speed — so it is measuring the air the glides "
+                     "happened to be in as much as the glider, and nothing is claimed "
+                     "from it. One flight is not a polar; an archive of them would be."
+            )
+        )
+
+    chips = "".join(
+        f'<div class="stat"><span class="key">{key}</span>'
+        f'<span class="stat-value">{value}</span><span class="sub">{sub}</span></div>'
+        for key, value, sub in rows
+    )
+    return f"""
+  <section>
+    <div class="section-head">
+      <h2>Through the air</h2>
+      <p>The same flight with the day subtracted, so what is left is the glider. Every
+         number here is inferred from the wind, because no logger in the sample set
+         records airspeed.</p>
+    </div>
+    <div class="stats">{chips}</div>
+    {f'<div class="grid-2" style="margin-top:22px"><div>'
+     f'<div class="panel" style="padding:14px 16px 6px">{chart}</div>'
+     f'<p class="caption">{polar_note}</p></div>'
+     f'<div><p class="caption" style="margin-top:0">{verdict} '
+     f'Wind from circle drift is only trusted from climbs actually circled in one '
+     f'direction for two full turns, and the flight-level average is deliberately not '
+     f'used — it measures 0.36–0.39 on the reference flights, which is not good enough '
+     f'to correct a glide with. Circle wander is the centre of each revolution in the '
+     f'air frame: over the ground a thermal&rsquo;s circles march downwind and the '
+     f'centre moves by exactly the drift, which says nothing about the pilot.</p></div>'
+     f'</div>' if chart else f'<p class="caption">{verdict}</p>'}
+  </section>"""
 
 
 def _wind_shear_note(analysis: Analysis) -> str:
@@ -1229,8 +1368,6 @@ def _meteo_section(analysis: Analysis, meteo, uid: str = "") -> str:
             ("boundary layer", f"{meteo.boundary_layer_top:,.0f} m".replace(",", " "),
              "model mixing depth")
         )
-    chips.append(("you reached", f"{flight_top:,.0f} m".replace(",", " "),
-                  "highest point, GPS datum"))
     if meteo.cape is not None:
         chips.append(("cape", f"{meteo.cape:.0f} J/kg",
                       f"low cloud {meteo.cloud_cover_low:.0f}%"
@@ -1334,7 +1471,8 @@ def _meteo_profile(analysis: Analysis, meteo, uid: str, rows: list[str]) -> str:
 def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
                  basemaps=None, fetch_tiles: bool = True,
                  kmz: bytes | None = None, uid: str = "f0",
-                 hidden: bool = False, verdict=None, findings=None) -> str:
+                 hidden: bool = False, metrics=None, air=None, verdict=None,
+                 findings=None) -> str:
     """One flight's sections, from masthead to footer.
 
     ``meteo`` and ``route`` are optional: the report degrades to the flight's own
@@ -1387,24 +1525,42 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
     # hosts the cursor, so an index means the same fix everywhere.
     sample = _sample_indices(analysis)
 
+    # Six tiles, and the cuts are what the verdict strip above already answers. `XC
+    # DISTANCE`, `HEIGHT GAINED` and the mean climb are up there; repeating them here is
+    # the redundancy that made the report an instrument panel. `MAX ALTITUDE` and the
+    # meteo section's `YOU REACHED` were the same number printed twice, 2 000 px apart,
+    # and `CEILING USED` folds both of them and the cloudbase into the one figure that
+    # means something — 3 774 of 3 954 m is 95%. Without `--meteo` there is no ceiling to
+    # divide by, so the tile falls back to the height itself rather than going blank.
+    ceiling_tile = (
+        _stat("ceiling used", f"{metrics.ceiling_used * 100:.0f}", "%",
+              f"{summary.max_altitude + offset:,.0f} of {metrics.ceiling:,.0f} m at "
+              f"{peak_time}".replace(",", " "))
+        if metrics is not None and metrics.ceiling_used is not None
+        else _stat("max altitude", f"{summary.max_altitude:,.0f}".replace(",", " "), " m",
+                   f"at {peak_time}"
+                   + (f" · {summary.max_altitude + offset:,.0f} m GPS".replace(",", " ")
+                      if offset else ""))
+    )
+    glide = metrics.median_ld if metrics is not None else None
+    speed = metrics.xc_speed if metrics is not None else None
     tiles = [
         _stat("airtime", _duration(summary.duration), "",
               f"{summary.takeoff_time} – {summary.landing_time}"),
-        _stat("xc distance", f"{route.km:.2f}" if route else "—", " km",
-              f"{SHAPE_LABEL.get(route.shape, 'open distance')} · "
-              f"{summary.track_distance / 1000:.0f} km flown, "
-              f"{summary.straight_distance / 1000:.0f} km straight" if route else ""),
-        _stat("max altitude", f"{summary.max_altitude:,.0f}".replace(",", " "), " m",
-              f"at {peak_time}"
-              + (f" · {summary.max_altitude + offset:,.0f} m GPS".replace(",", " ") if offset else "")),
-        _stat("height gained", f"{summary.total_gain:,.0f}".replace(",", " "), " m",
-              f"best single climb {summary.max_gain:.0f} m"),
+        ceiling_tile,
         _stat("climbs", str(len(thermals)), "",
               (f"{total_turns:.0f} turns · " if not coarse else "")
               + f"{climb_rate:+.2f} m/s mean"),
         _stat("wind", f"{analysis.wind.kmh:.0f}" if analysis.wind else "—", " km/h",
               f"from {analysis.wind.cardinal} · averaged over "
               f"{len([s for s in thermals if s.wind])} climbs" if analysis.wind else ""),
+        # A median over glides worth the name, never the maximum: the best glide on the
+        # reference flight reads 116.2, which is a glide that crossed lift.
+        _stat("median glide", f"{glide:.1f}" if glide else "—", "",
+              f"over {len(analysis.glides)} glides, over the ground"),
+        _stat("xc speed", f"{speed:.0f}" if speed else "—", " km/h",
+              f"over the scored {route.km:.0f} km" if route and speed
+              else f"{summary.track_distance / 1000:.0f} km flown"),
     ]
     if tow:
         tiles.append(
@@ -1452,16 +1608,16 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
   <section>
     <div class="section-head">
       <h2>The flight over the ground</h2>
-      <p>Drag to pan, right-drag or ctrl-drag to rotate and tilt, scroll to zoom. The
-         terrain is a real DEM carried inside this page; the Satellite button switches
-         between imagery, a map and bare relief. Hovering the charts below moves the
-         marker here too.</p>
+      <p>Drag to pan, right-drag or ctrl-drag to rotate and tilt, scroll to zoom — or
+         click the view and use the arrow keys, with <kbd>?</kbd> for the rest. The
+         terrain is a real DEM carried inside this page. Hovering the charts below moves
+         the marker here too.</p>
     </div>
     {view3d.panel(payload, uid, kmz_uri=kmz_uri,
                   kmz_name=f"{summary.date}-{(summary.site or 'flight').replace(' ', '-')}.kmz")}
     <p class="caption view3d-caption">Terrain {terrain.elevations.min():.0f}–{terrain.elevations.max():.0f} m
       over {terrain.cols}&#215;{terrain.rows} samples, drawn at true vertical scale so height
-      above ground can be judged directly — the &#215;1 button cycles to &#215;2 and &#215;4. Lowest
+      above ground can be judged directly — &#215;2 and &#215;4 exaggerate it. Lowest
       ground clearance of the flight was {clearance.min():.0f}&nbsp;m, median
       {float(np_median(clearance)):.0f}&nbsp;m.
       {charts.escape("; ".join(sorted({b.attribution for b in (basemaps or {}).values()
@@ -1470,6 +1626,7 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
   </section>"""
 
     wind_chart = charts.wind_profile(analysis, meteo=meteo, uid=uid)
+    airmass_section = _airmass_section(analysis, air, uid)
     histogram = charts.climb_histogram(analysis)
     meteo_section = _meteo_section(analysis, meteo, uid)
 
@@ -1582,29 +1739,36 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
   <section>
     <div class="section-head">
       <h2>Climbs</h2>
-      <p><strong>Turns</strong> is <em>full circles</em>: the heading coming all the way round,
-         in one direction. Swinging the nose does not count, so a wingover — 180&#176; out and
-         180&#176; back — is nothing here, and a climb worked both ways adds up the circles from
-         each rather than cancelling them out. A part circle scores zero.
-         <strong>m/turn</strong> is what a circle buys you: height gained per circle,
-         so a thermal worked tightly in the core shows more metres per turn than the same
-         average climb ground out in wide circles. <strong>Eff</strong> is mean climb over the
-         best 20&nbsp;s of the same climb — the closest single number to &ldquo;did you stay in
-         the core&rdquo;. Reversals and radius say how tidily it was flown.{" This track is sampled every " + f"{summary.sample_interval:.0f}" + " s, which is too coarse to resolve a circle, so the turn columns are blank." if coarse else ""}</p>
+      <p>The climb, what it gave, and whether it was flown tidily. <strong>Eff</strong> is
+         mean climb over the best 20&nbsp;s of the same climb — the closest single number to
+         &ldquo;did you stay in the core&rdquo;. The five columns of circling mechanics are a
+         sub-story of their own and sit behind the toggle.{" This track is sampled every " + f"{summary.sample_interval:.0f}" + " s, which is too coarse to resolve a circle, so the turn columns are blank." if coarse else ""}</p>
+    </div>
+    <div class="toggle toggle-small" role="group" aria-label="Circling detail">
+      <button type="button" class="toggle-button" data-columns="circling"
+              aria-pressed="false">&#8853; circling detail</button>
     </div>
     <div class="panel" style="padding:14px 16px 4px">
       <div class="table-scroll">
         <table>
           <thead><tr>
             <th>#</th><th>start</th><th>time</th><th>gain m</th><th>top m</th>
-            <th>avg m/s</th><th>best m/s</th><th>eff</th><th>turns</th><th>m/turn</th>
-            <th>dir</th><th>s/turn</th><th>radius m</th><th>wind km/h</th>
-            <th>rates</th><th>over time &rarr;</th>
+            <th>avg m/s</th><th>eff</th>
+            <th class="col-circling">turns</th><th class="col-circling">m/turn</th>
+            <th class="col-circling">dir</th><th class="col-circling">s/turn</th>
+            <th class="col-circling">radius m</th><th class="col-circling">wind km/h</th>
+            <th class="col-spark">over time &rarr;</th>
           </tr></thead>
           <tbody>{_thermal_rows(analysis)}</tbody>
         </table>
       </div>
     </div>
+    <p class="caption"><strong>Turns</strong>, behind the toggle, is <em>full circles</em>:
+      the heading coming all the way round in one direction, so a wingover — 180&#176; out and
+      180&#176; back — is nothing here, and a climb worked both ways adds up the circles from
+      each rather than cancelling them out. <strong>m/turn</strong> is what a circle buys you,
+      so a thermal cored tightly shows more metres per turn than the same average climb
+      ground out in wide circles.</p>
   </section>
 
   <section>
@@ -1632,6 +1796,8 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
       </div>
     </div>
   </section>
+
+{airmass_section}
 
 {meteo_section}
 
@@ -1739,8 +1905,12 @@ def _debrief_for(analysis: Analysis, *, meteo=None, route=None, terrain=None,
                  shape: str = "") -> tuple:
     """Measure a flight and rank its findings, in one place for both renderers."""
     clearance = terrain_module.clearance(terrain, analysis) if terrain is not None else None
-    metrics = debrief.measure(analysis, meteo=meteo, route=route, clearance=clearance)
+    air = airmass_module.analyse(analysis, meteo=meteo)
+    metrics = debrief.measure(analysis, meteo=meteo, route=route, clearance=clearance,
+                              air=air)
     return (
+        metrics,
+        air,
         debrief.verdict(analysis, metrics, route=route, shape=shape, meteo=meteo),
         debrief.findings(analysis, metrics, meteo=meteo, route=route, shape=shape),
     )
@@ -1751,7 +1921,7 @@ def render(analysis: Analysis, *, meteo=None, route=None, terrain=None,
            shape: str = "") -> str:
     """A report for a single flight, with the own-track picker alongside it."""
     summary = analysis.summary
-    verdict, findings = _debrief_for(
+    metrics, air, verdict, findings = _debrief_for(
         analysis, meteo=meteo, route=route, terrain=terrain, shape=shape
     )
     title = f"{summary.date} · {summary.site or 'flight'} — flight review"
@@ -1775,7 +1945,7 @@ def render(analysis: Analysis, *, meteo=None, route=None, terrain=None,
             _flight_body(
                 analysis, meteo=meteo, route=route, terrain=terrain,
                 basemaps=basemaps, fetch_tiles=fetch_tiles, kmz=kmz, uid="f0",
-                verdict=verdict, findings=findings,
+                metrics=metrics, air=air, verdict=verdict, findings=findings,
             )
         ],
         tabs,
@@ -1800,7 +1970,7 @@ def render_multi(reports: list[dict]) -> str:
         )
         for report in reports
     ]
-    debrief.compare([verdict for verdict, _ in debriefs])
+    debrief.compare([verdict for _, _, verdict, _ in debriefs])
 
     bodies, buttons = [], []
     for index, report in enumerate(reports):
@@ -1818,8 +1988,10 @@ def render_multi(reports: list[dict]) -> str:
                 kmz=report.get("kmz"),
                 uid=uid,
                 hidden=index > 0,
-                verdict=debriefs[index][0],
-                findings=debriefs[index][1],
+                metrics=debriefs[index][0],
+                air=debriefs[index][1],
+                verdict=debriefs[index][2],
+                findings=debriefs[index][3],
             )
         )
         shape = report.get("shape") or ""
