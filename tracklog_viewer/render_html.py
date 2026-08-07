@@ -1198,7 +1198,7 @@ def _airmass_section(analysis: Analysis, air, uid: str = "") -> str:
     if air.polar and air.polar.points:
         best = air.polar.best_glide
         polar_note = (
-            f"The curve below is sink against airspeed over this flight's own glides, "
+            f"The curve above is sink against airspeed over this flight's own glides, "
             f"binned and taken as a median per bin. "
             + (
                 f"It rises monotonically, which is what a wing does, and its best bin is "
@@ -1978,6 +1978,7 @@ def _page(title: str, bodies: list[str], tabs: str = "") -> str:
 {quicklook.panel()}
 </div>
 <div class="tooltip" id="tip" role="status" aria-live="polite"></div>
+<script type="application/json" id="parainsights-thresholds">{json.dumps(debrief.THRESHOLDS)}</script>
 <script>{view3d.SCRIPT}
 {view3d_gl.SCRIPT}
 {SCRIPT}</script>

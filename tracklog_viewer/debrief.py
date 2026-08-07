@@ -736,7 +736,8 @@ def verdict(analysis: Analysis, m: Metrics, *, route=None, shape: str = "",
 
     opening = f"A {length} flight"
     if route is not None:
-        opening += f", scored {route.km:.2f} km as {shape or 'open distance'}"
+        named = shape or "open distance"
+        opening += f", scored {route.km:.2f} km as {_article(named)} {named}"
     opening += "."
 
     clauses = []
@@ -753,7 +754,15 @@ def verdict(analysis: Analysis, m: Metrics, *, route=None, shape: str = "",
     if m.closing_distance is not None and route is not None and len(route.points) >= 5:
         clauses.append(f"the course finished {m.closing_distance / 1000:.1f} km from closing")
     elif m.ceiling_used is not None:
-        clauses.append(f"{m.ceiling_used * 100:.0f}% of the modelled ceiling was used")
+        # Over 100% is common and is not an error: the modelled thermal top is a
+        # model's analysis for a point near the course line, and a real day routinely
+        # beats it. "107% of the ceiling was used" reads like a mistake; saying the
+        # flight topped *above* it says the same number and means what it says.
+        clauses.append(
+            f"the flight topped {m.ceiling_used * 100 - 100:.0f}% above the modelled "
+            f"ceiling" if m.ceiling_used > 1.02 else
+            f"{m.ceiling_used * 100:.0f}% of the modelled ceiling was used"
+        )
 
     sentence = opening
     if clauses:
@@ -818,6 +827,20 @@ def compare(verdicts: list[Verdict]) -> None:
         group[-1].comparison = f"&#9660; lowest of the {count} here"
         for rank, figure in enumerate(group[1:-1], start=2):
             figure.comparison = f"{_ordinal(rank)} of the {count} here"
+
+
+def _article(phrase: str) -> str:
+    """"a" or "an", by how the phrase is *said* rather than how it is spelt.
+
+    The one case this file actually meets is the one a vowel test gets wrong: "FAI
+    triangle" is said "eff-ay-eye", so it takes "an" despite starting with a consonant.
+    An initialism is detected by its first word being all capitals, and the letters whose
+    names open with a vowel sound are F, H, L, M, N, R, S and X.
+    """
+    first = phrase.split(" ")[0]
+    if first.isupper() and len(first) > 1:
+        return "an" if first[0] in "AEFHILMNORSX" else "a"
+    return "an" if first[:1].lower() in "aeiou" else "a"
 
 
 def _ordinal(n: int) -> str:

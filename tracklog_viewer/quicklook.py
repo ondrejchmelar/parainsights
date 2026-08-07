@@ -307,7 +307,19 @@ SCRIPT = r"""
   }
 
   // ---- analysis --------------------------------------------------------------
-  var WINDOW = 20, GLIDE_PROGRESS = 0.9;
+  // The thresholds come from `debrief.THRESHOLDS`, serialised into the page by the
+  // renderer, so the browser side and the Python side cannot drift apart on the numbers
+  // they share. The literals below are the fallback for a page built before that block
+  // existed — they are the values it carries, and they are the thing to delete, not to
+  // edit, if the two ever disagree.
+  var T = (function () {
+    var node = document.getElementById('parainsights-thresholds');
+    try { return node ? JSON.parse(node.textContent) : {}; } catch (e) { return {}; }
+  })();
+  var WINDOW = 20;
+  var GLIDE_PROGRESS = T.glide_progress !== undefined ? T.glide_progress : 0.9;
+  var MIN_GLIDE = T.min_glide_seconds !== undefined ? T.min_glide_seconds : 120;
+  var MIN_THERMAL = T.min_thermal_seconds !== undefined ? T.min_thermal_seconds : 60;
 
   function interpolate(ts, values, at) {
     if (at <= ts[0]) return values[0];
@@ -411,11 +423,11 @@ SCRIPT = r"""
         }
       }
     }
-    mark(function (i2) { return progress[i2] >= GLIDE_PROGRESS; }, 'glide', 120);
+    mark(function (i2) { return progress[i2] >= GLIDE_PROGRESS; }, 'glide', MIN_GLIDE);
     mark(function (i2) {
       return (progress[i2] < GLIDE_PROGRESS && climb[i2] > 0) ||
              (speed[i2] < 10 && climb[i2] > 0) || climb[i2] > 1;
-    }, 'thermal', 60);
+    }, 'thermal', MIN_THERMAL);
 
     var climbs = [];
     var current = null;

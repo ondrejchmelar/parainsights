@@ -8,7 +8,7 @@ parainsights/
 ├── CLAUDE.md              this file
 ├── pyproject.toml         one project, one venv, one test suite
 ├── tracklog_viewer/       the tool: IGC/KML/KMZ → analysis → HTML, KMZ, 3D map
-├── tests/                 pytest, 268 tests, no network
+├── tests/                 pytest, 286 tests, no network
 └── docs/
     ├── formats.md         IGC and KML/KMZ format research, measured on real files
     ├── plan.md            scope, decisions and status
@@ -27,7 +27,7 @@ as the packages, so there is nothing to line up by hand:
 
 ```bash
 uv sync --extra dev          # creates .venv on the pinned Python, from uv.lock
-uv run pytest -c pyproject.toml     # 268 tests, ~4 min, no network
+uv run pytest -c pyproject.toml     # 286 tests, ~4 min, no network
 ```
 
 `-c pyproject.toml` matters when the repo sits inside another project — pytest otherwise
@@ -674,10 +674,14 @@ phase covered. What those two documents still list as unbuilt:
   distance only.
 - Historical weather is surface-only: the ERA5 archive returns nulls on every pressure
   level, so flights older than ~60 days get no sounding.
-- `quicklook.py` duplicates a subset of the analysis in JavaScript. `debrief.THRESHOLDS`
-  is the shared source for the numbers it needs, and is serialised into the page — but
-  the browser side does not yet read it, so for now: if the Python thresholds change,
-  change them there too.
+- `quicklook.py` duplicates a subset of the analysis in JavaScript, but **no longer
+  duplicates its thresholds**: `debrief.THRESHOLDS` is serialised into every page as
+  `#parainsights-thresholds` and the browser reads it, with the old literals kept only
+  as the fallback for a page built before the block existed.
+  `tests/test_thresholds.py` checks the seam from both ends — a JSON block nobody reads
+  would pass a test that only greps the markup. What is still duplicated is the *logic*:
+  the phase heuristic, the climb detection and the circle counting are two
+  implementations of one idea, and only their constants are shared.
   It also has to parse `HFDTE` itself: B records carry only a time of day, and treating
   that as an epoch put every uploaded IGC flight on 1 January 1970 — which the weather
   lookup then fetched the real 1970 weather for and presented as "the air that day".
