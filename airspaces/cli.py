@@ -89,7 +89,7 @@ def main(argv=None) -> int:
     # needed even when only the file is being written; the text itself only when a map is.
     base_text, base_version = sources.base_airspace(refresh=args.refresh)
     text = build.to_openair(overlay, corrected=not args.raw, base_version=base_version)
-    name = f"CZ_ATZ_{overlay.atz_date or 'current'}.txt".replace("-", "")
+    name = overlay.filename
 
     if args.openair:
         args.openair.write_text(text, encoding="utf-8", newline="")

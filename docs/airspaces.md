@@ -42,7 +42,7 @@ consume only it. Same split as the tracklog viewer's `Analysis`.
 ## Running it
 
 ```bash
-uv run python -m airspaces.cli --openair CZ_ATZ.txt      # for XCTrack
+uv run python -m airspaces.cli --openair CZ_airfields.txt   # for XCTrack
 uv run python -m airspaces.cli --html airspace.html      # the map
 uv run python -m airspaces.cli --report                  # what built, what did not
 ```
@@ -342,9 +342,30 @@ so its filename is read from the directory listing instead of computed.
 
 - **The download button says what the file is not.** "Download for XCTrack" invites the
   reading that this replaces your airspace, which would delete every CTR and TMA from the
-  instrument. It now reads *"Download ATZ + okruhy only"*, with the panel stating that
+  instrument. It now reads *"Download the airfield layer"*, with the panel stating that
   nothing red or amber on the map is in the file and that it loads alongside the usual
   airspace.
+
+- **The download sits under the map, not over it.** The map is what the page is for and
+  what a reader arrives to look at; the file is what they want after deciding it is worth
+  having. A panel above the map pushed the map itself below the fold on a phone.
+
+- **"ATZ" is the AIP's name for one layer, not the name of the tool.** The page said ATZ
+  in its title, its lede, its legend, its download button and its filename, from when the
+  tool did nothing else. It now draws the whole published airspace, and **half the 156
+  fields it adds have no ATZ at all** — an SLZ strip carries only a traffic circuit. So
+  the visible copy talks about *aerodrome zones* and *traffic circuits*, and the acronym
+  survives in exactly one place: the sources table, parenthetically, so a reader can match
+  the layer to the AIP. Airspace *names* inside the OpenAir file are untouched — `ATZ
+  LKHB` is what the zone is called and what a pilot needs to see on the instrument.
+
+- **The counts printed are circuits, not shapes.** One circuit is two rectangles meeting
+  on the runway, so `circuit_count` reads 410 where there are 205 circuits at 156 fields.
+  `Overlay.circuits` and `Overlay.circuit_fields` are what goes in front of a pilot.
+
+- **The download's filename has one source, `Overlay.filename`.** Both CLIs write this
+  file and both spelled the name themselves; renaming it found that they had already
+  drifted, which would have published a page linking at a file that was never written.
 
 - **The download carries a currency warning, and so does the file.** Airspace has an
   effective date and this is a snapshot: an AIRAC cycle is 28 days, a NOTAM is same-day,
@@ -372,9 +393,9 @@ so its filename is read from the directory listing instead of computed.
 
 ## Status
 
-Done: both goals. 156 ATZ (82 aerodromes, 74 SLZ fields) and 205 circuit bands, 117 KB
-of OpenAir; the map renders all 612 airspaces with class and floor filters, and offers
-the OpenAir file for download. Published at `public/airspace/` and as a view in the
+Done: both goals. 82 aerodrome zones and 205 traffic circuits at 156 fields (410
+rectangles, two per circuit), 197 KB of OpenAir; the map renders all 743 airspaces with
+class and floor filters, and offers the OpenAir file for download. Published at `public/airspace/` and as a view in the
 report. 66 tests, no network.
 
 The map ships two ways: as a standalone page (`airspaces.cli --html`) and as a top-level

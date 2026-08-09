@@ -560,10 +560,43 @@ def test_map_draws_a_path_for_every_airspace(zones):
 def test_the_download_points_at_a_sibling_file():
     """A relative href, so the file has to be published next to the page. Deliberate —
     see the module docstring — and the one place here that is not self-contained."""
-    html = render_html.download_link("CZ_ATZ_20260806.txt", "Download", "note")
-    assert 'href="CZ_ATZ_20260806.txt"' in html
-    assert 'download="CZ_ATZ_20260806.txt"' in html
+    html = render_html.download_link("CZ_airfield_zones_20260806.txt", "Download", "note")
+    assert 'href="CZ_airfield_zones_20260806.txt"' in html
+    assert 'download="CZ_airfield_zones_20260806.txt"' in html
     assert "data:" not in html
+
+
+def test_the_download_filename_has_one_source(zones):
+    """Both CLIs write this file and both used to spell the name themselves; they had
+    already drifted. The name is also what a pilot picks out of XCTrack's import list,
+    so it says what is in the file rather than which acronym the tool began as."""
+    overlay = build.Overlay(airspaces=[], zones=zones, fields={}, atz_date="2026-08-06")
+    assert overlay.filename == "CZ_airfield_zones_20260806.txt"
+
+    for module in ("airspaces/cli.py", "tracklog_viewer/cli.py"):
+        source = (Path(__file__).parent.parent / module).read_text(encoding="utf-8")
+        assert "overlay.filename" in source, module
+        assert ".txt\"" not in source.replace("overlay.filename", ""), module
+
+
+def test_the_counts_offered_are_circuits_not_rectangles(zones):
+    """One circuit is drawn as two rectangles meeting on the runway, so the shape count
+    is about twice the number of circuits and is the wrong thing to print."""
+    field_a = Aerodrome(icao="LKAA", name="A", lat=50.0, lon=15.0, elevation_ft=1000)
+    spaces = [
+        openair.Airspace("okruh LKAA RWY 09 N", "Q", floor="GND", ceiling="2000ft AMSL",
+                         points=[(50.0, 15.0), (50.1, 15.0), (50.1, 15.1)],
+                         meta={"icao": "LKAA", "kind": "circuit", "runway": "09/27",
+                               "side": "N"}),
+        openair.Airspace("okruh LKAA RWY 09 S", "Q", floor="GND", ceiling="2000ft AMSL",
+                         points=[(50.0, 15.0), (49.9, 15.0), (49.9, 15.1)],
+                         meta={"icao": "LKAA", "kind": "circuit", "runway": "09/27",
+                               "side": "S"}),
+    ]
+    overlay = build.Overlay(airspaces=spaces, zones=[], fields={"LKAA": field_a})
+    assert overlay.circuit_count == 2
+    assert overlay.circuits == 1
+    assert overlay.circuit_fields == 1
 
 
 def test_the_download_says_the_file_is_not_a_full_airspace_set(zones):
@@ -574,7 +607,7 @@ def test_the_download_says_the_file_is_not_a_full_airspace_set(zones):
         zones=zones, fields={},
     )
     article = render_html.body(
-        overlay, [], "26-04-01", openair_name="CZ_ATZ.txt", openair_size=71000
+        overlay, [], "26-04-01", openair_name="CZ_airfield_zones.txt", openair_size=71000
     )
     assert "not a full airspace set" in article
     assert "alongside" in article
@@ -589,7 +622,7 @@ def test_the_download_sits_under_the_map(zones):
         zones=zones, fields={},
     )
     article = render_html.body(
-        overlay, [], "26-04-01", openair_name="CZ_ATZ.txt", openair_size=71000
+        overlay, [], "26-04-01", openair_name="CZ_airfield_zones.txt", openair_size=71000
     )
     assert article.index("asp-holder") < article.index("asp-download")
     assert article.index("asp-download") < article.index("asp-src")
@@ -603,8 +636,8 @@ def airspace_article(zones):
         airspaces=[atz.to_airspace(z, f"ATZ {z.icao}") for z in zones],
         zones=zones, fields={}, atz_date="2026-08-06",
     )
-    return overlay, render_html.body(overlay, [], "26-04-01", openair_name="CZ_ATZ.txt",
-                                     openair_size=71000, openair_href="airspace/CZ_ATZ.txt")
+    return overlay, render_html.body(overlay, [], "26-04-01", openair_name="CZ_airfield_zones.txt",
+                                     openair_size=71000, openair_href="airspace/CZ_airfield_zones.txt")
 
 
 def test_the_article_stays_out_of_the_flight_tab_controller(zones):
@@ -620,8 +653,8 @@ def test_the_download_href_can_differ_from_the_filename(zones):
     """Embedded in a report one directory up, the link is `airspace/NAME` while the
     saved file must still be `NAME`."""
     _, article = airspace_article(zones)
-    assert 'href="airspace/CZ_ATZ.txt"' in article
-    assert 'download="CZ_ATZ.txt"' in article
+    assert 'href="airspace/CZ_airfield_zones.txt"' in article
+    assert 'download="CZ_airfield_zones.txt"' in article
 
 
 def test_the_page_warns_and_puts_responsibility_on_the_pilot(zones):

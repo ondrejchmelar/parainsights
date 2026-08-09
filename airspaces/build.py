@@ -7,9 +7,9 @@ from dataclasses import dataclass, field
 
 from . import aerodromes, atz, circuits, openair, sources
 
-HEADER = """Czech ATZ and traffic circuits, for XCTrack
+HEADER = """Czech aerodrome zones and traffic circuits, for XCTrack
 
-ATZ (class W, green): aerodrome traffic zones at the 82 ICAO aerodromes, GND -
+ZONE (class W, green): the aerodrome traffic zone, or ATZ, at the 82 ICAO aerodromes, GND -
 4000 ft AMSL. An unpowered paraglider may fly here, but call the aerodrome and stay
 out of the circuit.
 
@@ -89,6 +89,31 @@ class Overlay:
     @property
     def circuit_count(self) -> int:
         return sum(1 for a in self.airspaces if a.meta.get("kind") == "circuit")
+
+    @property
+    def filename(self) -> str:
+        """What the download is called, in one place.
+
+        The name a pilot reads in XCTrack's import list, so it says what the file holds
+        rather than which acronym the tool started life on: half the fields in here have
+        no ATZ at all, only a circuit. It lived in two `cli.py` files that had already
+        drifted apart once.
+        """
+        return f"CZ_airfield_zones_{self.atz_date or 'current'}.txt".replace("-", "")
+
+    @property
+    def circuits(self) -> int:
+        """How many *circuits*, not how many shapes. One circuit is drawn as two
+        rectangles meeting on the runway, so `circuit_count` is roughly twice this and
+        is the wrong number to put in front of a pilot."""
+        return len({(a.meta.get("icao"), a.meta.get("runway"))
+                    for a in self.airspaces if a.meta.get("kind") == "circuit"})
+
+    @property
+    def circuit_fields(self) -> int:
+        """How many airfields have a circuit drawn. Several publish two runways."""
+        return len({a.meta.get("icao")
+                    for a in self.airspaces if a.meta.get("kind") == "circuit"})
 
     @property
     def circle_count(self) -> int:

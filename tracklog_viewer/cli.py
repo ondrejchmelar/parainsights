@@ -143,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
 
         overlay = airspace_build.build()
         base_text, base_version = airspace_sources.base_airspace()
-        name = f"CZ_ATZ_{overlay.atz_date or 'current'}.txt".replace("-", "")
+        name = overlay.filename
         text = airspace_build.to_openair(overlay, base_version=base_version)
         # The download has to exist where the page points, which is `--airspace`'s
         # argument resolved against the report's own directory.
@@ -153,7 +153,7 @@ def main(argv: list[str] | None = None) -> int:
         extras.append(render_html.Extra(
             uid="airspace",
             label="Airspace",
-            meta=f"{overlay.atz_count} ATZ &middot; okruhy",
+            meta=f"{overlay.atz_count} zones &middot; {overlay.circuits} okruhy",
             body=airspace_html.body(
                 overlay, airspace_openair.read(base_text), base_version,
                 openair_name=name, openair_size=len(text),

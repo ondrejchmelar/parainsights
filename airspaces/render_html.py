@@ -32,7 +32,11 @@ CLASSES = [
     ("base", "Controlled (CTR/TMA/CTA)", "#c2410c"),
     ("restricted", "Restricted, danger, prohibited", "#b91c1c"),
     ("gliding", "Gliding, dropzones, PGZ", "#a16207"),
-    ("atz", "ATZ", "#15803d"),
+    # "ATZ" was the label here and is now only the technical name, kept where the AIP is
+    # being quoted. A reader filtering a map wants to know what the green ring *is* — the
+    # zone around an aerodrome — not the acronym for it, and half the airfields drawn have
+    # no ATZ at all, only a circuit.
+    ("atz", "Aerodrome zone", "#15803d"),
     ("circuit", "Traffic circuit (okruh)", "#ea580c"),
 ]
 
@@ -415,22 +419,24 @@ def controls(top: int) -> str:
 
 
 def _atz_row(overlay, clipped: int, shift: float) -> str:
-    """What the ATZ layer actually contains — counted off what is drawn, not what was
-    parsed, because an SLZ field's zone is not an ATZ and is normally left out."""
+    """What the aerodrome-zone layer actually contains — counted off what is drawn, not
+    what was parsed, because an SLZ field's circle is not an aerodrome zone and is
+    normally left out."""
     drawn = [a for a in overlay.airspaces if a.meta.get("kind") == "atz"]
     aerodromes = sum(1 for a in drawn if not a.name.startswith("SLZ"))
     slz = len(drawn) - aerodromes
-    detail = f"{aerodromes} at ICAO aerodromes, 5 500 m radius"
+    detail = (f"{aerodromes} public aerodromes, 5 500 m radius, ground to 4 000 ft "
+              "(the AIP calls these ATZ)")
     if clipped:
         detail += f", {clipped} clipped by an overlying CTR or TMA"
     if shift >= 1:
         detail += f"; positions corrected by {shift:.0f} m"
     if slz:
-        detail += f". Plus {slz} SLZ zones — UAS zones, <em>not</em> ATZ"
+        detail += f". Plus {slz} SLZ circles — UAS zones, and not the same thing"
     else:
-        detail += (". <strong>An SLZ strip has no ATZ</strong>, so those 74 fields "
-                   "carry only their traffic circuit")
-    return f"ATZ — {detail}"
+        detail += (". <strong>An ultralight strip has no zone of its own</strong>, so "
+                   "those 74 fields carry only their traffic circuit")
+    return f"Aerodrome zones — {detail}"
 
 
 def _link(href: str, text: str) -> str:
@@ -557,14 +563,16 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
             '<div class="asp-get">'
             + download_link(
                 openair_href or openair_name,
-                "Download ATZ + okruhy only",
-                f"OpenAir · {overlay.atz_count} ATZ, {overlay.circuit_count} circuits "
+                "Download the airfield layer",
+                f"OpenAir · {overlay.atz_count} aerodrome zones, {overlay.circuits} "
+                f"circuits at {overlay.circuit_fields} fields "
                 f"· {openair_size / 1024:.0f} KB",
             )
             + '<p class="asp-get-how"><strong>This file is not a full airspace set.</strong> '
-            "It holds only the ATZ and traffic circuits — the part XCTrack and XContest "
-            "leave out — so load it <em>alongside</em> your usual airspace, never instead "
-            "of it. Nothing in red or amber on the map below is in this file.<br>"
+            "It holds the green and orange layers only — the aerodrome zones and traffic "
+            "circuits that XCTrack and XContest leave out — so load it <em>alongside</em> "
+            "your usual airspace, never instead of it. Nothing in red or amber on the map "
+            "above is in this file.<br>"
             "Import under <em>Preferences → Airspaces and obstacles → Files → Import "
             "OpenAir files</em>, or copy it into the <code>XCTrack/Airspaces</code> "
             "folder and tick it there.</p>"
@@ -574,8 +582,11 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
 
     return f"""<article class="flight airspace-article" id="{uid}-article">
   <h1>Czech airspace</h1>
-  <p class="lede">The published base airspace, plus the {overlay.atz_count} ATZ it
-  leaves out. Scroll to zoom, drag to pan, hover for the name and limits.</p>
+  <p class="lede">Everything the published airspace carries, plus the airfields it leaves
+  out: a zone around each of the {overlay.atz_count} public aerodromes, and the traffic
+  circuit at {overlay.circuit_fields} fields and ultralight strips. A paraglider may fly
+  inside the zone but must stay out of the circuit, and no instrument draws either.
+  Scroll to zoom, drag to pan, hover for the name and limits.</p>
   {controls(top)}
   <div class="asp-holder">
     {map_svg(airspaces, project)}

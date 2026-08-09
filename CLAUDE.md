@@ -55,7 +55,7 @@ uv run python -m tracklog_viewer.cli a.igc b.kmz c.igc --html all.html   # fligh
 uv run python -m tracklog_viewer.cli FLIGHT.igc --kmz flight.kmz         # Google Earth
 uv run python -m tracklog_viewer.cli FLIGHT.igc --map map.html           # 3D map
 
-uv run python -m airspaces.cli --openair CZ_ATZ.txt    # Czech ATZ for XCTrack
+uv run python -m airspaces.cli --openair CZ_airfields.txt  # aerodrome zones + okruhy for XCTrack
 uv run python -m airspaces.cli --html airspace.html    # the airspace map
 uv run python -m airspaces.cli --report                # what built, and what did not
 ```
