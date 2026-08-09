@@ -578,7 +578,21 @@ def test_the_download_says_the_file_is_not_a_full_airspace_set(zones):
     )
     assert "not a full airspace set" in article
     assert "alongside" in article
-    assert "ATZ + okruhy only" in article
+
+
+def test_the_download_sits_under_the_map(zones):
+    """The map is what the page is for and it is what a reader arrives to look at; the
+    file is what they want *after* deciding it is worth having. A download panel above
+    the map pushed the map itself below the fold on a phone."""
+    overlay = build.Overlay(
+        airspaces=[atz.to_airspace(z, f"ATZ {z.icao}") for z in zones],
+        zones=zones, fields={},
+    )
+    article = render_html.body(
+        overlay, [], "26-04-01", openair_name="CZ_ATZ.txt", openair_size=71000
+    )
+    assert article.index("asp-holder") < article.index("asp-download")
+    assert article.index("asp-download") < article.index("asp-src")
 
 
 # ------------------------------------------- the airspace view inside the report

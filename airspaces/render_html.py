@@ -576,11 +576,11 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
   <h1>Czech airspace</h1>
   <p class="lede">The published base airspace, plus the {overlay.atz_count} ATZ it
   leaves out. Scroll to zoom, drag to pan, hover for the name and limits.</p>
-  {download}
   {controls(top)}
   <div class="asp-holder">
     {map_svg(airspaces, project)}
     <div class="asp-name" id="asp-name"></div>
   </div>
+  {download}
   {sources_table(overlay, base_version, shift)}
 </article>"""
