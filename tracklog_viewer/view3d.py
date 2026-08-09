@@ -645,6 +645,8 @@ function initView3d(root, cursorTrack) {
     canvas.width = W = width;
     canvas.height = H = height;
     if (renderer) renderer.resize(W, H);
+    // The fitted scale is measured against the canvas, so a new canvas needs a new one.
+    refitScale();
     return true;
   }
   resize();
@@ -781,6 +783,9 @@ function initView3d(root, cursorTrack) {
 
   function setVertical(level) {
     view.vertical = level;
+    // Exaggeration changes how tall the scene projects, which is a framing change and
+    // not a gesture, so it is one of the three things allowed to re-fit the scale.
+    refitScale();
     pressSegment('[data-view3d-act="exaggerate-set"]', function (button) {
       return parseFloat(button.dataset.vertical) === level;
     });
@@ -1004,6 +1009,20 @@ function initView3d(root, cursorTrack) {
   // exaggerated outline zooms out by exactly the factor the user just asked for, which
   // is why the ×2 button appeared to do nothing at all.
   var fit = { scale: 1, dx: 0, dy: 0 };
+  // The scale the scene was fitted at, held rather than re-measured every frame.
+  //
+  // `refit()` used to derive it from the bounding box of the *rotated, pitched* scene,
+  // so turning the view rescaled it: a 45 degree twist shrank the ground scale from
+  // 778 px per 10 km to 345 at pitch 0.18 — the view zooming itself out by 2.3x in the
+  // middle of a gesture that was only meant to rotate. That is what "it rotates weirdly
+  // when tilted down" is, and it is worst at low pitch because there the projected
+  // height of the scene is dominated by terrain relief rather than by its northing, so
+  // the box a rotation sweeps out changes most. A yaw is not a zoom, and now it is not
+  // one. `refitScale()` asks for a new measurement, and only the three things that
+  // genuinely change the framing call it: a resize, a change of vertical exaggeration,
+  // and the reset button.
+  var fitBase = 0;
+  function refitScale() { fitBase = 0; }
   // Where the fit puts the middle of the scene. zoomAt has to measure the cursor from
   // this point, not from the canvas corner, so it is named rather than written twice.
   function anchorX() { return W / 2; }
@@ -1033,10 +1052,12 @@ function initView3d(root, cursorTrack) {
     // Slight overfill: the bounds are of a *rotated* rectangle, whose bounding box is
     // wider than the rectangle itself, so fitting the box exactly leaves visible margins
     // on every side. Overflowing the terrain edge costs nothing — it is only terrain.
-    var scale = Math.min(W * 1.08 / Math.max(maxX - minX, 1),
+    if (!fitBase) {
+      fitBase = Math.min(W * 1.08 / Math.max(maxX - minX, 1),
                          H * 1.02 / Math.max(maxY - minY, 1));
+    }
     view.vertical = wanted;
-    fit.scale = scale * view.zoom;
+    fit.scale = fitBase * view.zoom;
     fit.dx = anchorX() - (minX + maxX) / 2 * fit.scale;
     // Keep the *ground* centred rather than the whole scene: as the exaggeration grows
     // the flight should climb up the canvas, not push the terrain off the bottom.
@@ -1899,7 +1920,14 @@ function initView3d(root, cursorTrack) {
     var sx = (clientX - box.left) / box.width * W - anchorX();
     var sy = (clientY - box.top) / box.height * H - anchorY();
     var before = view.zoom;
-    view.zoom = Math.max(0.3, Math.min(12, view.zoom * factor));
+    // 12 was the ceiling and it is not enough: on a cross-country box it stops at about
+    // 2 km across the canvas, which is still too far out to see which side of a spine a
+    // climb was worked on. The imagery goes soft well before 40 — the stitch is ~20 m a
+    // pixel — but a soft picture the reader chose to look at closely is better than a
+    // sharp one that refuses to. The floor comes down to 0.2 for the same reason in the
+    // other direction: tilting no longer re-fits the scale, so a top-down view of a long
+    // flight needs room to pull back.
+    view.zoom = Math.max(0.2, Math.min(40, view.zoom * factor));
     var ratio = view.zoom / before;
     view.panX = sx - (sx - view.panX) * ratio;
     view.panY = sy - (sy - view.panY) * ratio;

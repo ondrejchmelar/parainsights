@@ -340,3 +340,99 @@ def test_marking_an_offscreen_moment_brings_it_into_view():
     assert answer["offscreen"] is True, "an off-screen point was left off screen"
     assert answer["afterX"] > -4000, "the view did not pan towards the marker"
     assert answer["settled"] is False, "the pan did not actually bring it into view"
+
+
+# A rotation is not a zoom. `refit()` used to re-measure the fitted scale from the
+# bounding box of the *rotated, pitched* scene on every frame, so turning the view
+# rescaled it — worst at low pitch, where the projected height of the scene is dominated
+# by relief rather than by northing and the box a rotation sweeps out changes most.
+_TWIST_SCALE = """
+var h = window.__handle;
+var canvas = document.querySelector('canvas.view3d');
+%s
+
+function twistAt(pitch) {
+  h.view.yaw = 0; h.view.pitch = pitch; h.view.zoom = 1;
+  h.view.panX = 0; h.view.panY = 0;
+  h.redraw();
+  var before = h.projection().scale;
+  var box = canvas.getBoundingClientRect();
+  var cx = box.left + box.width / 2, cy = box.top + box.height / 2, R = 120;
+  function place(angle, id) {
+    var sign = id === 1 ? -1 : 1;
+    return [cx + sign * R * Math.cos(angle), cy + sign * R * Math.sin(angle)];
+  }
+  var a0 = place(0, 1), b0 = place(0, 2);
+  send('pointerdown', 1, a0[0], a0[1]);
+  send('pointerdown', 2, b0[0], b0[1]);
+  for (var i = 1; i <= 14; i++) {
+    var at = Math.PI / 4 * i / 14;
+    var a = place(at, 1), b = place(at, 2);
+    send('pointermove', 1, a[0], a[1]);
+    send('pointermove', 2, b[0], b[1]);
+  }
+  send('pointerup', 1, 0, 0);
+  send('pointerup', 2, 0, 0);
+  h.redraw();
+  return { pitch: pitch, before: before, after: h.projection().scale,
+           zoom: h.view.zoom, yaw: h.view.yaw };
+}
+
+return { low: twistAt(0.18), mid: twistAt(0.6), high: twistAt(1.45) };
+""" % _BEARING
+
+
+@needs_chrome
+@pytest.mark.parametrize("state", ["low", "mid", "high"])
+def test_a_twist_does_not_rescale_the_scene(state):
+    """Reported as "it rotates weirdly when tilted down", and that is exactly what it is.
+
+    The fitted scale came off the bounding box of the rotated scene, so a 45 degree
+    twist at pitch 0.18 took the ground scale from 778 px per 10 km to 345 — the view
+    zooming itself out by 2.3x in the middle of a gesture meant only to rotate. It is
+    a low-pitch problem because there the projected height of the scene is relief rather
+    than northing, so the box a rotation sweeps out changes most; at pitch 1.45 the same
+    twist cost only 16%, which is why it read as a tilt bug rather than a rotate bug.
+    The scale is now measured when the framing changes — a resize, an exaggeration, a
+    reset — and held through every gesture.
+    """
+    answer = _probe(_scene(basemap=False), _TWIST_SCALE)[state]
+    # Floating-point exact is too strong: the pinch's own scale factor is
+    # `now.distance / pinch.distance`, which on a pure twist is 1 to a rounding error.
+    assert answer["zoom"] == pytest.approx(1, rel=1e-6), (
+        "the twist changed view.zoom, which it must not touch")
+    assert answer["after"] == pytest.approx(answer["before"], rel=1e-9), (
+        f"a twist rescaled the scene by {answer['after'] / answer['before']:.2f}x "
+        f"at pitch {answer['pitch']}")
+
+
+_ZOOM_RANGE = """
+var h = window.__handle;
+var canvas = document.querySelector('canvas.view3d');
+var box = canvas.getBoundingClientRect();
+var cx = box.left + box.width / 2, cy = box.top + box.height / 2;
+function wheel(dy, times) {
+  for (var i = 0; i < times; i++) {
+    canvas.dispatchEvent(new WheelEvent('wheel', {
+      deltaY: dy, clientX: cx, clientY: cy, bubbles: true, cancelable: true
+    }));
+  }
+  h.redraw();
+}
+h.view.zoom = 1; h.view.panX = 0; h.view.panY = 0; h.redraw();
+wheel(-100, 60);
+var closest = h.view.zoom;
+wheel(100, 120);
+return { closest: closest, farthest: h.view.zoom };
+"""
+
+
+@needs_chrome
+def test_the_view_zooms_closer_than_it_used_to():
+    """12x stopped about 2 km across the canvas, which is too far out to see which side
+    of a spine a climb was worked on. The imagery is soft long before 40x — a stitch is
+    about 20 m a pixel — but a soft picture the reader asked for beats a sharp one that
+    refuses."""
+    answer = _probe(_scene(basemap=False), _ZOOM_RANGE)
+    assert answer["closest"] == pytest.approx(40, rel=1e-6)
+    assert answer["farthest"] == pytest.approx(0.2, rel=1e-6)
