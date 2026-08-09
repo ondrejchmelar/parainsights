@@ -170,6 +170,20 @@ so its filename is read from the directory listing instead of computed.
   offset cannot be called systematic, and shifting real geometry on noise is worse than
   leaving a known small error alone.
 
+- **An SLZ strip has no ATZ, so it gets only an okruh.** Publication B's circles are
+  *UAS geographical zones* — dronview labels one `SLZ LKCAST`, and the VFR manual calls
+  the place a *neveřejná plocha SLZ*, not an aerodrome. Emitting them as green `ATZ`
+  invented 74 aerodrome traffic zones that do not exist, and made the circuit look wrong
+  for sitting outside one. What a paraglider needs at an SLZ strip is the traffic
+  circuit; the zone is a drone rule. Off by default, `--slz-zones` puts them back, named
+  `SLZ` rather than `ATZ`.
+
+  Worth knowing if you compare against dronview: its drawn disc looks about twice the
+  radius of the polygon in `LKR315B`, which measures 976 m over 73 vertices spanning
+  962–988 m. Vlásenice (1 938 m from the reference point) and Hejlovský rybník
+  (1 864 m) both sit outside that 976 m circle but appear inside dronview's. Not
+  resolved; the published polygon is what this uses.
+
 - **SLZ fields have a VFR manual page too, and therefore an okruh.** Under their own
   six-letter ident: `lkcast_text_en.html`. All 74 of publication B's have one, with a
   reference point and a runway table. None publishes a circuit altitude, so theirs is
@@ -307,9 +321,11 @@ so its filename is read from the directory listing instead of computed.
   in the file — and without them the renderer draws 67 empty paths, which is exactly
   what the first version of the map did.
 
-- **Airspaces are drawn big-and-high first, small-and-low last.** Otherwise a TMA covers
-  every ATZ under it and the layer a paraglider cares about is the one that cannot be
-  clicked.
+- **Airspaces are drawn strictly biggest-area first, ignoring class.** SVG has no
+  z-index — paint order *is* hit order, so whatever is drawn last both covers and
+  captures the pointer. Ordering by class put every ATZ above the dropzone inside it,
+  and Tábor's dropzone could not be clicked through its own ATZ. Smallest on top means
+  the most specific thing under the cursor is the one you get.
 
 - **No tile layer on the map.** Same constraint as the rest of the repository: a
   published artifact reaches no external host, so the backdrop is an embedded Natural

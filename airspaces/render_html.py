@@ -343,13 +343,12 @@ def map_svg(airspaces, project) -> str:
     parts.append(f'<path class="asp-border" d="{_path(basemap.BORDER, project)}"/>')
 
     colours = dict((key, colour) for key, _, colour in CLASSES)
-    order = {key: index for index, (key, _, _) in enumerate(CLASSES)}
-    # Big and high first, small and low on top — otherwise a TMA covers every ATZ
-    # underneath it and the layer a paraglider cares about is the one you cannot click.
-    ranked = sorted(
-        airspaces,
-        key=lambda a: (order.get(classify(a), 0), -_area(a)),
-    )
+    # Purely biggest-first, ignoring class. SVG has no z-index — paint order *is* hit
+    # order — so whatever is drawn last both covers and captures the pointer. Ordering
+    # by class put every ATZ above the dropzone inside it, and Tábor's dropzone could
+    # not be clicked through its own ATZ. Smallest on top means the most specific thing
+    # under the cursor is the one you get, which is what a reader means by clicking.
+    ranked = sorted(airspaces, key=lambda a: -_area(a))
     for airspace in ranked:
         group = classify(airspace)
         label = airspace.name
@@ -416,25 +415,21 @@ def controls(top: int) -> str:
 
 
 def _atz_row(overlay, clipped: int, shift: float) -> str:
-    """What the ATZ layer actually contains, per publication."""
-    counts = overlay.by_publication
-    parts = []
-    if counts.get("A"):
-        parts.append(f"{counts['A']} at ICAO aerodromes, 5 500 m")
-    if counts.get("B"):
-        parts.append(f"{counts['B']} SLZ fields, ~1 km")
-    if counts.get("C"):
-        parts.append(f"{counts['C']} heliports")
-    if counts.get("D"):
-        parts.append(f"{counts['D']} landing sites")
-    detail = "; ".join(parts)
-    extra = []
+    """What the ATZ layer actually contains — counted off what is drawn, not what was
+    parsed, because an SLZ field's zone is not an ATZ and is normally left out."""
+    drawn = [a for a in overlay.airspaces if a.meta.get("kind") == "atz"]
+    aerodromes = sum(1 for a in drawn if not a.name.startswith("SLZ"))
+    slz = len(drawn) - aerodromes
+    detail = f"{aerodromes} at ICAO aerodromes, 5 500 m radius"
     if clipped:
-        extra.append(f"{clipped} clipped by CTR/TMA")
+        detail += f", {clipped} clipped by an overlying CTR or TMA"
     if shift >= 1:
-        extra.append(f"aerodrome positions corrected by {shift:.0f} m")
-    if extra:
-        detail += " — " + ", ".join(extra)
+        detail += f"; positions corrected by {shift:.0f} m"
+    if slz:
+        detail += f". Plus {slz} SLZ zones — UAS zones, <em>not</em> ATZ"
+    else:
+        detail += (". <strong>An SLZ strip has no ATZ</strong>, so those 74 fields "
+                   "carry only their traffic circuit")
     return f"ATZ — {detail}"
 
 
@@ -479,13 +474,19 @@ def sources_table(overlay, base_version: str, shift: float) -> str:
          f"{_link('https://aim.rlp.cz/', 'ŘLP ČR')} — UAS zones, {zone_links}",
          _escape(overlay.atz_date)),
         (["circuit"],
-         "Traffic circuits (okruhy) — not a published boundary",
-         "drawn by this tool, from "
+         "Traffic circuits (okruhy) — <strong>drawn by this tool, not a published "
+         "boundary.</strong> Shape scaled off the AIP's VOC charts (±10%); altitude "
+         "published where stated, otherwise 1 000 ft above the field (measured mean "
+         "993 ft over five, spread 820–1 150). At an SLZ strip the runway itself is "
+         "reconstructed from the reference point and a heading rounded to 10°, so those "
+         "are marked <code>est</code>",
+         "circuit drawn from the "
+         + _link("https://aim.rlp.cz/vfrmanual/actual/ad/lkcast_voc.jpg", "VOC charts")
+         + ", altitudes and runway tables from the "
          + _link("https://aim.rlp.cz/vfrmanual/actual/lkta_text_en.html",
                  "AIP VFR manual")
-         + " circuit altitudes and "
-         + _link("https://ourairports.com/countries/CZ/", "OurAirports")
-         + " runway positions",
+         + ", thresholds from "
+         + _link("https://ourairports.com/countries/CZ/", "OurAirports"),
          "—"),
     ]
     body = "".join(

@@ -9,8 +9,13 @@ from . import aerodromes, atz, circuits, openair, sources
 
 HEADER = """Czech ATZ and traffic circuits, for XCTrack
 
-ATZ (class W, green): aerodrome traffic zones, GND - 4000 ft AMSL. An unpowered
-paraglider may fly here, but call the aerodrome and stay out of the circuit.
+ATZ (class W, green): aerodrome traffic zones at the 82 ICAO aerodromes, GND -
+4000 ft AMSL. An unpowered paraglider may fly here, but call the aerodrome and stay
+out of the circuit.
+
+An SLZ strip (a plocha SLZ, the ultralight fields) has NO ATZ, so the 74 of those
+carry only their traffic circuit. The circles the UAS zone file publishes for them
+are a drone rule, not airspace, and are left out.
 
 OKRUH (class Q, orange): the traffic circuit, ground to the published circuit
 altitude. NOT an official boundary -- a {width} m wide band tracing the circuit,
@@ -21,9 +26,8 @@ sides because the glider circuit is often the mirror of the powered one. The
 published circuit direction, where the AIP states one, is in the airspace name.
 
 The dimensions were measured off the AIP's own VOC charts, where the ATZ ring gives
-the scale. At LKCAST each published rectangle is about 2950 x 1300 m; these are
-3100 x 1300. At an SLZ field the circuit reaches well outside the small ATZ, so
-expect the band to extend past the green circle -- but it crosses it too.
+the scale, to about +/-10%. At LKCAST each published rectangle is about 2950 x 1300 m;
+these are 3100 x 1300.
 
 The band has a {gap} m break in one short end. OpenAir cannot express a polygon with
 a hole, and closing the ring through a zero-width slit makes a shape that some
@@ -157,7 +161,7 @@ def geo_distance(zone, field_) -> float:
 
 
 def build(*, correct: bool = True, refresh: bool = False, with_circuits: bool = True,
-          publications=None) -> Overlay:
+          publications=None, slz_zones: bool = False) -> Overlay:
     """The complete ATZ overlay, across every requested publication.
 
     **The correction is measured per publication, never across them.** Publication A is
@@ -217,8 +221,16 @@ def build(*, correct: bool = True, refresh: bool = False, with_circuits: bool = 
     out: list[openair.Airspace] = []
     notes: list[str] = []
     for zone in zones:
+        # **An SLZ field has no ATZ.** Publication B's circles are UAS geographical
+        # zones — dronview labels them `SLZ LKCAST`, and the VFR manual calls the place
+        # a *neveřejná plocha SLZ*, not an aerodrome. Emitting them as green `ATZ`
+        # invented 74 aerodrome traffic zones that do not exist, and left the okruh
+        # looking wrong for sitting outside one. What a paraglider needs at an SLZ strip
+        # is the circuit; the zone is a drone rule. Off unless asked for.
+        if not zone.is_aerodrome and not slz_zones:
+            continue
         field_ = fields.get(zone.icao)
-        label = f"ATZ {zone.icao}"
+        label = f"{'ATZ' if zone.is_aerodrome else 'SLZ'} {zone.icao}"
         if zone.name:
             label += f" {zone.name}"
         if not zone.is_circle:

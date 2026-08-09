@@ -56,6 +56,10 @@ def main(argv=None) -> int:
                         help="reproduce the ATZ publication unchanged, datum error and all")
     parser.add_argument("--no-circuits", action="store_true",
                         help="ATZ only, no traffic-circuit bands")
+    parser.add_argument("--slz-zones", action="store_true",
+                        help="also emit publication B's circles as airspace. Off by "
+                             "default: an SLZ strip has no ATZ — those circles are UAS "
+                             "zones, and only their traffic circuit concerns a pilot.")
     parser.add_argument("--publications", metavar="LETTERS", default="A,B",
                         help="which RLP UAS zone publications to include. "
                              "A=82 ICAO aerodromes, B=74 SLZ fields, C=222 heliports, "
@@ -78,6 +82,7 @@ def main(argv=None) -> int:
     overlay = build.build(
         correct=not args.raw, refresh=args.refresh,
         with_circuits=not args.no_circuits, publications=pubs,
+        slz_zones=args.slz_zones,
     )
 
     # Fetched once. The version goes in the OpenAir header's currency warning, so it is

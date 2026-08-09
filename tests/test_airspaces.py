@@ -683,6 +683,36 @@ def test_the_label_does_not_hide_itself_on_a_touchscreen():
     assert "showTip(zone, e.clientX, e.clientY, true)" in down[:400]
 
 
+def test_the_smallest_shape_under_the_cursor_is_the_one_on_top():
+    """SVG has no z-index: paint order is hit order, so the last thing drawn both covers
+    and captures the pointer. Ordering by class put every ATZ above the dropzone inside
+    it, and Tábor's dropzone could not be clicked through its own ATZ."""
+    def ring(radius, label, klass):
+        space = openair.Airspace(label, klass, "GND", "4000ft AMSL",
+                                 points=openair.circle_points((49.4, 15.0), radius))
+        space.meta["kind"] = "atz" if klass == "W" else None
+        return space
+
+    big = ring(5500, "ATZ LKTA", "W")          # the ATZ
+    small = ring(3704, "DROPZONE Tabor", "Q")  # the dropzone inside it
+    project = render_html.Projection((48.5, 51.0, 12.0, 19.0))
+    svg = render_html.map_svg([small, big], project)
+    assert svg.index("ATZ LKTA") < svg.index("DROPZONE Tabor"), \
+        "the smaller shape must be painted last, so it is the one hit"
+
+
+def test_an_slz_zone_is_not_called_an_atz(zones):
+    """dronview labels it `SLZ LKCAST`, and the VFR manual calls the place a *neveřejná
+    plocha SLZ*. Emitting 74 green `ATZ` invented aerodrome traffic zones that do not
+    exist — and made the okruh look wrong for sitting outside one."""
+    slz = atz.ATZ("LKCAST", "", 49.409, 15.144, 976.0,
+                  openair.circle_points((49.409, 15.144), 976.0), 1.0,
+                  publication="B", name="Částkovice")
+    assert not slz.is_aerodrome
+    overlay = build.Overlay(airspaces=[], zones=[slz], fields={})
+    assert overlay.by_publication == {"B": 1}
+
+
 def test_map_escapes_a_name_that_would_break_the_svg(zones):
     space = atz.to_airspace(zones[0], 'ATZ <b>"x"</b> & co')
     project = render_html.Projection((48.5, 51.0, 12.0, 19.0))
