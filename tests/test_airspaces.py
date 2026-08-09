@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import json
 import math
 import re
@@ -10,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from airspaces import aerodromes, atz, circuits, geo, openair, render_html
+from airspaces import aerodromes, atz, build, circuits, geo, openair, render_html
 from airspaces.aerodromes import Aerodrome, Runway
 
 DATA = Path(__file__).parent / "data"
@@ -451,14 +450,28 @@ def test_map_draws_a_path_for_every_airspace(zones):
     assert 'd=""' not in svg
 
 
-def test_the_download_carries_the_file_itself_not_a_link():
-    """A published artifact reaches no external host, so its attachments have to be in
-    it. Decoding the data URI must give back exactly what `--openair` writes."""
-    text = "AC W\r\nAN ATZ LKXX\r\nAH 4000ft AMSL\r\nAL GND\r\nDC 2.9698\r\n"
-    html = render_html.download_link(text, "CZ_ATZ.txt", "Download", "note")
-    payload = re.search(r"base64,([A-Za-z0-9+/=]+)", html).group(1)
-    assert base64.b64decode(payload).decode("utf-8") == text
-    assert 'download="CZ_ATZ.txt"' in html
+def test_the_download_points_at_a_sibling_file():
+    """A relative href, so the file has to be published next to the page. Deliberate —
+    see the module docstring — and the one place here that is not self-contained."""
+    html = render_html.download_link("CZ_ATZ_20260806.txt", "Download", "note")
+    assert 'href="CZ_ATZ_20260806.txt"' in html
+    assert 'download="CZ_ATZ_20260806.txt"' in html
+    assert "data:" not in html
+
+
+def test_the_download_says_the_file_is_not_a_full_airspace_set(zones):
+    """Reading it as a replacement would take every CTR and TMA off the instrument, so
+    the panel has to rule that out rather than merely not imply it."""
+    overlay = build.Overlay(
+        airspaces=[atz.to_airspace(z, f"ATZ {z.icao}") for z in zones],
+        zones=zones, fields={},
+    )
+    article = render_html.body(
+        overlay, [], "26-04-01", openair_name="CZ_ATZ.txt", openair_size=71000
+    )
+    assert "not a full airspace set" in article
+    assert "alongside" in article
+    assert "ATZ + okruhy only" in article
 
 
 def test_map_escapes_a_name_that_would_break_the_svg(zones):

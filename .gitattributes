@@ -1,0 +1,8 @@
+# OpenAir files are written with CRLF on purpose (see `airspaces/openair.py`): it is
+# what every OpenAir file in the wild uses, and at least one parser treats a bare LF as
+# part of the last field. This checkout has `core.autocrlf=input`, which strips CR on
+# the way into the index — so without this the published file would differ from the one
+# `--openair` writes locally, and the test asserting CRLF would pass while the download
+# did not have it. `-text` disables end-of-line conversion in both directions.
+public/airspace/*.txt -text
+*.oair -text

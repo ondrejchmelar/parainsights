@@ -15,3 +15,6 @@ report.html
 # flight data stays out of the repo
 *.igc
 public/*.igc
+
+# local agent settings
+.claude/

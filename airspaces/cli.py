@@ -69,7 +69,6 @@ def main(argv=None) -> int:
         correct=not args.raw, refresh=args.refresh, with_circuits=not args.no_circuits
     )
 
-    # Built once whether or not it is written out: the map embeds it as a download.
     text = build.to_openair(overlay, corrected=not args.raw)
     name = f"CZ_ATZ_{overlay.atz_date or 'current'}.txt".replace("-", "")
 
@@ -81,12 +80,17 @@ def main(argv=None) -> int:
     if args.html:
         base_text, version = sources.base_airspace(refresh=args.refresh)
         base = openair.read(base_text)
+        # The page links to the OpenAir file rather than carrying it, so the file has
+        # to be written beside the page — publishing the HTML alone gives a dead button.
+        args.html.parent.mkdir(parents=True, exist_ok=True)
+        beside = args.html.parent / name
+        beside.write_text(text, encoding="utf-8", newline="")
         article = render_html.body(
-            overlay, base, version, openair_text=text, openair_name=name
+            overlay, base, version, openair_name=name, openair_size=len(text)
         )
         args.html.write_text(_page(article, "Czech airspace"), encoding="utf-8")
-        print(f"{args.html}: {len(base)} base airspaces + {len(overlay.airspaces)} added, "
-              f"{name} embedded for download")
+        print(f"{args.html}: {len(base)} base airspaces + {len(overlay.airspaces)} added")
+        print(f"{beside}: linked from the page ({len(text) / 1024:.0f} KB)")
 
     if args.report:
         east, north, samples = overlay.offset

@@ -4,6 +4,12 @@ Same constraint as everything else this repo publishes: no external request at v
 time, because a published artifact runs under a policy that blocks every host. So the
 map is inline SVG over an embedded border outline — no tile layer, no map library.
 
+**One deliberate exception**: the OpenAir download is a relative link to a file next to
+the page, not a data URI. That makes this the one page here that needs a sibling to be
+published with it. The trade is worth it — the download keeps its filename on every
+phone, can be curl'd or linked directly, and the page does not carry 79 KB of base64
+that most readers never click. Nothing the map *renders* fetches anything.
+
 The projection is equirectangular with the longitude axis scaled by cos(lat) at the
 centre of the country. Over 6.7° of longitude and 2.5° of latitude the shape error is
 under a pixel at the sizes drawn here, and it keeps the pan/zoom arithmetic to a scale
@@ -15,7 +21,6 @@ to care about end up on top rather than buried under a TMA.
 
 from __future__ import annotations
 
-import base64
 import math
 import re
 
@@ -359,25 +364,25 @@ def controls(top: int) -> str:
     )
 
 
-def download_link(text: str, filename: str, label: str, note: str) -> str:
-    """The OpenAir file as a data URI, so the page carries it rather than links to it.
+def download_link(filename: str, label: str, note: str) -> str:
+    """A link to the OpenAir file sitting next to the page.
 
-    Same rule as the rest of the repository: a published artifact reaches no external
-    host, and that has to include its own attachments. base64 rather than percent
-    encoding because an OpenAir file is `*`, `:` and newlines throughout, which
-    percent-encoding roughly doubles anyway.
+    A plain relative href, not a data URI. The page therefore is not self-contained —
+    the one place in this repository where that is true — and the file has to be
+    published alongside it. In exchange the download is an ordinary file: it keeps its
+    name on every browser and phone, it can be linked to and curl'd directly, and the
+    page does not carry 79 KB of base64 that most readers never click.
     """
-    payload = base64.b64encode(text.encode("utf-8")).decode("ascii")
     return (
         f'<a class="asp-download" download="{_escape(filename)}" '
-        f'href="data:text/plain;base64,{payload}">'
+        f'href="{_escape(filename)}">'
         f'<span class="asp-dl-label">{_escape(label)}</span>'
         f'<span class="asp-dl-note">{_escape(note)}</span></a>'
     )
 
 
 def body(overlay, base, base_version: str, uid: str = "airspace",
-         openair_text: str = "", openair_name: str = "CZ_ATZ.txt") -> str:
+         openair_name: str = "", openair_size: int = 0) -> str:
     """The airspace article, ready to drop into the report as a tab."""
     airspaces = list(base) + list(overlay.airspaces)
     rings = [a.points for a in airspaces if a.points] + [basemap.BORDER]
@@ -387,20 +392,22 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
     top = int(math.ceil(max(floor_metres(a) for a in airspaces) / 50.0) * 50)
 
     download = ""
-    if openair_text:
+    if openair_name:
         download = (
             '<div class="asp-get">'
             + download_link(
-                openair_text,
                 openair_name,
-                "Download for XCTrack",
-                f"OpenAir · {overlay.atz_count} ATZ + {overlay.circuit_count} circuits "
-                f"· {len(openair_text) / 1024:.0f} KB",
+                "Download ATZ + okruhy only",
+                f"OpenAir · {overlay.atz_count} ATZ, {overlay.circuit_count} circuits "
+                f"· {openair_size / 1024:.0f} KB",
             )
-            + '<p class="asp-get-how">Import in XCTrack under <em>Preferences → '
-            "Airspaces and obstacles → Files → Import OpenAir files</em>, or copy it into "
-            "the <code>XCTrack/Airspaces</code> folder and tick it there. It is an "
-            "<strong>addition</strong> — keep your usual airspace loaded as well.</p>"
+            + '<p class="asp-get-how"><strong>This file is not a full airspace set.</strong> '
+            "It holds only the ATZ and traffic circuits — the part XCTrack and XContest "
+            "leave out — so load it <em>alongside</em> your usual airspace, never instead "
+            "of it. Nothing in red or amber on the map below is in this file.<br>"
+            "Import under <em>Preferences → Airspaces and obstacles → Files → Import "
+            "OpenAir files</em>, or copy it into the <code>XCTrack/Airspaces</code> "
+            "folder and tick it there.</p>"
             "</div>"
         )
 

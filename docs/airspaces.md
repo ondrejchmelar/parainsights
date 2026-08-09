@@ -42,9 +42,22 @@ consume only it. Same split as the tracklog viewer's `Analysis`.
 ## Running it
 
 ```bash
-.venv/bin/python -m airspaces.cli --openair CZ_ATZ.txt      # for XCTrack
-.venv/bin/python -m airspaces.cli --html airspace.html      # the map
-.venv/bin/python -m airspaces.cli --report                  # what built, what did not
+uv run python -m airspaces.cli --openair CZ_ATZ.txt      # for XCTrack
+uv run python -m airspaces.cli --html airspace.html      # the map
+uv run python -m airspaces.cli --report                  # what built, what did not
+```
+
+`--html` writes **two** files: the page, and the OpenAir file next to it that the page's
+download button links to. Publish them together or the button is dead.
+
+The published copy lives at `public/airspace/`, deployed by the `pages` job in
+`.gitlab-ci.yml` along with the rest of the site. `public/index.html` is the tracklog
+viewer's report and must not be overwritten — the airspace map is a sibling, not the
+front page:
+
+```bash
+uv run python -m airspaces.cli --html public/airspace/index.html
+git add public/airspace && git commit -m "Republish the airspace map" && git push
 ```
 
 Every source is cached under `~/.cache/parainsights/airspace`; `--refresh` re-fetches.
@@ -189,10 +202,24 @@ so its filename is read from the directory listing instead of computed.
   with longitude scaled by cos(lat) at the country's centre — under a pixel of shape
   error at these sizes, and it keeps pan and zoom to a scale and an offset.
 
+- **The OpenAir download is a real file, not a data URI.** This is the one page in the
+  repository that needs a sibling published with it, and it was a data URI first for
+  exactly that reason. A plain file wins anyway: it keeps its name when a phone saves it,
+  it can be linked to or `curl`'d on its own, and the page sheds 79 KB of base64 that
+  most readers never click. Nothing the map *renders* fetches anything, so the offline
+  guarantee that matters is intact.
+
+- **The download button says what the file is not.** "Download for XCTrack" invites the
+  reading that this replaces your airspace, which would delete every CTR and TMA from the
+  instrument. It now reads *"Download ATZ + okruhy only"*, with the panel stating that
+  nothing red or amber on the map is in the file and that it loads alongside the usual
+  airspace.
+
 ## Status
 
-Done: both goals. 82 ATZ and 114 circuit boxes, 47 KB of OpenAir; the map renders all
-447 airspaces with class and floor filters. 43 tests, no network.
+Done: both goals. 82 ATZ and 114 circuit bands, 71 KB of OpenAir; the map renders all
+447 airspaces with class and floor filters, and offers the OpenAir file for download.
+Published at `public/airspace/`. 48 tests, no network.
 
 The map is currently written as a standalone page by `--html`. The article it emits is
 already shaped as `<article data-flight-report="airspace">`, which is what the tracklog
