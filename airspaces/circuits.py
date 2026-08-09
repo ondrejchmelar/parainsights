@@ -43,9 +43,20 @@ from __future__ import annotations
 from . import geo, openair
 from .aerodromes import FEET, Aerodrome, Runway
 
-# The circuit path: downwind leg abeam, turns beyond the threshold.
+# The circuit path: downwind leg abeam, turns beyond the threshold. These are the
+# figures for a light aircraft at a full-size aerodrome, and they are the ceiling.
 BESIDE_M = 1200.0
 BEYOND_M = 2000.0
+
+# …but a circuit is flown at the speed of what uses the field, and that tracks the
+# runway. An ultralight off a 500 m SLZ strip does not fly the 5 km circuit a Cessna
+# flies off 1 100 m, and drawing one made a 2.4 km band around a 976 m ATZ. Scaled to
+# the runway between these bounds, a 1 100 m runway still gets 1 200 / 1 980 — the
+# aerodrome figures, unchanged — and a 500 m strip gets 600 / 1 000.
+BESIDE_PER_M = 1.1
+BEYOND_PER_M = 1.8
+MIN_BESIDE_M = 600.0
+MIN_BEYOND_M = 1000.0
 
 # How wide the band around that path is, and the gap that keeps the ring simple.
 RIBBON_M = 300.0
@@ -84,13 +95,25 @@ def _rectangle(frame: _Frame, along: float, across: float):
     ]
 
 
-def box(runway: Runway, beside: float = BESIDE_M, beyond: float = BEYOND_M):
+def dimensions(runway: Runway) -> tuple[float, float]:
+    """How far abeam the downwind leg sits, and how far past each threshold it turns."""
+    length = runway.length_m
+    return (
+        min(max(length * BESIDE_PER_M, MIN_BESIDE_M), BESIDE_M),
+        min(max(length * BEYOND_PER_M, MIN_BEYOND_M), BEYOND_M),
+    )
+
+
+def box(runway: Runway, beside: float | None = None, beyond: float | None = None):
     """The filled rectangle the band is built around. Kept for measuring against."""
+    fitted = dimensions(runway)
+    beside = fitted[0] if beside is None else beside
+    beyond = fitted[1] if beyond is None else beyond
     frame = _Frame(runway)
     return _rectangle(frame, frame.half + beyond, beside)
 
 
-def ribbon(runway: Runway, beside: float = BESIDE_M, beyond: float = BEYOND_M,
+def ribbon(runway: Runway, beside: float | None = None, beyond: float | None = None,
            width: float = RIBBON_M, gap: float = GAP_M):
     """The circuit path thickened into a band, as one simple closed ring.
 
@@ -98,6 +121,9 @@ def ribbon(runway: Runway, beside: float = BESIDE_M, beyond: float = BEYOND_M,
     back along the inner edge — so the enclosed area is the band and the middle is
     outside it, with no self-touching anywhere.
     """
+    fitted = dimensions(runway)
+    beside = fitted[0] if beside is None else beside
+    beyond = fitted[1] if beyond is None else beyond
     frame = _Frame(runway)
     half = width / 2
     out_along, out_across = frame.half + beyond + half, beside + half
@@ -132,13 +158,18 @@ def ceiling_ft(field: Aerodrome) -> float | None:
 
 
 def _name(field: Aerodrome, runway: Runway, ceiling: float | None, published: bool) -> str:
+    """`est` marks a number the AIP did not publish — an assumed 1 000 ft circuit height,
+    or a runway reconstructed from the reference point and a heading rounded to 10°.
+    Both apply to every SLZ field, none of which publishes a circuit altitude."""
     parts = [f"OKRUH {field.icao}"]
     if field.name:
         parts.append(field.name)
     parts.append(f"RWY {runway.name}")
     if ceiling is not None:
         metres = round(ceiling * FEET / 10) * 10
-        parts.append(f"{round(ceiling)}ft/{metres}m" + ("" if published else " est"))
+        parts.append(f"{round(ceiling)}ft/{metres}m")
+    if not published or runway.estimated:
+        parts.append("est")
     if field.circuit_note:
         parts.append(field.circuit_note)
     return " ".join(parts)

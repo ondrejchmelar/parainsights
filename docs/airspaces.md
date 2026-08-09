@@ -17,8 +17,8 @@ An unpowered paraglider is permitted inside a Czech ATZ, but must stay clear of 
 traffic circuit. Neither XCTrack nor XContest carries the ATZ — they appear only when a
 specific activity (parachuting, for instance) is activated. Of the 251 airspaces in the
 Aeroklub base file, exactly one is an ATZ (LKCS, and only because it is a controlled
-aerodrome). So the pilot flies past 82 aerodromes that the instrument does not know
-about.
+aerodrome). So the pilot flies past 156 aerodromes and airstrips that the instrument
+does not know about.
 
 ## Architecture
 
@@ -29,7 +29,7 @@ airspaces/
 ├── openair.py      OpenAir reader (tolerant) and writer (strict — see below)
 ├── atz.py          UAS zone GeoJSON → circles and clipped polygons, datum correction
 ├── aerodromes.py   VFR manual prose + OurAirports runways → reference data
-├── circuits.py     the okruh box
+├── circuits.py     the okruh band
 ├── basemap.py      embedded Czech border and city list, for the map backdrop
 ├── build.py        assembles the overlay from all of it
 ├── render_html.py  the map: inline SVG, class filter, floor filter, pan/zoom
@@ -82,7 +82,7 @@ replacement.
 |---|---|---|
 | ATZ geometry | `aim.rlp.cz/data/uas/{AIRAC}/actual/LKR315{A,B,C,D}.json` | the only machine-readable publication of Czech ATZ; the AIP gives them as prose |
 | base airspace | `airspace.aeroklub.cz/docs/public/CZ_low_*.txt` | Jan Zahradka for Aeroklub ČR, free to use |
-| circuit altitude, ARP, circuit prose | `aim.rlp.cz/vfrmanual/actual/{icao}_text_en.html` | official, and the header line is fixed-format |
+| circuit altitude, ARP, runway table, circuit prose | `aim.rlp.cz/vfrmanual/actual/{ident}_text_en.html` | official, header line is fixed-format, and SLZ fields have a page under their six-letter ident |
 | runway thresholds | OurAirports `runways.csv` | public domain, and the VFR manual has no thresholds |
 
 **The base airspace is Aeroklub's, not xcontest's.** The goal was "the same data as
@@ -153,12 +153,35 @@ so its filename is read from the directory listing instead of computed.
   offset cannot be called systematic, and shifting real geometry on noise is worse than
   leaving a known small error alone.
 
-- **B, C and D zones are named by position, not by code.** Their idents are not ICAO
-  codes, they have no VFR manual page and no OurAirports `ident` row, so the only handle
-  is where they are: the nearest listed Czech airfield within 2 km supplies the name.
-  73 of B's 74 match, which is how `LKCAST` reads as *Částkovice*. They get no okruh —
-  an SLZ field publishes no circuit altitude, and inventing one would be worse than
-  leaving it out.
+- **SLZ fields have a VFR manual page too, and therefore an okruh.** Under their own
+  six-letter ident: `lkcast_text_en.html`. All 74 of publication B's have one, with a
+  reference point and a runway table. None publishes a circuit altitude, so theirs is
+  the 1 000 ft AGL default; none has surveyed thresholds either — OurAirports has them
+  for 2 of the 35 Czech fields it lists — so the runway is reconstructed from the
+  reference point, the manual's magnetic heading and its length. **Everything
+  reconstructed is marked `est` in the airspace name.**
+
+  The magnetic heading in an SLZ runway table is the designator times ten, so it is
+  rounded to 10° before `DECLINATION` (5.5°, varying 4.5–6.5° across the country) is
+  added. The residual is dominated by that rounding, not by the constant.
+
+  Do not read a circuit altitude out of the prose: the only page that appears to state
+  one says *"do not overfly surrounding villages in lower height than 1000 ft AGL"*,
+  which is a noise-abatement minimum and not the circuit at all.
+
+- **The circuit is scaled to the runway.** A circuit is flown at the speed of whatever
+  uses the field, and that tracks runway length. The aerodrome figures — 1 200 m abeam,
+  2 000 m beyond — drew a 2.4 km band around Částkovice's 976 m ATZ and 500 m strip.
+  Scaled at 1.1× and 1.8× the runway between floors of 600/1 000 m and those caps, an
+  1 100 m runway still gets 1 200/1 980 (unchanged) and a 500 m strip gets 600/1 000.
+
+- **Names come from the VFR heading, position is the fallback.** `LK[A-Z]{2}` matched
+  `LKCA` and then failed on the `S`, so all 74 B fields were unnamed; the ident is two
+  to four letters after `LK`. The heading's second word is only sometimes part of the
+  name — *Česká Lípa* yes, *Částkovice ARP:* no — so trailing service words and anything
+  ending in a colon are stripped. Where the heading still yields nothing, the nearest
+  listed Czech airfield within 2 km supplies it, which is also how C and D would be
+  named, having no page at all.
 
 - **The map label is hover on a mouse and tap-to-pin on a touchscreen.** A touchscreen
   fires `pointerover` on touch-down and `pointerout` on touch-up, so a hover-driven label
@@ -277,9 +300,10 @@ so its filename is read from the directory listing instead of computed.
 
 ## Status
 
-Done: both goals. 82 ATZ and 114 circuit bands, 71 KB of OpenAir; the map renders all
-447 airspaces with class and floor filters, and offers the OpenAir file for download.
-Published at `public/airspace/`. 48 tests, no network.
+Done: both goals. 156 ATZ (82 aerodromes, 74 SLZ fields) and 205 circuit bands, 117 KB
+of OpenAir; the map renders all 612 airspaces with class and floor filters, and offers
+the OpenAir file for download. Published at `public/airspace/` and as a view in the
+report. 66 tests, no network.
 
 The map ships two ways: as a standalone page (`airspaces.cli --html`) and as a top-level
 view in the tracklog report (`tracklog_viewer.cli --airspace`). Both are published.

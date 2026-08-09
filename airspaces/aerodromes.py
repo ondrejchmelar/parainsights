@@ -33,6 +33,13 @@ from dataclasses import dataclass, field
 FEET = 0.3048
 
 
+# Magnetic variation in Czechia, 2026. It runs about +4.5° in west Bohemia to +6.5° in
+# east Moravia; one constant is good to a degree. That is well inside the error already
+# present, because the VFR manual's "magnetic direction" column for an SLZ field is the
+# runway designator times ten — rounded to 10°, so ±5° before this is applied at all.
+DECLINATION = 5.5
+
+
 @dataclass
 class Runway:
     low: str
@@ -41,6 +48,9 @@ class Runway:
     low_lon: float
     high_lat: float
     high_lon: float
+    # True when the ends were derived from the reference point and a published magnetic
+    # heading rather than read from surveyed threshold coordinates.
+    estimated: bool = False
 
     @property
     def name(self) -> str:
@@ -80,12 +90,18 @@ _ARP = re.compile(
 _ELEV = re.compile(r"ELEV:\s*([\d\s]+)\s*ft\s*/\s*([\d\s]+)\s*m", re.I)
 _CIRCUIT = re.compile(r"Circuit:\s*([\d\s]+)\s*ft\s*/\s*([\d\s]+)\s*m", re.I)
 _FREQ = re.compile(r"\b([A-ZÁ-Ž][\wá-ž]+)\s+RADIO\s+(\d{3}[,.]\d{2,3})")
-_NAME = re.compile(r"\b(LK[A-Z]{2})\s*[-–]\s*([^ ]+(?: [A-ZČŘŠŽÁÉÍÓÚŮ][^ ]*)?)")
+# `LKTA - Tábor`, but also `LKCAST - Částkovice`: an SLZ field's ident is six letters,
+# and `LK[A-Z]{2}` matched `LKCA` and then failed on the `S`, leaving those 74 unnamed.
+_NAME = re.compile(r"\b(LK[A-Z]{2,4})\s*[-–]\s*([^ ]+(?: [A-ZČŘŠŽÁÉÍÓÚŮ][^ ]*)?)")
 
 # The heading runs `LKBA - Břeclav INFO`, and a two-word aerodrome name is common
-# (Česká Lípa, Dvůr Králové), so the name cannot just be the first token. These are the
-# service words that follow it.
-_SERVICE_WORDS = ("INFO", "RADIO", "TOWER", "AFIS", "ATIS", "GLIDING")
+# (Česká Lípa, Dvůr Králové), so the name cannot just be the first token — but the
+# second word is only sometimes part of the name. These are what may follow it: the
+# radio service, and the start of the next field.
+_SERVICE_WORDS = (
+    "INFO", "RADIO", "TOWER", "AFIS", "ATIS", "GLIDING",
+    "ARP", "ELEV", "VFR", "IFR", "PUBLIC", "PRIVATE", "AD",
+)
 
 
 def _number(raw: str) -> float:
@@ -159,7 +175,9 @@ def parse_vfr(icao: str, page: str) -> Aerodrome:
     match = _NAME.search(text)
     if match and match.group(1) == icao:
         words = match.group(2).split()
-        while words and words[-1].upper() in _SERVICE_WORDS:
+        while words and (
+            words[-1].upper().rstrip(":") in _SERVICE_WORDS or words[-1].endswith(":")
+        ):
             words.pop()
         field_.name = " ".join(words)
 
@@ -188,7 +206,47 @@ def parse_vfr(icao: str, page: str) -> Aerodrome:
         field_.frequency = match.group(2).replace(",", ".")
 
     field_.circuit_note = circuit_note(text)
+    # A fallback only: `build` overwrites this with surveyed thresholds where they exist.
+    if field_.lat is not None:
+        field_.runways = runways_from_table(text, field_.lat, field_.lon)
     return field_
+
+
+# `10 100° 500 x 15` in the VFR manual's runway table. The aerodrome pages carry more
+# columns after the dimensions (strength, TORA/TODA/ASDA/LDA); this stops at the width.
+_RWY_TABLE = re.compile(r"\b(\d{2}[LRC]?)\s+(\d{1,3})°\s+(\d+)\s*x\s*(\d+)")
+
+
+def _reciprocal(designator: str) -> str:
+    number = int(re.match(r"\d+", designator).group())
+    return f"{((number + 17) % 36) + 1:02d}"
+
+
+def runways_from_table(text: str, lat: float, lon: float) -> list[Runway]:
+    """Runways built from the VFR manual's own table, about the reference point.
+
+    For an SLZ field this is the only geometry there is: OurAirports has surveyed
+    thresholds for 2 of the 35 it lists, and the RLP zone file carries no runway at all.
+    A single-strip field's reference point is effectively the runway midpoint, so
+    ARP + heading + length is a fair reconstruction — but it is a reconstruction, and
+    `estimated` says so all the way through to the airspace name.
+    """
+    from . import geo
+
+    out: list[Runway] = []
+    claimed: set[str] = set()
+    for designator, magnetic, length, _width in _RWY_TABLE.findall(text):
+        if designator in claimed:
+            continue
+        other = _reciprocal(designator)
+        claimed.update((designator, other))
+        true = (float(magnetic) + DECLINATION) % 360
+        half = float(length) / 2
+        low = geo.destination(lat, lon, (true + 180) % 360, half)
+        high = geo.destination(lat, lon, true, half)
+        out.append(Runway(designator, other, low[0], low[1], high[0], high[1],
+                          estimated=True))
+    return out
 
 
 def parse_runways(csv_text: str, icaos: set[str]) -> dict[str, list[Runway]]:

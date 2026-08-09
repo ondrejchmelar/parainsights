@@ -373,28 +373,45 @@ def test_the_ribbon_is_hollow():
 def test_the_ribbon_covers_both_downwind_legs():
     """Both sides is the whole design: the glider circuit mirrors the powered one, so a
     band on the published side alone would be wrong at the busiest fields."""
+    beside, _ = circuits.dimensions(runway())
     ring = frame_xy(circuits.ribbon(runway()))
-    assert contains(ring, (0, circuits.BESIDE_M))
-    assert contains(ring, (0, -circuits.BESIDE_M))
+    assert contains(ring, (0, beside))
+    assert contains(ring, (0, -beside))
 
 
 def test_the_ribbon_covers_the_turns_beyond_each_threshold():
+    _, beyond = circuits.dimensions(runway())
     ring = frame_xy(circuits.ribbon(runway()))
-    along = 500 + circuits.BEYOND_M
+    along = 500 + beyond
     assert contains(ring, (along, 500))
     assert contains(ring, (-along, 0))
     assert not contains(ring, (along + circuits.RIBBON_M, 0))
 
 
+def test_the_circuit_is_scaled_to_the_runway():
+    """A 500 m SLZ strip does not get the 5 km circuit a 1 100 m aerodrome does — that
+    drew a 2.4 km band around a 976 m ATZ."""
+    def strip(metres):
+        end = geo.destination(50.0, 15.0, 90.0, metres)
+        return Runway("09", "27", 50.0, 15.0, end[0], end[1])
+
+    assert circuits.dimensions(strip(1100)) == pytest.approx((1200, 1980), abs=15)
+    assert circuits.dimensions(strip(500)) == pytest.approx((600, 1000), abs=15)
+    # Clamped at both ends, so nothing silly comes out of a 3 km runway or a 100 m one.
+    assert circuits.dimensions(strip(3000)) == (circuits.BESIDE_M, circuits.BEYOND_M)
+    assert circuits.dimensions(strip(100)) == (circuits.MIN_BESIDE_M, circuits.MIN_BEYOND_M)
+
+
 def test_the_gap_is_small_and_only_at_one_end():
+    _, beyond = circuits.dimensions(runway())
     ring = frame_xy(circuits.ribbon(runway()))
-    along = 500 + circuits.BEYOND_M
+    along = 500 + beyond
     assert not contains(ring, (along, 0))                      # dead centre of the gap
     assert contains(ring, (along, circuits.GAP_M))             # just clear of it
     assert contains(ring, (-along, 0))                         # the far end is unbroken
 
 
-def test_the_ribbon_is_a_third_of_the_filled_box():
+def test_the_ribbon_is_much_smaller_than_the_filled_box():
     def area(ring):
         return abs(sum(
             ring[i][0] * ring[(i + 1) % len(ring)][1]
@@ -402,9 +419,57 @@ def test_the_ribbon_is_a_third_of_the_filled_box():
             for i in range(len(ring))
         )) / 2
 
+    # The exact fraction depends on the runway, since the band keeps a fixed width while
+    # the box scales — so assert the point of the band, not one geometry's number.
     band = area(frame_xy(circuits.ribbon(runway())))
     box = area(frame_xy(circuits.box(runway())))
-    assert band / box == pytest.approx(0.37, abs=0.03)
+    assert 0.25 < band / box < 0.55
+
+
+LKCAST_TABLE = "RWY Magnetic direction RWY dimensions 10 100° 500 x 15 28 280° 500 x 15"
+
+
+def test_a_runway_can_be_rebuilt_from_the_vfr_table():
+    """An SLZ field has no surveyed thresholds anywhere — OurAirports has them for 2 of
+    the 35 it lists — so the manual's own table is the only geometry there is."""
+    got = aerodromes.runways_from_table(LKCAST_TABLE, 49.409, 15.144)
+    assert len(got) == 1                      # 10 and 28 are one runway, not two
+    runway = got[0]
+    assert runway.name == "10/28"
+    assert runway.estimated
+    assert runway.length_m == pytest.approx(500, abs=2)
+    # Magnetic 100° plus the variation, and the reference point is the midpoint.
+    assert geo.bearing(runway.low_lat, runway.low_lon, runway.high_lat, runway.high_lon) \
+        == pytest.approx(100 + aerodromes.DECLINATION, abs=0.5)
+    assert geo.distance(49.409, 15.144,
+                        (runway.low_lat + runway.high_lat) / 2,
+                        (runway.low_lon + runway.high_lon) / 2) < 1.0
+
+
+def test_reciprocal_designators_collapse_to_one_runway():
+    assert aerodromes._reciprocal("10") == "28"
+    assert aerodromes._reciprocal("28") == "10"
+    assert aerodromes._reciprocal("36") == "18"
+    assert aerodromes._reciprocal("01") == "19"
+
+
+def test_an_slz_field_gets_an_okruh_marked_estimated():
+    """Částkovice publishes a reference point, a runway table and no circuit altitude —
+    which is every SLZ field. The okruh is built, and says it was reconstructed."""
+    field_ = Aerodrome(icao="LKCAST", name="Částkovice", lat=49.409, lon=15.144,
+                       elevation_ft=1925.0)
+    field_.runways = aerodromes.runways_from_table(LKCAST_TABLE, 49.409, 15.144)
+    spaces = circuits.to_airspaces(field_)
+    assert len(spaces) == 1
+    assert spaces[0].name.startswith("OKRUH LKCAST Částkovice RWY 10/28")
+    assert "est" in spaces[0].name
+    assert spaces[0].ceiling == "2925ft AMSL"   # elevation + 1000 ft, none published
+
+
+def test_a_six_letter_ident_still_yields_a_name():
+    """`LK[A-Z]{2}` matched `LKCA` and then failed on the `S`, leaving all 74 unnamed."""
+    page = "<p>LKCAST - Částkovice</p><p>ARP: 49° 24' 33\" N, 15° 08' 39\" E</p>"
+    assert aerodromes.parse_vfr("LKCAST", page).name == "Částkovice"
 
 
 def test_circuit_ceiling_prefers_the_published_altitude():

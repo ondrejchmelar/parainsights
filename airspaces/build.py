@@ -14,10 +14,11 @@ paraglider may fly here, but call the aerodrome and stay out of the circuit.
 
 OKRUH (class Q, orange): the traffic circuit, ground to the published circuit
 altitude. NOT an official boundary -- a {width} m wide band following the circuit
-path, {beside} m abeam the runway and turning {beyond} m beyond each threshold. It is
-hollow: the ground over the runway itself is outside it. Drawn on BOTH sides,
-because the glider circuit is often the mirror of the powered one. The published
-circuit direction, where the AIP states one, is in the airspace name.
+path, scaled to the runway: up to {beside} m abeam and turning up to {beyond} m
+beyond each threshold, less at a short strip. It is hollow: the ground over the
+runway itself is outside it. Drawn on BOTH sides, because the glider circuit is
+often the mirror of the powered one. The published circuit direction, where the
+AIP states one, is in the airspace name.
 
 The band has a {gap} m break in one short end. OpenAir cannot express a polygon with
 a hole, and closing the ring through a zero-width slit makes a shape that some
@@ -25,6 +26,11 @@ readers fill in and others do not; a real gap keeps it unambiguous everywhere.
 
 This file is an ADDITION to your normal airspace. Czech ATZ are not in the XContest
 or Aeroklub data unless a specific activity is active. Keep both loaded.
+
+An OKRUH marked "est" is reconstructed rather than published: an assumed 1000 ft
+circuit height, or a runway placed from the aerodrome reference point and a heading
+rounded to 10 deg. Every SLZ field is in that case -- none publishes a circuit
+altitude.
 
 ATZ geometry from {atz_source}, {publications}, {atz_date}.
 Circuit altitudes and runway data from the RLP VFR manual and OurAirports.
@@ -104,7 +110,10 @@ def load_aerodromes(icaos, *, refresh: bool = False):
         sources.ourairports("airports", refresh=refresh), icaos
     )
     for icao, field_ in fields.items():
-        field_.runways = runways.get(icao, [])
+        # Surveyed thresholds where OurAirports has them; otherwise keep the ones
+        # `parse_vfr` reconstructed from the manual's runway table.
+        if runways.get(icao):
+            field_.runways = runways[icao]
         # OurAirports is the fallback position, not the primary: the VFR manual is the
         # official publication and the two agree to 7 m where both exist.
         if field_.lat is None and icao in positions:
@@ -115,9 +124,10 @@ def load_aerodromes(icaos, *, refresh: bool = False):
 def nearby_fields(zones, csv_text: str, limit: float = 2000.0):
     """Match zones to the nearest Czech airfield in OurAirports, for a human name.
 
-    Publications B, C and D use idents that are not ICAO codes (`LKCAST`, `HELLKUHIII`),
-    have no VFR manual page and no entry in the OurAirports `ident` column, so the only
-    handle on them is position. 73 of B's 74 land within 2 km of a listed airfield.
+    A fallback for the name only. B's fields do have a VFR manual page — under their
+    own six-letter ident — and that is where the name normally comes from; this covers
+    the ones whose heading does not parse, and would cover C and D, which have no page.
+    73 of B's 74 land within 2 km of a listed airfield.
     """
     import csv
     import io
@@ -174,10 +184,22 @@ def build(*, correct: bool = True, refresh: bool = False, with_circuits: bool = 
                 if field_ and field_.name:
                     zone.name = field_.name
         else:
+            # SLZ fields have a VFR manual page too, under their own six-letter ident —
+            # `lkcast_text_en.html`. All 74 of B's do, with a reference point and a
+            # runway table, which is the whole basis for their okruh.
+            more, _ = load_aerodromes({z.icao for z in found}, refresh=refresh)
+            fields.update(more)
             matched = nearby_fields(found, airports_csv)
-            reference = {code: (lat, lon) for code, (_, lat, lon) in matched.items()}
+            reference = {
+                code: (f.lat, f.lon) for code, f in more.items() if f.lat is not None
+            }
+            for code, (_, lat, lon) in matched.items():
+                reference.setdefault(code, (lat, lon))
             for zone in found:
-                if zone.icao in matched:
+                field_ = more.get(zone.icao)
+                if field_ and field_.name:
+                    zone.name = field_.name
+                elif zone.icao in matched:
                     zone.name = matched[zone.icao][0].replace(" Airfield", "")
 
         measured = atz.measure_offset(found, reference)
