@@ -2123,6 +2123,41 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
             f"track rather than the air.</p>"
         )
 
+    # The map and the side view are one instrument — the same flight seen from above and
+    # from the side, driven by one cursor — so the side view is built here and pasted
+    # directly under the 3D panel rather than living in a section of its own with a
+    # heading between them. When there is no terrain there is no 3D panel, and the side
+    # view carries the section on its own.
+    side_view = f"""
+    <div class="toggle" role="group" aria-label="Ground axis for the side view">
+      <button type="button" class="toggle-button is-on" data-profile="flown" aria-pressed="true">
+        distance flown</button>
+      <button type="button" class="toggle-button" data-profile="from_start" aria-pressed="false">
+        from launch</button>
+      <button type="button" class="toggle-button" data-profile="time" aria-pressed="false">
+        time</button>
+    </div>
+    <div class="panel hero">
+      <p class="chart-title">Side view — height above the ground axis. Shading is the detected
+        phase; the trace itself is coloured by climb rate.</p>
+      <div class="profile" data-profile-view="flown">
+        {charts.altitude_profile(analysis, meteo=meteo, mode="flown", sample=sample)}
+      </div>
+      <div class="profile" data-profile-view="from_start" hidden>
+        {charts.altitude_profile(analysis, meteo=meteo, mode="from_start", sample=sample)}
+      </div>
+      <div class="profile" data-profile-view="time" hidden>
+        {charts.altitude_profile(analysis, meteo=meteo, mode="time", sample=sample)}
+      </div>
+    </div>
+    <ul class="legend">
+      <li class="ramp">{ramp}</li>
+      <li>trace colour: sink &minus;4 m/s → climb +4 m/s</li>
+      <li><span class="swatch" style="background:var(--tow);opacity:.5"></span>tow</li>
+      <li><span class="swatch" style="background:var(--climb);opacity:.5"></span>climbing</li>
+      <li><span class="swatch" style="background:var(--sink);opacity:.5"></span>gliding</li>
+    </ul>"""
+
     view3d_section = ""
     clearance = None
     if terrain is not None:
@@ -2142,10 +2177,24 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
   <section>
     <div class="section-head">
       <h2>The flight over the ground</h2>
+      <p>Hovering a moment in the side view marks the same moment on the map above, and in
+         the top view below. Click to keep it there while you look; click again, or press
+         <kbd>Esc</kbd>, to let go. A row in the climbs or glides table does the same for
+         where that phase began.</p>
     </div>
     {view3d.panel(payload, uid, kmz_uri=kmz_uri,
                   kmz_name=f"{summary.date}-{(summary.site or 'flight').replace(' ', '-')}.kmz")}
-
+{side_view}
+  </section>"""
+    else:
+        view3d_section = f"""
+  <section>
+    <div class="section-head">
+      <h2>The flight from the side</h2>
+      <p>Hovering a moment marks the same moment in the top view below. Click to keep it
+         there while you look; click again, or press <kbd>Esc</kbd>, to let go.</p>
+    </div>
+{side_view}
   </section>"""
 
     wind_chart = charts.wind_profile(analysis, meteo=meteo, uid=uid)
@@ -2241,36 +2290,12 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
 
   <section>
     <div class="section-head">
-      <h2>Side view and top view</h2>
-      <p>Hovering a moment in one chart marks the same moment in the other and in the 3D
-         view above, so a point on the climb trace can be found on the ground. Click to
-         keep it there while you look; click again, or press <kbd>Esc</kbd>, to let go. A
-         row in the climbs or glides table below does the same for where that phase
-         began.</p>
-    </div>
-    <div class="toggle" role="group" aria-label="Ground axis for the side view">
-      <button type="button" class="toggle-button is-on" data-profile="flown" aria-pressed="true">
-        distance flown</button>
-      <button type="button" class="toggle-button" data-profile="from_start" aria-pressed="false">
-        from launch</button>
-      <button type="button" class="toggle-button" data-profile="time" aria-pressed="false">
-        time</button>
+      <h2>Top view</h2>
+      <p>The same flight seen from above, on the same cursor as the side view.</p>
     </div>
     <div class="panel hero">
-      <p class="chart-title">Side view — height above the ground axis. Shading is the detected
-        phase; the trace itself is coloured by climb rate.</p>
-      <div class="profile" data-profile-view="flown">
-        {charts.altitude_profile(analysis, meteo=meteo, mode="flown", sample=sample)}
-      </div>
-      <div class="profile" data-profile-view="from_start" hidden>
-        {charts.altitude_profile(analysis, meteo=meteo, mode="from_start", sample=sample)}
-      </div>
-      <div class="profile" data-profile-view="time" hidden>
-        {charts.altitude_profile(analysis, meteo=meteo, mode="time", sample=sample)}
-      </div>
-      <div class="panel-divide"></div>
       <div class="chart-head">
-        <p class="chart-title">Top view — the course line over the ground.{" Thin straight legs are the scored free-distance route." if route else ""}</p>
+        <p class="chart-title">The course line over the ground.{" Thin straight legs are the scored free-distance route." if route else ""}</p>
         <div class="toggle toggle-small" role="group" aria-label="What the climb circles show">
           <button type="button" class="toggle-button is-on" data-circles="gain"
                   aria-pressed="true">size = height gained</button>
@@ -2281,13 +2306,6 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
       {charts.plan_view(analysis, route=route, sample=sample,
                         height=charts.plan_height(analysis))}
     </div>
-    <ul class="legend">
-      <li class="ramp">{ramp}</li>
-      <li>trace colour: sink &minus;4 m/s → climb +4 m/s</li>
-      <li><span class="swatch" style="background:var(--tow);opacity:.5"></span>tow</li>
-      <li><span class="swatch" style="background:var(--climb);opacity:.5"></span>climbing</li>
-      <li><span class="swatch" style="background:var(--sink);opacity:.5"></span>gliding</li>
-    </ul>
   </section>
 {debrief_section}
 

@@ -362,10 +362,24 @@ class TestPageText:
         depends on whether this particular day produced any findings."""
         source = pathlib.Path(render_html.__file__).read_text(encoding="utf-8")
         view = source.index("{view3d_section}")
-        charts = source.index("Side view and top view")
+        charts = source.index("<h2>Top view</h2>")
         debrief = source.index("{debrief_section}", view)
         assert view < charts < debrief, (
             "the debrief is back between the map and the charts")
+
+    def test_the_side_view_hangs_off_the_map_itself(self, tmp_path):
+        """The map and the side view are the same flight from two angles on one cursor, so
+        the side view is pasted inside the map's section — no heading, no section gap, and
+        nothing to scroll between them. With no terrain there is no map, and the side view
+        carries the section alone."""
+        source = pathlib.Path(render_html.__file__).read_text(encoding="utf-8")
+        panel = source.index("view3d.panel(payload, uid")
+        assert source.index("{side_view}", panel) - panel < 400, (
+            "the side view no longer follows the 3D panel directly")
+
+        html = render_html.render(self._analysis(tmp_path), terrain=None)
+        assert "The flight from the side" in html
+        assert 'data-profile-view="flown"' in html
 
 
 class TestBasemapSpinner:
