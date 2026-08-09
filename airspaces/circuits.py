@@ -43,20 +43,21 @@ from __future__ import annotations
 from . import geo, openair
 from .aerodromes import FEET, Aerodrome, Runway
 
-# The circuit path: downwind leg abeam, turns beyond the threshold. These are the
-# figures for a light aircraft at a full-size aerodrome, and they are the ceiling.
-BESIDE_M = 1200.0
-BEYOND_M = 2000.0
-
-# …but a circuit is flown at the speed of what uses the field, and that tracks the
-# runway. An ultralight off a 500 m SLZ strip does not fly the 5 km circuit a Cessna
-# flies off 1 100 m, and drawing one made a 2.4 km band around a 976 m ATZ. Scaled to
-# the runway between these bounds, a 1 100 m runway still gets 1 200 / 1 980 — the
-# aerodrome figures, unchanged — and a 500 m strip gets 600 / 1 000.
-BESIDE_PER_M = 1.1
-BEYOND_PER_M = 1.8
-MIN_BESIDE_M = 600.0
-MIN_BEYOND_M = 1000.0
+# The circuit path: downwind leg abeam, turns beyond the threshold.
+#
+# **Measured off the AIP's own charts, not assumed.** The VOC chart at
+# `aim.rlp.cz/vfrmanual/actual/ad/{ident}_voc.jpg` draws the published circuit, and the
+# ATZ ring on it is a known 5 500 m radius, which gives the scale to within a few metres:
+#
+#   LKCAST, RWY 10/28,   500 m strip   circuit 3 316 x 2 832 m   -> beyond 1408, beside 1416
+#   LKTA,   two runways, 1 100 + 850 m envelope 4 672 x 4 161 m  -> both circuits together
+#
+# The lesson is that **circuit size barely tracks runway length**: a 500 m SLZ strip flies
+# a circuit nearly as large as a 1 100 m aerodrome, because the size is set by how an
+# aeroplane turns, not by how long the tarmac is. An earlier version scaled these with
+# the runway and made the SLZ bands less than half the published size.
+BESIDE_M = 1300.0
+BEYOND_M = 1400.0
 
 # How wide the band around that path is, and the gap that keeps the ring simple.
 RIBBON_M = 300.0
@@ -96,12 +97,13 @@ def _rectangle(frame: _Frame, along: float, across: float):
 
 
 def dimensions(runway: Runway) -> tuple[float, float]:
-    """How far abeam the downwind leg sits, and how far past each threshold it turns."""
-    length = runway.length_m
-    return (
-        min(max(length * BESIDE_PER_M, MIN_BESIDE_M), BESIDE_M),
-        min(max(length * BEYOND_PER_M, MIN_BEYOND_M), BEYOND_M),
-    )
+    """How far abeam the downwind leg sits, and how far past each threshold it turns.
+
+    The runway is deliberately ignored — see the measurements above. It stays an
+    argument because that is the thing you would reach for if this ever does need to
+    vary, and because every caller already has one.
+    """
+    return BESIDE_M, BEYOND_M
 
 
 def box(runway: Runway, beside: float | None = None, beyond: float | None = None):

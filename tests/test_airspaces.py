@@ -388,18 +388,29 @@ def test_the_ribbon_covers_the_turns_beyond_each_threshold():
     assert not contains(ring, (along + circuits.RIBBON_M, 0))
 
 
-def test_the_circuit_is_scaled_to_the_runway():
-    """A 500 m SLZ strip does not get the 5 km circuit a 1 100 m aerodrome does — that
-    drew a 2.4 km band around a 976 m ATZ."""
+def test_the_circuit_does_not_scale_with_the_runway():
+    """Measured off the AIP's own VOC charts: LKCAST's 500 m strip flies a
+    3 316 x 2 832 m circuit, near enough what a 1 100 m aerodrome flies. Scaling these
+    with runway length made the SLZ bands less than half the published size."""
     def strip(metres):
         end = geo.destination(50.0, 15.0, 90.0, metres)
         return Runway("09", "27", 50.0, 15.0, end[0], end[1])
 
-    assert circuits.dimensions(strip(1100)) == pytest.approx((1200, 1980), abs=15)
-    assert circuits.dimensions(strip(500)) == pytest.approx((600, 1000), abs=15)
-    # Clamped at both ends, so nothing silly comes out of a 3 km runway or a 100 m one.
-    assert circuits.dimensions(strip(3000)) == (circuits.BESIDE_M, circuits.BEYOND_M)
-    assert circuits.dimensions(strip(100)) == (circuits.MIN_BESIDE_M, circuits.MIN_BEYOND_M)
+    assert circuits.dimensions(strip(500)) == circuits.dimensions(strip(1100))
+    assert circuits.dimensions(strip(500)) == (circuits.BESIDE_M, circuits.BEYOND_M)
+
+
+def test_the_band_matches_the_published_circuit_at_lkcast():
+    """The one field whose published circuit was measured end to end. Tolerances are
+    loose because the published figure came off a chart, but a band half the size or
+    twice it is a regression."""
+    end = geo.destination(49.409, 15.144, 105.5, 500)
+    runway = Runway("10", "28", 49.409, 15.144, end[0], end[1])
+    beside, beyond = circuits.dimensions(runway)
+    along = 500 + 2 * beyond + circuits.RIBBON_M
+    across = 2 * beside + circuits.RIBBON_M
+    assert along == pytest.approx(3316, rel=0.20)     # published, measured
+    assert across == pytest.approx(2832, rel=0.20)
 
 
 def test_the_gap_is_small_and_only_at_one_end():

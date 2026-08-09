@@ -169,11 +169,25 @@ so its filename is read from the directory listing instead of computed.
   one says *"do not overfly surrounding villages in lower height than 1000 ft AGL"*,
   which is a noise-abatement minimum and not the circuit at all.
 
-- **The circuit is scaled to the runway.** A circuit is flown at the speed of whatever
-  uses the field, and that tracks runway length. The aerodrome figures — 1 200 m abeam,
-  2 000 m beyond — drew a 2.4 km band around Částkovice's 976 m ATZ and 500 m strip.
-  Scaled at 1.1× and 1.8× the runway between floors of 600/1 000 m and those caps, an
-  1 100 m runway still gets 1 200/1 980 (unchanged) and a 500 m strip gets 600/1 000.
+- **The band's dimensions were measured off the AIP's own charts, and do *not* scale
+  with the runway.** The VOC chart at `.../ad/{ident}_voc.jpg` draws the published
+  circuit, and the ATZ ring on it is a known 5 500 m radius, which gives the scale to a
+  few metres. Measured:
+
+  | field | runway | published circuit |
+  |---|---|---|
+  | LKCAST | 500 m | 3 316 × 2 832 m |
+  | LKTA | 1 100 + 850 m | 4 672 × 4 161 m (both circuits together) |
+
+  A 500 m SLZ strip therefore flies a circuit nearly the size of a 1 100 m aerodrome's:
+  the size is set by how an aeroplane turns, not by how long the tarmac is. 1 300 m
+  abeam and 1 400 m beyond puts the band within +9%/+2% of LKCAST's published figure.
+
+  An earlier version scaled these with runway length, on the reasoning that a 2.4 km
+  band around a 976 m ATZ "looked disproportionate". It was the reasoning that was
+  wrong, not the band: **at an SLZ field the published circuit really is about 1.5× the
+  ATZ diameter** and legitimately extends outside it. Scaling made those bands less than
+  half the published size, which is the dangerous direction to be wrong in.
 
 - **Names come from the VFR heading, position is the fallback.** `LK[A-Z]{2}` matched
   `LKCA` and then failed on the `S`, so all 74 B fields were unnamed; the ident is two
