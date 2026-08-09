@@ -76,6 +76,23 @@ IMPORT OPENAIR FILES, or copy it into the `XCTrack/Airspaces` folder and tick it
 same screen. **Keep the normal airspace loaded too** — this file is an addition, not a
 replacement.
 
+## The two kinds of field, in the AIP's own words
+
+Both are "airfields" loosely, and the AIP distinguishes them — publication A is the first
+kind and B the second:
+
+| | LKTA, publication A | LKCAST, publication B |
+|---|---|---|
+| Czech | **veřejné vnitrostátní letiště** | **neveřejná plocha SLZ** |
+| English | **public domestic aerodrome** | **private SLZ field** |
+| short | *letiště* — aerodrome | *plocha SLZ* — SLZ field |
+| ident | 4-letter ICAO, `LKTA` | 6-letter, `LKCAST` |
+| ATZ radius | 5 500 m | ~965 m |
+
+*SLZ* is **sportovní létající zařízení**, sport flying device — the Czech category for
+ultralights, and by extension the strips they fly from. This module uses "aerodrome" and
+"SLZ field" throughout, which is what the manual's own English does.
+
 ## Sources
 
 | what | where | why this one |
@@ -168,6 +185,26 @@ so its filename is read from the directory listing instead of computed.
   Do not read a circuit altitude out of the prose: the only page that appears to state
   one says *"do not overfly surrounding villages in lower height than 1000 ft AGL"*,
   which is a noise-abatement minimum and not the circuit at all.
+
+  **The 1 000 ft AGL default was checked and holds.** The VOC chart writes the circuit
+  altitude beside the circuit at fields whose text page omits it — the number is an
+  altitude, not a length, which subtracting the elevation across five fields settles:
+
+  | field | elevation | on the chart | AGL | = metres |
+  |---|---|---|---|---|
+  | LKBORE Borek | 557 ft | 1 377 ft | 820 ft | 420 m |
+  | LKBOLE Boleradice | 650 ft | 1 800 ft | 1 150 ft | 549 m |
+  | LKBRTO Brťov | 1 610 ft | 2 624 ft | 1 014 ft | 800 m |
+  | LKBREZ Březí Falcon | 1 680 ft | 2 700 ft | 1 020 ft | 823 m |
+  | LKCAST Částkovice | 1 925 ft | 2 887 ft | 962 ft | 880 m |
+
+  Mean 993 ft AGL over elevations spanning 557–1 925 ft, and the metric values are round
+  (420 m, 800 m, 880 m) — Czech AIP practice, as at LKTA's published *2460 ft / 750 m*.
+  A length would not track elevation like that. LKTA's own chart carries no such label,
+  because its text page already publishes one.
+
+  So the estimate is good to about ±150 ft. Reading the exact figure would mean OCR on a
+  JPEG, which is why it is still an estimate and still marked `est`.
 
 - **The band's dimensions were measured off the AIP's own charts, and do *not* scale
   with the runway.** The VOC chart at `.../ad/{ident}_voc.jpg` draws the published
