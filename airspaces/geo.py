@@ -150,5 +150,13 @@ def fit_circle(points: list[tuple[float, float]]) -> tuple[float, float, float, 
     return cx, cy, radius, max(abs(r - radius) for r in radii)
 
 
+CARDINALS = "N NNE NE ENE E ESE SE SSE S SSW SW WSW W WNW NW NNW".split()
+
+
+def cardinal(degrees: float) -> str:
+    """Nearest 16-point compass name for a bearing."""
+    return CARDINALS[int(degrees / 22.5 + 0.5) % 16]
+
+
 def centroid(points: list[tuple[float, float]]) -> tuple[float, float]:
     return sum(p[0] for p in points) / len(points), sum(p[1] for p in points) / len(points)

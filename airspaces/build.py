@@ -13,16 +13,17 @@ ATZ (class W, green): aerodrome traffic zones, GND - 4000 ft AMSL. An unpowered
 paraglider may fly here, but call the aerodrome and stay out of the circuit.
 
 OKRUH (class Q, orange): the traffic circuit, ground to the published circuit
-altitude. NOT an official boundary -- a {width} m wide band following the circuit
-path, {beside} m abeam the runway and turning {beyond} m beyond each threshold. It
-is hollow: the ground over the runway itself is outside it. Drawn on BOTH sides,
-because the glider circuit is often the mirror of the powered one. The published
-circuit direction, where the AIP states one, is in the airspace name.
+altitude. NOT an official boundary -- a {width} m wide band tracing the circuit,
+which runs from the runway out to {beside} m abeam and turns {beyond} m beyond each
+threshold. TWO per runway, one each side, abutting along the runway -- which is how
+the AIP draws them, and it means the shared leg runs down the runway itself. Both
+sides because the glider circuit is often the mirror of the powered one. The
+published circuit direction, where the AIP states one, is in the airspace name.
 
-Those dimensions were measured off the AIP's own VOC charts, where the ATZ ring
-gives the scale. At LKCAST the published circuit is 3316 x 2832 m and this band is
-3600 x 2900 m. Note that at an SLZ field the circuit is LARGER than the ATZ -- about
-1.5x its diameter -- so the band sticks out of the green circle, correctly.
+The dimensions were measured off the AIP's own VOC charts, where the ATZ ring gives
+the scale. At LKCAST each published rectangle is about 2950 x 1300 m; these are
+3100 x 1300. At an SLZ field the circuit reaches well outside the small ATZ, so
+expect the band to extend past the green circle -- but it crosses it too.
 
 The band has a {gap} m break in one short end. OpenAir cannot express a polygon with
 a hole, and closing the ring through a zero-width slit makes a shape that some

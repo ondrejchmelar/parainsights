@@ -251,12 +251,17 @@ so its filename is read from the directory listing instead of computed.
   that model is also a *line with an altitude* — a power line, a cable car — which a
   volume of circling traffic is not. So the okruh stays OpenAir.
 
-- **It is a band following the circuit path, not a filled box.** 300 m wide, 1 200 m
-  abeam the runway, turning 2 000 m beyond each threshold, hollow in the middle. A
-  filled box is 12 km² per runway, most of it corners where nothing ever flies; the band
-  is 4.4 km², 37% of it, and reads like the circuit it represents. The proportions are
-  the ordinary shape of a light-aircraft circuit, not a published figure, and the name
-  and the file header both say so.
+- **It is a band following the circuit path, not a filled box — and there are two per
+  runway, one each side, abutting along the runway itself.** That is how the AIP draws
+  them: at LKCAST the two published rectangles meet on the runway line, each about
+  2 950 m long and 1 300 m wide, together filling a 2 661 m span across.
+
+  An earlier version drew a *single* ring at ±1 300 m with a hole in the middle. At an
+  SLZ field, whose ATZ is only ~976 m in radius, the entire ATZ fell inside that hole —
+  so the okruh appeared as a rectangle floating around the green circle, touching none
+  of it, and nothing was marked over the field, the approach or the climb-out. That is
+  the ground where an aeroplane is lowest and least able to avoid anybody. With two
+  rectangles the shared leg runs down the runway and crosses the ATZ, as it should.
 
 - **The band has a 60 m gap in one short end.** OpenAir has no hole primitive. Closing
   the ring through a zero-width slit produces a polygon that touches itself, and the two

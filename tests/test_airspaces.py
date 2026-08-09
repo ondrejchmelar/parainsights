@@ -316,16 +316,21 @@ def runway() -> Runway:
     return Runway("09", "27", 50.0, 15.0, end[0], end[1])
 
 
-def frame_xy(points):
-    """Ribbon points in the runway's own frame: x along it, y across, from the midpoint.
+def frame_xy(points, runway_=None):
+    """Points in the runway's own frame: along it, and across to the right of the
+    take-off direction.
 
-    The runway in these tests starts at (50, 15) and runs 1 km east, so its midpoint is
-    500 m along — anchoring the plane at the threshold instead shifts every x by that
-    and silently moves the test points into the hollow middle.
+    `Plane.to_xy` gives east/north with y *up*; an along/across basis built as
+    (sin, -cos) is the image convention with y down, and silently rotates everything.
     """
-    rw = runway()
+    rw = runway_ or runway()
     plane = geo.Plane((rw.low_lat + rw.high_lat) / 2, (rw.low_lon + rw.high_lon) / 2)
-    return [plane.to_xy(lat, lon) for lat, lon in points]
+    t = math.radians(geo.bearing(rw.low_lat, rw.low_lon, rw.high_lat, rw.high_lon))
+    out = []
+    for lat, lon in points:
+        x, y = plane.to_xy(lat, lon)
+        out.append((x * math.sin(t) + y * math.cos(t), x * math.cos(t) - y * math.sin(t)))
+    return out
 
 
 def contains(ring, point) -> bool:
@@ -340,6 +345,15 @@ def contains(ring, point) -> bool:
     return inside
 
 
+def both_sides(rw=None):
+    rw = rw or runway()
+    return [frame_xy(circuits.ribbon(rw, s), rw) for s in (1, -1)]
+
+
+def covered(point, rw=None) -> bool:
+    return any(contains(r, point) for r in both_sides(rw))
+
+
 def segments_cross(a, b, c, d) -> bool:
     def side(o, p, q):
         return (p[0] - o[0]) * (q[1] - o[1]) - (p[1] - o[1]) * (q[0] - o[0])
@@ -349,77 +363,63 @@ def segments_cross(a, b, c, d) -> bool:
     )
 
 
-def test_the_ribbon_is_a_simple_polygon():
+@pytest.mark.parametrize("side", [1, -1])
+def test_the_ribbon_is_a_simple_polygon(side):
     """A ring that touches or crosses itself is read one way under even-odd fill and
-    another under nonzero winding — the hollow centre appears or does not depending on
-    the consumer. The 60 m gap exists precisely so this assertion can hold."""
-    ring = frame_xy(circuits.ribbon(runway()))
+    another under nonzero winding. The slit exists so this assertion can hold."""
+    ring = frame_xy(circuits.ribbon(runway(), side))
     n = len(ring)
     for i in range(n):
         for j in range(i + 1, n):
             if j == i or (j + 1) % n == i or (i + 1) % n == j:
                 continue
-            a, b = ring[i], ring[(i + 1) % n]
-            c, d = ring[j], ring[(j + 1) % n]
-            assert not segments_cross(a, b, c, d), f"edges {i} and {j} cross"
+            assert not segments_cross(ring[i], ring[(i + 1) % n],
+                                      ring[j], ring[(j + 1) % n]), f"edges {i},{j}"
 
 
-def test_the_ribbon_is_hollow():
-    ring = frame_xy(circuits.ribbon(runway()))
-    assert not contains(ring, (0, 0))            # over the runway itself
-    assert not contains(ring, (0, 600))          # between runway and downwind leg
+def test_each_side_runs_from_the_runway_outward():
+    """The AIP draws two rectangles abutting *on* the runway, not one ring around the
+    field. Drawing the ring left the whole ATZ inside the hole — nothing marked over the
+    field, the approach or the climb-out, which is where the aeroplanes are lowest."""
+    ring = frame_xy(circuits.ribbon(runway(), 1))
+    across = [a for _, a in ring]
+    assert min(across) == pytest.approx(-circuits.RIBBON_M / 2, abs=1)   # on the runway
+    assert max(across) == pytest.approx(circuits.BESIDE_M + circuits.RIBBON_M / 2, abs=1)
+    # And the other side is its mirror.
+    other = [a for _, a in frame_xy(circuits.ribbon(runway(), -1))]
+    assert max(other) == pytest.approx(circuits.RIBBON_M / 2, abs=1)
 
 
-def test_the_ribbon_covers_both_downwind_legs():
-    """Both sides is the whole design: the glider circuit mirrors the powered one, so a
-    band on the published side alone would be wrong at the busiest fields."""
-    beside, _ = circuits.dimensions(runway())
-    ring = frame_xy(circuits.ribbon(runway()))
-    assert contains(ring, (0, beside))
-    assert contains(ring, (0, -beside))
+def test_the_band_covers_the_runway_and_the_approach():
+    """The reason the shape changed: this is the ground a paraglider shares with an
+    aeroplane that is low and committed."""
+    assert covered((0, 0))                       # over the runway
+    assert covered((250, 0))                     # the threshold
+    assert covered((950, 0))                     # 700 m out on final
+    assert covered((1650, 0))                    # 1400 m out
 
 
-def test_the_ribbon_covers_the_turns_beyond_each_threshold():
-    _, beyond = circuits.dimensions(runway())
-    ring = frame_xy(circuits.ribbon(runway()))
-    along = 500 + beyond
-    assert contains(ring, (along, 500))
-    assert contains(ring, (-along, 0))
-    assert not contains(ring, (along + circuits.RIBBON_M, 0))
+def test_the_band_covers_both_downwind_legs():
+    """Both sides: the glider circuit mirrors the powered one."""
+    assert covered((0, circuits.BESIDE_M))
+    assert covered((0, -circuits.BESIDE_M))
 
 
-def test_the_circuit_does_not_scale_with_the_runway():
-    """Measured off the AIP's own VOC charts: LKCAST's 500 m strip flies a
-    3 316 x 2 832 m circuit, near enough what a 1 100 m aerodrome flies. Scaling these
-    with runway length made the SLZ bands less than half the published size."""
-    def strip(metres):
-        end = geo.destination(50.0, 15.0, 90.0, metres)
-        return Runway("09", "27", 50.0, 15.0, end[0], end[1])
-
-    assert circuits.dimensions(strip(500)) == circuits.dimensions(strip(1100))
-    assert circuits.dimensions(strip(500)) == (circuits.BESIDE_M, circuits.BEYOND_M)
+def test_the_band_is_still_hollow_and_bounded():
+    assert not covered((0, circuits.BESIDE_M / 2))          # inside the circuit
+    assert not covered((0, circuits.BESIDE_M * 1.4))        # outside it
+    assert not covered((2000, 0))                           # past the turn
 
 
-def test_the_band_matches_the_published_circuit_at_lkcast():
-    """The one field whose published circuit was measured end to end. Tolerances are
-    loose because the published figure came off a chart, but a band half the size or
-    twice it is a regression."""
-    end = geo.destination(49.409, 15.144, 105.5, 500)
-    runway = Runway("10", "28", 49.409, 15.144, end[0], end[1])
-    beside, beyond = circuits.dimensions(runway)
-    along = 500 + 2 * beyond + circuits.RIBBON_M
-    across = 2 * beside + circuits.RIBBON_M
-    assert along == pytest.approx(3316, rel=0.20)     # published, measured
-    assert across == pytest.approx(2832, rel=0.20)
-
-
-def test_the_gap_is_small_and_only_at_one_end():
-    _, beyond = circuits.dimensions(runway())
-    ring = frame_xy(circuits.ribbon(runway()))
-    along = 500 + beyond
-    assert not contains(ring, (along, 0))                      # dead centre of the gap
-    assert contains(ring, (along, circuits.GAP_M))             # just clear of it
-    assert contains(ring, (-along, 0))                         # the far end is unbroken
+def test_the_band_overlaps_its_atz():
+    """At an SLZ field the ATZ is only ~976 m in radius. A ring at +/-1300 m never
+    touched it, so the green circle carried no okruh marking at all."""
+    reached = sum(
+        1 for d in (0, 300, 600, 900)
+        for k in range(16)
+        if covered((d * math.cos(k * math.tau / 16), d * math.sin(k * math.tau / 16)))
+    )
+    assert reached > 0.25 * 64
 
 
 def test_the_ribbon_is_much_smaller_than_the_filled_box():
@@ -432,9 +432,9 @@ def test_the_ribbon_is_much_smaller_than_the_filled_box():
 
     # The exact fraction depends on the runway, since the band keeps a fixed width while
     # the box scales — so assert the point of the band, not one geometry's number.
-    band = area(frame_xy(circuits.ribbon(runway())))
+    band = sum(area(r) for r in both_sides())
     box = area(frame_xy(circuits.box(runway())))
-    assert 0.25 < band / box < 0.55
+    assert 0.25 < band / box < 0.75
 
 
 LKCAST_TABLE = "RWY Magnetic direction RWY dimensions 10 100° 500 x 15 28 280° 500 x 15"
@@ -471,10 +471,12 @@ def test_an_slz_field_gets_an_okruh_marked_estimated():
                        elevation_ft=1925.0)
     field_.runways = aerodromes.runways_from_table(LKCAST_TABLE, 49.409, 15.144)
     spaces = circuits.to_airspaces(field_)
-    assert len(spaces) == 1
-    assert spaces[0].name.startswith("OKRUH LKCAST Částkovice RWY 10/28")
-    assert "est" in spaces[0].name
-    assert spaces[0].ceiling == "2925ft AMSL"   # elevation + 1000 ft, none published
+    assert len(spaces) == 2                      # one per side of the runway
+    assert {a.meta["side"] for a in spaces} == {"NNE", "SSW"}
+    for space in spaces:
+        assert space.name.startswith("OKRUH LKCAST Částkovice RWY 10/28")
+        assert "est" in space.name
+        assert space.ceiling == "2925ft AMSL"    # elevation + 1000 ft, none published
 
 
 def test_a_six_letter_ident_still_yields_a_name():
@@ -489,14 +491,14 @@ def test_circuit_ceiling_prefers_the_published_altitude():
     space = circuits.to_airspaces(field)[0]
     assert space.ceiling == "2460ft AMSL"
     assert space.airspace_class == "Q"      # orange and silent, inside an alerting ATZ
-    assert "est" not in space.name
+    assert " est" not in space.name
 
 
 def test_an_unpublished_circuit_altitude_is_estimated_and_says_so():
     field = Aerodrome(icao="LKXX", elevation_ft=1000.0, runways=[runway()])
     space = circuits.to_airspaces(field)[0]
     assert space.ceiling == "2000ft AMSL"
-    assert "est" in space.name
+    assert " est" in space.name
 
 
 def test_no_altitude_at_all_means_no_box():

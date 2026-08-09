@@ -1,8 +1,13 @@
 """The okruh: where the landing aeroplanes are.
 
 A paraglider may fly in a Czech ATZ, but not through the traffic circuit. This draws
-that circuit as a **band following the circuit path** — a racetrack around the runway,
-300 m wide, hollow in the middle.
+each circuit as a **band following the circuit path** — 300 m wide, hollow inside —
+and there are **two per runway, one each side, abutting along the runway itself**.
+That is how the AIP draws them, and it matters: an earlier version drew a single ring
+at ±1 300 m with a hole in the middle, and at an SLZ field, whose ATZ is only ~976 m
+in radius, the entire ATZ fell inside that hole. Nothing was marked over the field,
+the approach or the climb-out — the ground where an aeroplane is lowest and least able
+to avoid anybody.
 
 **Why a band and not a filled box.** The obvious representation would be XCTrack's
 obstacle layer, and it is not available: obstacles are a curated per-country download
@@ -10,9 +15,8 @@ from airspace.xcontest.org (Austria, France, Germany, Italy, Slovenia, Switzerla
 not Czechia), there is no import path, and the request for one has been open as
 xctrack-public#855 since April 2022. An obstacle there is also a *line with an
 altitude* — a power line or a cable car — which a volume of circling traffic is not.
-So this stays OpenAir, but takes the shape the idea was reaching for: a filled box is
-14 km² of alert per runway, most of it corners where nothing ever flies, where the band
-is 4.4 km² and reads like the circuit it represents.
+So this stays OpenAir, but takes the shape the idea was reaching for: a band that reads
+like the circuit it represents, rather than a slab over everything within it.
 
 **Both sides, always.** The published handedness would let the band be half this size,
 but at a Czech aeroclub field the glider circuit is the mirror of the powered one
@@ -30,9 +34,8 @@ winding fills it in. A real 60 m gap makes the ring a *simple* polygon that ever
 implementation reads identically. The cost is a 60 m break in one short end of the
 band, which is nothing against a 300 m width.
 
-The dimensions are the ordinary shape of a light-aircraft circuit, not a published
-figure — a downwind leg about 1.2 km abeam and the turns roughly 2 km beyond each
-threshold. `AN` says so, so nobody reads the boundary as an official one.
+The dimensions come off the AIP's own VOC charts (see below), but the band is still
+this tool's drawing and not a published boundary. `AN` says so.
 
 Ceiling is the published circuit altitude where there is one. That is an *altitude*
 AMSL, which is what OpenAir wants and what a paraglider's instrument shows.
@@ -49,15 +52,16 @@ from .aerodromes import FEET, Aerodrome, Runway
 # `aim.rlp.cz/vfrmanual/actual/ad/{ident}_voc.jpg` draws the published circuit, and the
 # ATZ ring on it is a known 5 500 m radius, which gives the scale to within a few metres:
 #
-#   LKCAST, RWY 10/28,   500 m strip   circuit 3 316 x 2 832 m   -> beyond 1408, beside 1416
-#   LKTA,   two runways, 1 100 + 850 m envelope 4 672 x 4 161 m  -> both circuits together
+#   LKCAST, RWY 10/28, 500 m strip: two rectangles abutting on the runway, each about
+#   2 950 m long and 1 300 m wide -- 2 661 m across for the pair, 1 293 m beyond each
+#   threshold. LKTA, 1 100 + 850 m: both circuits together span 4 672 x 4 161 m.
 #
 # The lesson is that **circuit size barely tracks runway length**: a 500 m SLZ strip flies
 # a circuit nearly as large as a 1 100 m aerodrome, because the size is set by how an
 # aeroplane turns, not by how long the tarmac is. An earlier version scaled these with
 # the runway and made the SLZ bands less than half the published size.
-BESIDE_M = 1300.0
-BEYOND_M = 1400.0
+BESIDE_M = 1300.0   # runway centreline to the downwind leg (measured 1277-1330 m)
+BEYOND_M = 1300.0   # threshold to the turn (measured 1293 m)
 
 # How wide the band around that path is, and the gap that keeps the ring simple.
 RIBBON_M = 300.0
@@ -115,39 +119,46 @@ def box(runway: Runway, beside: float | None = None, beyond: float | None = None
     return _rectangle(frame, frame.half + beyond, beside)
 
 
-def ribbon(runway: Runway, beside: float | None = None, beyond: float | None = None,
-           width: float = RIBBON_M, gap: float = GAP_M):
-    """The circuit path thickened into a band, as one simple closed ring.
+def ribbon(runway: Runway, side: int = 1, beside: float | None = None,
+           beyond: float | None = None, width: float = RIBBON_M, gap: float = GAP_M):
+    """One side's circuit, as a band tracing that rectangle: a simple closed ring.
 
-    Traced outer edge anticlockwise from one side of the gap all the way round, then
-    back along the inner edge — so the enclosed area is the band and the middle is
-    outside it, with no self-touching anywhere.
+    **The rectangle runs from the runway outward, not around the field.** The AIP draws
+    two of them per runway, abutting along the runway itself — measured at LKCAST, each
+    is about 2 950 m long and 1 300 m wide, and together they fill the box. An earlier
+    version drew a single ring at ±`beside` with a hole in the middle, which put the
+    whole ATZ inside the hole: no marking at all over the field, the approach or the
+    climb-out, which is precisely where the aeroplanes are lowest.
+
+    `side` is +1 or −1, the two sides of the runway. Traced outer edge round, then back
+    along the inner edge, with a `gap` slit so the ring never touches itself.
     """
     fitted = dimensions(runway)
     beside = fitted[0] if beside is None else beside
     beyond = fitted[1] if beyond is None else beyond
     frame = _Frame(runway)
-    half = width / 2
-    out_along, out_across = frame.half + beyond + half, beside + half
-    in_along, in_across = frame.half + beyond - half, beside - half
+    h = width / 2
+    a = frame.half + beyond            # half-length of the circuit rectangle
     edge = gap / 2
+    mid = beside / 2                   # the slit sits mid-way up one short end
+    s = 1 if side >= 0 else -1
 
-    outer = _rectangle(frame, out_along, out_across)
-    inner = _rectangle(frame, in_along, in_across)
-    # `_rectangle` yields (-along, +across), (+along, +across), (+along, -across),
-    # (-along, -across). The outer edge has to be walked from the gap *away* from it,
-    # which is index 1 → 0 → 3 → 2; taking them in stored order instead folds the ring
-    # over itself and the polygon stops being simple.
-    return [
-        # Outer edge, from one side of the gap all the way round to the other.
-        frame.point(out_along, edge),
-        outer[1], outer[0], outer[3], outer[2],
-        frame.point(out_along, -edge),
-        # Across the width of the band, then the inner edge back.
-        frame.point(in_along, -edge),
-        inner[2], inner[3], inner[0], inner[1],
-        frame.point(in_along, edge),
-    ]
+    return [frame.point(along, s * across) for along, across in (
+        # Outer edge, from one lip of the slit all the way round to the other.
+        (a + h, mid + edge),
+        (a + h, beside + h),
+        (-(a + h), beside + h),
+        (-(a + h), -h),                # the runway-side edge, straddling the centreline
+        (a + h, -h),
+        (a + h, mid - edge),
+        # Across the band at the slit, then the inner edge back.
+        (a - h, mid - edge),
+        (a - h, h),
+        (-(a - h), h),
+        (-(a - h), beside - h),
+        (a - h, beside - h),
+        (a - h, mid + edge),
+    )]
 
 
 def ceiling_ft(field: Aerodrome) -> float | None:
@@ -159,7 +170,8 @@ def ceiling_ft(field: Aerodrome) -> float | None:
     return None
 
 
-def _name(field: Aerodrome, runway: Runway, ceiling: float | None, published: bool) -> str:
+def _name(field: Aerodrome, runway: Runway, ceiling: float | None, published: bool,
+          side: str = "") -> str:
     """`est` marks a number the AIP did not publish — an assumed 1 000 ft circuit height,
     or a runway reconstructed from the reference point and a heading rounded to 10°.
     Both apply to every SLZ field, none of which publishes a circuit altitude."""
@@ -167,6 +179,8 @@ def _name(field: Aerodrome, runway: Runway, ceiling: float | None, published: bo
     if field.name:
         parts.append(field.name)
     parts.append(f"RWY {runway.name}")
+    if side:
+        parts.append(side)
     if ceiling is not None:
         metres = round(ceiling * FEET / 10) * 10
         parts.append(f"{round(ceiling)}ft/{metres}m")
@@ -190,15 +204,24 @@ def to_airspaces(field: Aerodrome) -> list[openair.Airspace]:
     published = field.circuit_ft is not None
     out = []
     for runway in field.runways:
-        out.append(
-            openair.Airspace(
-                name=_name(field, runway, ceiling, published),
-                airspace_class="Q",
-                floor="GND",
-                ceiling=f"{round(ceiling)}ft AMSL",
-                frequency=field.frequency,
-                points=ribbon(runway),
-                meta={"icao": field.icao, "kind": "circuit", "runway": runway.name},
-            )
+        heading = geo.bearing(
+            runway.low_lat, runway.low_lon, runway.high_lat, runway.high_lon
         )
+        # One per side, as the AIP draws them. They share the runway leg, so the two
+        # overlap in a band 300 m wide along the centreline — which is the leg both
+        # circuits actually fly, so the overlap is the truth rather than an artefact.
+        for side in (1, -1):
+            where = geo.cardinal((heading + side * 90) % 360)
+            out.append(
+                openair.Airspace(
+                    name=_name(field, runway, ceiling, published, where),
+                    airspace_class="Q",
+                    floor="GND",
+                    ceiling=f"{round(ceiling)}ft AMSL",
+                    frequency=field.frequency,
+                    points=ribbon(runway, side),
+                    meta={"icao": field.icao, "kind": "circuit",
+                          "runway": runway.name, "side": where},
+                )
+            )
     return out
