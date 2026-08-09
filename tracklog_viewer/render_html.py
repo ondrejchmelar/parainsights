@@ -2050,18 +2050,13 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
     longest = max(analysis.glides, key=lambda s: s.distance) if analysis.glides else None
     total_turns = sum(s.turns or 0 for s in thermals)
 
-    # HFFTY is a free-text soup: "Google Pixel 8 17 Client:xctrack FlightId:019f…".
-    # Keep the device, drop the OS version and the identifiers.
-    device = (flight.headers.logger_type or "—").split(" Client:")[0].split(" FlightId:")[0]
-    parts = device.rsplit(" ", 1)
-    if len(parts) == 2 and parts[1].isdigit():
-        device = parts[0]
-
+    # No recorder chip: which phone logged the track answers no question a pilot asks,
+    # and the one thing the logger does decide — baro or GPS altitude — is already said
+    # in "How to read this", where it comes with its consequences.
     identity = [
         ("pilot", summary.pilot or "—"),
         ("glider", summary.glider or "—"),
         ("site", summary.site or "—"),
-        ("recorder", device),
     ]
     identity_html = "".join(
         f'<div><span class="key">{key}</span><span class="val">{charts.escape(value)}</span></div>'
