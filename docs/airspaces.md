@@ -57,7 +57,15 @@ front page:
 
 ```bash
 uv run python -m airspaces.cli --html public/airspace/index.html
-git add public/airspace && git commit -m "Republish the airspace map" && git push
+```
+
+The same map is also a **view in the report**, reached by the switch at the very top of
+the page. The tracklog viewer's `--airspace` builds it, and its argument is where the
+download sits relative to the report:
+
+```bash
+uv run python -m tracklog_viewer.cli FLIGHT.igc [...] --terrain --meteo --online \
+  --airspace airspace/ --html public/index.html
 ```
 
 Every source is cached under `~/.cache/parainsights/airspace`; `--refresh` re-fetches.
@@ -215,22 +223,43 @@ so its filename is read from the directory listing instead of computed.
   nothing red or amber on the map is in the file and that it loads alongside the usual
   airspace.
 
+- **The download carries a currency warning, and so does the file.** Airspace has an
+  effective date and this is a snapshot: an AIRAC cycle is 28 days, a NOTAM is same-day,
+  and nothing downstream can detect that the file has gone stale. So both the panel and
+  the OpenAir header name the two effective dates the reader would check against, say it
+  is informative only and not a navigation source, note that the okruh outlines are not
+  published boundaries at all, and put the responsibility where it actually sits. In the
+  file it is a banner, because a text file gets opened long after the page that offered
+  it was closed.
+
+- **In the report, the airspace map is a top-level view, not another flight tab.** The
+  flight strip chooses *which flight*; this chooses *whether you are looking at flights
+  at all*, which is a level up. It is the switch across the very top of the page.
+  Consequences: the article carries no `data-flight-report` — that attribute belongs to
+  the flight strip's controller, which hides everything that is not the open flight, and
+  the two fought over `hidden` when it did — and the `<section data-view>` wrapper is
+  emitted only when there is a second view, so reports without one keep the DOM they
+  always had.
+
+- **The viewer does not import the airspace package.** `render_html.Extra` is opaque:
+  a uid, a label, and `body`/`style`/`script` strings pasted in unexamined. The
+  composition happens in `tracklog_viewer/cli.py` behind `--airspace`, which imports
+  `airspaces` lazily — so the viewer still works with the package absent or the network
+  down. The two tools share a page, not code.
+
 ## Status
 
 Done: both goals. 82 ATZ and 114 circuit bands, 71 KB of OpenAir; the map renders all
 447 airspaces with class and floor filters, and offers the OpenAir file for download.
 Published at `public/airspace/`. 48 tests, no network.
 
-The map is currently written as a standalone page by `--html`. The article it emits is
-already shaped as `<article data-flight-report="airspace">`, which is what the tracklog
-report's existing tab strip switches on, so dropping it in as a tab there is a matter of
-adding the tab and the article to `tracklog_viewer/render_html.py` — deliberately left
-until the report and the map are wanted in one file.
+The map ships two ways: as a standalone page (`airspaces.cli --html`) and as a top-level
+view in the tracklog report (`tracklog_viewer.cli --airspace`). Both are published.
 
 ## Wanted next
 
-- **Fold the map into the flight report as a tab**, and draw the flight's own track over
-  it. The article and the tab-strip contract already match.
+- **Draw the flight's own track over the airspace map.** The view is in the report now,
+  but the two do not yet know about each other.
 - **Airspace against the track**: which zones a flight entered, how close it came, and
   at what height — the natural bridge to `tracklog_viewer/analysis.py`.
 - **Activation state.** Dropzones and restricted areas are only live sometimes; the AUP

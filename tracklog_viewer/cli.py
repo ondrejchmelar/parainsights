@@ -87,6 +87,13 @@ def main(argv: list[str] | None = None) -> int:
              "as reconstructed intent and its findings are downgraded.",
     )
     parser.add_argument(
+        "--airspace", metavar="HREF", nargs="?", const="",
+        help="add an airspace tab to the report, built by the `airspaces` tool. Needs "
+             "the network. HREF is where the OpenAir download sits relative to the "
+             "report — pass 'airspace/' when the report is at public/index.html and the "
+             "file at public/airspace/, or omit it when they are side by side.",
+    )
+    parser.add_argument(
         "--archive", type=Path, metavar="DIR",
         help="a directory of per-flight summaries (a few KB of JSON each, no track data). "
              "Every flight analysed is added to it, and the report places this one against "
@@ -125,6 +132,38 @@ def main(argv: list[str] | None = None) -> int:
         )
         args.json.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         print(f"wrote {args.json}")
+    extras = []
+    if args.airspace is not None:
+        # Imported here, not at module scope: the two tools share a tab strip, not code,
+        # and the viewer must keep working with the airspace package absent or offline.
+        from airspaces import build as airspace_build
+        from airspaces import openair as airspace_openair
+        from airspaces import render_html as airspace_html
+        from airspaces import sources as airspace_sources
+
+        overlay = airspace_build.build()
+        base_text, base_version = airspace_sources.base_airspace()
+        name = f"CZ_ATZ_{overlay.atz_date or 'current'}.txt".replace("-", "")
+        text = airspace_build.to_openair(overlay, base_version=base_version)
+        # The download has to exist where the page points, which is `--airspace`'s
+        # argument resolved against the report's own directory.
+        target = (args.html.parent / args.airspace / name) if args.html else Path(name)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8", newline="")
+        extras.append(render_html.Extra(
+            uid="airspace",
+            label="Airspace",
+            meta=f"{overlay.atz_count} ATZ &middot; okruhy",
+            body=airspace_html.body(
+                overlay, airspace_openair.read(base_text), base_version,
+                openair_name=name, openair_size=len(text),
+                openair_href=f"{args.airspace}{name}",
+            ),
+            style=airspace_html.STYLE,
+            script=airspace_html.SCRIPT,
+        ))
+        print(f"wrote {target}")
+
     if args.html:
         if len(reports) == 1:
             render_html.write(
@@ -133,10 +172,13 @@ def main(argv: list[str] | None = None) -> int:
                 terrain=reports[0]["terrain"], basemaps=reports[0]["basemaps"],
                 fetch_tiles=reports[0]["fetch_tiles"], kmz=reports[0]["kmz"],
                 archive=held if args.archive else None,
-                flight_plan=reports[0]["plan"],
+                flight_plan=reports[0]["plan"], extras=extras,
             )
         else:
-            render_html.write_multi(reports, args.html, archive=held if args.archive else None)
+            render_html.write_multi(
+                reports, args.html,
+                archive=held if args.archive else None, extras=extras,
+            )
         print(f"wrote {args.html}")
     if args.kmz:
         render_kmz.write(

@@ -29,7 +29,24 @@ or Aeroklub data unless a specific activity is active. Keep both loaded.
 ATZ geometry from {atz_source}, publication LKR315A, {atz_date}.
 Circuit altitudes and runway data from the RLP VFR manual and OurAirports.
 {correction}
-Generated {generated} by parainsights. Not for navigation; verify against the AIP."""
+
+=====================================================================
+CHECK THIS IS STILL CURRENT, AND CHECK IT AGAINST THE AIP.
+
+This is a snapshot, generated {generated}. The ATZ come from the AIRAC cycle
+effective {atz_date} and the base airspace from {base_version}. Airspace changes
+every 28-day AIRAC cycle, and a NOTAM changes it the same day. This file will
+go out of date and has no way to tell you that it has.
+
+It is INFORMATIVE ONLY. It is not a navigation source, it is not an official
+publication, and it does not replace your own preflight check. The OKRUH
+outlines are drawn by this tool from ordinary circuit proportions -- they are
+not published boundaries.
+
+The pilot in command remains responsible for knowing the airspace flown in.
+=====================================================================
+
+Built by parainsights."""
 
 CORRECTION_NOTE = """
 Note: the published ATZ polygons are offset {offset:.0f} m to the south-west of the
@@ -137,7 +154,7 @@ def build(*, correct: bool = True, refresh: bool = False, with_circuits: bool = 
     )
 
 
-def to_openair(overlay: Overlay, *, corrected: bool = True) -> str:
+def to_openair(overlay: Overlay, *, corrected: bool = True, base_version: str = "") -> str:
     east, north, samples = overlay.offset
     import math
 
@@ -159,6 +176,7 @@ def to_openair(overlay: Overlay, *, corrected: bool = True) -> str:
             gap=round(circuits.GAP_M),
             atz_source="aim.rlp.cz",
             atz_date=overlay.atz_date,
+            base_version=base_version or "Aeroklub CZ_low",
             correction=correction,
             generated=dt.date.today().isoformat(),
         ),

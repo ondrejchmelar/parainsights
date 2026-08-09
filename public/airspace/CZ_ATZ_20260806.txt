@@ -27,7 +27,24 @@
 * outlier -- the signature of an S-JTSK to WGS84 conversion without the grid. Circles
 * here are re-centred on the published reference point and clipped polygons shifted by
 * the measured mean. Use --raw to reproduce the publication unchanged.
-* Generated 2026-08-09 by parainsights. Not for navigation; verify against the AIP.
+*
+* =====================================================================
+* CHECK THIS IS STILL CURRENT, AND CHECK IT AGAINST THE AIP.
+*
+* This is a snapshot, generated 2026-08-09. The ATZ come from the AIRAC cycle
+* effective 2026-08-06 and the base airspace from 26-04-01. Airspace changes
+* every 28-day AIRAC cycle, and a NOTAM changes it the same day. This file will
+* go out of date and has no way to tell you that it has.
+*
+* It is INFORMATIVE ONLY. It is not a navigation source, it is not an official
+* publication, and it does not replace your own preflight check. The OKRUH
+* outlines are drawn by this tool from ordinary circuit proportions -- they are
+* not published boundaries.
+*
+* The pilot in command remains responsible for knowing the airspace flown in.
+* =====================================================================
+*
+* Built by parainsights.
 *
 AC W
 AN ATZ LKBA Břeclav

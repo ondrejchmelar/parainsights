@@ -37,7 +37,7 @@ button {{ font:inherit; padding:3px 10px; background:var(--panel);
 {render_html.STYLE}
 </style>
 <div class="wrap">
-{article.replace(" hidden>", ">", 1)}
+{article}
 </div>
 <script>{render_html.SCRIPT}</script>
 """
@@ -69,7 +69,10 @@ def main(argv=None) -> int:
         correct=not args.raw, refresh=args.refresh, with_circuits=not args.no_circuits
     )
 
-    text = build.to_openair(overlay, corrected=not args.raw)
+    # Fetched once. The version goes in the OpenAir header's currency warning, so it is
+    # needed even when only the file is being written; the text itself only when a map is.
+    base_text, base_version = sources.base_airspace(refresh=args.refresh)
+    text = build.to_openair(overlay, corrected=not args.raw, base_version=base_version)
     name = f"CZ_ATZ_{overlay.atz_date or 'current'}.txt".replace("-", "")
 
     if args.openair:
@@ -78,7 +81,6 @@ def main(argv=None) -> int:
               f"{len(text) / 1024:.0f} KB")
 
     if args.html:
-        base_text, version = sources.base_airspace(refresh=args.refresh)
         base = openair.read(base_text)
         # The page links to the OpenAir file rather than carrying it, so the file has
         # to be written beside the page — publishing the HTML alone gives a dead button.
@@ -86,7 +88,7 @@ def main(argv=None) -> int:
         beside = args.html.parent / name
         beside.write_text(text, encoding="utf-8", newline="")
         article = render_html.body(
-            overlay, base, version, openair_name=name, openair_size=len(text)
+            overlay, base, base_version, openair_name=name, openair_size=len(text)
         )
         args.html.write_text(_page(article, "Czech airspace"), encoding="utf-8")
         print(f"{args.html}: {len(base)} base airspaces + {len(overlay.airspaces)} added")

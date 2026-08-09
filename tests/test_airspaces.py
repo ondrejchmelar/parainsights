@@ -474,6 +474,66 @@ def test_the_download_says_the_file_is_not_a_full_airspace_set(zones):
     assert "ATZ + okruhy only" in article
 
 
+# ------------------------------------------- the airspace view inside the report
+
+
+def airspace_article(zones):
+    overlay = build.Overlay(
+        airspaces=[atz.to_airspace(z, f"ATZ {z.icao}") for z in zones],
+        zones=zones, fields={}, atz_date="2026-08-06",
+    )
+    return overlay, render_html.body(overlay, [], "26-04-01", openair_name="CZ_ATZ.txt",
+                                     openair_size=71000, openair_href="airspace/CZ_ATZ.txt")
+
+
+def test_the_article_stays_out_of_the_flight_tab_controller(zones):
+    """It lives in a top-level view section, and the flight strip's controller hides
+    every `[data-flight-report]` that is not the open flight. Carrying that attribute
+    made the two fight over `hidden`."""
+    _, article = airspace_article(zones)
+    assert "data-flight-report" not in article
+    assert " hidden>" not in article
+
+
+def test_the_download_href_can_differ_from_the_filename(zones):
+    """Embedded in a report one directory up, the link is `airspace/NAME` while the
+    saved file must still be `NAME`."""
+    _, article = airspace_article(zones)
+    assert 'href="airspace/CZ_ATZ.txt"' in article
+    assert 'download="CZ_ATZ.txt"' in article
+
+
+def test_the_page_warns_that_the_file_goes_out_of_date(zones):
+    _, article = airspace_article(zones)
+    assert "2026-08-06" in article and "26-04-01" in article
+    assert "informative only" in article
+    assert "pilot in command remains" in article.lower() or "responsible" in article
+
+
+def test_the_report_puts_extras_above_the_flight_tabs():
+    """One level up: the flight strip chooses which flight, the view switch chooses
+    whether you are looking at flights at all."""
+    from tracklog_viewer import render_html as report_html
+
+    extra = report_html.Extra(uid="airspace", label="Airspace", body="<article>x</article>")
+    page = report_html._page("t", ["<article data-flight-report='f0'></article>"],
+                             tabs="<nav id='flight-tabs'></nav>", extras=[extra])
+    assert page.index('id="views"') < page.index("flight-tabs")
+    assert '<section data-view="flights">' in page
+    assert '<section data-view="airspace" hidden>' in page
+    # And not a flight tab.
+    assert 'data-flight-tab="airspace"' not in page
+
+
+def test_a_report_with_no_extras_has_no_view_switch():
+    """The switch is meaningless with one view, and every existing report has one."""
+    from tracklog_viewer import render_html as report_html
+
+    page = report_html._page("t", ["<article></article>"], tabs="<nav></nav>")
+    assert 'id="views"' not in page
+    assert "data-view=" not in page
+
+
 def test_map_escapes_a_name_that_would_break_the_svg(zones):
     space = atz.to_airspace(zones[0], 'ATZ <b>"x"</b> & co')
     project = render_html.Projection((48.5, 51.0, 12.0, 19.0))

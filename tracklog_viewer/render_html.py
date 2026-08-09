@@ -14,6 +14,7 @@ import base64
 import datetime as dt
 import json
 import math
+from dataclasses import dataclass
 from pathlib import Path
 
 from . import (airmass, charts, debrief, geo, insolation, metrics, quicklook,
@@ -2453,7 +2454,95 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
 """
 
 
-def _page(title: str, bodies: list[str], tabs: str = "") -> str:
+@dataclass
+class Extra:
+    """A whole view in this document that is not the flight report.
+
+    Deliberately opaque: `body`, `style` and `script` are strings this renderer pastes
+    in without inspecting. That is what keeps the airspace map out of the tracklog
+    viewer's imports — the two tools share a page, not code.
+
+    An extra is **not** a flight tab. It sits one level up, in the view switcher at the
+    top of the page, because it is not another flight to compare against these ones —
+    it is a different thing to look at. Its body must therefore carry no
+    `data-flight-report`: that attribute belongs to the flight strip's controller, which
+    hides everything that is not the open flight, and the two would fight over `hidden`.
+    """
+
+    uid: str
+    label: str
+    meta: str = ""
+    body: str = ""
+    style: str = ""
+    script: str = ""
+
+
+VIEW_SCRIPT = """
+// The top-level view switch. One level above the flight tabs: those choose which
+// flight, this chooses whether you are looking at flights at all.
+(function () {
+  var nav = document.getElementById('views');
+  if (!nav) return;
+  function show(key) {
+    document.querySelectorAll('[data-view]').forEach(function (section) {
+      section.hidden = section.dataset.view !== key;
+    });
+    nav.querySelectorAll('[data-view-tab]').forEach(function (button) {
+      var on = button.dataset.viewTab === key;
+      button.classList.toggle('is-on', on);
+      button.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }
+  nav.addEventListener('click', function (event) {
+    var button = event.target.closest('[data-view-tab]');
+    if (button) show(button.dataset.viewTab);
+  });
+})();
+"""
+
+VIEW_STYLE = """
+.views { display: flex; gap: 4px; margin: 0 0 18px; border-bottom: 1px solid var(--rule);
+  padding-bottom: 0; }
+.view-tab { font: inherit; font-size: 15px; font-weight: 600; letter-spacing: 0.01em;
+  background: none; border: 0; border-bottom: 2px solid transparent; color: var(--ink-3);
+  padding: 9px 15px 8px; cursor: pointer; margin-bottom: -1px; }
+.view-tab:hover { color: var(--ink-2); }
+.view-tab.is-on { color: var(--ink); border-bottom-color: var(--climb); }
+.view-tab:focus-visible { outline: 2px solid var(--climb); outline-offset: -2px; }
+"""
+
+
+def _flights_view(tabs: str, bodies: list[str], extras: "list[Extra]") -> str:
+    """The flight report, wrapped in a view section only when there is a view to switch
+    to. Every report before extras existed had no wrapper, and adding one unconditionally
+    would change the DOM of all of them to no purpose."""
+    inner = f'{tabs}\n{"".join(bodies)}\n{quicklook.panel()}'
+    if not extras:
+        return inner
+    return f'<section data-view="flights">\n{inner}\n</section>'
+
+
+def _view_nav(extras: "list[Extra]") -> str:
+    """The switch across the top. Absent entirely when there is nothing to switch to."""
+    if not extras:
+        return ""
+    buttons = [
+        '<button type="button" class="view-tab is-on" data-view-tab="flights" '
+        'aria-pressed="true">Flights</button>'
+    ]
+    buttons += [
+        f'<button type="button" class="view-tab" data-view-tab="{e.uid}" '
+        f'aria-pressed="false">{charts.escape(e.label)}</button>'
+        for e in extras
+    ]
+    return (
+        '<nav class="views" id="views" role="group" aria-label="Choose a view">'
+        f'{"".join(buttons)}</nav>'
+    )
+
+
+def _page(title: str, bodies: list[str], tabs: str = "", extras: "list[Extra]" = ()) -> str:
     """Wrap one or more flight bodies into a complete document.
 
     The doctype is not decoration. Without it the page is in **quirks mode**, where
@@ -2469,17 +2558,20 @@ def _page(title: str, bodies: list[str], tabs: str = "") -> str:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{charts.escape(title)}</title>
-<style>{_font_face()}{STYLE}{view3d.STYLE}{view3d_gl.STYLE}{quicklook.STYLE}</style>
+<style>{_font_face()}{STYLE}{view3d.STYLE}{view3d_gl.STYLE}{quicklook.STYLE}
+{VIEW_STYLE if extras else ""}{"".join(e.style for e in extras)}</style>
 <div class="wrap">
-{tabs}
-{"".join(bodies)}
-{quicklook.panel()}
+{_view_nav(extras)}
+{_flights_view(tabs, bodies, extras)}
+{"".join(f'<section data-view="{e.uid}" hidden>{e.body}</section>' for e in extras)}
 </div>
 <div class="tooltip" id="tip" role="status" aria-live="polite"></div>
 <script>{view3d.SCRIPT}
 {view3d_gl.SCRIPT}
 {SCRIPT}</script>
 <script>{quicklook.SCRIPT}</script>
+{"".join(f"<script>{e.script}</script>" for e in extras)}
+{f"<script>{VIEW_SCRIPT}</script>" if extras else ""}
 """
 
 
@@ -2515,7 +2607,7 @@ ADD_TAB = (
 
 def render(analysis: Analysis, *, meteo=None, route=None, terrain=None,
            basemaps=None, fetch_tiles: bool = True, kmz: bytes | None = None,
-           archive=None, flight_plan=None) -> str:
+           archive=None, flight_plan=None, extras: "list[Extra]" = ()) -> str:
     """A report for a single flight, with the own-track picker alongside it."""
     summary = analysis.summary
     title = f"{summary.date} · {summary.site or 'flight'} — flight review"
@@ -2540,10 +2632,11 @@ def render(analysis: Analysis, *, meteo=None, route=None, terrain=None,
             )
         ],
         tabs,
+        extras,
     )
 
 
-def render_multi(reports: list[dict], *, archive=None) -> str:
+def render_multi(reports: list[dict], *, archive=None, extras: "list[Extra]" = ()) -> str:
     """One document holding several flights, with a picker.
 
     Each report is ``{"analysis": …, "meteo": …, "route": …}``. Bodies are all
@@ -2607,23 +2700,25 @@ def render_multi(reports: list[dict], *, archive=None) -> str:
     )
     first = reports[0]["analysis"].summary
     title = f"tracklog viewer · {len(reports)} flights from {first.pilot or 'the log'}"
-    return _page(title, bodies, tabs)
+    return _page(title, bodies, tabs, extras)
 
 
 def write(analysis: Analysis, path, *, meteo=None, route=None, terrain=None,
           basemaps=None, fetch_tiles: bool = True, kmz: bytes | None = None,
-          archive=None, flight_plan=None) -> Path:
+          archive=None, flight_plan=None, extras: "list[Extra]" = ()) -> Path:
     path = Path(path)
     path.write_text(
         render(analysis, meteo=meteo, route=route, terrain=terrain, basemaps=basemaps,
                fetch_tiles=fetch_tiles,
-               kmz=kmz, archive=archive, flight_plan=flight_plan),
+               kmz=kmz, archive=archive, flight_plan=flight_plan, extras=extras),
         encoding="utf-8",
     )
     return path
 
 
-def write_multi(reports: list[dict], path, *, archive=None) -> Path:
+def write_multi(reports: list[dict], path, *, archive=None, extras: "list[Extra]" = ()) -> Path:
     path = Path(path)
-    path.write_text(render_multi(reports, archive=archive), encoding="utf-8")
+    path.write_text(
+        render_multi(reports, archive=archive, extras=extras), encoding="utf-8"
+    )
     return path

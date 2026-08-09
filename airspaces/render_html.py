@@ -75,6 +75,10 @@ STYLE = """
 .asp-get-how { margin: 0; flex: 1 1 320px; font-size: 12.5px; color: var(--ink-2); }
 .asp-get-how code { font-size: 12px; background: var(--panel-2); padding: 1px 4px;
   border-radius: 2px; }
+.asp-warn { flex: 1 1 100%; margin: 2px 0 0; padding: 9px 12px; font-size: 12.5px;
+  line-height: 1.5; color: var(--ink-2); background: var(--panel-2);
+  border-left: 3px solid #b45309; border-radius: 3px; }
+.asp-warn strong { color: var(--ink); }
 """
 
 SCRIPT = """
@@ -364,6 +368,27 @@ def controls(top: int) -> str:
     )
 
 
+def warning(atz_date: str, base_version: str) -> str:
+    """What the file is not, stated before the reader downloads it.
+
+    Airspace has an effective date and this one is a snapshot: an AIRAC cycle is 28 days
+    and a NOTAM is same-day, so a file that was right when it was built can be wrong the
+    week after. Nothing downstream can detect that, so it is said here, with the dates
+    the reader would need to check it against.
+    """
+    return (
+        '<p class="asp-warn"><strong>Check it is still current, and check it against '
+        "the AIP.</strong> This is a snapshot: ATZ from the AIRAC cycle effective "
+        f"{_escape(atz_date)}, base airspace {_escape(base_version)}. Airspace changes "
+        "every 28-day cycle and NOTAMs change it the same day, so this file will go out "
+        "of date and cannot tell you when it has. It is <em>informative only</em> — not "
+        "a navigation source, not an official publication, and no substitute for your "
+        "own preflight check. The traffic-circuit outlines are drawn by this tool and "
+        "are not published boundaries at all. <strong>The pilot in command remains "
+        "responsible for knowing the airspace flown in.</strong></p>"
+    )
+
+
 def download_link(filename: str, label: str, note: str) -> str:
     """A link to the OpenAir file sitting next to the page.
 
@@ -374,7 +399,7 @@ def download_link(filename: str, label: str, note: str) -> str:
     page does not carry 79 KB of base64 that most readers never click.
     """
     return (
-        f'<a class="asp-download" download="{_escape(filename)}" '
+        f'<a class="asp-download" download="{_escape(filename.rsplit("/", 1)[-1])}" '
         f'href="{_escape(filename)}">'
         f'<span class="asp-dl-label">{_escape(label)}</span>'
         f'<span class="asp-dl-note">{_escape(note)}</span></a>'
@@ -382,8 +407,17 @@ def download_link(filename: str, label: str, note: str) -> str:
 
 
 def body(overlay, base, base_version: str, uid: str = "airspace",
-         openair_name: str = "", openair_size: int = 0) -> str:
-    """The airspace article, ready to drop into the report as a tab."""
+         openair_name: str = "", openair_size: int = 0, openair_href: str = "") -> str:
+    """The airspace article, ready to drop into the report.
+
+    Carries no `data-flight-report` and is not hidden: in the report it sits inside a
+    top-level view section that owns its visibility. Giving it the flight attribute put
+    it under the flight tab strip's controller too, and the two then fought over
+    `hidden` — the flight controller hides everything that is not the open flight.
+
+    `openair_href` is where the download lives *relative to the page*, which is not the
+    same as its filename once this article is embedded in a report one directory up.
+    """
     airspaces = list(base) + list(overlay.airspaces)
     rings = [a.points for a in airspaces if a.points] + [basemap.BORDER]
     project = Projection(_bounds(rings))
@@ -396,7 +430,7 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
         download = (
             '<div class="asp-get">'
             + download_link(
-                openair_name,
+                openair_href or openair_name,
                 "Download ATZ + okruhy only",
                 f"OpenAir · {overlay.atz_count} ATZ, {overlay.circuit_count} circuits "
                 f"· {openair_size / 1024:.0f} KB",
@@ -408,10 +442,11 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
             "Import under <em>Preferences → Airspaces and obstacles → Files → Import "
             "OpenAir files</em>, or copy it into the <code>XCTrack/Airspaces</code> "
             "folder and tick it there.</p>"
-            "</div>"
+            + warning(overlay.atz_date, base_version)
+            + "</div>"
         )
 
-    return f"""<article class="flight" data-flight-report="{uid}" hidden>
+    return f"""<article class="flight airspace-article" id="{uid}-article">
   <h1>Czech airspace</h1>
   <p class="lede">The published base airspace, plus the {overlay.atz_count} ATZ it
   leaves out. Scroll to zoom, drag to pan, hover for the name and limits.</p>
