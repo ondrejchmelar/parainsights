@@ -55,7 +55,12 @@ def main(argv=None) -> int:
     parser.add_argument("--raw", action="store_true",
                         help="reproduce the ATZ publication unchanged, datum error and all")
     parser.add_argument("--no-circuits", action="store_true",
-                        help="ATZ only, no traffic-circuit boxes")
+                        help="ATZ only, no traffic-circuit bands")
+    parser.add_argument("--publications", metavar="LETTERS", default="A,B",
+                        help="which RLP UAS zone publications to include. "
+                             "A=82 ICAO aerodromes, B=74 SLZ fields, C=222 heliports, "
+                             "D=195 landing sites. Default A,B — C and D are mostly "
+                             "hospital pads and add 417 small circles.")
     parser.add_argument("--refresh", action="store_true",
                         help="re-fetch every source instead of using the cache")
     parser.add_argument("--report", action="store_true",
@@ -65,8 +70,14 @@ def main(argv=None) -> int:
     if not (args.openair or args.html or args.report):
         parser.error("nothing to do: pass --openair, --html or --report")
 
+    pubs = [p.strip().upper() for p in args.publications.split(",") if p.strip()]
+    unknown = [p for p in pubs if p not in sources.PUBLICATIONS]
+    if unknown:
+        parser.error(f"unknown publication(s) {', '.join(unknown)}; "
+                     f"choose from {', '.join(sources.PUBLICATIONS)}")
     overlay = build.build(
-        correct=not args.raw, refresh=args.refresh, with_circuits=not args.no_circuits
+        correct=not args.raw, refresh=args.refresh,
+        with_circuits=not args.no_circuits, publications=pubs,
     )
 
     # Fetched once. The version goes in the OpenAir header's currency warning, so it is

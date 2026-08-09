@@ -134,6 +134,35 @@ def test_correction_recentres_a_circle_on_the_reference_point():
         assert fixed.shifted_by == pytest.approx(math.hypot(85.0, 78.0), abs=1.0)
 
 
+@pytest.mark.parametrize(
+    "ident, code, number",
+    [
+        ("905LKBA", "LKBA", "905"),      # publication A: zone number + ICAO
+        ("LKCAST", "LKCAST", ""),        # B: an SLZ field, not an ICAO code
+        ("HELLKUHIII", "HELLKUHIII", ""),  # C: a heliport
+        ("PISLK011II", "PISLK011II", ""),  # D: a landing site
+    ],
+)
+def test_ident_forms_across_the_four_publications(ident, code, number):
+    """Only A prefixes the ICAO with a zone number. Slicing `ident[3:]` unconditionally
+    turned `LKCAST` into `AST`, which is why Částkovice could not be found."""
+    assert atz.split_ident(ident) == (code, number)
+
+
+def test_a_publication_b_zone_keeps_its_whole_ident():
+    geojson = {"features": [{
+        "properties": {"ident": "LKCAST"},
+        "geometry": {"type": "Polygon", "coordinates": [[
+            [15.144 + 0.013 * math.cos(t / 40 * math.tau),
+             49.409 + 0.0088 * math.sin(t / 40 * math.tau)] for t in range(40)
+        ]]},
+    }]}
+    zone = atz.parse(geojson, publication="B")[0]
+    assert zone.icao == "LKCAST"
+    assert zone.publication == "B"
+    assert not zone.is_aerodrome
+
+
 def test_correction_is_skipped_without_enough_samples(zones):
     """Fewer than five circles is not enough to call a systematic offset, so the
     geometry must pass through untouched rather than be shifted on noise."""
@@ -503,11 +532,39 @@ def test_the_download_href_can_differ_from_the_filename(zones):
     assert 'download="CZ_ATZ.txt"' in article
 
 
-def test_the_page_warns_that_the_file_goes_out_of_date(zones):
+def test_the_page_warns_and_puts_responsibility_on_the_pilot(zones):
+    """Short by design — the dates it would otherwise recite are in the sources table."""
     _, article = airspace_article(zones)
-    assert "2026-08-06" in article and "26-04-01" in article
-    assert "informative only" in article
-    assert "pilot in command remains" in article.lower() or "responsible" in article
+    assert "no guarantee" in article
+    assert "Pilots are responsible for the airspace they fly in" in article
+
+
+def test_the_sources_table_says_where_each_layer_came_from(zones):
+    """The question a reader has is 'that green circle — who says so?', and only a
+    per-layer table answers it."""
+    _, article = airspace_article(zones)
+    assert "What is on this map, and where it came from" in article
+    assert "Aeroklub" in article and "26-04-01" in article        # base airspace
+    assert "LKR315" in article and "2026-08-06" in article        # ATZ
+    assert "not a published boundary" in article                  # circuits
+    # Every legend colour appears as a swatch in the table.
+    for _, _, colour in render_html.CLASSES:
+        assert colour in article
+
+
+def test_every_source_is_a_link_to_the_file_it_came_from(zones):
+    """So currency can be checked at the source instead of taken on trust. A link is
+    not a fetch at view time, so the offline guarantee is intact."""
+    overlay, article = airspace_article(zones)
+    table = article[article.index('<table class="asp-src"'):]
+    table = table[:table.index("</table>")]
+    hrefs = re.findall(r'href="([^"]+)"', table)
+    assert any("airspace.aeroklub.cz" in h and h.endswith("26-04-01.txt") for h in hrefs)
+    assert any("ourairports.com" in h for h in hrefs)
+    assert any("vfrmanual" in h for h in hrefs)
+    # One link per publication actually included, pointing at that AIRAC cycle.
+    for pub in overlay.by_publication:
+        assert any(f"LKR315{pub}.json" in h and "2026_08_06" in h for h in hrefs)
 
 
 def test_the_report_puts_extras_above_the_flight_tabs():
@@ -532,6 +589,20 @@ def test_a_report_with_no_extras_has_no_view_switch():
     page = report_html._page("t", ["<article></article>"], tabs="<nav></nav>")
     assert 'id="views"' not in page
     assert "data-view=" not in page
+
+
+def test_the_label_does_not_hide_itself_on_a_touchscreen():
+    """A touchscreen fires pointerout when the finger lifts, so a hover-driven label
+    appeared and vanished inside one tap. Touch is now tap-to-pin."""
+    script = render_html.SCRIPT
+    assert "e.pointerType === 'touch'" in script
+    # pointerout must bail out on touch rather than hiding.
+    out = script[script.index("'pointerout'"):]
+    out = out[:out.index("});")]
+    assert "e.pointerType === 'touch') return" in out
+    # And a tap has to be able to show it in the first place.
+    down = script[script.index("svg.addEventListener('pointerdown', function (e) {\n    if (!tip"):]
+    assert "showTip(zone, e.clientX, e.clientY, true)" in down[:400]
 
 
 def test_map_escapes_a_name_that_would_break_the_svg(zones):

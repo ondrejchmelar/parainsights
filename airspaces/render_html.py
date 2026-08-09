@@ -79,6 +79,20 @@ STYLE = """
   line-height: 1.5; color: var(--ink-2); background: var(--panel-2);
   border-left: 3px solid #b45309; border-radius: 3px; }
 .asp-warn strong { color: var(--ink); }
+.asp-src { width: 100%; border-collapse: collapse; margin: 18px 0 0; font-size: 12.5px; }
+.asp-src caption { text-align: left; font-size: 12.5px; font-weight: 600;
+  color: var(--ink-2); padding: 0 0 6px; }
+.asp-src th { text-align: left; font-weight: 600; font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-3);
+  border-bottom: 1px solid var(--rule); padding: 0 10px 5px 0; }
+.asp-src td { padding: 7px 10px 7px 0; border-bottom: 1px solid var(--rule);
+  color: var(--ink-2); vertical-align: top; }
+.asp-src a { color: inherit; text-decoration: underline;
+  text-decoration-color: var(--ink-3); text-underline-offset: 2px; }
+.asp-src a:hover { color: var(--ink); text-decoration-color: currentColor; }
+.asp-src-key { color: var(--ink) !important; }
+.asp-src-key .asp-swatch { margin-right: 5px; vertical-align: -1px; }
+.asp-src-when { white-space: nowrap; font-variant-numeric: tabular-nums; }
 """
 
 SCRIPT = """
@@ -170,21 +184,54 @@ SCRIPT = """
   var slider = document.getElementById('asp-floor');
   if (slider) slider.addEventListener('input', refilter);
 
-  svg.addEventListener('pointerover', function (e) {
-    var zone = e.target.closest('.asp-zone');
-    if (!zone || !tip) return;
+  // The label: hover on a mouse, tap-to-pin on a touchscreen.
+  //
+  // A touchscreen fires pointerover on touch-down and pointerout on touch-up, so a
+  // hover-driven label appears and vanishes within the same tap — which is exactly
+  // what it did. On touch the label is therefore pinned by a tap and dismissed by
+  // tapping somewhere else, and it is placed *above* the finger, because a label under
+  // the fingertip is a label you cannot read.
+  function placeTip(x, y, above) {
+    var holder = tip.parentNode.getBoundingClientRect();
+    var left = x - holder.left + (above ? -tip.offsetWidth / 2 : 12);
+    var top = y - holder.top + (above ? -tip.offsetHeight - 16 : 12);
+    // Keep it inside the map rather than letting it hang off an edge.
+    left = Math.max(4, Math.min(left, holder.width - tip.offsetWidth - 4));
+    top = Math.max(4, top);
+    tip.style.left = left + 'px';
+    tip.style.top = top + 'px';
+  }
+  function showTip(zone, x, y, above) {
     tip.textContent = zone.dataset.label;
     tip.classList.add('is-on');
+    placeTip(x, y, above);
+  }
+  function hideTip() { if (tip) tip.classList.remove('is-on'); }
+
+  svg.addEventListener('pointerover', function (e) {
+    if (!tip || e.pointerType === 'touch') return;
+    var zone = e.target.closest('.asp-zone');
+    if (zone) showTip(zone, e.clientX, e.clientY, false);
   });
   svg.addEventListener('pointermove', function (e) {
-    if (!tip || !tip.classList.contains('is-on')) return;
-    var holder = tip.parentNode.getBoundingClientRect();
-    tip.style.left = (e.clientX - holder.left + 12) + 'px';
-    tip.style.top = (e.clientY - holder.top + 12) + 'px';
+    if (!tip || e.pointerType === 'touch') return;
+    if (tip.classList.contains('is-on')) placeTip(e.clientX, e.clientY, false);
   });
   svg.addEventListener('pointerout', function (e) {
-    if (tip && !e.relatedTarget) tip.classList.remove('is-on');
-    else if (tip && !e.relatedTarget.closest('.asp-zone')) tip.classList.remove('is-on');
+    // Never on touch: pointerout there means the finger lifted, not that the label
+    // stopped being wanted.
+    if (!tip || e.pointerType === 'touch') return;
+    if (!e.relatedTarget || !e.relatedTarget.closest('.asp-zone')) hideTip();
+  });
+  svg.addEventListener('pointerdown', function (e) {
+    if (!tip || e.pointerType !== 'touch') return;
+    var zone = e.target.closest('.asp-zone');
+    if (zone) showTip(zone, e.clientX, e.clientY, true);
+    else hideTip();
+  });
+  // A tap anywhere else in the document puts it away.
+  document.addEventListener('pointerdown', function (e) {
+    if (tip && e.pointerType === 'touch' && !svg.contains(e.target)) hideTip();
   });
 
   var reset = document.getElementById('asp-reset');
@@ -368,24 +415,102 @@ def controls(top: int) -> str:
     )
 
 
-def warning(atz_date: str, base_version: str) -> str:
-    """What the file is not, stated before the reader downloads it.
+def _atz_row(overlay, clipped: int, shift: float) -> str:
+    """What the ATZ layer actually contains, per publication."""
+    counts = overlay.by_publication
+    parts = []
+    if counts.get("A"):
+        parts.append(f"{counts['A']} at ICAO aerodromes, 5 500 m")
+    if counts.get("B"):
+        parts.append(f"{counts['B']} SLZ fields, ~1 km")
+    if counts.get("C"):
+        parts.append(f"{counts['C']} heliports")
+    if counts.get("D"):
+        parts.append(f"{counts['D']} landing sites")
+    detail = "; ".join(parts)
+    extra = []
+    if clipped:
+        extra.append(f"{clipped} clipped by CTR/TMA")
+    if shift >= 1:
+        extra.append(f"aerodrome positions corrected by {shift:.0f} m")
+    if extra:
+        detail += " — " + ", ".join(extra)
+    return f"ATZ — {detail}"
 
-    Airspace has an effective date and this one is a snapshot: an AIRAC cycle is 28 days
-    and a NOTAM is same-day, so a file that was right when it was built can be wrong the
-    week after. Nothing downstream can detect that, so it is said here, with the dates
-    the reader would need to check it against.
+
+def _link(href: str, text: str) -> str:
+    """A link out to a source. Not a request at view time — only when clicked — so this
+    does not break the rule that a published artifact fetches nothing."""
+    return f'<a href="{_escape(href)}" rel="noreferrer">{_escape(text)}</a>'
+
+
+def sources_table(overlay, base_version: str, shift: float) -> str:
+    """Which layer on the map came from where. State, not explanation.
+
+    Keyed by the legend swatch, because the question a reader actually has is "that
+    green circle — who says so?" and a paragraph cannot answer it colour by colour.
+    Every source links to the file it actually came from, so the reader can check
+    currency at the source rather than take this table's word for it.
     """
+    from . import sources
+
+    colour = dict((key, hue) for key, _, hue in CLASSES)
+    clipped = len(overlay.zones) - overlay.circle_count
+    stamp = overlay.atz_date.replace("-", "_")
+    aeroklub = _link(
+        f"{sources.AEROKLUB_DIR}CZ_low_{base_version}.txt",
+        "Aeroklub ČR — CZ_low, Jan Zahradka",
+    )
+    zone_links = ", ".join(
+        _link(sources.RLP_ATZ.format(date=stamp, pub=pub), f"LKR315{pub}")
+        for pub in sorted(overlay.by_publication)
+    )
+    rows = [
+        (["base", "restricted"],
+         "Controlled, restricted, danger, prohibited",
+         aeroklub,
+         _escape(base_version)),
+        (["gliding"],
+         "Gliding areas, dropzones, PGZ",
+         aeroklub,
+         _escape(base_version)),
+        (["atz"],
+         _atz_row(overlay, clipped, shift),
+         f"{_link('https://aim.rlp.cz/', 'ŘLP ČR')} — UAS zones, {zone_links}",
+         _escape(overlay.atz_date)),
+        (["circuit"],
+         "Traffic circuits (okruhy) — not a published boundary",
+         "drawn by this tool, from "
+         + _link("https://aim.rlp.cz/vfrmanual/actual/lkta_text_en.html",
+                 "AIP VFR manual")
+         + " circuit altitudes and "
+         + _link("https://ourairports.com/countries/CZ/", "OurAirports")
+         + " runway positions",
+         "—"),
+    ]
+    body = "".join(
+        "<tr><td class='asp-src-key'>"
+        + "".join(
+            f'<span class="asp-swatch" style="background:{colour[k]}"></span>'
+            for k in keys
+        )
+        + f"{label}</td><td>{source}</td><td class='asp-src-when'>{when}</td></tr>"
+        for keys, label, source, when in rows
+    )
     return (
-        '<p class="asp-warn"><strong>Check it is still current, and check it against '
-        "the AIP.</strong> This is a snapshot: ATZ from the AIRAC cycle effective "
-        f"{_escape(atz_date)}, base airspace {_escape(base_version)}. Airspace changes "
-        "every 28-day cycle and NOTAMs change it the same day, so this file will go out "
-        "of date and cannot tell you when it has. It is <em>informative only</em> — not "
-        "a navigation source, not an official publication, and no substitute for your "
-        "own preflight check. The traffic-circuit outlines are drawn by this tool and "
-        "are not published boundaries at all. <strong>The pilot in command remains "
-        "responsible for knowing the airspace flown in.</strong></p>"
+        '<table class="asp-src"><caption>What is on this map, and where it came from'
+        "</caption><thead><tr><th>Layer</th><th>Source</th><th>Effective</th></tr>"
+        f"</thead><tbody>{body}</tbody></table>"
+    )
+
+
+def warning() -> str:
+    """Short on purpose. The dates it would otherwise recite are in the sources table
+    below the map, which is where a reader goes to check currency anyway."""
+    return (
+        '<p class="asp-warn">Provided with no guarantee — it may be out of date or '
+        "wrong. <strong>Pilots are responsible for the airspace they fly in.</strong> "
+        "Check the AIP and NOTAMs before flying.</p>"
     )
 
 
@@ -442,7 +567,7 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
             "Import under <em>Preferences → Airspaces and obstacles → Files → Import "
             "OpenAir files</em>, or copy it into the <code>XCTrack/Airspaces</code> "
             "folder and tick it there.</p>"
-            + warning(overlay.atz_date, base_version)
+            + warning()
             + "</div>"
         )
 
@@ -456,13 +581,5 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
     {map_svg(airspaces, project)}
     <div class="asp-name" id="asp-name"></div>
   </div>
-  <p class="asp-hint">
-    Base airspace: <strong>CZ_low {_escape(base_version)}</strong>, Jan Zahradka for
-    Aeroklub ČR — the same data airspace.xcontest.org carries for Czechia, taken from
-    the origin rather than the mirror. ATZ: RLP publication LKR315A,
-    {_escape(overlay.atz_date)}, {overlay.circle_count} of {len(overlay.zones)} refitted
-    as exact 5 500 m circles and the rest kept as clipped polygons; all of them shifted
-    {shift:.0f} m north-east to correct a datum error in the source, measured over
-    {samples} zones. Circuit boxes are drawn by this tool and are not an official
-    boundary. Not for navigation.</p>
+  {sources_table(overlay, base_version, shift)}
 </article>"""

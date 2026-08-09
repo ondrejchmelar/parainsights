@@ -27,6 +27,7 @@ nothing a pilot can fly, but it is a known error and there is no reason to copy 
 from __future__ import annotations
 
 import math
+import re
 import statistics
 from dataclasses import dataclass
 
@@ -62,10 +63,28 @@ class ATZ:
     points: list[tuple[float, float]]
     fit_error: float
     shifted_by: float = 0.0
+    publication: str = "A"
+    name: str = ""
 
     @property
     def is_circle(self) -> bool:
         return self.radius_m is not None
+
+    @property
+    def is_aerodrome(self) -> bool:
+        """A publication-A zone: a real ICAO aerodrome with a VFR manual entry."""
+        return self.publication == "A"
+
+
+# `905LKBA` in publication A; `LKCAST` in B; `HELLKUHIII` and `PISLK011II` in C and D.
+_NUMBERED = re.compile(r"^(\d{3})(LK[A-Z]{2})$")
+
+
+def split_ident(ident: str) -> tuple[str, str]:
+    """(code, zone-number). Publication A prefixes the ICAO with a zone number; the
+    others do not, and their idents are not ICAO codes at all."""
+    match = _NUMBERED.match(ident)
+    return (match.group(2), match.group(1)) if match else (ident, "")
 
 
 def _ring(feature) -> list[tuple[float, float]]:
@@ -76,11 +95,12 @@ def _ring(feature) -> list[tuple[float, float]]:
     return ring
 
 
-def parse(geojson: dict) -> list[ATZ]:
-    """Every ATZ in the publication, as circles where they are circles."""
+def parse(geojson: dict, publication: str = "A") -> list[ATZ]:
+    """Every zone in the publication, as circles where they are circles."""
     out = []
     for feature in geojson.get("features", []):
         ident = feature["properties"]["ident"]
+        code, zone_number = split_ident(ident)
         ring = _ring(feature)
         if len(ring) < 3:
             continue
@@ -96,20 +116,22 @@ def parse(geojson: dict) -> list[ATZ]:
             # the fitted circle rather than the source ring, so a renderer shows the
             # same geometry the file carries — and 64 points rather than 3 549.
             out.append(
-                ATZ(ident[3:], ident[:3], clat, clon, radius,
-                    openair.circle_points((clat, clon), radius), error)
+                ATZ(code, zone_number, clat, clon, radius,
+                    openair.circle_points((clat, clon), radius), error,
+                    publication=publication)
             )
         else:
             simple = geo.simplify(planar, SIMPLIFY_TOLERANCE)
             out.append(
                 ATZ(
-                    ident[3:],
-                    ident[:3],
+                    code,
+                    zone_number,
                     lat0,
                     lon0,
                     None,
                     [plane.to_ll(x, y) for x, y in simple],
                     error,
+                    publication=publication,
                 )
             )
     return sorted(out, key=lambda z: z.icao)
@@ -152,14 +174,15 @@ def correct(zones: list[ATZ], reference: dict[str, tuple[float, float]]) -> list
             out.append(
                 ATZ(zone.icao, zone.zone, lat, lon, zone.radius_m,
                     openair.circle_points((lat, lon), zone.radius_m),
-                    zone.fit_error, moved)
+                    zone.fit_error, moved, zone.publication, zone.name)
             )
         else:
             points = [geo.offset(lat, lon, east, north) for lat, lon in zone.points]
             lat, lon = geo.offset(zone.lat, zone.lon, east, north)
             out.append(
                 ATZ(zone.icao, zone.zone, lat, lon, zone.radius_m, points,
-                    zone.fit_error, math.hypot(east, north))
+                    zone.fit_error, math.hypot(east, north),
+                    zone.publication, zone.name)
             )
     return out
 

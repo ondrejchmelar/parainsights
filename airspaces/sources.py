@@ -36,7 +36,21 @@ from pathlib import Path
 
 CACHE = Path.home() / ".cache" / "parainsights" / "airspace"
 
-RLP_ATZ = "https://aim.rlp.cz/data/uas/{date}/actual/LKR315A.json"
+RLP_ATZ = "https://aim.rlp.cz/data/uas/{date}/actual/LKR315{pub}.json"
+
+# The UAS zone data comes in four publications, all GND - 4000 ft AMSL, none of them
+# indexed anywhere — they were found by asking for the next letter.
+#
+#   A  82 ATZ at ICAO aerodromes, `905LKBA`,   5 500 m
+#   B  74 SLZ/ultralight fields,  `LKCAST`,      ~965 m
+#   C  222 heliports,             `HELLKUHIII`,  127-1 979 m
+#   D  195 landing sites,         `PISLK011II`,  126-1 976 m
+#
+# A and B are aerodromes with circuit traffic and are the default. C and D are mostly
+# hospital pads and small strips: 417 more circles for a paraglider to be warned about,
+# which is why they are opt-in.
+PUBLICATIONS = ("A", "B", "C", "D")
+DEFAULT_PUBLICATIONS = ("A", "B")
 AEROKLUB_DIR = "https://airspace.aeroklub.cz/docs/public/"
 VFR_MANUAL = "https://aim.rlp.cz/vfrmanual/actual/{icao}_text_en.html"
 OURAIRPORTS = "https://davidmegginson.github.io/ourairports-data/{table}.csv"
@@ -80,18 +94,21 @@ def _try(url: str, **kwargs) -> bytes | None:
         return None
 
 
-def atz(*, refresh: bool = False, on: dt.date | None = None) -> dict:
-    """The current ATZ publication, as parsed GeoJSON.
+def atz(*, refresh: bool = False, on: dt.date | None = None, pub: str = "A") -> dict:
+    """One UAS zone publication, as parsed GeoJSON.
 
     The URL carries the AIRAC date it was published under and there is no index, so
     walk back from the current cycle until one answers.
     """
     for date in airac_dates(on):
         stamp = date.strftime("%Y_%m_%d")
-        data = _try(RLP_ATZ.format(date=stamp), cache_key=f"atz-{stamp}.json", refresh=refresh)
+        data = _try(
+            RLP_ATZ.format(date=stamp, pub=pub),
+            cache_key=f"atz{pub}-{stamp}.json", refresh=refresh,
+        )
         if data:
             return json.loads(data)
-    raise RuntimeError("no ATZ publication found in the last 14 AIRAC cycles")
+    raise RuntimeError(f"no LKR315{pub} publication in the last 14 AIRAC cycles")
 
 
 def base_airspace(*, refresh: bool = False, variant: str = "CZ_low") -> tuple[str, str]:

@@ -80,7 +80,7 @@ replacement.
 
 | what | where | why this one |
 |---|---|---|
-| ATZ geometry | `aim.rlp.cz/data/uas/{AIRAC}/actual/LKR315A.json` | the only machine-readable publication of Czech ATZ; the AIP gives them as prose |
+| ATZ geometry | `aim.rlp.cz/data/uas/{AIRAC}/actual/LKR315{A,B,C,D}.json` | the only machine-readable publication of Czech ATZ; the AIP gives them as prose |
 | base airspace | `airspace.aeroklub.cz/docs/public/CZ_low_*.txt` | Jan Zahradka for Aeroklub ČR, free to use |
 | circuit altitude, ARP, circuit prose | `aim.rlp.cz/vfrmanual/actual/{icao}_text_en.html` | official, and the header line is fixed-format |
 | runway thresholds | OurAirports `runways.csv` | public domain, and the VFR manual has no thresholds |
@@ -125,18 +125,46 @@ so its filename is read from the directory listing instead of computed.
   50 N, which reads the 5 500 m radius as 5 490 m. The whole argument for replacing a
   polygon with a circle is that the circle is exact, so the geodesy has to be too.
 
-- **The published ATZ geometry is 117 m out, and is corrected.** The fitted centres sit
-  a mean 116.9 m from the aerodrome reference points on a mean bearing of 226°
-  (sd 15°) — systematic, not scatter. Two independent sources agree with each other and
-  not with it: RLP's own VFR manual and OurAirports are 7.3 m apart, and both are ~110 m
-  from the zone centre. The signature is an S-JTSK → WGS84 conversion without the
-  transformation grid. Circles are therefore re-centred on the published reference point
-  and clipped polygons shifted by the mean measured across all the circles. `--raw`
-  reproduces the publication unchanged. Written up for RLP in `atz-datum-hlaseni.md`.
+- **There are four zone publications, not one, and nothing indexes them.** `LKR315A` is
+  82 ATZ at ICAO aerodromes; `LKR315B` is 74 SLZ/ultralight fields; `C` is 222 heliports
+  and `D` 195 landing sites. They were found by asking for the next letter. A and B are
+  the default — aerodromes with circuit traffic; C and D are mostly hospital pads and add
+  417 small circles, so they are behind `--publications A,B,C,D`. **Missing B is what
+  made Částkovice (`LKCAST`) absent**, and it is 74 airfields, not an edge case.
+
+- **Only publication A prefixes the ICAO with a zone number.** A uses `905LKBA`; B uses
+  `LKCAST`, C `HELLKUHIII`, D `PISLK011II`, and none of those is an ICAO code. Slicing
+  `ident[3:]` unconditionally turns `LKCAST` into `AST`. `split_ident` matches the
+  numbered form explicitly and leaves everything else whole.
+
+- **The published ATZ geometry is 117 m out, and is corrected — but only publication A
+  is wrong.** A's fitted centres sit a mean 116.9 m from the aerodrome reference points
+  on a mean bearing of 226° (sd 15°) — systematic, not scatter. Two independent sources
+  agree with each other and not with it: RLP's own VFR manual and OurAirports are 7.3 m
+  apart, and both are ~110 m from the zone centre. The signature is an S-JTSK → WGS84
+  conversion without the transformation grid. **Publication B, same organisation and same
+  effective date, is right to 5 m** — which is why the offset is measured *per
+  publication* and never across them: averaging a real error with clean data would move
+  both. `--raw` reproduces the publications unchanged. Written up for RLP in
+  `atz-datum-hlaseni.md`, where B's cleanliness is the strongest evidence that the fault
+  is in one pipeline rather than in the zone data as a whole.
 
   The correction refuses to act on fewer than five circular samples — below that an
   offset cannot be called systematic, and shifting real geometry on noise is worse than
   leaving a known small error alone.
+
+- **B, C and D zones are named by position, not by code.** Their idents are not ICAO
+  codes, they have no VFR manual page and no OurAirports `ident` row, so the only handle
+  is where they are: the nearest listed Czech airfield within 2 km supplies the name.
+  73 of B's 74 match, which is how `LKCAST` reads as *Částkovice*. They get no okruh —
+  an SLZ field publishes no circuit altitude, and inventing one would be worse than
+  leaving it out.
+
+- **The map label is hover on a mouse and tap-to-pin on a touchscreen.** A touchscreen
+  fires `pointerover` on touch-down and `pointerout` on touch-up, so a hover-driven label
+  appeared and vanished inside a single tap — which is exactly what it did on a phone.
+  On touch it is now pinned by a tap, dismissed by tapping elsewhere, and drawn *above*
+  the finger, because a label under the fingertip cannot be read.
 
 - **The okruh is not an XCTrack obstacle, because it cannot be.** Obstacles would be the
   natural fit — they are the layer with proximity warnings and altitude labels — but

@@ -64,6 +64,20 @@ soubor zón, nikoli vztažné body.
 | LKCB | 50,065554 N, 12,411976 E | 50,066389 N, 12,412778 E | 109 m |
 | LKCE | 50,708596 N, 14,565507 E | 50,709444 N, 14,566667 E | 125 m |
 
+**Publikace LKR315B stejnou vadu nemá**
+
+Pro srovnání jsem stejným postupem změřil i publikaci `LKR315B` (74 ploch SLZ,
+stejný datum účinnosti, stejný zdroj dat). Tam odchylka od poloh letišť činí
+v průměru **5 m**, tedy prakticky nula.
+
+| publikace | obsah | průměrná odchylka |
+|---|---|---|
+| LKR315A | 82 ATZ letišť s ICAO kódem | **117 m** |
+| LKR315B | 74 ploch SLZ | 5 m |
+
+Chyba tedy není v celém zpracování zón, ale pouze v cestě, kterou vzniká
+LKR315A. To by mohlo pomoci ji lokalizovat.
+
 **Domněnka o příčině**
 
 Konstantní velikost i směr odchylky odpovídají převodu mezi S-JTSK a WGS84
