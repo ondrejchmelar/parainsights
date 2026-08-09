@@ -1,24 +1,30 @@
 # parainsights
 
-Tools for paragliding flight analysis. One repository, several tools; the first and
-currently only one is the **tracklog viewer**.
+Tools for paragliding flight analysis. One repository, two tools: the **tracklog
+viewer** and **airspaces**.
 
 ```
 parainsights/
 ├── CLAUDE.md              this file
 ├── pyproject.toml         one project, one venv, one test suite
-├── tracklog_viewer/       the tool: IGC/KML/KMZ → analysis → HTML, KMZ, 3D map
-├── tests/                 pytest, 395 tests, no network
+├── tracklog_viewer/       IGC/KML/KMZ → analysis → HTML, KMZ, 3D map
+├── airspaces/             Czech airspace + the ATZ nobody else carries → OpenAir, map
+├── tests/                 pytest, 441 tests, no network
 └── docs/
-    ├── formats.md         IGC and KML/KMZ format research, measured on real files
-    ├── plan.md            scope, decisions and status
-    ├── ux-review.md       the report's UX, measured; the debrief layer, planned
-    └── analysis-plan.md   what more the data can say, and what data would help
+    ├── formats.md            IGC and KML/KMZ format research, measured on real files
+    ├── plan.md               tracklog viewer: scope, decisions and status
+    ├── ux-review.md          the report's UX, measured; the debrief layer, planned
+    ├── analysis-plan.md      what more the data can say, and what data would help
+    ├── airspaces.md          airspaces: sources, decisions and status
+    └── atz-datum-hlaseni.md  draft report to RLP of the datum error found in LKR315A
 ```
 
-A second tool goes in as a sibling package (`parainsights/<tool_name>/`) sharing this
+A third tool goes in as a sibling package (`parainsights/<tool_name>/`) sharing this
 `pyproject.toml` and `tests/`. If shared code appears, put it in `parainsights_common/`
-rather than importing across tools.
+rather than importing across tools — which is why `airspaces/geo.py` exists alongside
+`tracklog_viewer/geo.py` rather than importing it. They are not the same geodesy: the
+viewer works on the FAI sphere because that is what a scored distance is measured on,
+and airspace is published against WGS84.
 
 ## Getting set up
 
@@ -27,7 +33,7 @@ as the packages, so there is nothing to line up by hand:
 
 ```bash
 uv sync --extra dev          # creates .venv on the pinned Python, from uv.lock
-uv run pytest -c pyproject.toml     # 395 tests, ~4 min, no network
+uv run pytest -c pyproject.toml     # 441 tests, ~4 min, no network
 ```
 
 `-c pyproject.toml` matters when the repo sits inside another project — pytest otherwise
@@ -48,9 +54,32 @@ uv run python -m tracklog_viewer.cli FLIGHT.igc --meteo --terrain --html out.htm
 uv run python -m tracklog_viewer.cli a.igc b.kmz c.igc --html all.html   # flight picker
 uv run python -m tracklog_viewer.cli FLIGHT.igc --kmz flight.kmz         # Google Earth
 uv run python -m tracklog_viewer.cli FLIGHT.igc --map map.html           # 3D map
+
+uv run python -m airspaces.cli --openair CZ_ATZ.txt    # Czech ATZ for XCTrack
+uv run python -m airspaces.cli --html airspace.html    # the airspace map
+uv run python -m airspaces.cli --report                # what built, and what did not
 ```
 
-Only `--meteo` and `--terrain` touch the network. Everything else is offline.
+Only `--meteo` and `--terrain` touch the network. Everything else in the viewer is
+offline. `airspaces` fetches from four public sources and caches them under
+`~/.cache/parainsights/airspace`; `--refresh` re-fetches. Its tests use fixtures.
+
+## airspaces, in one paragraph
+
+A paraglider may fly inside a Czech ATZ but must keep out of the traffic circuit, and
+**no ATZ is in the airspace XCTrack or XContest carries** — one of the 251 airspaces in
+the Aeroklub base file is an ATZ, and only because it is a controlled aerodrome. So this
+builds an overlay: 82 ATZ as class `W` (XCTrack paints `W` green) and 114 traffic-circuit
+bands as class `Q` (orange, silent), imported alongside the normal airspace rather than
+replacing it. Read `docs/airspaces.md` before changing it; the four things most likely
+to be re-litigated are that the writer emits only `AC AN AH AL AF V DP DC DB` because
+XCTrack rejects `AG` and misreports a missing `AH` against the *next* airspace, that the
+circuit is a hollow band on **both** sides of the runway because the glider circuit
+mirrors the powered one, that the band carries a 60 m gap because OpenAir has no hole
+and a self-touching ring fills differently under the two fill rules, and that the
+published ATZ geometry is 117 m out and gets corrected. The okruh is **not** an XCTrack
+obstacle and cannot be — obstacles are a curated per-country download with no Czech
+coverage and no import path.
 
 ## Where the report is read, and what that costs
 

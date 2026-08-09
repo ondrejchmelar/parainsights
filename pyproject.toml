@@ -20,13 +20,14 @@ terrain = ["pillow>=10"]
 
 [project.scripts]
 tracklog-viewer = "tracklog_viewer.cli:main"
+airspaces = "airspaces.cli:main"
 
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["tracklog_viewer*"]
+include = ["tracklog_viewer*", "airspaces*"]
 
 # Set explicitly so pytest does not walk up and adopt an enclosing project's config.
 [tool.pytest.ini_options]
