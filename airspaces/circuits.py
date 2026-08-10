@@ -174,7 +174,15 @@ def _name(field: Aerodrome, runway: Runway, ceiling: float | None, published: bo
           side: str = "") -> str:
     """`est` marks a number the AIP did not publish — an assumed 1 000 ft circuit height,
     or a runway reconstructed from the reference point and a heading rounded to 10°.
-    Both apply to every SLZ field, none of which publishes a circuit altitude."""
+    Both apply to every SLZ field, none of which publishes a circuit altitude.
+
+    **The operating hours go last, because the name is the only channel there is.**
+    XCTrack reads a schedule for the airspace it downloads from xcontest and honours it —
+    hidden when inactive, grey when it is about to activate — but an imported OpenAir
+    file carries no schedule at all, and there is no record to put one in. So this band
+    is drawn at three in the morning in January exactly as it is on a Saturday, and the
+    one place a pilot can be told otherwise is the name XCTrack shows on a tap.
+    """
     parts = [f"OKRUH {field.icao}"]
     if field.name:
         parts.append(field.name)
@@ -188,6 +196,9 @@ def _name(field: Aerodrome, runway: Runway, ceiling: float | None, published: bo
         parts.append("est")
     if field.circuit_note:
         parts.append(field.circuit_note)
+    schedule = field.hours.short()
+    if schedule:
+        parts.append(schedule)
     return " ".join(parts)
 
 
@@ -221,7 +232,8 @@ def to_airspaces(field: Aerodrome) -> list[openair.Airspace]:
                     frequency=field.frequency,
                     points=ribbon(runway, side),
                     meta={"icao": field.icao, "kind": "circuit",
-                          "runway": runway.name, "side": where},
+                          "runway": runway.name, "side": where,
+                          "hours": field.hours.payload()},
                 )
             )
     return out

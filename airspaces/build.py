@@ -33,6 +33,19 @@ The band has a {gap} m break in one short end. OpenAir cannot express a polygon 
 a hole, and closing the ring through a zero-width slit makes a shape that some
 readers fill in and others do not; a real gap keeps it unambiguous everywhere.
 
+WHEN THE FIELD IS OPEN is at the end of the name, where the AIP publishes hours:
+"15APR-15OCT SAT-SUN,HOL 0700-1400Z". Times are UTC -- add 2 hours for Czech summer
+time -- and "O/R" means the page publishes no hours, only operation on request.
+68 of the 82 aerodromes state hours this way. NONE of the 74 SLZ strips does, so
+those okruhy carry nothing.
+
+READ IT AS "PROBABLY NOBODY", NOT AS "CLOSED". Nearly every page adds "otherwise
+O/R" or "during aeroclub operation", so a field outside its published hours can
+still have a tow launch on it. And nothing here switches itself off: XCTrack honours
+an activation schedule only for the airspace it downloads from xcontest, never for an
+imported OpenAir file, which has no record to carry one. Every zone in this file is
+drawn at all times.
+
 This file is an ADDITION to your normal airspace. Czech ATZ are not in the XContest
 or Aeroklub data unless a specific activity is active. Keep both loaded.
 
@@ -118,6 +131,12 @@ class Overlay:
     @property
     def circle_count(self) -> int:
         return sum(1 for z in self.zones if z.is_circle)
+
+    @property
+    def scheduled_fields(self) -> int:
+        """How many fields publish hours this tool could read. 68 of 156, every one of
+        them an ICAO aerodrome — no SLZ strip publishes any."""
+        return sum(1 for f in self.fields.values() if f.hours.known)
 
     @property
     def by_publication(self) -> dict[str, int]:
@@ -260,7 +279,16 @@ def build(*, correct: bool = True, refresh: bool = False, with_circuits: bool = 
             label += f" {zone.name}"
         if not zone.is_circle:
             label += " (clipped)"
-        out.append(atz.to_airspace(zone, label, field_.frequency if field_ else None))
+        # The zone itself is not time-limited — the AIP makes an ATZ class G airspace
+        # permanently, and it is the aerodrome's *service* and its traffic that keep
+        # hours. The hours are here anyway because the duty a paraglider carries inside
+        # one is a radio call, and this says whether anybody is listening.
+        if field_ and field_.hours.short():
+            label += f" {field_.hours.short()}"
+        zone_airspace = atz.to_airspace(zone, label, field_.frequency if field_ else None)
+        if field_:
+            zone_airspace.meta["hours"] = field_.hours.payload()
+        out.append(zone_airspace)
 
     if with_circuits:
         for icao in sorted(fields):

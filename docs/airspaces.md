@@ -29,6 +29,7 @@ airspaces/
 ├── openair.py      OpenAir reader (tolerant) and writer (strict — see below)
 ├── atz.py          UAS zone GeoJSON → circles and clipped polygons, datum correction
 ├── aerodromes.py   VFR manual prose + OurAirports runways → reference data
+├── hours.py        the *Provozní doba* line → a schedule, and the Czech holidays
 ├── circuits.py     the okruh band
 ├── basemap.py      embedded Czech border and city list, for the map backdrop
 ├── build.py        assembles the overlay from all of it
@@ -102,7 +103,7 @@ ultralights, and by extension the strips they fly from. This module uses "aerodr
 |---|---|---|
 | ATZ geometry | `aim.rlp.cz/data/uas/{AIRAC}/actual/LKR315{A,B,C,D}.json` | the only machine-readable publication of Czech ATZ; the AIP gives them as prose |
 | base airspace | `airspace.aeroklub.cz/docs/public/CZ_low_*.txt` | Jan Zahradka for Aeroklub ČR, free to use |
-| circuit altitude, ARP, runway table, circuit prose | `aim.rlp.cz/vfrmanual/actual/{ident}_text_en.html` | official, header line is fixed-format, and SLZ fields have a page under their six-letter ident |
+| circuit altitude, ARP, runway table, circuit prose, operating hours | `aim.rlp.cz/vfrmanual/actual/{ident}_text_en.html` | official, header line is fixed-format, and SLZ fields have a page under their six-letter ident |
 | runway thresholds | OurAirports `runways.csv` | public domain, and the VFR manual has no thresholds |
 
 **The base airspace is Aeroklub's, not xcontest's.** The goal was "the same data as
@@ -423,8 +424,9 @@ so its filename is read from the directory listing instead of computed.
 
 Done: both goals. 82 aerodrome zones and 205 traffic circuits at 156 fields (410
 rectangles, two per circuit), 197 KB of OpenAir; the map renders all 743 airspaces with
-class and floor filters, and offers the OpenAir file for download. Published at `public/airspace/` and as a view in the
-report. 66 tests, no network.
+class and floor filters, and offers the OpenAir file for download. 68 of the 82
+aerodromes carry their published hours in the airspace name.
+Published at `public/airspace/` and as a view in the report. 81 tests, no network.
 
 The map ships two ways: as a standalone page (`airspaces.cli --html`) and as a top-level
 view in the tracklog report (`tracklog_viewer.cli --airspace`). Both are published.
@@ -435,7 +437,111 @@ view in the tracklog report (`tracklog_viewer.cli --airspace`). Both are publish
   but the two do not yet know about each other.
 - **Airspace against the track**: which zones a flight entered, how close it came, and
   at what height — the natural bridge to `tracklog_viewer/analysis.py`.
-- **Activation state.** Dropzones and restricted areas are only live sometimes; the AUP
-  and NOTAM feeds say when. Everything here is drawn as if always active.
+- **Activation state for the *base* airspace.** Dropzones, TSAs and TRAs are only live
+  sometimes, and the AUP and NOTAM feeds say when. The aerodrome layers now carry their
+  published hours — see *When the field is open* — but everything red and amber here is
+  still drawn as if always active. xcontest already analyses Czech NOTAMs and XCTrack
+  already honours the result, so the useful version of this is probably reading their
+  answer rather than computing a worse one.
 - **The 15 aerodromes with no published circuit direction** could be filled in by hand
   from the ADC charts, which are images and so not parseable.
+
+## When the field is open
+
+The okruh is the one layer here that is genuinely time-varying, and until this it was
+drawn as though a Tuesday in January looked like a Saturday in June. The feature is in
+`hours.py`, in the airspace name, and in a clock on the map.
+
+**An ATZ is not time-activated, and saying so was the first thing to get right.** The AIP
+makes it class G airspace of fixed dimensions, permanently; what follows the aerodrome's
+operating hours is the AFIS *service* and the traffic in the circuit. So the thing with a
+schedule is the okruh — the layer this tool draws itself — which is the opposite of where
+the intuition points.
+
+**XCTrack has activation, and cannot be given ours.** It reads a schedule alongside each
+zone it downloads from airspace.xcontest.org, and honours it properly: hidden when
+inactive, grey when it is about to activate, a warning at 15, 10 and 5 minutes if you are
+inside one that is about to go live. An **imported OpenAir file gets none of that** —
+there is no record to carry a schedule and no support for one. openAIP's extended OpenAir
+defines an `AA` activation record, and it must not be emitted here: XCTrack rejects
+records it does not know (`AG` is the lesson already learned), and one ISO8601 interval
+cannot express "15 APR – 15 OCT, SAT/SUN/HOL 0700–1400" without expanding to hundreds.
+
+That asymmetry is exactly what makes the okruh worth having at LKTA, and it runs both
+ways. Tábor's dropzone is `AC Q`, 2 NM, and comes from the base file with an xcontest
+schedule; the okruh's furthest point is 2 799 m from the reference point, so **the whole
+circuit sits inside the dropzone** — when the dropzone is live, avoiding it covers the
+okruh completely, and when it is not, XCTrack draws neither. Ours is the one that is
+always drawn, at every hour of every day.
+
+### The data, and the line it splits along
+
+The *Provozní doba* line is on all 156 VFR manual pages, in an unlabelled `<div>` whose
+only marker is the alt text of the icon beside it — so it is the one field that cannot be
+read out of `_text(page)`, which strips tags. What it says does not split evenly:
+
+| | fields | a clock window |
+|---|---|---|
+| publication A, ICAO aerodromes | 82 | **68**, of which 61 give season + days + hours |
+| publication B, SLZ strips | 74 | **0** — every one is "Year-round", "according to the operator's needs" |
+
+**The schedule exists exactly where the ATZ exists, and is missing exactly where there is
+only an okruh.** The 74 reconstructed bands marked `est` — the layer least entitled to be
+believed — are the ones that can never be dimmed. 13 of the remaining aerodromes publish
+`O/R` and nothing else, and LKZD's page says `NIL`.
+
+**And the published window is the paraglider's own day.** The dominant form, at 61 of the
+82, is `15 APR - 15 OCT SAT, SUN, HOL 0700-1400`. Times are UTC — LKSB writes it out, and
+the two pages that print a bracketed second window are printing the summer equivalent —
+and that season lies wholly inside DST, so it reads **0900–1600 local, weekends and
+holidays, mid-April to mid-October**. Measured on the built map: a June Saturday at 11:00
+Prague hides **nothing**; the Tuesday at the same wall-clock hour hides 230 of 743 rings.
+Where this earns its keep is a weekday, and it was worth knowing before building it that
+it would never earn it on a Saturday.
+
+### Decisions
+
+- **Everything unreadable errs towards open.** A dozen pages say things this cannot parse
+  — `0700-TE`, `0800UTC-SS`, `HO (Aeroklub Liberec)`. Each yields no schedule, and no
+  schedule means always active. The cost is asymmetric: an okruh over an empty airfield is
+  clutter, and one withheld from a field with a tow launch on it is the other thing.
+
+- **Three rules keep it from being wrong in the dangerous direction**, and each is a real
+  page that broke an earlier version:
+
+  - *A period needs a season or a window.* LKPO's `O/R … 48 HR O/R SAT, SUN, HOL.` read as
+    a period says "shut Monday to Friday" at a field that is on request and therefore open
+    whenever asked. Days alone is a sentence fragment, not a schedule.
+  - *The text is cut at `except`.* LKHK's `… except 24-26 DEC, 31 DEC - 1 JAN, Easter
+    Monday` — `31 DEC - 1 JAN` is a season by shape, and reading the exclusion list as
+    periods shrank a whole-year entry to two days in December.
+  - *A repeated window keeps the season and days it repeats under.* LKCS's `0700-1600
+    (0600-1500)` is the winter figure and the summer one; two periods over the same days
+    make the union, 0600–1600, which is the wider and so the safer reading.
+
+- **`O/R` in a name means the AIP's `O/R`, not "no hours".** An SLZ strip's "according to
+  the operator's needs" means flown *whenever the operator likes* — the opposite claim —
+  so `on_request` (the broad flag, set at nearly every field) and `request_only` (which
+  earns the token) are two different things. Conflating them wrote `O/R` on all 74 SLZ
+  okruhy and said a strip was quiet when its page said no such thing.
+
+- **Outside published hours is never rendered as "closed".** Nearly every page adds
+  "otherwise O/R", "and further during aeroclub operation". It means nobody is there
+  unless somebody asked, not that nobody is, and both the file header and the map say so
+  in those words.
+
+- **The name is the only channel, so the hours go last in it.** After the runway, the
+  altitude, the `est` marker and the circuit direction: `OKRUH LKTA Tábor RWY 12/30 NNE
+  2460ft/750m RWY 34 right 15APR-15OCT SAT-SUN,HOL 0700-1400Z`. Last because it is the
+  least urgent of those in a truncated list and fully visible on a tap, which is where
+  XCTrack shows it. `Z` on the window because the AIP publishes UTC and a Czech pilot's
+  instrument reads local — two hours apart for the whole season. LKOL publishes four
+  periods and gets `+3 more`; a name is not the place for all of them.
+
+### What it still cannot do
+
+The base airspace is the part a pilot most wants activation for — the TSAs and TRAs, which
+are reserved by AUP and by NOTAM — and nothing here touches it. xcontest already runs a
+NOTAM analyser for Czechia and XCTrack already honours it; the honest position is that
+this cannot be beaten from here and should not be attempted. What this adds is the layer
+xcontest does not carry at all.

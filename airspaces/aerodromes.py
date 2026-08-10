@@ -1,4 +1,5 @@
-"""Aerodromes: reference point, circuit altitude, runways, and which way the circuit goes.
+"""Aerodromes: reference point, circuit altitude, runways, when it is open, and which
+way the circuit goes.
 
 Two sources, because neither is enough alone. The RLP VFR manual publishes the
 reference point, the elevation and the circuit altitude in a fixed header line, and the
@@ -10,6 +11,10 @@ metres.
 
 Measured over all 82 ATZ aerodromes: the reference point parses for 81, the circuit
 altitude for 80, and OurAirports has both thresholds for 137 of 140 Czech runways.
+
+The operating hours come from the same header, and are what `hours.py` turns into a
+schedule — 68 of the 82 aerodromes and none of the 74 SLZ strips, which publish no hours
+at all. That asymmetry is the whole story of the feature; it is written up there.
 
 Handedness is the part that does not parse cleanly. The AIP says it five different
 ways — `RWY 27 - left`, `Traffic circuits on both RWYs are performed to the left`,
@@ -29,6 +34,8 @@ import html
 import io
 import re
 from dataclasses import dataclass, field
+
+from . import hours as hours_module
 
 FEET = 0.3048
 
@@ -76,6 +83,9 @@ class Aerodrome:
     frequency: str | None = None
     circuit_note: str = ""
     runways: list[Runway] = field(default_factory=list)
+    # When the field operates, which is when there is anybody in the circuit. Never
+    # None: an unparsed page yields a schedule that says "always", by design.
+    hours: hours_module.Schedule = field(default_factory=hours_module.Schedule)
 
 
 def _text(page: str) -> str:
@@ -167,10 +177,24 @@ def circuit_note(text: str) -> str:
     return note
 
 
+# The operating hours are the one field that cannot be read out of `_text(page)`: they
+# sit in an unlabelled `<div>` whose only marker is the icon beside them, and `_text`
+# throws the tag — and so the alt attribute — away. Czech alt text even on the English
+# page, which is why this matches the accented and unaccented spelling both.
+_HOURS = re.compile(r'alt="Provozn[ií] doba"[^>]*>(.*?)</div>', re.S)
+
+
+def operating_hours(page: str) -> str:
+    """The *Provozní doba* line, as written. Present on all 156 pages."""
+    match = _HOURS.search(page)
+    return _text(match.group(1)).strip() if match else ""
+
+
 def parse_vfr(icao: str, page: str) -> Aerodrome:
     """One aerodrome from its VFR manual text page."""
     text = _text(page)
     field_ = Aerodrome(icao=icao)
+    field_.hours = hours_module.parse(operating_hours(page))
 
     match = _NAME.search(text)
     if match and match.group(1) == icao:

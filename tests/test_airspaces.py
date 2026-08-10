@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import math
 import re
@@ -9,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from airspaces import aerodromes, atz, build, circuits, geo, openair, render_html
+from airspaces import aerodromes, atz, build, circuits, geo, hours, openair, render_html
 from airspaces.aerodromes import Aerodrome, Runway
 
 DATA = Path(__file__).parent / "data"
@@ -307,6 +308,140 @@ def test_a_closed_runway_is_dropped():
     assert aerodromes.parse_runways(csv_text, {"LKAA"}) == {}
 
 
+# ---------------------------------------------------------------- operating hours
+
+
+def when(text: str) -> dt.datetime:
+    """A UTC instant, written the way the AIP writes its own times."""
+    return dt.datetime.fromisoformat(text)
+
+
+def test_the_hours_are_only_reachable_from_the_raw_page():
+    """They sit in an unlabelled `<div>` whose only marker is an image's alt text, so
+    `_text()` — which strips tags — destroys the one thing that identifies them."""
+    page = (DATA / "vfr_lkta.html").read_text()
+    assert "Provozní doba" not in aerodromes._text(page)
+    assert aerodromes.operating_hours(page).startswith("15 APR - 15 OCT")
+
+
+def test_lkta_is_a_weekend_field_and_the_times_are_utc():
+    """`15 APR - 15 OCT SAT, SUN, HOL 0700-1400` is 0900-1600 local, which is the Czech
+    XC day — so this dims nothing on a summer Saturday and everything on a Tuesday."""
+    schedule = vfr("lkta").hours
+    assert schedule.active(when("2026-08-08 11:00"))       # Saturday, mid-window
+    assert not schedule.active(when("2026-08-11 11:00"))   # Tuesday
+    assert not schedule.active(when("2026-08-08 05:00"))   # Saturday, before 0700 UTC
+    assert not schedule.active(when("2026-01-10 11:00"))   # Saturday, out of season
+
+
+def test_hol_means_a_public_holiday_and_the_calendar_is_computed():
+    """6 July 2026 is a Monday and Den upálení mistra Jana Husa, so LKTA is open on it
+    while the Monday before is shut. Without the calendar `HOL` would be a dead word at
+    the 61 fields that publish it."""
+    schedule = vfr("lkta").hours
+    assert schedule.active(when("2026-07-06 11:00"))
+    assert not schedule.active(when("2026-06-29 11:00"))
+    assert hours.easter(2026) == dt.date(2026, 4, 5)
+    assert dt.date(2026, 4, 6) in hours.czech_holidays(2026)   # Easter Monday
+
+
+def test_lkbe_publishes_three_seasons_with_a_gap_between_them():
+    """`1 APR - 31 OCT 0800-1500  1 NOV - 15 DEC 0900-1300  6 JAN - 31 MAR 0900-1300` —
+    three periods, and 16 December to 5 January is in none of them."""
+    schedule = vfr("lkbe").hours
+    assert len(schedule.periods) == 3
+    assert schedule.active(when("2026-05-04 09:00"))
+    assert schedule.active(when("2026-11-20 10:00"))
+    assert not schedule.active(when("2026-12-20 10:00"))
+    assert not schedule.active(when("2026-11-20 14:00"))   # past 1300 in the winter window
+
+
+def test_days_alone_are_not_a_schedule():
+    """LKPO's page is `O/R ... 48 HR O/R SAT, SUN, HOL.` — an on-request field with a
+    sentence about weekends in it. Read as a period it says "shut Monday to Friday",
+    which is the one direction this must never be wrong in."""
+    schedule = hours.parse("O/R In case of arrivals outside the Schengen Area "
+                           "48 HR O/R SAT, SUN, HOL.")
+    assert not schedule.known
+    assert schedule.on_request
+    assert schedule.active(when("2026-08-11 11:00"))
+    assert schedule.short() == "O/R"
+
+
+def test_except_lists_exclusions_and_is_cut_off():
+    """LKHK writes `... except 24-26 DEC, 31 DEC - 1 JAN, Easter Monday`. `31 DEC - 1
+    JAN` is a season by shape, and reading it as one shrank a whole-year entry to two
+    days in December."""
+    schedule = hours.parse("MON-FRI 0700-TE SAT, SUN, HOL 0800-TE "
+                           "except 24-26 DEC, 31 DEC - 1 JAN; otherwise O/R")
+    assert not schedule.known, "an exclusion list was read as a published period"
+    assert schedule.active(when("2026-08-11 11:00"))
+
+
+def test_a_repeated_window_keeps_the_days_it_repeats_under():
+    """LKSB's `SAT, SUN, HOL 0900 - 1600 (0800 - 1500) UTC` is the winter figure and the
+    summer one. Two periods over the same days, and their union is the wider answer."""
+    schedule = hours.parse("15 APR - 15 OCT SAT, SUN, HOL 0900 - 1600 (0800 - 1500) UTC")
+    assert len(schedule.periods) == 2
+    assert all(period.days == frozenset({"SAT", "SUN", "HOL"})
+               for period in schedule.periods)
+    assert schedule.active(when("2026-05-02 08:30"))      # only the bracketed window
+    assert schedule.active(when("2026-05-02 15:30"))      # only the printed one
+    assert not schedule.active(when("2026-05-02 16:30"))
+    assert not schedule.active(when("2026-04-29 12:00"))  # a Wednesday
+
+
+def test_an_slz_strip_publishes_no_hours_at_all():
+    """All 74 of them say this, and it is the reason the feature can never dim the
+    layer that most deserves dimming — the reconstructed okruh marked `est`."""
+    for text in ("Year-round", "Operating hours are not specified. According to the "
+                 "operator's needs. Year-round according to the current state."):
+        schedule = hours.parse(text)
+        assert not schedule.known
+        assert schedule.short() == ""
+        assert schedule.active(when("2026-01-01 03:00")), "an unread page must stay open"
+
+
+def test_operators_needs_is_not_the_aip_s_o_slash_r():
+    """`O/R` means arranged in advance; an SLZ strip's "according to the operator's
+    needs" means flown whenever the operator likes, which is the opposite claim. Writing
+    `O/R` on those 74 okruhy would say a strip is quiet when its page says no such thing.
+    """
+    loose = hours.parse("Year-round. According to the needs of the operator.")
+    assert loose.on_request and not loose.request_only
+    assert loose.short() == ""
+    strict = hours.parse("Operational hours not specified, only O/R")
+    assert strict.request_only
+    assert strict.short() == "O/R"
+
+
+def test_a_window_that_parsed_still_says_o_slash_r_is_possible():
+    """Nearly every page adds it, and it is why no caller may render "outside published
+    hours" as "closed"."""
+    assert vfr("lkta").hours.on_request
+    assert vfr("lkbe").hours.on_request
+
+
+def test_the_short_form_carries_the_zulu_marker():
+    """The name is read by a pilot whose instrument is set to local time, and the two
+    are two hours apart for the whole season."""
+    assert vfr("lkta").hours.short() == "15APR-15OCT SAT-SUN,HOL 0700-1400Z"
+    assert vfr("lkmb").hours.short() == "15APR-15OCT 0700-1600Z"
+    # LKOL publishes four periods; a name is not the place for all of them.
+    many = hours.parse("1 APR - 30 APR: THU - SUN, HOL: 0600 - 1600 "
+                       "1 MAY - 30 SEP: TUE - SUN, HOL: 0500 - 1800 "
+                       "1 OCT - 31 OCT: THU - SUN, HOL: 0600 - 1600 "
+                       "1 NOV - 31 MAR: SAT, SUN, HOL: 0800 - 1500 otherwise O/R")
+    assert many.short() == "1APR-30APR THU-SUN,HOL 0600-1600Z +3 more"
+
+
+def test_a_season_may_wrap_the_year():
+    schedule = hours.parse("1 NOV - 31 MAR 0900-1300")
+    assert schedule.active(when("2026-01-15 10:00"))
+    assert schedule.active(when("2026-12-15 10:00"))
+    assert not schedule.active(when("2026-06-15 10:00"))
+
+
 # ---------------------------------------------------------------- circuits
 
 
@@ -477,6 +612,31 @@ def test_an_slz_field_gets_an_okruh_marked_estimated():
         assert space.name.startswith("OKRUH LKCAST Částkovice RWY 10/28")
         assert "est" in space.name
         assert space.ceiling == "2925ft AMSL"    # elevation + 1000 ft, none published
+
+
+def test_the_hours_reach_the_name_because_nothing_else_can_carry_them():
+    """XCTrack honours an activation schedule only for the airspace it downloads from
+    xcontest; an imported OpenAir file has no record for one, so the band is drawn at
+    three in the morning in January exactly as on a Saturday. The name is the only
+    channel there is, and it is the one XCTrack shows on a tap."""
+    field_ = vfr("lkta")
+    field_.runways = [runway()]
+    names = [space.name for space in circuits.to_airspaces(field_)]
+    assert names, "LKTA publishes a circuit altitude, so it must produce a band"
+    for name in names:
+        assert name.endswith("15APR-15OCT SAT-SUN,HOL 0700-1400Z")
+        assert "2460ft/750m" in name, "the hours must not have displaced the altitude"
+
+
+def test_a_field_with_no_published_hours_gets_no_token():
+    """Every SLZ strip is in this case, so a token here would be 410 rectangles of
+    invented precision."""
+    field_ = Aerodrome(icao="LKCAST", name="Částkovice", lat=49.409, lon=15.144,
+                       elevation_ft=1925.0)
+    field_.runways = aerodromes.runways_from_table(LKCAST_TABLE, 49.409, 15.144)
+    for space in circuits.to_airspaces(field_):
+        assert space.name.endswith("est")
+        assert space.meta["hours"] is None
 
 
 def test_a_six_letter_ident_still_yields_a_name():
