@@ -94,7 +94,11 @@ pages:
     # Fail loudly rather than deploying an empty site: without this the job goes green
     # and publishes nothing, which looks like Pages being broken.
     - test -f public/index.html || (echo "no public/index.html to publish — build one locally, see the header of this file" && exit 1)
-    - echo "publishing $(du -h public/index.html | cut -f1) to $CI_PAGES_URL"
+    # Every page in the nav strip, because the strip links to all of them from all of
+    # them: a missing sibling is not a smaller site, it is three dead links on every
+    # page that is there.
+    - for page in airspace meteo planner; do test -f "public/$page/index.html" || (echo "no public/$page/index.html — the nav strip on every other page links to it" && exit 1); done
+    - echo "publishing $(du -sh public | cut -f1) to $CI_PAGES_URL"
   artifacts:
     paths: [public]
   environment:
