@@ -74,15 +74,20 @@ SCRIPT = """
 // canvas renderer in charge, which is the supported outcome and not a failure.
 (function () {
 
+// `aGeo` is the node's position in the *DEM's* box, 0..1 east and 0..1 south. It is a
+// property of the grid alone, so the buffer is built once and never rebuilt — where the
+// old `aUV` was built against the image's box and had to be regenerated every time a
+// mosaic finished stitching. Each image's box now arrives as a uniform instead, which is
+// what makes it cheap to have two of them at once.
 var VERTEX = [
   'attribute vec3 aPos;',
-  'attribute vec2 aUV;',
+  'attribute vec2 aGeo;',
   'attribute vec3 aColour;',
   'uniform mat4 uMatrix;',
-  'varying vec2 vUV;',
+  'varying vec2 vGeo;',
   'varying vec3 vColour;',
   'void main() {',
-  '  vUV = aUV;',
+  '  vGeo = aGeo;',
   '  vColour = aColour;',
   '  gl_Position = uMatrix * vec4(aPos, 1.0);',
   '}'
@@ -91,14 +96,40 @@ var VERTEX = [
 // Either the draped imagery or the bare relief colour computed per vertex, chosen by a
 // uniform rather than by a second program: the geometry is identical and switching
 // styles is a button press, not a hot path.
+//
+// Two draped images, not one. The base mosaic covers the whole terrain at whatever zoom
+// its tile budget reached; the *detail* mosaic covers only what the reader has zoomed in
+// on, at a zoom several steps finer. Where a fragment falls inside the detail box it
+// wins, and outside it the base carries on — so the terrain is textured everywhere and
+// sharp where it is being looked at.
+//
+// `uBox` and `uDetailBox` are (scaleX, scaleY, offsetX, offsetY), taking a DEM-space
+// position to that image's UV. The edge is feathered over `EDGE` of the detail box
+// rather than switched, because a hard boundary between two zoom levels of the same
+// imagery is a visible rectangle drawn across the ground — the seam reads as a bug even
+// though both halves are correct.
 var FRAGMENT = [
   'precision mediump float;',
   'uniform sampler2D uMap;',
+  'uniform sampler2D uDetailMap;',
+  'uniform vec4 uBox;',
+  'uniform vec4 uDetailBox;',
   'uniform float uUseMap;',
-  'varying vec2 vUV;',
+  'uniform float uUseDetail;',
+  'varying vec2 vGeo;',
   'varying vec3 vColour;',
+  'const float EDGE = 0.03;',
   'void main() {',
-  '  vec3 colour = uUseMap > 0.5 ? texture2D(uMap, vUV).rgb : vColour;',
+  '  vec3 colour = vColour;',
+  '  if (uUseMap > 0.5) {',
+  '    colour = texture2D(uMap, vGeo * uBox.xy + uBox.zw).rgb;',
+  '    if (uUseDetail > 0.5) {',
+  '      vec2 d = vGeo * uDetailBox.xy + uDetailBox.zw;',
+  '      vec2 edge = min(d, 1.0 - d);',
+  '      float inside = smoothstep(0.0, EDGE, min(edge.x, edge.y));',
+  '      colour = mix(colour, texture2D(uDetailMap, clamp(d, 0.0, 1.0)).rgb, inside);',
+  '    }',
+  '  }',
   '  gl_FragColor = vec4(colour, 1.0);',
   '}'
 ].join('\\n');
@@ -168,9 +199,13 @@ function backend(host) {
 
   var uMatrix = gl.getUniformLocation(program, 'uMatrix');
   var uMap = gl.getUniformLocation(program, 'uMap');
+  var uDetailMap = gl.getUniformLocation(program, 'uDetailMap');
+  var uBox = gl.getUniformLocation(program, 'uBox');
+  var uDetailBox = gl.getUniformLocation(program, 'uDetailBox');
   var uUseMap = gl.getUniformLocation(program, 'uUseMap');
+  var uUseDetail = gl.getUniformLocation(program, 'uUseDetail');
   var aPos = gl.getAttribLocation(program, 'aPos');
-  var aUV = gl.getAttribLocation(program, 'aUV');
+  var aGeo = gl.getAttribLocation(program, 'aGeo');
   var aColour = gl.getAttribLocation(program, 'aColour');
 
   // ---- geometry -----------------------------------------------------------------
@@ -249,7 +284,7 @@ function backend(host) {
   gl.bindBuffer(gl.ARRAY_BUFFER, colourBuffer);
   gl.bufferData(gl.ARRAY_BUFFER, colour, gl.STATIC_DRAW);
 
-  var uvBuffer = gl.createBuffer();
+  var geoBuffer = gl.createBuffer();
   var indexBuffer = gl.createBuffer();
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
   gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
@@ -257,8 +292,9 @@ function backend(host) {
   // ---- texture ------------------------------------------------------------------
 
   var texture = null;
-  var uploaded = null;      // the image object currently in the texture
-  var mapped = null;        // the geographic box the UVs were built for
+  var uploaded = null;            // the image object currently in the base texture
+  var detailTexture = null;
+  var detailUploaded = null;      // and in the detail texture
   var maxTexture = gl.getParameter(gl.MAX_TEXTURE_SIZE);
 
   // Queried and reported but deliberately not used — see upload() for the measurements
@@ -270,27 +306,39 @@ function backend(host) {
   var anisoMax = aniso
     ? gl.getParameter(aniso.MAX_TEXTURE_MAX_ANISOTROPY_EXT) : 1;
 
-  // UVs come from the same linear lon/lat mapping sourceRect() uses in the 2D renderer,
-  // which is what makes the imagery register with the grid cell for cell. They depend
-  // on the *image's* box, not the DEM's: a stitched mosaic covers whole tiles and so
-  // reaches past the terrain on every side.
-  function buildUV(box) {
-    var uv = new Float32Array(vertices * 2);
-    var lonSpan = box.east - box.west;
-    var latSpan = box.north - box.south;
+  // The node's place in the DEM's own box, which is a property of the grid and of
+  // nothing else — so this is built once, at startup, and a mosaic finishing does not
+  // touch it. The linear lon/lat mapping is the one `sourceRect()` uses in the 2D
+  // renderer, which is what makes the imagery register with the grid cell for cell.
+  (function buildGeo() {
+    var geo = new Float32Array(vertices * 2);
     for (var r = 0; r < rows; r++) {
-      var lat = dem.north - (dem.north - dem.south) * r / (rows - 1);
-      var v = (box.north - lat) / latSpan;
+      var v = r / (rows - 1);
       for (var c = 0; c < cols; c++) {
-        var lon = dem.west + (dem.east - dem.west) * c / (cols - 1);
         var i = (r * cols + c) * 2;
-        uv[i] = (lon - box.west) / lonSpan;
-        uv[i + 1] = v;
+        geo[i] = c / (cols - 1);
+        geo[i + 1] = v;
       }
     }
-    gl.bindBuffer(gl.ARRAY_BUFFER, uvBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, uv, gl.STATIC_DRAW);
-    mapped = box;
+    gl.bindBuffer(gl.ARRAY_BUFFER, geoBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, geo, gl.STATIC_DRAW);
+  })();
+
+  // An image's box as (scaleX, scaleY, offsetX, offsetY), so that
+  // `uv = aGeo * scale + offset`. A stitched mosaic covers whole tiles and reaches past
+  // the terrain on every side, so the scale is normally under 1 for the base image and
+  // well over 1 for a detail mosaic covering a corner of it.
+  function boxUniform(box) {
+    var lonSpan = box.east - box.west;
+    var latSpan = box.north - box.south;
+    var demLon = dem.east - dem.west;
+    var demLat = dem.north - dem.south;
+    return [
+      demLon / lonSpan,
+      demLat / latSpan,
+      (dem.west - box.west) / lonSpan,
+      (box.north - dem.north) / latSpan
+    ];
   }
 
   // A stitched mosaic can be bigger than the driver will take. Downscaling is better
@@ -307,9 +355,16 @@ function backend(host) {
     return scaled;
   }
 
-  function upload(image) {
-    if (!texture) texture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, texture);
+  // Both textures go up the same way. `unit` picks which one, so the detail mosaic
+  // inherits every decision below — the clamp, the LINEAR filter and the absence of
+  // mipmaps — rather than acquiring its own set by accident.
+  function upload(image, detail) {
+    var handle = detail ? detailTexture : texture;
+    if (!handle) {
+      handle = gl.createTexture();
+      if (detail) detailTexture = handle; else texture = handle;
+    }
+    gl.bindTexture(gl.TEXTURE_2D, handle);
     // The basemap's first row is its northern edge and v = 0 is north, so the default
     // unflipped upload is the one that lines up.
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
@@ -343,7 +398,7 @@ function backend(host) {
     // close to 1:1 at the cameras that matter, so there is little aliasing to save.
     // The extension is still queried and reported, so a future change here is
     // measurable rather than a guess.
-    uploaded = image;
+    if (detail) detailUploaded = image; else uploaded = image;
   }
 
   // Noticed by identity rather than by being told: the style cycles, a mosaic finishes
@@ -355,9 +410,21 @@ function backend(host) {
     if (!image || !box) return false;
     var width = image.naturalWidth || image.width;
     if (!width) return false;
-    if (image !== uploaded) upload(image);
-    if (box !== mapped) buildUV(box);
-    return true;
+    if (image !== uploaded) upload(image, false);
+    return boxUniform(box);
+  }
+
+  // The sharper mosaic over whatever the reader has zoomed in on, or null. Absent for
+  // the whole life of a panel nobody zooms into, which is why it is asked for by the
+  // same identity check the base image uses rather than being pushed in.
+  function syncDetail() {
+    if (!host.detail) return null;
+    var patch = host.detail();
+    if (!patch || !patch.image || !patch.box) return null;
+    var width = patch.image.naturalWidth || patch.image.width;
+    if (!width) return null;
+    if (patch.image !== detailUploaded) upload(patch.image, true);
+    return boxUniform(patch.box);
   }
 
   // ---- camera -------------------------------------------------------------------
@@ -447,7 +514,9 @@ function backend(host) {
   function terrain(withMap) {
     var size = host.size();
     if (size[0] !== W || size[1] !== H) resize(size[0], size[1]);
-    var textured = withMap && syncTexture();
+    var box = withMap ? syncTexture() : null;
+    var textured = !!box;
+    var detail = textured ? syncDetail() : null;
 
     gl.viewport(0, 0, W, H);
     gl.clearColor(0, 0, 0, 0);          // the sky is the canvas's CSS background
@@ -464,19 +533,27 @@ function backend(host) {
     gl.useProgram(program);
     gl.uniformMatrix4fv(uMatrix, false, matrix());
     gl.uniform1f(uUseMap, textured ? 1 : 0);
+    gl.uniform1f(uUseDetail, detail ? 1 : 0);
 
     bind(positionBuffer, aPos, 3);
     bind(colourBuffer, aColour, 3);
     if (textured) {
-      bind(uvBuffer, aUV, 2);
+      bind(geoBuffer, aGeo, 2);
+      gl.uniform4f(uBox, box[0], box[1], box[2], box[3]);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, texture);
       gl.uniform1i(uMap, 0);
-    } else if (aUV >= 0) {
+      if (detail) {
+        gl.uniform4f(uDetailBox, detail[0], detail[1], detail[2], detail[3]);
+        gl.activeTexture(gl.TEXTURE1);
+        gl.bindTexture(gl.TEXTURE_2D, detailTexture);
+        gl.uniform1i(uDetailMap, 1);
+      }
+    } else if (aGeo >= 0) {
       // Left enabled with no buffer bound, an attribute reads garbage; a constant is
       // both correct and free.
-      gl.disableVertexAttribArray(aUV);
-      gl.vertexAttrib2f(aUV, 0, 0);
+      gl.disableVertexAttribArray(aGeo);
+      gl.vertexAttrib2f(aGeo, 0, 0);
     }
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
@@ -520,9 +597,10 @@ function backend(host) {
       disposed = true;
       gl.deleteBuffer(positionBuffer);
       gl.deleteBuffer(colourBuffer);
-      gl.deleteBuffer(uvBuffer);
+      gl.deleteBuffer(geoBuffer);
       gl.deleteBuffer(indexBuffer);
       if (texture) gl.deleteTexture(texture);
+      if (detailTexture) gl.deleteTexture(detailTexture);
       gl.deleteProgram(program);
       var lose = gl.getExtension('WEBGL_lose_context');
       if (lose) lose.loseContext();

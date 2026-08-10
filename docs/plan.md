@@ -6,6 +6,45 @@ layout and the decisions a newcomer needs first.
 Goal: IGC tracklog → (a) a KMZ for Google Earth, (b) a 3D browser view with a written
 report. Both driven by one analysis pass. See `formats.md` for the format research.
 
+## The map gets sharper as you zoom in
+
+The base mosaic is stitched once over the whole terrain, so its resolution is whatever a
+120-tile budget reaches across that box — about 20 m a pixel on a cross-country flight
+and about **300 m a pixel over a whole country**. Zooming in magnified exactly those
+pixels: the view got closer and the ground got blurrier, which is the opposite of what
+zooming is for, and it was the one thing that made the airspace map feel like a picture
+of a map rather than a map.
+
+So once the camera settles, `detailPlan()` asks whether what is on screen is a small
+enough part of the terrain that a finer tile zoom would fit in 48 tiles. If it is, a
+second mosaic is stitched over just that box and handed to the renderer as a **detail
+layer**: the fragment shader samples it where it covers and the base image everywhere
+else, feathered over 3% of its width so the boundary between two zoom levels is not a
+rectangle drawn across the ground. Measured on the published airspace map: base zoom 9,
+detail zoom 11 after one press of the zoom button — place names and field boundaries
+where there had been a smear.
+
+Four decisions worth keeping:
+
+- **The UV attribute became a geo attribute.** It used to be built against the *image's*
+  box and rebuilt every time a mosaic finished; it is now the node's place in the DEM's
+  own box, built once, with each image's box arriving as a `vec4` uniform. That is what
+  makes two images at once cheap rather than a second vertex buffer.
+- **The detail patch is shaded like the base.** `shadedTexture()` bakes the hillshade in,
+  and an unshaded patch reads as a flat rectangle laid over hillshaded ground — the
+  terrain looks *wrong*, not merely different, because relief is what carries its shape.
+- **It fires on stillness, wants two zoom levels of improvement, and pads the box it asks
+  for.** Without all three it is a tile-fetching machine: the padding is what makes a
+  small pan ask for nothing.
+- **A failed detail fetch changes nothing the reader can see.** It does not take over the
+  spinner or the credit line, and the base image is still underneath. That is the whole
+  reason it is a second fetch rather than a re-fetch.
+
+**The 2D fallback does not have it.** `drawTerrain` drapes one image, and giving it two
+means choosing per cell which image and which source rect. The fallback exists for a
+browser without WebGL and for the seconds after a context loss; it is not where anyone
+looks at terrain closely.
+
 ## Architecture
 
 ```

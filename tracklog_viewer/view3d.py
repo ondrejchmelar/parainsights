@@ -729,6 +729,7 @@ function initView3d(root, cursorTrack) {
       settle = null;
       interacting = false;
       draw();
+      scheduleDetail();
     }, 180);
   }
 
@@ -772,24 +773,151 @@ function initView3d(root, cursorTrack) {
     return [x, y];
   }
 
+  // The finest zoom whose tile count over `box` stays inside `budget`.
+  function zoomFor(source, box, budget) {
+    for (var zoom = Math.min(18, source.max_zoom); zoom > 5; zoom--) {
+      if (tileCount(box, zoom) <= budget) return zoom;
+    }
+    return 6;
+  }
+
+  function tileCount(box, zoom) {
+    var a = tileNumbers(box.west, box.north, zoom);
+    var b = tileNumbers(box.east, box.south, zoom);
+    return (Math.floor(b[0]) - Math.floor(a[0]) + 1) *
+           (Math.floor(b[1]) - Math.floor(a[1]) + 1);
+  }
+
   function tileZoom(source) {
     // Enough tiles to be sharp, few enough to be polite: aim for a mosaic no wider than
     // Nothing is embedded on this path, so the budget buys sharpness rather than bytes:
     // 120 tiles reaches zoom 12-13 on a cross-country box, roughly 10-20 m per pixel
     // against the 80 m that a 30-tile budget allowed.
-    for (var zoom = Math.min(14, source.max_zoom); zoom > 5; zoom--) {
-      var a = tileNumbers(dem.west, dem.north, zoom);
-      var b = tileNumbers(dem.east, dem.south, zoom);
-      var across = Math.floor(b[0]) - Math.floor(a[0]) + 1;
-      var down = Math.floor(b[1]) - Math.floor(a[1]) + 1;
-      if (across * down <= 120) return zoom;
+    //
+    // Capped at 14 on purpose even though the *detail* mosaic below will go further: the
+    // base image covers the whole terrain and is what a page carries before anyone
+    // touches it, so it buys coverage. Sharpness is the second fetch's job.
+    return Math.min(zoomFor(source, dem, 120), 14);
+  }
+
+  // ---- detail imagery ----------------------------------------------------------------
+  //
+  // The base mosaic is stitched once for the whole terrain, so its resolution is fixed by
+  // a tile budget spread over the whole box — about 300 m a pixel over a country, which
+  // is a backdrop and not something to read. Zooming in used to magnify exactly those
+  // pixels: the view got closer and the ground got blurrier, which is the opposite of
+  // what zooming is for.
+  //
+  // So once the camera settles, if what is on screen is a small enough part of the
+  // terrain that a finer zoom would fit in a tile budget, a *second* mosaic is stitched
+  // over just that box and handed to the renderer as a detail layer. The shader draws it
+  // where it covers and the base image everywhere else.
+  //
+  // Three things keep this from becoming a tile-fetching machine:
+  //
+  //  - it only ever fires when the camera has been still for `DETAIL_DELAY`;
+  //  - it wants at least `DETAIL_STEP` zoom levels of improvement, so nudging the view
+  //    does not re-fetch the same ground at the same sharpness;
+  //  - the box it asks for is padded, so small pans stay inside what has already been
+  //    fetched and ask for nothing.
+  var detail = null;          // { image, box, shaded, style, zoom }
+  var detailPending = null;   // the box currently being stitched, so it is asked once
+  var DETAIL_TILES = 48;      // a fetch is one screenful; politeness matters more here
+  var DETAIL_STEP = 2;        // zoom levels of improvement worth a fetch
+  var DETAIL_PAD = 0.35;      // of the visible box, on each side
+  var DETAIL_DELAY = 420;     // ms of stillness before asking
+
+  // What is on screen, as a lon/lat box, clamped to the terrain.
+  //
+  // Taken from the four canvas corners inverted onto the ground plane. At a low pitch the
+  // top corners land near the horizon — enormous or behind the camera — which is exactly
+  // why the result is clamped to the DEM rather than trusted: the answer wanted here is
+  // "which part of the terrain is being looked at", and terrain is all there is.
+  function visibleBox() {
+    if (!fit.scale || Math.abs(Math.sin(view.pitch)) < 1e-3) return null;
+    var west = Infinity, east = -Infinity, south = Infinity, north = -Infinity;
+    var corners = [[0, 0], [W, 0], [0, H], [W, H]];
+    for (var i = 0; i < corners.length; i++) {
+      var point = groundAtCanvas(corners[i][0], corners[i][1]);
+      if (!point) return null;
+      var lon = lon0 + point[0] / mPerDegLon;
+      var lat = lat0 + point[1] / mPerDegLat;
+      if (!isFinite(lon) || !isFinite(lat)) return null;
+      west = Math.min(west, lon); east = Math.max(east, lon);
+      south = Math.min(south, lat); north = Math.max(north, lat);
     }
-    return 6;
+    var box = {
+      west: Math.max(west, dem.west), east: Math.min(east, dem.east),
+      south: Math.max(south, dem.south), north: Math.min(north, dem.north)
+    };
+    if (box.east <= box.west || box.north <= box.south) return null;
+    return box;
+  }
+
+  // groundUnder() in canvas coordinates. The gesture handlers work in client pixels and
+  // this works in the backing store's, and converting one into the other twice was how
+  // the two drifted apart the first time.
+  function groundAtCanvas(sx, sy) {
+    var sp = Math.sin(view.pitch);
+    if (Math.abs(sp) < 1e-4 || !fit.scale) return null;
+    var wx = (sx - fit.dx - view.panX) / fit.scale;
+    var wy = -(sy - fit.dy - view.panY) / (fit.scale * sp);
+    var cy = Math.cos(view.yaw), sn = Math.sin(view.yaw);
+    return [wx * cy + wy * sn, -wx * sn + wy * cy];
+  }
+
+  function padded(box) {
+    var padX = (box.east - box.west) * DETAIL_PAD;
+    var padY = (box.north - box.south) * DETAIL_PAD;
+    return {
+      west: Math.max(box.west - padX, dem.west),
+      east: Math.min(box.east + padX, dem.east),
+      south: Math.max(box.south - padY, dem.south),
+      north: Math.min(box.north + padY, dem.north)
+    };
+  }
+
+  function covers(outer, inner) {
+    return outer && inner && outer.west <= inner.west && outer.east >= inner.east
+      && outer.south <= inner.south && outer.north >= inner.north;
+  }
+
+  // Whether a detail fetch is worth making, and for what. Pure, and exposed on the
+  // handle, because "would this zoom trigger a fetch" is the part worth testing without
+  // a network.
+  function detailPlan() {
+    var source = scene.tiles && style && scene.tiles[style];
+    if (!source || !view.map) return null;
+    var seen = visibleBox();
+    if (!seen) return null;
+    var want = padded(seen);
+    var zoom = zoomFor(source, want, DETAIL_TILES);
+    var have = detail && detail.style === style ? detail.zoom : (mosaicZoom || 0);
+    if (zoom < have + DETAIL_STEP) return null;
+    // Already inside what was fetched, at the same sharpness: nothing to do.
+    if (detail && detail.style === style && detail.zoom >= zoom
+        && covers(detail.box, seen)) return null;
+    if (detailPending && covers(detailPending, seen)) return null;
+    return { zoom: zoom, box: want, style: style, tiles: tileCount(want, zoom) };
+  }
+
+  var detailTimer = null;
+  function scheduleDetail() {
+    if (detailTimer) clearTimeout(detailTimer);
+    detailTimer = setTimeout(function () {
+      detailTimer = null;
+      var plan = detailPlan();
+      if (plan) loadTiles(plan.style, plan);
+    }, DETAIL_DELAY);
   }
 
   // Images ready to drape, keyed by style: the embedded ones from the start, a stitched
   // mosaic once it has been fetched. Switching back to one is then instant.
   var ready = {};
+  // The zoom the base mosaic reached, which is what a detail fetch has to beat. Zero
+  // until one has been stitched — an embedded image has no tile zoom, and over a whole
+  // country it is coarse enough that the first detail fetch is always worth making.
+  var mosaicZoom = 0;
 
   // A segment shows which state is current by being pressed, not by relabelling itself.
   // `aria-pressed` and the `is-on` class move together, so the keyboard, the buttons and
@@ -818,6 +946,9 @@ function initView3d(root, cursorTrack) {
     });
     if (next === 'off') { view.map = false; draw(); return; }
     view.map = true;
+    // The detail patch belongs to the style it was stitched from — satellite imagery
+    // laid over a road map is not a sharper road map, it is two maps.
+    if (style !== next) { detail = null; detailPending = null; }
     style = next;
     if (ready[next]) {
       basemap = ready[next].shaded || ready[next].image;
@@ -877,15 +1008,26 @@ function initView3d(root, cursorTrack) {
   // line and the spinner both ran indefinitely.
   var TILE_STALL_MS = 12000;
 
-  function loadTiles(styleName) {
+  // One stitcher for both fetches. `plan` is absent for the base mosaic — the whole
+  // terrain, at whatever zoom 120 tiles reaches — and present for a detail mosaic over a
+  // smaller box at a finer zoom. The differences are all at the ends: a detail fetch
+  // takes over neither the spinner nor the credit line, and failing it changes nothing
+  // the reader can see, because the base image is still there underneath.
+  function loadTiles(styleName, plan) {
     var source = scene.tiles && scene.tiles[styleName];
-    if (!source || loading) return;
-    loading = true;
-    showCredit('Loading ' + source.label.toLowerCase() + ' tiles…');
-    showLoading('Loading ' + source.label.toLowerCase() + '…');
-    var zoom = tileZoom(source);
-    var a = tileNumbers(dem.west, dem.north, zoom);
-    var b = tileNumbers(dem.east, dem.south, zoom);
+    if (!source) return;
+    if (plan ? detailPending : loading) return;
+    if (plan) {
+      detailPending = plan.box;
+    } else {
+      loading = true;
+      showCredit('Loading ' + source.label.toLowerCase() + ' tiles…');
+      showLoading('Loading ' + source.label.toLowerCase() + '…');
+    }
+    var want = plan ? plan.box : dem;
+    var zoom = plan ? plan.zoom : tileZoom(source);
+    var a = tileNumbers(want.west, want.north, zoom);
+    var b = tileNumbers(want.east, want.south, zoom);
     var x0 = Math.floor(a[0]), x1 = Math.floor(b[0]);
     var y0 = Math.floor(a[1]), y1 = Math.floor(b[1]);
     var size = 256;
@@ -924,6 +1066,7 @@ function initView3d(root, cursorTrack) {
     function stall() {
       if (settled) return;
       settled = true;
+      if (plan) { detailPending = null; return; }   // the base image carries on
       loading = false;
       hideLoading();
       showCredit('Map imagery timed out — hillshade only');
@@ -943,6 +1086,26 @@ function initView3d(root, cursorTrack) {
       if (settled) return;    // the watchdog gave up first
       settled = true;
       if (watchdog) clearTimeout(watchdog);
+      if (plan) {
+        detailPending = null;
+        if (done === 0) return;
+        layers.forEach(function (layer) { mctx.drawImage(layer, 0, 0); });
+        var patch = new Image();
+        patch.onerror = function () { detailPending = null; };
+        patch.onload = function () {
+          if (style !== styleName) return;   // the reader cycled on while we stitched
+          // Shaded exactly as the base image is, or the sharp patch would read as a
+          // flat rectangle laid over hillshaded ground — the terrain looks *wrong*
+          // rather than merely different, because relief is what carries its shape.
+          detail = {
+            image: shadedTexture(patch, box) || patch,
+            box: box, style: styleName, zoom: zoom
+          };
+          draw();
+        };
+        patch.src = mosaic.toDataURL('image/jpeg', 0.85);
+        return;
+      }
       loading = false;
       if (done === 0) {
         // No tiles at all: almost certainly a content-security policy. Skip to the next
@@ -960,6 +1123,7 @@ function initView3d(root, cursorTrack) {
         draw();
         return;
       }
+      mosaicZoom = zoom;
       layers.forEach(function (layer) { mctx.drawImage(layer, 0, 0); });
       var image = new Image();
       // Hidden once the stitched image has decoded, not when the last tile arrives:
@@ -1157,6 +1321,10 @@ function initView3d(root, cursorTrack) {
     // notices by identity rather than by being told.
     texture: function () { return basemap; },
     textureBox: function () { return scene.basemap; },
+    // The sharper mosaic over whatever the reader has zoomed in on, or null. Same
+    // contract as `texture()`: handed over by identity, and the backend decides when it
+    // has changed.
+    detail: function () { return detail; },
     // Hand the heightfield back to the 2D path. Context loss on a phone is real, and a
     // blank panel is a worse outcome than a slower one.
     fallback: function () { renderer = null; sampleCellColours(); draw(); }
@@ -2351,6 +2519,9 @@ function initView3d(root, cursorTrack) {
       if (order.length) setBasemapStyle(order[0]);
     }
     draw();
+    // The buttons and the keyboard zoom too, and they never go through `moving()` —
+    // which is where a pointer gesture schedules its detail fetch.
+    scheduleDetail();
   }
 
   root.querySelectorAll('[data-view3d-act]').forEach(function (button) {
@@ -2674,6 +2845,19 @@ function initView3d(root, cursorTrack) {
     // this widget only knows how to draw rings and say which one a point is inside.
     setAirspaceFilter: function (fn) { airspaceFilter = fn || null; draw(); },
     scene: function () { return scene; },
+    // Exposed for tests: whether the current camera would ask for a sharper mosaic and
+    // for what. The fetch itself needs a network and a tile server; the decision does
+    // not, and the decision is where this can be wrong.
+    detailPlan: function () { return detailPlan(); },
+    detailState: function () {
+      return detail ? { zoom: detail.zoom, style: detail.style, box: detail.box } : null;
+    },
+    // Exposed for tests: stand in for a stitch that cannot happen offline. Takes the
+    // same shape the stitcher produces, so the renderer cannot tell the difference.
+    setDetail: function (image, box, zoom) {
+      detail = image ? { image: image, box: box, style: style, zoom: zoom || 99 } : null;
+      draw();
+    },
     // What is under this point on the map, in the coordinates a plan is written in.
     // `groundUnder` answers in the local metric frame, which is an implementation
     // detail of the projection; a turnpoint is a longitude and a latitude.

@@ -110,7 +110,8 @@ def _basemap(size: int = 256) -> dict:
 
 def _scene(*, terrain: dict | None = None, basemap: bool = True,
            basemap_size: int = 256, sun: dict | None = None,
-           wind: dict | None = None, cursor: dict | None = None) -> dict:
+           wind: dict | None = None, cursor: dict | None = None,
+           tiles: bool = False) -> dict:
     dem = terrain or _terrain()
     track = {"lon": [], "lat": [], "alt": [], "c": []}
     for i in range(120):
@@ -137,7 +138,10 @@ def _scene(*, terrain: dict | None = None, basemap: bool = True,
         "palette": [[20, 40, 60], [60, 90, 120], [120, 150, 60],
                     [200, 160, 40], [230, 110, 50], [240, 60, 40]],
         "basemaps": {"satellite": _basemap(basemap_size)} if basemap else {},
-        "tiles": None,
+        # Templates only, and nothing fetches them: the embedded image above is what the
+        # panel drapes. They are here so the *detail* planner has a source to reason
+        # about, which is the half of that feature a test can reach without a network.
+        "tiles": view3d.TILE_SOURCES if tiles else None,
         "landing": {"lon": 14.2, "lat": 49.2, "alt": dem["min"]},
         # Absent unless a test asks for them: a panel with no date has no sun and an
         # uploaded track may have no wind estimate, and neither may draw anything then.
@@ -687,3 +691,125 @@ def test_phase_labels_are_off_until_asked_for_and_draw_when_they_are():
     assert answer["climbsDrew"] is True, "the climb labels drew nothing"
     assert answer["glidesDrew"] is True, "the glide labels drew nothing"
     assert answer["turningBothOffRestoresIt"] is True
+
+
+# ---- the detail mosaic ---------------------------------------------------------------
+#
+# Zooming in used to magnify the base mosaic's own pixels: the view got closer and the
+# ground got blurrier, which is the opposite of what zooming is for. A second, sharper
+# mosaic is now stitched over whatever is on screen once the camera settles. The fetch
+# needs a tile server; the two things that can be wrong here do not.
+
+_DETAIL_PLAN = """
+var h = window.__view3dAll[Object.keys(window.__view3dAll)[0]];
+function plan(zoom) {
+  h.view.zoom = zoom; h.view.pitch = 0.9; h.view.yaw = 0;
+  h.view.panX = 0; h.view.panY = 0;
+  h.redraw();
+  var p = h.detailPlan();
+  return p ? { zoom: p.zoom, tiles: p.tiles,
+               width: Number((p.box.east - p.box.west).toFixed(4)) } : null;
+}
+var out = { rest: plan(1), near: plan(8), nearer: plan(24) };
+// Having fetched it, the same camera must not ask again.
+h.view.zoom = 8; h.redraw();
+var again = h.detailPlan();
+h.setDetail(document.querySelector('canvas.view3d'), again.box, again.zoom);
+h.view.zoom = 8; h.redraw();
+out.repeat = h.detailPlan();
+out.state = h.detailState();
+return out;
+"""
+
+
+@needs_chrome
+def test_zooming_in_asks_for_a_sharper_mosaic_and_only_once():
+    """Three claims. The finer the zoom, the smaller the box on screen and the higher the
+    tile zoom that box can afford — so zooming in buys sharpness rather than magnifying
+    the pixels it already had. And once a patch has been fetched, sitting still at the
+    same camera must not ask for it again: the alternative is a page that fetches tiles
+    forever.
+
+    The resting view asks for one too, and that is correct here rather than a miss: this
+    fixture's basemap is *embedded*, so no mosaic has been stitched, and an embedded
+    image is the coarsest thing this view ever drapes. Against a stitched base the same
+    camera asks for nothing, because `mosaicZoom` is then the zoom that base reached and
+    a plan has to beat it by `DETAIL_STEP`.
+    """
+    answer = _probe(_scene(tiles=True), _DETAIL_PLAN)
+    assert answer["near"] and answer["nearer"], "zooming in asked for nothing"
+    assert answer["near"]["zoom"] > answer["rest"]["zoom"], (
+        "zooming in from rest did not buy a finer tile zoom")
+    assert answer["nearer"]["zoom"] > answer["near"]["zoom"], (
+        "zooming further in did not buy a finer tile zoom")
+    assert answer["nearer"]["width"] < answer["near"]["width"], (
+        "the box asked for did not shrink as the view zoomed in")
+    assert answer["near"]["tiles"] <= 48, "a detail fetch blew the tile budget"
+    assert answer["repeat"] is None, "the same camera asked for the same patch twice"
+    assert answer["state"]["zoom"] == answer["near"]["zoom"]
+
+
+_DETAIL_PIXELS = """
+var h = window.__view3dAll[Object.keys(window.__view3dAll)[0]];
+var panel = document.querySelector('.view3d-panel');
+var gl = panel.querySelector('canvas.view3d-gl');
+if (!gl) return { skipped: true };
+
+h.view.zoom = 8; h.view.pitch = 0.9; h.view.yaw = 0;
+h.view.panX = 0; h.view.panY = 0;
+h.redraw();
+
+function centre() {
+  var off = document.createElement('canvas');
+  off.width = 60; off.height = 60;
+  var ctx = off.getContext('2d');
+  ctx.drawImage(gl, gl.width / 2 - 30, gl.height / 2 - 30, 60, 60, 0, 0, 60, 60);
+  var px = ctx.getImageData(0, 0, 60, 60).data;
+  var r = 0, g = 0, b = 0;
+  for (var i = 0; i < 60 * 60; i++) { r += px[i * 4]; g += px[i * 4 + 1]; b += px[i * 4 + 2]; }
+  return [Math.round(r / 3600), Math.round(g / 3600), Math.round(b / 3600)];
+}
+
+var before = centre();
+
+// A flat magenta patch over the middle of the terrain, standing in for a stitch that
+// cannot happen offline. Nothing in the fixture's imagery is this colour, so if it
+// appears on screen it came through the detail sampler and nowhere else.
+var patch = document.createElement('canvas');
+patch.width = patch.height = 64;
+var pctx = patch.getContext('2d');
+pctx.fillStyle = '#ff00ff';
+pctx.fillRect(0, 0, 64, 64);
+var dem = JSON.parse(document.querySelector('.view3d-data').textContent).terrain;
+var midLon = (dem.west + dem.east) / 2, midLat = (dem.south + dem.north) / 2;
+var w = (dem.east - dem.west) * 0.2, hgt = (dem.north - dem.south) * 0.2;
+h.setDetail(patch, { west: midLon - w, east: midLon + w,
+                     south: midLat - hgt, north: midLat + hgt }, 15);
+h.redraw();
+var after = centre();
+
+h.setDetail(null);
+h.redraw();
+return { before: before, after: after, cleared: centre() };
+"""
+
+
+@needs_chrome
+def test_the_detail_patch_reaches_the_pixels_and_only_where_it_covers():
+    """The shader claim, measured rather than reasoned: a fragment inside the detail box
+    samples the detail texture, and one outside it carries on sampling the base. A patch
+    in a colour the fixture's imagery does not contain is the only way to tell the two
+    apart in a screenshot.
+
+    Also that removing the patch puts the base back — the detail belongs to a camera and
+    to a style, and a stale one left on screen would be imagery of somewhere else.
+    """
+    answer = _probe(_scene(tiles=True), _DETAIL_PIXELS)
+    if answer.get("skipped"):
+        pytest.skip("no WebGL backend in this browser")
+    before, after, cleared = answer["before"], answer["after"], answer["cleared"]
+    assert after[0] > 180 and after[2] > 180 and after[1] < 90, (
+        f"the detail patch did not reach the middle of the view: {after}")
+    assert before[1] > after[1], "the base imagery was already magenta"
+    assert abs(cleared[1] - before[1]) < 25, (
+        f"clearing the patch did not put the base image back: {cleared} vs {before}")
