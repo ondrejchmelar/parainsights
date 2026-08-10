@@ -424,9 +424,10 @@ so its filename is read from the directory listing instead of computed.
 
 Done: both goals. 82 aerodrome zones and 205 traffic circuits at 156 fields (410
 rectangles, two per circuit), 197 KB of OpenAir; the map renders all 743 airspaces with
-class and floor filters, and offers the OpenAir file for download. 68 of the 82
-aerodromes carry their published hours in the airspace name.
-Published at `public/airspace/` and as a view in the report. 81 tests, no network.
+class, floor and operating-hours filters, and offers the OpenAir file for download. 68 of
+the 82 aerodromes carry their published hours, in the airspace name and on the map.
+Published at `public/airspace/` and as a view in the report. 95 tests; two drive a real
+browser, and none touches the network.
 
 The map ships two ways: as a standalone page (`airspaces.cli --html`) and as a top-level
 view in the tracklog report (`tracklog_viewer.cli --airspace`). Both are published.
@@ -537,6 +538,27 @@ it would never earn it on a Saturday.
   XCTrack shows it. `Z` on the window because the AIP publishes UTC and a Czech pilot's
   instrument reads local — two hours apart for the whole season. LKOL publishes four
   periods and gets `+3 more`; a name is not the place for all of them.
+
+- **The clock is off when the map opens**, the same decision as the floor slider and for a
+  stronger reason: this one would withhold airspace on the strength of prose parsed out of
+  a manual page. It never hides silently either — the readout states the count both when
+  something was hidden and when nothing was.
+
+- **The input is Czech wall-clock time and the comparison is UTC**, with `Intl` doing the
+  conversion rather than a hand-rolled DST rule. A control that took UTC would be off by
+  two hours for the whole flying season, which is the exact error the feature exists to
+  prevent.
+
+- **The holiday calendar rides on the control, not in the scene payload.** `HOL` is a
+  published operating day at 61 of the 68 fields, so the filter cannot answer without one;
+  the flat map has no scene to put it in, and both maps have to give the same answer. It
+  is computed in Python and shipped as a `data-` attribute rather than reimplemented —
+  a second copy of the Easter algorithm is a second thing to get wrong.
+
+- **A ring with no schedule is a ring the filter must never touch.** That is all 251 base
+  airspaces, whose activation lives in NOTAMs this repository does not fetch, and all 74
+  SLZ okruhy. Three quarters of the map is outside what this can speak for, and the note
+  beside the control says which quarter is not.
 
 ### What it still cannot do
 

@@ -53,6 +53,7 @@ button {{ font:inherit; padding:3px 10px; background:var(--panel);
 </div>
 <script>{view3d.SCRIPT}
 {view3d_gl.SCRIPT}</script>
+<script>{airspace_html.HOURS_SCRIPT}</script>
 <script>{render_html.SCRIPT}</script>
 {extra_script}
 """

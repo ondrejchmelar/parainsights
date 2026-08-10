@@ -90,7 +90,7 @@ def rings(airspaces) -> list[dict]:
         label = airspace.name
         if airspace.floor or airspace.ceiling:
             label += f"  ({airspace.floor} – {airspace.ceiling})"
-        out.append({
+        ring = {
             "k": classify(airspace),
             "n": label,
             # Metres AMSL, and the number the floor filter compares against, so the
@@ -99,7 +99,14 @@ def rings(airspaces) -> list[dict]:
             "g": _is_ground(airspace),
             "lon": [round(lon, 4) for _, lon in points],
             "lat": [round(lat, 4) for lat, _ in points],
-        })
+        }
+        # Only where hours were actually read. A ring with no `w` is a ring the time
+        # filter must never hide — that covers all 251 base airspaces, whose activation
+        # lives in NOTAMs this repository does not fetch, and the 74 SLZ okruhy, whose
+        # fields publish no hours at all.
+        if airspace.meta.get("hours"):
+            ring["w"] = airspace.meta["hours"]
+        out.append(ring)
     return out
 
 

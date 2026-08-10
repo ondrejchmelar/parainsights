@@ -57,10 +57,17 @@ STYLE = """
 .plan-crossed-name { flex:1; min-width:0; }
 .plan-crossed-km { color:var(--ink-3); font-size:12px; white-space:nowrap;
   font-variant-numeric:tabular-nums; }
+.plan-crossed li.is-shut .plan-crossed-name { color:var(--ink-3); }
+.plan-when { font-size:10.5px; text-transform:uppercase; letter-spacing:.06em;
+  padding:2px 6px; border-radius:3px; white-space:nowrap; flex:none; }
+.plan-when.is-open { background:#15803d; color:#fff; }
+.plan-when.is-shut { background:var(--panel-2); color:var(--ink-3); }
 """
 
 
 def controls() -> str:
+    from airspaces import render_html as airspace_html
+
     return (
         '<div class="plan-bar">'
         '<button type="button" id="plan-undo">Undo point</button>'
@@ -70,6 +77,17 @@ def controls() -> str:
         "Drag, pinch and twist still move the view — a click that moved is a drag, not a "
         "point.</span>"
         "</div>"
+        # The same control the airspace map carries, and deliberately the same one: a
+        # planner that answered "which fields are open" differently from the map it is
+        # drawn on would be worse than not answering. Here it also decides what the
+        # crossing list says about each aerodrome layer, which is the point of having a
+        # time on a page whose whole job is planning a particular day.
+        + airspace_html.when_control(
+            "Czech local time. It marks the aerodrome layers in the list below and hides "
+            "the ones that are shut. Hours are published for 68 of the 82 aerodromes and "
+            "for <strong>no</strong> ultralight strip; the controlled and restricted "
+            "airspace here carries no hours at all, and its activation is in the NOTAMs."
+        )
     )
 
 
@@ -225,7 +243,7 @@ SCRIPT = """
         // rectangles, and a list that says "LKPR CTR" four times is a list nobody reads.
         var seen = found[ring.n];
         if (!seen) found[ring.n] = seen = { name: ring.n, k: ring.k, f: ring.f,
-                                            g: ring.g, metres: 0 };
+                                            g: ring.g, w: ring.w, metres: 0 };
         seen.metres += fraction * length;
         seen.f = Math.min(seen.f, ring.f);
       });
@@ -235,6 +253,9 @@ SCRIPT = """
       .sort(function (a, b) { return a.f - b.f || b.metres - a.metres; });
   }
 
+  // The whole list is always shown, even when the map has hidden a field for being
+  // shut. The map is decluttering; the list is the answer, and an answer that quietly
+  // drops a zone because a VFR manual page said "SAT, SUN, HOL" is not one.
   function reportAirspace() {
     var box = document.getElementById('plan-airspace');
     var crossed = crossings();
@@ -246,6 +267,9 @@ SCRIPT = """
       return;
     }
     var colours = handle.scene().airspaceColours || {};
+    var when = window.aspHours ? window.aspHours.chosen() : null;
+    var holidays = window.aspHours ? window.aspHours.holidays() : {};
+    var shut = 0;
     var heading = document.createElement('p');
     heading.className = 'plan-crossed-head';
     heading.textContent = crossed.length + (crossed.length === 1
@@ -269,9 +293,30 @@ SCRIPT = """
       row.appendChild(swatch);
       row.appendChild(name);
       row.appendChild(much);
+      // Only a ring that carries hours can be marked, and only when a time was asked
+      // for. Everything else says nothing, which is the truth about it.
+      if (when && item.w) {
+        var open = window.aspHours.activeAt(item.w, when, holidays);
+        var tag = document.createElement('span');
+        tag.className = 'plan-when ' + (open ? 'is-open' : 'is-shut');
+        tag.textContent = open ? 'operating' : 'outside hours';
+        row.appendChild(tag);
+        if (!open) { row.classList.add('is-shut'); shut++; }
+      }
       list.appendChild(row);
     });
     box.appendChild(list);
+    if (when) {
+      var note = document.createElement('p');
+      note.className = 'plan-clear';
+      note.textContent = shut
+        ? shut + ' of these are outside their published hours at '
+          + window.aspHours.label(when)
+          + ' — which means nobody is there unless somebody asked, not that nobody is.'
+        : 'Every field on this route with published hours is open at '
+          + window.aspHours.label(when) + '.';
+      box.appendChild(note);
+    }
   }
 
   // ---- scoring -----------------------------------------------------------------------
@@ -410,6 +455,22 @@ SCRIPT = """
     redraw();
   });
   document.getElementById('plan-close').addEventListener('change', redraw);
+
+  // The time control does two things at once, and they are the same thing: it takes the
+  // shut fields off the map so the route is readable, and it marks them in the list so
+  // the reader knows why the map went quiet.
+  function retime() {
+    var when = window.aspHours ? window.aspHours.chosen() : null;
+    var holidays = window.aspHours ? window.aspHours.holidays() : {};
+    handle.setAirspaceFilter(when ? function (space) {
+      return window.aspHours.activeAt(space.w, when, holidays);
+    } : null);      // setAirspaceFilter redraws on its own
+    reportAirspace();
+  }
+  var whenBox = document.getElementById('asp-when-on');
+  var whenInput = document.getElementById('asp-when');
+  if (whenBox) whenBox.addEventListener('change', retime);
+  if (whenInput) whenInput.addEventListener('input', retime);
 
   redraw();
 })();

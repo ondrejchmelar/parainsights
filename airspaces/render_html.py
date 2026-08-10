@@ -21,10 +21,12 @@ to care about end up on top rather than buried under a TMA.
 
 from __future__ import annotations
 
+import datetime as dt
+import json
 import math
 import re
 
-from . import basemap
+from . import basemap, hours
 from .aerodromes import FEET
 
 # The class filter, and how each class is painted. Order is draw order.
@@ -61,6 +63,10 @@ STYLE = """
 .asp-slider input { flex: 1; }
 .asp-readout { font-variant-numeric: tabular-nums; color: var(--ink-2);
   min-width: 8.5em; }
+.asp-when-out { flex: 1 1 20em; min-width: 0; }
+.asp-controls input[type="datetime-local"] { font: inherit; padding: 2px 6px;
+  background: var(--panel); color: var(--ink); border: 1px solid var(--rule);
+  border-radius: 3px; }
 .asp-hint { font-size: 12.5px; color: var(--ink-3); margin: 6px 0 0; }
 .asp-name { position: absolute; pointer-events: none; background: var(--ink);
   color: var(--paper); padding: 5px 8px; border-radius: 3px; font-size: 12px;
@@ -99,7 +105,124 @@ STYLE = """
 .asp-src-when { white-space: nowrap; font-variant-numeric: tabular-nums; }
 """
 
-SCRIPT = """
+# Shared by the flat map, the 3D map and the planner, all three of which ask the same
+# question of the same payload. It is its own IIFE rather than part of `SCRIPT` because
+# `SCRIPT` returns immediately when there is no flat `<svg>` to drive, which is every
+# page that draws the 3D view.
+HOURS_SCRIPT = """
+(function () {
+  // The published hours are UTC and the reader thinks in Czech local time — two hours
+  // apart for the whole flying season, which is a big enough error to be the very thing
+  // this control exists to prevent. So the input is wall-clock Prague and the comparison
+  // is UTC, with `Intl` doing the conversion rather than a hand-rolled DST rule.
+  function pragueOffset(instant) {
+    var parts = {};
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Europe/Prague', hour12: false, year: 'numeric', month: '2-digit',
+      day: '2-digit', hour: '2-digit', minute: '2-digit'
+    }).formatToParts(instant).forEach(function (part) { parts[part.type] = part.value; });
+    var wall = Date.UTC(+parts.year, +parts.month - 1, +parts.day,
+                        +parts.hour % 24, +parts.minute);
+    return (wall - instant.getTime()) / 60000;
+  }
+
+  // Prague wall-clock to the instant it names. Twice round, because the first offset is
+  // sampled at an instant that is wrong by the offset itself — which only matters within
+  // an hour of a DST change, and the second pass lands.
+  function fromPrague(text) {
+    var m = /^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2})/.exec(text || '');
+    if (!m) return null;
+    var wall = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
+    var instant = wall;
+    for (var i = 0; i < 2; i++) instant = wall - pragueOffset(new Date(instant)) * 60000;
+    return new Date(instant);
+  }
+
+  function toPrague(instant) {
+    var shifted = new Date(instant.getTime() + pragueOffset(instant) * 60000);
+    return shifted.toISOString().slice(0, 16);
+  }
+
+  function inSeason(month, day, season) {
+    var here = month * 100 + day;
+    var from = season[0] * 100 + season[1], to = season[2] * 100 + season[3];
+    return from <= to ? (here >= from && here <= to) : (here >= from || here <= to);
+  }
+
+  // True whenever nothing is known, which is the entire point: a ring with no schedule
+  // is a ring this filter must not touch, and that is 251 base airspaces plus every one
+  // of the 74 SLZ circuits. No instant answers the same way — the filter is off — and
+  // every caller guards for that already, so this is one line to stop the next one
+  // having to. The date is read in UTC, which is the AIP's own frame: its operating days
+  // go with its operating hours, and both are published Zulu.
+  function activeAt(schedule, instant, holidays) {
+    if (!instant) return true;
+    if (!schedule || !schedule.p || !schedule.p.length) return true;
+    var month = instant.getUTCMonth() + 1, day = instant.getUTCDate();
+    var weekday = (instant.getUTCDay() + 6) % 7;      // 0 = Monday, as the payload counts
+    var minutes = instant.getUTCHours() * 60 + instant.getUTCMinutes();
+    var stamp = instant.toISOString().slice(0, 10);
+    var holiday = !!(holidays && holidays[stamp]);
+    for (var i = 0; i < schedule.p.length; i++) {
+      var period = schedule.p[i];
+      if (period.s && !inSeason(month, day, period.s)) continue;
+      if (period.d && period.d.indexOf(weekday) < 0 && !(period.h && holiday)) continue;
+      if (period.w) {
+        var from = period.w[0], to = period.w[1];
+        var within = from <= to ? (minutes >= from && minutes < to)
+                                : (minutes >= from || minutes < to);
+        if (!within) continue;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  var cachedHolidays = null;
+  function holidays() {
+    if (cachedHolidays) return cachedHolidays;
+    var input = document.getElementById('asp-when');
+    cachedHolidays = {};
+    if (input && input.dataset.holidays) {
+      input.dataset.holidays.split(',').forEach(function (day) {
+        cachedHolidays[day] = true;
+      });
+    }
+    return cachedHolidays;
+  }
+
+  // The instant the controls are asking about, or null when the filter is off.
+  function chosen() {
+    var box = document.getElementById('asp-when-on');
+    var input = document.getElementById('asp-when');
+    if (!box || !input || !box.checked) return null;
+    return fromPrague(input.value);
+  }
+
+  function label(instant) {
+    if (!instant) return '';
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Europe/Prague', weekday: 'short', day: 'numeric', month: 'short',
+      hour: '2-digit', minute: '2-digit', hour12: false
+    }).format(instant);
+  }
+
+  window.aspHours = { activeAt: activeAt, holidays: holidays, chosen: chosen,
+                      toPrague: toPrague, label: label };
+
+  // Open on the reader's own clock. The page is static and may be read months after it
+  // was built, so a build-time default would be a date nobody asked about.
+  var input = document.getElementById('asp-when');
+  if (input && !input.value) input.value = toPrague(new Date());
+  var now = document.getElementById('asp-when-now');
+  if (now && input) now.addEventListener('click', function () {
+    input.value = toPrague(new Date());
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+})();
+"""
+
+MAP_SCRIPT = """
 (function () {
   var svg = document.getElementById('asp-map');
   if (!svg) return;
@@ -172,21 +295,47 @@ SCRIPT = """
     var out = document.getElementById('asp-readout');
     if (out) out.textContent = limit >= top ? 'every floor'
       : 'floor at or below ' + limit + ' m';
-    var shown = 0;
+    var when = window.aspHours ? window.aspHours.chosen() : null;
+    var holidays = window.aspHours ? window.aspHours.holidays() : {};
+    var shown = 0, dimmed = 0;
     svg.querySelectorAll('.asp-zone').forEach(function (zone) {
       var visible = on[zone.dataset.klass] !== false
         && Number(zone.dataset.floor) <= limit;
+      if (visible && when) {
+        var schedule = zone.dataset.hours ? JSON.parse(zone.dataset.hours) : null;
+        if (!window.aspHours.activeAt(schedule, when, holidays)) {
+          visible = false;
+          dimmed++;
+        }
+      }
       zone.style.display = visible ? '' : 'none';
       if (visible) shown++;
     });
     var count = document.getElementById('asp-count');
     if (count) count.textContent = shown + ' shown';
+    reportWhen(when, dimmed);
   }
+
+  // Never silent. Hiding airspace without saying how much was hidden is the one thing
+  // this control must not do, so the readout states the count even when it is zero.
+  function reportWhen(when, dimmed) {
+    var out = document.getElementById('asp-when-out');
+    if (!out) return;
+    if (!when) { out.textContent = ''; return; }
+    out.textContent = dimmed
+      ? dimmed + ' outside published hours at ' + window.aspHours.label(when)
+      : 'every field with published hours is open at ' + window.aspHours.label(when);
+  }
+
   document.querySelectorAll('[data-asp-class]').forEach(function (box) {
     box.addEventListener('change', refilter);
   });
   var slider = document.getElementById('asp-floor');
   if (slider) slider.addEventListener('input', refilter);
+  var whenBox = document.getElementById('asp-when-on');
+  var whenInput = document.getElementById('asp-when');
+  if (whenBox) whenBox.addEventListener('change', refilter);
+  if (whenInput) whenInput.addEventListener('input', refilter);
 
   // The label: hover on a mouse, tap-to-pin on a touchscreen.
   //
@@ -248,6 +397,11 @@ SCRIPT = """
   apply();
 })();
 """
+
+# What every caller has always included. The hours helper has to come first: the map
+# script gives up immediately when there is no flat `<svg>` on the page, and the 3D
+# script and the planner both need `window.aspHours` regardless.
+SCRIPT = HOURS_SCRIPT + MAP_SCRIPT
 
 WIDTH, HEIGHT = 1000.0, 667.0
 
@@ -358,10 +512,13 @@ def map_svg(airspaces, project) -> str:
         label = airspace.name
         if airspace.floor or airspace.ceiling:
             label += f"  ({airspace.floor} – {airspace.ceiling})"
+        schedule = airspace.meta.get("hours")
         parts.append(
             f'<path class="asp-zone" data-klass="{group}" '
             f'data-floor="{floor_metres(airspace):.0f}" '
-            f'data-label="{_escape(label)}" '
+            + (f'data-hours="{_escape(json.dumps(schedule, separators=(",", ":")))}" '
+               if schedule else "")
+            + f'data-label="{_escape(label)}" '
             f'fill="{colours[group]}" fill-opacity="0.18" '
             f'stroke="{colours[group]}" stroke-width="1.1" '
             f'd="{_path(airspace.points, project)}"><title>{_escape(label)}</title></path>'
@@ -387,6 +544,47 @@ def _area(airspace) -> float:
         y2, x2 = points[(i + 1) % len(points)]
         total += x1 * y2 - x2 * y1
     return abs(total) / 2
+
+
+def when_control(note: str = "") -> str:
+    """The time filter: hide the fields that are outside their published hours.
+
+    **Off by default**, for the same reason the floor slider opens showing everything: a
+    map that silently withholds airspace is the wrong thing to open with, and this one
+    would withhold it on the strength of prose parsed out of a VFR manual page.
+
+    The input is Czech wall-clock time, because that is what a pilot plans in; the
+    published hours are UTC and the script converts. It carries the holiday calendar in
+    a data attribute rather than in the scene payload, because the flat map has no scene
+    and both maps have to answer the same question.
+
+    Only the aerodrome layers can be hidden by it. The base airspace's own activation
+    lives in NOTAMs this repository does not fetch, and the 74 SLZ strips publish no
+    hours — so the count beside the control is the honest measure of how much of the map
+    this control can actually speak for.
+    """
+    years = range(dt.date.today().year - 1, dt.date.today().year + 3)
+    calendar = ",".join(hours.holiday_list(years))
+    return (
+        '<div class="asp-controls">'
+        '<label for="asp-when-on"><input type="checkbox" id="asp-when-on">'
+        "Only fields open at</label>"
+        f'<input type="datetime-local" id="asp-when" data-holidays="{calendar}" '
+        'aria-label="date and time, Czech local">'
+        '<button type="button" id="asp-when-now">now</button>'
+        '<span class="asp-readout asp-when-out" id="asp-when-out"></span>'
+        "</div>"
+        f'<p class="asp-hint">{note}</p>'
+    )
+
+
+WHEN_NOTE = (
+    "Czech local time. Aerodrome hours are published for 68 of the 82 aerodromes and "
+    "for <strong>none</strong> of the 74 ultralight strips, and nothing else on this map "
+    "carries hours at all — so this hides part of one layer, not the map. "
+    "<strong>Outside published hours is not “closed”</strong>: almost every field adds "
+    "“otherwise on request”, and a tow launch needs no published hour."
+)
 
 
 def controls(top: int, flat: bool = True) -> str:
@@ -419,6 +617,7 @@ def controls(top: int, flat: bool = True) -> str:
         f'<button type="button" id="asp-reset">'
         f'{"Reset view" if flat else "Reset"}</button>'
         "</div>"
+        + when_control(WHEN_NOTE)
     )
 
 
@@ -565,15 +764,28 @@ SCRIPT3D = """
     var out = document.getElementById('asp-readout');
     if (out) out.textContent = limit >= top ? 'every floor'
       : 'floor at or below ' + limit + ' m';
-    var shown = 0;
+    var when = window.aspHours ? window.aspHours.chosen() : null;
+    var holidays = window.aspHours ? window.aspHours.holidays() : {};
+    function open(space) {
+      return !when || window.aspHours.activeAt(space.w, when, holidays);
+    }
+    var shown = 0, dimmed = 0;
     var spaces = handle.scene().airspaces || [];
     for (var i = 0; i < spaces.length; i++) {
-      if (on[spaces[i].k] !== false && spaces[i].f <= limit) shown++;
+      if (on[spaces[i].k] === false || spaces[i].f > limit) continue;
+      if (open(spaces[i])) shown++; else dimmed++;
     }
     var count = document.getElementById('asp-count');
     if (count) count.textContent = shown + ' shown';
+    var says = document.getElementById('asp-when-out');
+    if (says) {
+      says.textContent = !when ? ''
+        : (dimmed ? dimmed + ' outside published hours at ' + window.aspHours.label(when)
+                  : 'every field with published hours is open at '
+                    + window.aspHours.label(when));
+    }
     handle.setAirspaceFilter(function (space) {
-      return on[space.k] !== false && space.f <= limit;
+      return on[space.k] !== false && space.f <= limit && open(space);
     });
   }
   document.querySelectorAll('[data-asp-class]').forEach(function (box) {
@@ -581,6 +793,10 @@ SCRIPT3D = """
   });
   var slider = document.getElementById('asp-floor');
   if (slider) slider.addEventListener('input', refilter);
+  var whenBox = document.getElementById('asp-when-on');
+  var whenInput = document.getElementById('asp-when');
+  if (whenBox) whenBox.addEventListener('change', refilter);
+  if (whenInput) whenInput.addEventListener('input', refilter);
 
   // Hover on a mouse, tap-to-pin on a touchscreen — the same split the flat map made,
   // and for the same reason: a touchscreen's pointerout means the finger lifted, not
@@ -624,6 +840,7 @@ SCRIPT3D = """
       box.checked = true;
     });
     if (slider) slider.value = slider.dataset.top;
+    if (whenBox) whenBox.checked = false;
     refilter();
     var act = panel.querySelector('[data-view3d-act="reset"]');
     if (act) act.click();

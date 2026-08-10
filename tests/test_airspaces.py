@@ -12,6 +12,7 @@ import pytest
 
 from airspaces import aerodromes, atz, build, circuits, geo, hours, openair, render_html
 from airspaces.aerodromes import Aerodrome, Runway
+from tests.test_view3d_gl import CHROME, CHROME_FLAGS, needs_chrome
 
 DATA = Path(__file__).parent / "data"
 
@@ -950,6 +951,38 @@ def test_a_ring_carries_its_own_floor(zones):
     assert atz_ring["g"] is True, "a GND floor must follow the terrain, not sit at 0 m"
 
 
+def test_only_a_ring_with_published_hours_carries_a_schedule(zones):
+    """The time filter can only ever speak for the layer it has hours for. The 251 base
+    airspaces get their activation from NOTAMs this repository does not fetch, and the
+    74 SLZ okruhy from pages that publish no hours — so neither may carry a schedule,
+    and the filter must leave both alone."""
+    from airspaces import scene as airspace_scene
+
+    base = openair.Airspace("MCTR KBELY", "C", floor="GND", ceiling="FL 95",
+                            points=[(50.0, 14.5), (50.2, 14.5), (50.2, 14.8)])
+    field_ = vfr("lkta")
+    field_.runways = [runway()]
+    okruh = circuits.to_airspaces(field_)[0]
+
+    rings = airspace_scene.rings([base, okruh])
+    assert "w" not in next(r for r in rings if r["n"].startswith("MCTR"))
+    scheduled = next(r for r in rings if r["n"].startswith("OKRUH"))
+    assert scheduled["w"]["p"], "the okruh lost the hours its field publishes"
+    assert scheduled["w"]["r"] == 1, "LKTA says 'otherwise O/R' and the ring must say so"
+
+
+def test_the_time_filter_is_off_when_the_page_opens():
+    """Same decision as the floor slider, and for a stronger reason: this one would
+    withhold airspace on the strength of prose parsed out of a VFR manual page."""
+    markup = render_html.when_control(render_html.WHEN_NOTE)
+    box = re.search(r'<input type="checkbox" id="asp-when-on"[^>]*>', markup).group()
+    assert "checked" not in box
+    assert "not “closed”" in markup, "the O/R caveat has to be on screen, not in a doc"
+    # The holiday calendar rides on the control, because the flat map has no scene to
+    # put it in and both maps must answer the same question.
+    assert f"{dt.date.today().year}-12-24" in markup
+
+
 def test_rings_are_ordered_biggest_first(zones):
     """Paint order is hit order on a canvas exactly as it is in SVG, so the smallest
     thing under the pointer has to be drawn last or a dropzone cannot be read through
@@ -996,3 +1029,148 @@ def test_a_zero_floor_is_the_ground_however_it_is_written():
     high = openair.Airspace("Y", "C", floor="1000 ft AMSL", ceiling="FL 95",
                             points=points)
     assert airspace_scene.rings([high])[0]["g"] is False
+
+
+# ------------------------------------------- the time filter, in a browser
+#
+# The rest of this module is pure Python, and these two are here because the filter
+# cannot be checked any other way: whether a Prague wall-clock time lands on the right
+# UTC minute, and whether a ring with no schedule survives, are claims about what the
+# browser does with the payload.
+#
+# Both maps are driven, because they filter by different means and the duplication is
+# deliberate — the flat map sets `display` on an SVG element and the 3D map hands the
+# view a predicate. A reader must get the same answer from either, and the flat one is
+# the fallback nothing else exercises, so a syntax error in it would surface on the day
+# a tile server was slow.
+
+
+def _hours_fixture():
+    """LKTA with its published weekend hours, an SLZ strip with none, and a piece of
+    base airspace. One of each kind the filter has to treat differently."""
+    field_ = vfr("lkta")
+    field_.runways = [runway()]
+    slz = Aerodrome(icao="LKCAST", name="Částkovice", lat=49.409, lon=15.144,
+                    elevation_ft=1925.0)
+    slz.runways = aerodromes.runways_from_table(LKCAST_TABLE, 49.409, 15.144)
+    base = [openair.Airspace("MCTR KBELY", "C", floor="GND", ceiling="FL 95",
+                             points=[(50.0, 14.5), (50.2, 14.5), (50.2, 14.8)])]
+    overlay = build.Overlay(
+        airspaces=circuits.to_airspaces(field_) + circuits.to_airspaces(slz),
+        zones=[], fields={"LKTA": field_, "LKCAST": slz}, atz_date="2026-08-06",
+    )
+    return overlay, base
+
+
+# Tick the box on a Tuesday, read what is left, then move to the Saturday. 11:00 Prague
+# is 09:00 Z, which is inside LKTA's `SAT, SUN, HOL 0700-1400` on the one day and outside
+# it on the other — the whole feature, in two wall-clock times a pilot would actually use.
+_ASK = """
+var input = document.getElementById('asp-when');
+var box = document.getElementById('asp-when-on');
+input.value = '2026-08-11T11:00';
+box.checked = true;
+box.dispatchEvent(new Event('change', { bubbles: true }));
+var tuesday = names();
+var says = document.getElementById('asp-when-out').textContent;
+input.value = '2026-08-08T11:00';
+input.dispatchEvent(new Event('input', { bubbles: true }));
+return { all: all, tuesday: tuesday, saturday: names().length, says: says,
+         satSays: document.getElementById('asp-when-out').textContent };
+"""
+
+
+def _probe(page: str, body: str) -> dict:
+    import subprocess
+    import tempfile
+
+    probe = """
+    <pre id="probe-out"></pre>
+    <script>
+    window.addEventListener('load', function () { setTimeout(function () {
+      var out;
+      try { out = (function () { %s })(); }
+      catch (error) { out = { error: String((error && error.stack) || error) }; }
+      document.getElementById('probe-out').textContent = JSON.stringify(out);
+    }, 900); });
+    </script>
+    """ % body
+    with tempfile.TemporaryDirectory() as folder:
+        target = Path(folder) / "airspace.html"
+        target.write_text(page + probe, encoding="utf-8")
+        out = subprocess.run([CHROME, *CHROME_FLAGS, target.as_uri()],
+                             capture_output=True, text=True, timeout=180).stdout
+    found = re.search(r'<pre id="probe-out">(.*?)</pre>', out, re.S)
+    assert found, out[-2000:]
+    answer = json.loads(found.group(1) or "null")
+    assert answer and "error" not in answer, answer
+    return answer
+
+
+def _check(answer: dict):
+    """The same four claims, whichever map produced them."""
+    assert answer["all"] == answer["saturday"], "a Saturday hid a field that is open"
+    assert answer["tuesday"], "the Tuesday hid the whole map"
+    assert not any(name.startswith("OKRUH LKTA") for name in answer["tuesday"]), (
+        "LKTA publishes weekend hours and was still drawn on a Tuesday")
+    assert any(name.startswith("OKRUH LKCAST") for name in answer["tuesday"]), (
+        "an SLZ strip publishes no hours at all and must never be hidden by the clock")
+    assert any(name.startswith("MCTR") for name in answer["tuesday"]), (
+        "the base airspace carries no hours and must never be hidden by the clock")
+    # Never silent either way: hiding airspace without saying how much, and saying
+    # nothing when nothing was hidden, both look like a page that has not run.
+    assert "outside published hours" in answer["says"]
+    assert "every field with published hours is open" in answer["satSays"]
+
+
+@needs_chrome
+def test_the_flat_map_hides_only_the_fields_that_publish_hours():
+    from airspaces import cli as airspace_cli
+
+    overlay, base = _hours_fixture()
+    page = airspace_cli._page(render_html.body(overlay, base, "26-04-01"),
+                              "Czech airspace")
+    _check(_probe(page, """
+    function names() {
+      return Array.prototype.filter.call(
+        document.querySelectorAll('.asp-zone'),
+        function (zone) { return zone.style.display !== 'none'; }
+      ).map(function (zone) { return zone.dataset.label.split('  (')[0]; });
+    }
+    var all = names().length;
+    """ + _ASK))
+
+
+@needs_chrome
+def test_the_3d_map_gives_the_same_answer_as_the_flat_one():
+    """It filters by a different route — a predicate handed to the view rather than a
+    pass over the DOM — and it is the one the report and the published page actually
+    open with."""
+    import numpy as np
+
+    from airspaces import cli as airspace_cli
+    from airspaces import scene as airspace_scene
+    from tracklog_viewer import terrain as terrain_module
+
+    overlay, base = _hours_fixture()
+    ground = terrain_module.Terrain(
+        west=14.0, east=16.0, south=49.0, north=51.0,
+        elevations=np.full((24, 24), 400.0),
+    )
+    payload = airspace_scene.build(base + overlay.airspaces, terrain=ground,
+                                   basemaps={}, tiles=False)
+    page = airspace_cli._page(
+        render_html.body(overlay, base, "26-04-01", scene=payload),
+        "Czech airspace", three_d=True,
+    )
+    _check(_probe(page, """
+    var canvas = document.querySelector('canvas.view3d');
+    var handle = window.__view3dAll[canvas.id];
+    function names() {
+      var when = window.aspHours.chosen(), holidays = window.aspHours.holidays();
+      return (handle.scene().airspaces || []).filter(function (space) {
+        return window.aspHours.activeAt(space.w, when, holidays);
+      }).map(function (space) { return space.n.split('  (')[0]; });
+    }
+    var all = names().length;
+    """ + _ASK))

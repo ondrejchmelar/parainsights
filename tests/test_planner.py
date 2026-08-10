@@ -37,15 +37,25 @@ def _terrain():
                                   elevations=z)
 
 
-def _band(name, west, east, south, north, floor="GND", ceiling="FL 95", klass="C"):
+def _band(name, west, east, south, north, floor="GND", ceiling="FL 95", klass="C",
+          hours=None):
     """A rectangular airspace, so that what a leg through it should measure is arithmetic
-    a reader can check rather than a number this code produced."""
+    a reader can check rather than a number this code produced.
+
+    `hours` is a *Provozní doba* line, parsed the same way a real page's is — writing the
+    payload out by hand here would test the renderer against a schedule the parser might
+    never produce.
+    """
+    from airspaces import hours as hours_module
     from airspaces import openair
 
-    return openair.Airspace(
+    space = openair.Airspace(
         name, klass, floor=floor, ceiling=ceiling,
         points=[(south, west), (north, west), (north, east), (south, east)],
     )
+    if hours:
+        space.meta["hours"] = hours_module.parse(hours).payload()
+    return space
 
 
 def _page(spaces=()) -> str:
@@ -242,6 +252,41 @@ function crossed() {
     });
 }
 function kmOf(note) { return parseFloat(note); }
+
+// The time control, driven the way a reader drives it: type a Czech wall-clock time and
+// tick the box. Everything downstream — the list marks and the map filter — hangs off
+// the two events those two actions fire.
+function askAbout(local) {
+  var input = document.getElementById('asp-when');
+  var box = document.getElementById('asp-when-on');
+  input.value = local;
+  box.checked = true;
+  box.dispatchEvent(new Event('change', { bubbles: true }));
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+function marks() {
+  return Array.prototype.map.call(
+    document.querySelectorAll('#plan-airspace .plan-crossed li'),
+    function (row) {
+      var tag = row.querySelector('.plan-when');
+      return { name: row.querySelector('.plan-crossed-name').textContent,
+               mark: tag ? tag.textContent : null };
+    });
+}
+// What is under a point on the map. A ring the filter dropped was never drawn and so is
+// not in the hit list — which is the reader-facing consequence of hiding it, and the
+// only one observable from here. `redraw` first because `setAirspaceFilter` paints on
+// the next animation frame and this probe returns before one arrives; on the page that
+// is 16 ms and nobody sees it, in here it is the difference between the two answers.
+function under(lon, lat) {
+  handle.redraw();
+  var m = handle.toMetres(lon, lat);
+  var p = handle.worldProject(m[0], m[1], handle.groundAt(lon, lat));
+  var box = canvas.getBoundingClientRect();
+  var found = handle.airspaceAt(box.left + p[0] / canvas.width * box.width,
+                               box.top + p[1] / canvas.height * box.height);
+  return found ? found.n : null;
+}
 """
 
 
@@ -314,3 +359,66 @@ def test_the_closing_leg_is_checked_too():
     assert answer["open"] == 0, (
         "the outward legs already crossed it, so the test proves nothing")
     assert answer["closed"] == 1, "the closing leg was never checked"
+
+
+# ---- when the field is open ----------------------------------------------------------
+#
+# The one layer on this map that is genuinely time-varying. An ATZ is class G airspace
+# permanently; what keeps hours is the aerodrome, and therefore the traffic in the okruh.
+
+
+@needs_chrome
+def test_a_crossing_is_marked_open_or_shut_at_the_planned_hour():
+    """`15 APR - 15 OCT SAT, SUN, HOL 0700-1400` is UTC, so a Saturday at 11:00 Prague
+    time is 09:00 Z and inside it, and the same hour on the Tuesday is not. Getting the
+    two apart is the whole feature: the published window *is* the Czech XC weekend, so a
+    planner that ignored it would say the same thing on both days."""
+    band = _band("OKRUH LKTA", 14.4, 14.6, 49.0, 50.0,
+                 hours="15 APR - 15 OCT SAT, SUN, HOL 0700-1400, otherwise O/R")
+    answer = _run(_DROP + """
+    at(14.1, 49.5); at(14.9, 49.5);
+    askAbout('2026-08-08T11:00');
+    var saturday = marks();
+    askAbout('2026-08-11T11:00');
+    var tuesday = marks();
+    return { saturday: saturday, tuesday: tuesday,
+             note: document.getElementById('plan-airspace').textContent };
+    """, spaces=[band])
+    assert [row["mark"] for row in answer["saturday"]] == ["operating"]
+    assert [row["mark"] for row in answer["tuesday"]] == ["outside hours"]
+    assert "not that nobody is" in answer["note"], (
+        "'outside published hours' must never be rendered as 'closed' — nearly every "
+        "field adds 'otherwise O/R'")
+
+
+@needs_chrome
+def test_the_shut_field_leaves_the_map_but_stays_in_the_list():
+    """The map is decluttering and the list is the answer. Dropping a zone out of the
+    list because a VFR manual page said `SAT, SUN, HOL` would be the tool quietly
+    deciding something it does not know."""
+    band = _band("OKRUH LKTA", 14.4, 14.6, 49.0, 50.0,
+                 hours="15 APR - 15 OCT SAT, SUN, HOL 0700-1400, otherwise O/R")
+    answer = _run(_DROP + """
+    at(14.1, 49.5); at(14.9, 49.5);
+    var before = under(14.5, 49.5);
+    askAbout('2026-08-11T11:00');
+    return { before: before, after: under(14.5, 49.5), rows: marks().length };
+    """, spaces=[band])
+    assert answer["before"] == "OKRUH LKTA  (GND – FL 95)"
+    assert answer["after"] is None, "a shut field was still drawn on the map"
+    assert answer["rows"] == 1, "the list dropped a zone the route really does cross"
+
+
+@needs_chrome
+def test_a_zone_with_no_published_hours_is_never_marked():
+    """Which is 251 base airspaces, whose activation is in NOTAMs this repository does
+    not fetch, and all 74 SLZ okruhy, whose pages publish no hours. Marking those would
+    be inventing an answer for three quarters of the map."""
+    band = _band("MCTR KBELY", 14.4, 14.6, 49.0, 50.0)
+    answer = _run(_DROP + """
+    at(14.1, 49.5); at(14.9, 49.5);
+    askAbout('2026-08-11T03:00');
+    return { rows: marks(), under: under(14.5, 49.5) };
+    """, spaces=[band])
+    assert [row["mark"] for row in answer["rows"]] == [None]
+    assert answer["under"] is not None, "a ring with no hours was hidden by the clock"

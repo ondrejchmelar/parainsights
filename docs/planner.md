@@ -76,10 +76,193 @@ of what the route enters, **lowest floor first**, with how far through each one 
   is a page that has not run. It also repeats what the check does *not* cover, because a
   green result is exactly when a reader stops thinking about NOTAMs.
 
-Finding this also found a real bug in the airspace layer underneath: the base file writes
+## Whether anybody is there
+
+A crossing list is a plan view in a second sense too: it says the route enters that
+polygon *ever*, and a task is flown on a particular day at a particular hour. The clock
+above the map answers the part of that question the AIP publishes.
+
+It is the airspace map's own control, emitted by `airspaces.render_html.when_control` and
+used verbatim, because a planner that answered "which fields are open" differently from
+the map it is drawn on would be worse than not answering. Setting it does two things,
+which are the same thing: it takes the shut fields off the map so the route is readable,
+and it marks them in the list so the reader knows why the map went quiet.
+
+- **The map declutters; the list is the answer, and stays complete.** Dropping a zone out
+  of the list because a VFR manual page said `SAT, SUN, HOL` would be the tool quietly
+  deciding something it does not know. Every crossing is still listed, and a marked one
+  reads `outside hours` rather than *closed* — nearly every Czech field adds "otherwise
+  O/R", so it means nobody is there unless somebody asked, not that nobody is.
+- **Only a ring that carries hours is ever marked.** That is 68 aerodromes' worth. The
+  base airspace and all 74 SLZ okruhy carry none, and marking those would be inventing an
+  answer for three quarters of the map — which is the same reason the crossing list does
+  not yet claim a height. The note under the control says which part it speaks for.
+- **It does not reorder the list.** Lowest floor first stays the order, because what a
+  paraglider hits soonest is still what it most needs to know; whether the field was
+  operating is a property of the row, not a reason to rank it.
+
+Written up in full in `airspaces.md` — the parsing, the three rules that keep it from
+being wrong in the dangerous direction, and why an ATZ is not the thing with a schedule.
+
+Finding the crossing list also found a real bug in the airspace layer underneath: the base file writes
 `0 AGL` far more often than `GND`, and only the word was being read as the ground. Those
 rings were being drawn at *sea level* — 200 to 1 600 m below the terrain they belong to
 — and labelled "floor 0 m" for something that starts under your feet.
+
+## The vertical — planned, not built
+
+The crossing list above is a plan view. It says the route *enters* a zone, which is not
+the same claim as the flight being *inside* it: most of these zones have a floor, and a
+task that stays under it is legal. So "25 airspaces crossed" reads as a wall when a good
+part of it is air you may fly through, and the number that is meant to make a reader
+careful is the number that teaches them to stop reading. The fix is a planned height band
+per leg, and a list that separates **stay under 1 000 ft here** from **you cannot go**.
+
+Written up here rather than built, because the shape of the answer is the decision and it
+is worth agreeing on before there is code to argue with.
+
+### The split is three ways, not two
+
+Measured on what the scene actually carries — 743 rings, being `CZ_low 26-04-01` (251)
+plus this repository's own aerodrome overlay (492):
+
+| | rings | what a band could say |
+|---|---|---|
+| air underneath | 119 | a limit: stay below this and the crossing is not a crossing |
+| ground up, and closed | 62 | a wall: no band clears it — 41 R, 11 P, 10 D |
+| ground up, and open with a duty | 562 | not a limit at all: 82 ATZ, 410 okruh, 70 GS/Q/E |
+
+The third row is the one that makes the current list misleading, and it is three quarters
+of it. An ATZ is class W here and an unpowered paraglider **may** fly it — the duty is a
+phone call and staying out of the circuit, not a floor. An okruh is not a published
+boundary at all; this tool draws it from ordinary circuit proportions. Neither belongs in
+the same bucket as LKP2 Temelín, and today they are all just "crossed".
+
+So the vertical is not one feature. It is a band for the 119, a class rule for the 62, and
+an admission that for the other 562 the honest answer was never a height.
+
+### The 13 rings the feature is named after
+
+Every ring in the base file whose floor is quoted above ground — all thirteen of them —
+is class R, and every one is a TRA or a TSA:
+
+| floor | ceiling | count | |
+|---|---|---|---|
+| `300 AGL` | `1000 AGL` | 6 | LKTSA20 Ždírec, 21 Měřín, 22 Opatov, 24 Litovel, 26 Pravonín, 27 Humpolec |
+| `1000 AGL` | FL 75 – FL 245 | 6 | LKTRA31, 56, 74, 76, 77, 78 |
+| `300 AGL` | FL 125 | 1 | LKTRA15 Brtnice |
+
+Two things follow, and both are sharp.
+
+**The six TSAs are slabs.** Floor 300 ft AGL, ceiling 1 000 ft AGL: a 700 ft band of
+restricted air with legal air *below it and above it*. The current list cannot express
+that shape at all, and 27 rings in the file have a non-FL ceiling and so have sky above
+them. A band that only ever says "stay under" would get these wrong in the direction that
+costs a pilot the flight.
+
+**`floor_metres` is wrong here, on purpose.** It treats AGL as AMSL, and
+`airspaces/render_html.py` says why: the altitude slider's question is "could this be in
+my way low down", and a floor quoted above ground is by definition low down. Correct for
+that question. For a band it is a 500 m error on exactly these rings — `1000 AGL` becomes
+305 m, and over the Vysočina at 550 m the real floor is about 855 m, so a task planned at
+800 m would be reported as inside a zone it is half a kilometre beneath.
+
+The fix is *not* to change `floor_metres`. The slider is asking a different question and
+is right to. The ring has to carry its datum and the band has to resolve it, which is the
+first of the three code changes below.
+
+### What the code has to gain
+
+- **A ceiling on the ring.** `airspaces/scene.py: rings()` emits `f` (floor, metres AMSL)
+  and `g` (is-ground); the ceiling exists only inside the label string `n`, as
+  `"LKTSA20  (300 AGL – 1000 AGL)"`. A band needs it as a number, so `rings()` gains `c`.
+  Parsing it back out of the label would work and must not be done: the label is for a
+  human to read and is free to change, and a display string load-bearing for a legal
+  answer is the sort of coupling that breaks quietly.
+
+- **The datum, alongside the number.** `f` stays what it is, and the ring gains a flag for
+  "this floor was quoted above ground". Where it is set, the planner resolves the floor
+  against `handle.groundAt(lon, lat)` — which it already calls, to put the course line
+  60 m over the terrain. An AGL floor is a *surface*, not a height, so it has to be
+  resolved along the leg rather than once.
+
+- **Intervals, not a fraction.** `fractionInside` sorts its crossing parameters and
+  collapses them to a single total. A band is a function of distance along the leg, so it
+  must return the intervals `[[t0, t1], …]` and let the caller sum them for the kilometre
+  figure it prints today. That is the one real refactor here, and it is safe: the existing
+  tests pin the sum, so they go on pinning it.
+
+Grouping changes with it. Today the crossings are keyed by name and the floors merged with
+`seen.f = Math.min(seen.f, ring.f)`, which is fine for sorting a list and wrong for a
+limit: a stepped CTR is several rings at several floors, and a task that only clips the
+high-floored outer one would be told to stay under the inner one's floor. The geometry has
+to stay per interval, and the grouping become presentation only.
+
+### Whose height is it
+
+The open decision, and the one worth taking a view on. Three ways to get the band:
+
+1. **One planned working height for the task**, AMSL, from a slider.
+2. **A hand-entered band per leg.**
+3. **Derived** — the day's thermal top, less a glide from each turnpoint.
+
+Take (1). It is how a pilot actually plans a day ("I expect to work to 1 800 m"), it is one
+number rather than a form, and `meteo/render_html.py` already computes both a thermal top
+and a cloudbase in metres AMSL for 159 Czech takeoffs — so the slider can *default* to the
+day's number instead of to a guess. (2) is more truthful and nobody will type it. (3) is
+the right end state and the ingredient is already in the repository, but it needs the meteo
+view and the planner to agree on a day, which is a bigger seam than this feature.
+
+One constraint on any of them: the number is **AMSL**. Czech terrain under a 226 km task
+runs 200 to 1 600 m, so a single AGL figure would mean a different thing at each end of the
+line. A single AMSL number is honest; a single AGL number is a bug with a friendly face.
+
+### What the list becomes
+
+Three kinds of row instead of one, ordered so the walls come first:
+
+```
+✗  MCTR Kbely            ground – 1000 ft, 18.8 km        no height clears this
+▲  LKTRA62 Nymburk       below 914 m, 12.4 km of leg 2    plan is 1 800 m — you are in it
+▬  LKTSA20 Ždírec        below 855 m or above 1 070 m     3.1 km of leg 3
+✓  ATZ LKBE Benešov      ground up, 4.2 km                call the aerodrome, stay out of the circuit
+```
+
+The last row is the point of the whole exercise: it is not a crossing to be cleared, it is
+a crossing with a duty attached, and today it is indistinguishable from the first.
+
+### What a band still cannot say
+
+This section needs its limits stated harder than the rest of the page, because a more
+useful answer is a more trusted one.
+
+- **The 13 are temporary, and the clock above the map does not reach them.** TRA and TSA
+  are *reserved*, by AUP and by NOTAM, and the base OpenAir file carries no activation
+  times — the parser reads `AC AN AH AL AF DP DB DC` and there is no time field for it to
+  be dropping. The operating hours added since come off the VFR manual's aerodrome pages
+  and so cover the aerodrome layers only; these 13 are exactly the rings they miss. For
+  precisely the zones a band handles best, it can say "under the floor you are clear" and
+  cannot say "and above it, today". That asymmetry has to be on screen, not in a footnote.
+- **The terrain grid is 1.4 km a node** (320 columns over the country, `scene.py`). An AGL
+  floor resolved on it is a smooth approximation of a surface that follows real ground, so
+  the band wants a margin rather than a hard edge, and the margin wants to be visible.
+- **The claim gets bigger.** Today the tool states a geometric fact: this line enters that
+  polygon. A band states a legal one: you may fly under it. That is a different bar and a
+  different kind of wrong, and it is the argument for keeping **this is a plan, not a
+  clearance** loud — a green band is exactly the moment a reader stops checking NOTAMs.
+
+### Tests it would want
+
+In the shape the existing nine are in — a real browser, a real scene, and one asserted
+sentence each:
+
+- a leg under a floor reports clear, and the same leg 200 m higher reports the limit;
+- a slab reports both bounds, and does not report "stay under" alone;
+- an AGL floor over 900 m terrain is not compared against sea level — the regression for
+  the error named above, which is the same class of bug as the `0 AGL` one already fixed;
+- the intervals sum to the kilometres the current test asserts, so the refactor is proved
+  not to have moved the number a reader already trusts;
+- an ATZ crossing is never rendered as a wall.
 
 ## Running it
 
@@ -95,17 +278,18 @@ Imagery is fetched at view time by default, and gets sharper as the reader zooms
 
 Works end to end: drop turnpoints, undo, clear, close the course, and read the distance,
 the shape, the multiplier, the score, the side lengths and every airspace the route
-crosses. Nine tests, eight of them driving a real browser.
+crosses — with the aerodromes among them marked open or shut at the hour you are planning
+for. Twelve tests, eleven of them driving a real browser.
 
 Wanted next:
 
 - **Drag a turnpoint.** Adding and undoing is enough to draw a task; moving one is what
   makes it a planning tool. It needs hit-testing the markers, which the airspace layer
   already does for rings.
-- **The vertical.** The crossing list is a plan view: it says the route enters a zone,
-  not that the flight would be inside it. Most of those zones have a floor, and a task
-  that stays under it is legal — so the honest next step is a planned height band per leg
-  and a list that separates "you must stay under 1 000 ft here" from "you cannot go".
+- **The vertical.** A planned height band per leg, so the list separates "stay under
+  1 000 ft here" from "you cannot go". **Written up above** — the split turns out to be
+  three ways rather than two, the ring has to start carrying a ceiling and a datum, and
+  `fractionInside` has to return its intervals instead of their sum.
 - **Turnpoints by name, and a task you can share.** A URL that carries the points would
   make a plan something you can send to the people you are flying with.
 - **Start from a takeoff.** The meteo view already knows 159 of them.
