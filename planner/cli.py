@@ -65,8 +65,11 @@ def main(argv=None) -> int:
     )
     parser.add_argument("--html", metavar="FILE", type=Path, required=True,
                         help="write the planner page")
+    parser.add_argument("--embed", action="store_true",
+                        help="bake a stitched image into the page rather than fetching "
+                             "imagery at view time")
     parser.add_argument("--online", action="store_true",
-                        help="fetch imagery at view time rather than embedding a stitch")
+                        help=argparse.SUPPRESS)   # now the default
     parser.add_argument("--no-airspace", action="store_true",
                         help="terrain only. Faster to build, and the map then shows "
                              "nothing about what the line crosses")
@@ -84,7 +87,7 @@ def main(argv=None) -> int:
         base_text, _ = airspace_sources.base_airspace()
         spaces = list(airspace_openair.read(base_text)) + list(overlay.airspaces)
 
-    payload = airspace_scene.fetch(spaces, online=args.online)
+    payload = airspace_scene.fetch(spaces, online=not args.embed)
     if payload is None:
         print("terrain could not be fetched; the planner needs a map to draw on")
         return 1

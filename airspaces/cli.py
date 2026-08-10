@@ -72,10 +72,13 @@ def main(argv=None) -> int:
     parser.add_argument("--flat", action="store_true",
                         help="the old flat SVG map instead of the 3D view. Needs no "
                              "network at build time and carries no imagery")
+    parser.add_argument("--embed", action="store_true",
+                        help="bake a stitched image into the page instead of fetching "
+                             "imagery at view time. Needs no network to view, and over a "
+                             "whole country it is a 300 m/pixel backdrop rather than a "
+                             "map you can read")
     parser.add_argument("--online", action="store_true",
-                        help="let the page fetch its own imagery at view time instead "
-                             "of embedding a stitch. Sharper and much smaller, and it "
-                             "only works where the page can reach a tile server")
+                        help=argparse.SUPPRESS)   # now the default
     parser.add_argument("--raw", action="store_true",
                         help="reproduce the ATZ publication unchanged, datum error and all")
     parser.add_argument("--no-circuits", action="store_true",
@@ -132,7 +135,7 @@ def main(argv=None) -> int:
             from . import scene as airspace_scene
 
             payload = airspace_scene.fetch(list(base) + list(overlay.airspaces),
-                                           online=args.online)
+                                           online=not args.embed)
             if payload is None:
                 print("terrain unavailable, falling back to the flat map")
         article = render_html.body(

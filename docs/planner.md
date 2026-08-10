@@ -50,31 +50,62 @@ written in rather than the projection's own metric frame — and `groundAt`.
   The two are not interchangeable and the script says so where it defines its radius:
   one measures a task, the other draws a boundary.
 
+## What the line crosses
+
+The feature the page is arranged around, and the reason it draws on the airspace map
+rather than on a basemap. Every leg — including the closing leg, which is the one a tired
+pilot flies home on — is tested against every ring in the scene, and the result is a list
+of what the route enters, **lowest floor first**, with how far through each one it goes.
+
+- **Exact, not sampled.** Every crossing of the segment with a ring edge is collected as
+  a parameter along the segment, the parameters are sorted, and the midpoint of each
+  interval is tested for being inside. So "18.8 km through the Kbely MCTR" is a real
+  distance. The cheaper way — walking the leg at some spacing and counting samples inside
+  — has its worst error exactly where the answer matters: a long leg brushing a small
+  zone can pass between two samples and be reported clear.
+- **A bounding-box test first.** 743 airspaces of a few thousand vertices, recomputed on
+  every turnpoint, is otherwise a visible pause; the box test throws away all but a
+  handful.
+- **Grouped by name.** One CTR is published as several rings and one okruh is two
+  rectangles. A list that says "LKPR CTR" four times is a list nobody reads.
+- **Lowest floor first, not most kilometres.** What a paraglider hits soonest is what it
+  most needs to know. Measured on a 226 km triangle across Bohemia: 25 airspaces, led by
+  MCTR Kbely at 18.8 km through from the ground.
+- **A clear route says so.** "Nothing on this map is crossed by the route" and an empty
+  panel look the same on screen and mean opposite things — one is an answer and the other
+  is a page that has not run. It also repeats what the check does *not* cover, because a
+  green result is exactly when a reader stops thinking about NOTAMs.
+
+Finding this also found a real bug in the airspace layer underneath: the base file writes
+`0 AGL` far more often than `GND`, and only the word was being read as the ground. Those
+rings were being drawn at *sea level* — 200 to 1 600 m below the terrain they belong to
+— and labelled "floor 0 m" for something that starts under your feet.
+
 ## Running it
 
 ```bash
-uv run python -m planner.cli --html public/planner/index.html --online
+uv run python -m planner.cli --html public/planner/index.html
 uv run python -m planner.cli --html plan.html --no-airspace   # terrain only, faster
+uv run python -m planner.cli --html plan.html --embed         # bake the imagery in
 ```
 
-`--online` leaves the imagery to be fetched at view time, which is sharper and much
-smaller; without it the page carries an embedded stitch and works with no network.
+Imagery is fetched at view time by default, and gets sharper as the reader zooms in.
 
 ## Status
 
-Started, and it works end to end: drop turnpoints, undo, clear, close the course, and
-read the distance, the shape, the multiplier, the score and the side lengths. Five tests,
-four of them driving real PointerEvents in Chrome.
+Works end to end: drop turnpoints, undo, clear, close the course, and read the distance,
+the shape, the multiplier, the score, the side lengths and every airspace the route
+crosses. Nine tests, eight of them driving a real browser.
 
 Wanted next:
 
 - **Drag a turnpoint.** Adding and undoing is enough to draw a task; moving one is what
   makes it a planning tool. It needs hit-testing the markers, which the airspace layer
   already does for rings.
-- **Say which airspace the line crosses.** Both halves are on the page and neither knows
-  about the other — the rings are in the scene and the legs are in the planner, and a
-  segment-in-polygon test over the drawn rings is the missing piece. This is the feature
-  the whole page is arranged around and it is not built yet.
+- **The vertical.** The crossing list is a plan view: it says the route enters a zone,
+  not that the flight would be inside it. Most of those zones have a floor, and a task
+  that stays under it is legal — so the honest next step is a planned height band per leg
+  and a list that separates "you must stay under 1 000 ft here" from "you cannot go".
 - **Turnpoints by name, and a task you can share.** A URL that carries the points would
   make a plan something you can send to the people you are flying with.
 - **Start from a takeoff.** The meteo view already knows 159 of them.

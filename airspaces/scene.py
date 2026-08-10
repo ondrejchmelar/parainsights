@@ -61,8 +61,18 @@ def _thin(points, tolerance: float):
 
 
 def _is_ground(airspace) -> bool:
+    """Whether this floor is the ground rather than an altitude.
+
+    Not only the word: the base file writes `0 AGL` 200-odd times and that is the ground
+    too. Getting it wrong is visible — a ring floored at "0 m AMSL" is drawn at *sea
+    level*, which in Bohemia is 200 to 1 600 m below the terrain it belongs to, so it
+    projects to the wrong place on screen and the label reads "floor 0 m" for something
+    that starts under your feet.
+    """
     raw = (airspace.floor or "").upper().replace(" ", "")
-    return not raw or raw.startswith("GND") or raw.startswith("SFC")
+    if not raw or raw.startswith("GND") or raw.startswith("SFC"):
+        return True
+    return floor_metres(airspace) <= 0
 
 
 def rings(airspaces) -> list[dict]:

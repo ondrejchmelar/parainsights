@@ -80,13 +80,13 @@ uv run python -m tracklog_viewer.cli FLIGHT.igc --kmz flight.kmz         # Googl
 uv run python -m tracklog_viewer.cli FLIGHT.igc --map map.html           # 3D map
 
 uv run python -m airspaces.cli --openair CZ_airfields.txt  # aerodrome zones + okruhy for XCTrack
-uv run python -m airspaces.cli --html airspace.html --online   # the airspace map, in 3D
+uv run python -m airspaces.cli --html airspace.html     # the airspace map, in 3D
 uv run python -m airspaces.cli --report                # what built, and what did not
 
 uv run python -m meteo.cli --html meteo.html           # the day, against every takeoff
 uv run python -m meteo.cli --refresh-sites             # re-fetch the takeoff list
 
-uv run python -m planner.cli --html plan.html --online # draw a task, score it
+uv run python -m planner.cli --html plan.html          # draw a task, score it
 ```
 
 Only `--meteo` and `--terrain` touch the network. Everything else in the viewer is
@@ -117,29 +117,37 @@ published ATZ geometry is 117 m out and gets corrected. The okruh is **not** an 
 obstacle and cannot be — obstacles are a curated per-country download with no Czech
 coverage and no import path.
 
-## Where the report is read, and what that costs
+## A network is assumed
 
-Three destinations, and the differences are not cosmetic:
+**This was not always true and the code still remembers it.** Everything here was built
+to run inside a published artifact, behind a policy that blocks every external host — and
+that one constraint is why there is an embedded DEM, an embedded basemap, locally
+rendered charts, a canvas 3D view instead of a map library, and an inlined font.
 
-| | published artifact | GitHub Pages / any host | local file |
-|---|---|---|---|
-| can fetch anything | **no** | yes | yes |
-| imagery | must be embedded | fetched, sharp | fetched, sharp |
-| terrain for an *uploaded* track | flat plane | fetched at view time | fetched at view time |
-| weather for an uploaded track | fails, says so | works | works |
-| report size (reference flight) | 1.1 MB | 0.5 MB | 0.5 MB |
+That assumption is retired. The site is GitLab Pages, the reader has a connection, and
+the trade was never close: a fetched mosaic is 10–20 m a pixel where an embedded one can
+afford 45, the detail layer makes it sharper again as you zoom in, and the file is half
+the size. So **fetching at view time is the default** in all three page-writing tools,
+and `--embed` asks for the old behaviour where someone genuinely needs it. `--online` is
+still accepted and does nothing, so an old command line still runs.
 
-A published artifact runs under a policy that blocks **every** external host, so anything
-it shows has to be inside the file. That single constraint explains the embedded DEM, the
-embedded imagery, the local charts, the canvas 3D view and the inlined font.
+What is *not* retired, because it is still true and still worth keeping:
 
-Build for a host instead with `--online`: nothing is baked in, the 3D view fetches tiles at
-zoom 12–13 (10–20 m/px against the ~45 m/px an embedded image can afford), and the file is
-half the size. **That is the primary home** — the site is GitLab Pages, published from
-`public/` by the `pages` job in `.gitlab-ci.yml`:
+- the charts are rendered locally, because Google Image Charts died in 2019 and took
+  every graph in igc2kmz's output with it;
+- the font is inlined, because a font is one request for a document's whole appearance;
+- the 3D view is a canvas and a shader rather than a map library, because that is what
+  makes it embeddable in a report at all.
+
+And two things now *require* a network at view time rather than merely preferring one:
+the meteo page has no numbers of its own, and the imagery on every 3D map is fetched.
+Both say so on screen when the fetch fails rather than drawing an empty frame.
+
+Publishing is a build and a commit — the site is `public/`, handed to GitLab Pages by
+the `pages` job in `.gitlab-ci.yml`:
 
 ```bash
-uv run python -m tracklog_viewer.cli FLIGHT.igc --terrain --meteo --online \
+uv run python -m tracklog_viewer.cli FLIGHT.igc --terrain --meteo \
   --html public/index.html
 git add public/index.html && git commit -m "Publish flight" && git push
 ```
@@ -682,9 +690,10 @@ categorical trio. Both light and dark themes are defined token-by-token, with
 way. Palettes were checked with the skill's `validate_palette.js`; if you change one, run
 it again — several candidate ramps failed on contrast or step spacing.
 
-Reports are self-contained: an inlined woff2, inline SVG, embedded DEM and basemap, and
-no external requests at view time. That is a hard constraint, not a preference — a
-published artifact runs under a policy that blocks every external host.
+Reports carry their own charts as inline SVG and their own woff2, and fetch their
+imagery. That is no longer the hard constraint it was — see "A network is assumed" — but
+the charts stay local because a chart service that dies takes every graph with it, and
+the font stays inlined because it is one request for a document's whole appearance.
 
 ## Wanted next
 

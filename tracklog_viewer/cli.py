@@ -62,11 +62,15 @@ def main(argv: list[str] | None = None) -> int:
              "550 KB per flight, and the 3D view then shows hillshade only)",
     )
     parser.add_argument(
+        "--embed", action="store_true",
+        help="bake the imagery into the file instead of fetching it at view time. The "
+             "report then needs no network at all, at about 550 KB per flight per style "
+             "and at a resolution a stitch can afford. For a viewer behind a policy that "
+             "blocks every host — otherwise leave it off.",
+    )
+    parser.add_argument(
         "--online", action="store_true",
-        help="build for a page that can reach the network (GitHub Pages, a local file): "
-             "imagery is fetched at view time at full resolution instead of embedded, "
-             "which is both sharper and much smaller. Not for a published artifact — its "
-             "content-security policy blocks every request.",
+        help=argparse.SUPPRESS,   # now the default; accepted so old commands still run
     )
     parser.add_argument(
         "--label", action="append", default=[], metavar="PILOT|SITE|GLIDER",
@@ -159,7 +163,7 @@ def main(argv: list[str] | None = None) -> int:
             from airspaces import scene as airspace_scene
 
             payload = airspace_scene.fetch(
-                list(base) + list(overlay.airspaces), online=args.online
+                list(base) + list(overlay.airspaces), online=not args.embed
             )
         extras.append(render_html.Extra(
             uid="airspace",
@@ -279,7 +283,7 @@ def _one(source: str, args, index: int = 0) -> dict:
         ground = terrain_module.for_flight(analysis, max_points=budget)
         if ground is None:
             print(f"warning: no terrain data for {label}", file=sys.stderr)
-        elif not args.no_basemap and not args.online:
+        elif not args.no_basemap and args.embed:
             # Place names are what make the 3D view navigable, and both styles are
             # embedded so the button works in a page that cannot fetch anything. A
             # shared document pays that twice per flight, so it gets smaller, harder

@@ -37,10 +37,22 @@ def _terrain():
                                   elevations=z)
 
 
-def _page() -> str:
+def _band(name, west, east, south, north, floor="GND", ceiling="FL 95", klass="C"):
+    """A rectangular airspace, so that what a leg through it should measure is arithmetic
+    a reader can check rather than a number this code produced."""
+    from airspaces import openair
+
+    return openair.Airspace(
+        name, klass, floor=floor, ceiling=ceiling,
+        points=[(south, west), (north, west), (north, east), (south, east)],
+    )
+
+
+def _page(spaces=()) -> str:
     from airspaces import scene as airspace_scene
 
-    payload = airspace_scene.build([], terrain=_terrain(), basemaps={}, tiles=False)
+    payload = airspace_scene.build(list(spaces), terrain=_terrain(),
+                                   basemaps={}, tiles=False)
     panel = view3d.panel(payload, "planner")
     return planner_cli.page(planner_html.body(scene_panel=panel), "Plan a task")
 
@@ -60,10 +72,10 @@ window.addEventListener('load', function () {
 """
 
 
-def _run(body: str) -> dict:
+def _run(body: str, spaces=()) -> dict:
     with tempfile.TemporaryDirectory() as folder:
         page = Path(folder) / "planner.html"
-        page.write_text(_page() + PROBE % body, encoding="utf-8")
+        page.write_text(_page(spaces) + PROBE % body, encoding="utf-8")
         out = subprocess.run(
             [CHROME, *CHROME_FLAGS, page.as_uri()],
             capture_output=True, text=True, timeout=180,
@@ -197,3 +209,108 @@ def test_the_planner_scores_with_the_reports_own_constants():
 
     page = planner_html.body()
     assert "28%" in page and "20%" in page, "the page states the rules it scores by"
+
+
+# ---- what the line crosses -----------------------------------------------------------
+#
+# The feature the whole page is arranged around. The turnpoints are dropped by lon/lat
+# here rather than by clicking, because where a click lands is already tested above and
+# what is being measured now is the geometry, which wants exact coordinates.
+
+_DROP = """
+var canvas = document.querySelector('canvas.view3d');
+var handle = window.__view3dAll[canvas.id];
+function at(lon, lat) {
+  var m = handle.toMetres(lon, lat);
+  var p = handle.worldProject(m[0], m[1], handle.groundAt(lon, lat));
+  var box = canvas.getBoundingClientRect();
+  var x = box.left + p[0] / canvas.width * box.width;
+  var y = box.top + p[1] / canvas.height * box.height;
+  canvas.dispatchEvent(new PointerEvent('pointerdown', {
+    pointerId: 5, clientX: x, clientY: y, bubbles: true, cancelable: true,
+    pointerType: 'mouse', isPrimary: true, button: 0, buttons: 1 }));
+  canvas.dispatchEvent(new PointerEvent('pointerup', {
+    pointerId: 5, clientX: x, clientY: y, bubbles: true, cancelable: true,
+    pointerType: 'mouse', isPrimary: true, button: 0, buttons: 0 }));
+}
+function crossed() {
+  return Array.prototype.map.call(
+    document.querySelectorAll('#plan-airspace .plan-crossed li'),
+    function (row) {
+      return { name: row.querySelector('.plan-crossed-name').textContent,
+               note: row.querySelector('.plan-crossed-km').textContent };
+    });
+}
+function kmOf(note) { return parseFloat(note); }
+"""
+
+
+@needs_chrome
+def test_a_leg_through_a_band_measures_how_far_through_it_goes():
+    """A 0.2 degree band of longitude at 49.5 N is 14.4 km wide, and a leg crossing it
+    square must report that — not the leg's own length, and not a count of samples."""
+    band = _band("TMA TEST", 14.4, 14.6, 49.0, 50.0)
+    answer = _run(_DROP + """
+    at(14.1, 49.5); at(14.9, 49.5);
+    return { crossed: crossed(), legs: document.getElementById('plan-legs').textContent };
+    """, spaces=[band])
+    assert len(answer["crossed"]) == 1, answer["crossed"]
+    row = answer["crossed"][0]
+    assert row["name"].startswith("TMA TEST")
+    kilometres = float(row["note"].split(" ")[0])
+    assert 13.5 < kilometres < 15.3, f"a 14.4 km band measured {kilometres} km"
+    assert "from the ground" in row["note"], "a GND floor was reported as an altitude"
+
+
+@needs_chrome
+def test_a_leg_that_misses_says_so_rather_than_saying_nothing():
+    """Silence and 'nothing crossed' look the same on screen and mean opposite things:
+    one is an answer and the other is a page that has not run."""
+    band = _band("TMA TEST", 14.4, 14.6, 49.0, 49.2)
+    answer = _run(_DROP + """
+    at(14.1, 49.8); at(14.9, 49.8);
+    return { crossed: crossed(),
+             text: document.getElementById('plan-airspace').textContent };
+    """, spaces=[band])
+    assert answer["crossed"] == []
+    assert "Nothing on this map is crossed" in answer["text"]
+    assert "NOTAM" in answer["text"], (
+        "a clear route must still say what this check does not cover")
+
+
+@needs_chrome
+def test_the_lowest_floor_comes_first():
+    """What a paraglider hits soonest is what it most needs to know, so the order is by
+    floor and not by how much of the route is inside."""
+    high = _band("HIGH TMA", 14.2, 14.9, 49.0, 50.0, floor="FL 95")
+    low = _band("LOW ZONE", 14.55, 14.6, 49.0, 50.0, floor="1000 ft AMSL")
+    answer = _run(_DROP + """
+    at(14.1, 49.5); at(14.95, 49.5);
+    return { crossed: crossed() };
+    """, spaces=[high, low])
+    names = [row["name"].split(" ")[0] for row in answer["crossed"]]
+    assert names[0] == "LOW", f"the higher floor was listed first: {names}"
+    assert "HIGH" in names[1]
+    # ...even though the high one covers far more of the route.
+    kilometres = [float(row["note"].split(" ")[0]) for row in answer["crossed"]]
+    assert kilometres[1] > kilometres[0]
+    assert "floor 305 m" in answer["crossed"][0]["note"], (
+        f"1 000 ft was not converted to metres: {answer['crossed'][0]['note']}")
+
+
+@needs_chrome
+def test_the_closing_leg_is_checked_too():
+    """A closed course flies home, and the leg home crosses whatever it crosses. Checking
+    only the drawn legs would clear a task that flies straight through a CTR on the way
+    back — the one leg a pilot is most tired on."""
+    band = _band("HOME CTR", 14.4, 14.6, 49.0, 49.35)
+    answer = _run(_DROP + """
+    at(14.1, 49.2); at(14.5, 49.9); at(14.9, 49.2);
+    var open = crossed().length;
+    document.getElementById('plan-close').checked = true;
+    document.getElementById('plan-close').dispatchEvent(new Event('change'));
+    return { open: open, closed: crossed().length, rows: crossed() };
+    """, spaces=[band])
+    assert answer["open"] == 0, (
+        "the outward legs already crossed it, so the test proves nothing")
+    assert answer["closed"] == 1, "the closing leg was never checked"

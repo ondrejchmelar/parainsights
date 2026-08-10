@@ -43,6 +43,20 @@ STYLE = """
 .plan-legs { margin:12px 0 0; font-size:12.5px; color:var(--ink-2);
   font-variant-numeric:tabular-nums; }
 .plan-legs span { margin-right:14px; white-space:nowrap; }
+.plan-airspace { margin:16px 0 0; }
+.plan-crossed-head { margin:0 0 6px; font-size:12px; text-transform:uppercase;
+  letter-spacing:.07em; color:var(--ink-3); }
+.plan-clear { margin:0; font-size:12.5px; color:var(--ink-3); }
+.plan-crossed { list-style:none; margin:0; padding:0; border:1px solid var(--rule);
+  border-radius:4px; max-height:15em; overflow-y:auto; }
+.plan-crossed li { display:flex; align-items:baseline; gap:9px; padding:6px 11px;
+  border-bottom:1px solid var(--rule); font-size:13px; }
+.plan-crossed li:last-child { border-bottom:0; }
+.plan-swatch { width:10px; height:10px; border-radius:2px; flex:none;
+  transform:translateY(1px); }
+.plan-crossed-name { flex:1; min-width:0; }
+.plan-crossed-km { color:var(--ink-3); font-size:12px; white-space:nowrap;
+  font-variant-numeric:tabular-nums; }
 """
 
 
@@ -74,6 +88,7 @@ def body(uid: str = "planner", *, scene_panel: str = "") -> str:
   </div>
   <div class="plan-figures" id="plan-figures"></div>
   <p class="plan-legs" id="plan-legs"></p>
+  <div class="plan-airspace" id="plan-airspace"></div>
   <p class="met-links">Scored with the same rules as the flight report:
   every side at least {xc.FAI_MIN_SIDE:.0%} of the perimeter for FAI, a closing gap under
   {xc.MAX_CLOSING:.0%} of it for a closed course, multipliers
@@ -114,6 +129,149 @@ SCRIPT = """
     var h = Math.sin(dla / 2) * Math.sin(dla / 2)
       + Math.cos(la1) * Math.cos(la2) * Math.sin(dlo / 2) * Math.sin(dlo / 2);
     return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+  }
+
+  // ---- what the line crosses -----------------------------------------------------------
+  //
+  // The reason this planner draws on the airspace map at all. A line that looks like a
+  // good 60 km and clips the corner of a TMA is not a plan, and the map alone does not
+  // answer it: at the zoom a whole task fits into, a 2 km overlap is two pixels.
+  //
+  // Exact, not sampled. For each leg and each ring, every crossing of the segment with a
+  // ring edge is collected as a parameter along the segment; the parameters are sorted,
+  // and the midpoint of each resulting interval is tested for being inside. That gives
+  // the intervals the leg spends inside the ring, and their lengths are real kilometres
+  // rather than a count of sample points that happened to land in it. The cheaper way —
+  // walking the leg at some spacing and counting the samples inside — was not taken
+  // because its error is worst exactly where the answer matters: a long leg brushing a
+  // small zone can pass between two samples and be reported as clear.
+  function pointInRing(lon, lat, ring) {
+    var inside = false;
+    var n = ring.lon.length;
+    for (var i = 0, j = n - 1; i < n; j = i++) {
+      var yi = ring.lat[i], yj = ring.lat[j];
+      if ((yi > lat) === (yj > lat)) continue;
+      var x = ring.lon[i] + (lat - yi) / (yj - yi) * (ring.lon[j] - ring.lon[i]);
+      if (lon < x) inside = !inside;
+    }
+    return inside;
+  }
+
+  // Where along `a`→`b` the segment is inside `ring`, as a fraction of its length.
+  function fractionInside(a, b, ring) {
+    var ts = [0, 1];
+    var n = ring.lon.length;
+    var dx = b[0] - a[0], dy = b[1] - a[1];
+    for (var i = 0, j = n - 1; i < n; j = i++) {
+      var ex = ring.lon[i] - ring.lon[j], ey = ring.lat[i] - ring.lat[j];
+      var denominator = dx * ey - dy * ex;
+      if (!denominator) continue;             // parallel, and a grazing edge is not entry
+      var px = ring.lon[j] - a[0], py = ring.lat[j] - a[1];
+      var t = (px * ey - py * ex) / denominator;
+      var u = (px * dy - py * dx) / denominator;
+      if (t > 0 && t < 1 && u >= 0 && u <= 1) ts.push(t);
+    }
+    if (ts.length === 2) {
+      // No crossing at all: either wholly inside or wholly outside.
+      return pointInRing(a[0] + dx / 2, a[1] + dy / 2, ring) ? 1 : 0;
+    }
+    ts.sort(function (x, y) { return x - y; });
+    var total = 0;
+    for (var k = 1; k < ts.length; k++) {
+      var mid = (ts[k - 1] + ts[k]) / 2;
+      if (pointInRing(a[0] + dx * mid, a[1] + dy * mid, ring)) total += ts[k] - ts[k - 1];
+    }
+    return total;
+  }
+
+  // A leg's worth of ground is only ever compared against rings whose own bounding box it
+  // could reach. 743 airspaces times a few thousand edges is otherwise recomputed on every
+  // turnpoint, and the box test throws away all but a handful.
+  function ringBox(ring) {
+    if (ring.__box) return ring.__box;
+    var west = Infinity, east = -Infinity, south = Infinity, north = -Infinity;
+    for (var i = 0; i < ring.lon.length; i++) {
+      if (ring.lon[i] < west) west = ring.lon[i];
+      if (ring.lon[i] > east) east = ring.lon[i];
+      if (ring.lat[i] < south) south = ring.lat[i];
+      if (ring.lat[i] > north) north = ring.lat[i];
+    }
+    ring.__box = { west: west, east: east, south: south, north: north };
+    return ring.__box;
+  }
+
+  function crossings() {
+    var rings = handle.scene().airspaces || [];
+    if (!rings.length || points.length < 2) return [];
+    var legs = [];
+    for (var i = 1; i < points.length; i++) legs.push([points[i - 1], points[i]]);
+    if (document.getElementById('plan-close').checked && points.length > 2) {
+      legs.push([points[points.length - 1], points[0]]);
+    }
+
+    var found = {};
+    legs.forEach(function (leg) {
+      var length = distance(leg[0], leg[1]);
+      var west = Math.min(leg[0][0], leg[1][0]), east = Math.max(leg[0][0], leg[1][0]);
+      var south = Math.min(leg[0][1], leg[1][1]), north = Math.max(leg[0][1], leg[1][1]);
+      rings.forEach(function (ring) {
+        var box = ringBox(ring);
+        if (box.east < west || box.west > east || box.north < south || box.south > north) {
+          return;
+        }
+        var fraction = fractionInside(leg[0], leg[1], ring);
+        if (fraction <= 0) return;
+        // Keyed by name: one CTR is published as several rings and one okruh is two
+        // rectangles, and a list that says "LKPR CTR" four times is a list nobody reads.
+        var seen = found[ring.n];
+        if (!seen) found[ring.n] = seen = { name: ring.n, k: ring.k, f: ring.f,
+                                            g: ring.g, metres: 0 };
+        seen.metres += fraction * length;
+        seen.f = Math.min(seen.f, ring.f);
+      });
+    });
+    // Lowest floor first: what a paraglider hits soonest is what it most needs to know.
+    return Object.keys(found).map(function (key) { return found[key]; })
+      .sort(function (a, b) { return a.f - b.f || b.metres - a.metres; });
+  }
+
+  function reportAirspace() {
+    var box = document.getElementById('plan-airspace');
+    var crossed = crossings();
+    box.innerHTML = '';
+    if (points.length < 2) return;
+    if (!crossed.length) {
+      box.innerHTML = '<p class="plan-clear">Nothing on this map is crossed by the '
+        + 'route. That is the drawn airspace only — check the NOTAMs.</p>';
+      return;
+    }
+    var colours = handle.scene().airspaceColours || {};
+    var heading = document.createElement('p');
+    heading.className = 'plan-crossed-head';
+    heading.textContent = crossed.length + (crossed.length === 1
+      ? ' airspace crossed, lowest floor first'
+      : ' airspaces crossed, lowest floor first');
+    box.appendChild(heading);
+    var list = document.createElement('ul');
+    list.className = 'plan-crossed';
+    crossed.forEach(function (item) {
+      var row = document.createElement('li');
+      var swatch = document.createElement('span');
+      swatch.className = 'plan-swatch';
+      swatch.style.background = colours[item.k] || '#888';
+      var name = document.createElement('span');
+      name.className = 'plan-crossed-name';
+      name.textContent = item.name;
+      var much = document.createElement('span');
+      much.className = 'plan-crossed-km';
+      much.textContent = (item.metres / 1000).toFixed(1) + ' km through'
+        + (item.g ? ', from the ground' : ', floor ' + Math.round(item.f) + ' m');
+      row.appendChild(swatch);
+      row.appendChild(name);
+      row.appendChild(much);
+      list.appendChild(row);
+    });
+    box.appendChild(list);
   }
 
   // ---- scoring -----------------------------------------------------------------------
@@ -171,6 +329,7 @@ SCRIPT = """
     });
     handle.redraw();
     report();
+    reportAirspace();
   }
 
   function report() {

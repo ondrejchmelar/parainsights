@@ -820,3 +820,19 @@ def test_the_page_falls_back_to_the_flat_map_without_terrain(zones):
     """A tile server being slow must never cost the reader the airspace itself."""
     _, article = airspace_article(zones)
     assert "asp-map" in article and "view3d" not in article
+
+
+def test_a_zero_floor_is_the_ground_however_it_is_written():
+    """`0 AGL` is what the base file mostly says, and it means the same as `GND`. Read as
+    an altitude it puts the ring at sea level — 200 to 1 600 m under the terrain it
+    belongs to in this country — so it draws in the wrong place and prints "floor 0 m"
+    for something that starts under your feet."""
+    from airspaces import scene as airspace_scene
+
+    points = [(50.0, 15.0), (50.1, 15.0), (50.1, 15.1)]
+    for floor in ("GND", "0 AGL", "SFC", ""):
+        space = openair.Airspace("X", "C", floor=floor, ceiling="FL 95", points=points)
+        assert airspace_scene.rings([space])[0]["g"] is True, floor
+    high = openair.Airspace("Y", "C", floor="1000 ft AMSL", ceiling="FL 95",
+                            points=points)
+    assert airspace_scene.rings([high])[0]["g"] is False
