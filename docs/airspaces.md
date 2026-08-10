@@ -32,8 +32,9 @@ airspaces/
 ├── circuits.py     the okruh band
 ├── basemap.py      embedded Czech border and city list, for the map backdrop
 ├── build.py        assembles the overlay from all of it
-├── render_html.py  the map: inline SVG, class filter, floor filter, pan/zoom
-└── cli.py          airspaces [--openair FILE] [--html FILE] [--report]
+├── scene.py        the 3D payload: rings at their floors, over fetched terrain
+├── render_html.py  the map: the viewer's 3D panel, or inline SVG; filters, labels
+└── cli.py          airspaces [--openair FILE] [--html FILE] [--flat] [--online] [--report]
 ```
 
 `build.Overlay` is the boundary: everything upstream produces it, both renderers
@@ -43,8 +44,10 @@ consume only it. Same split as the tracklog viewer's `Analysis`.
 
 ```bash
 uv run python -m airspaces.cli --openair CZ_airfields.txt   # for XCTrack
-uv run python -m airspaces.cli --html airspace.html      # the map
-uv run python -m airspaces.cli --report                  # what built, what did not
+uv run python -m airspaces.cli --html airspace.html         # the map, in 3D
+uv run python -m airspaces.cli --html airspace.html --online  # imagery fetched at view time
+uv run python -m airspaces.cli --html airspace.html --flat  # the old flat SVG map
+uv run python -m airspaces.cli --report                     # what built, what did not
 ```
 
 `--html` writes **two** files: the page, and the OpenAir file next to it that the page's
@@ -327,7 +330,32 @@ so its filename is read from the directory listing instead of computed.
   and Tábor's dropzone could not be clicked through its own ATZ. Smallest on top means
   the most specific thing under the cursor is the one you get.
 
-- **No tile layer on the map.** Same constraint as the rest of the repository: a
+- **The map is the viewer's 3D view, and the flat SVG is its fallback.** `view3d` is a
+  map widget, not flight code — hand it a terrain grid, some imagery and a list of things
+  to draw and it never asks what a flight is — so the airspace map is that same panel with
+  no track in it: terrain, a satellite/map/relief switch, and the same gestures a reader
+  already learned on the flights tab. Two consequences worth knowing. **Each ring is drawn
+  at its own floor**, which is the entire argument for showing airspace in three
+  dimensions: a CTR whose floor is FL95 and one that starts at the ground are the same red
+  outline on a flat map and obviously different objects here; a `GND` floor samples the
+  DEM under each vertex, because "ground" is a surface and not an altitude. And **it opens
+  nearly flat** (`view.pitch` 1.32 from the payload, against the flight camera's 0.46),
+  because over 500 km of country the three-quarter view turns the far half into a sliver.
+  The scene needs terrain and imagery, both fetched, so `airspaces.cli --html` falls back
+  to `map_svg` when the fetch fails and `--flat` asks for it outright — a slow tile server
+  must never cost the reader the airspace itself.
+
+- **`airspaces` importing `tracklog_viewer.view3d` does not break the "share a page, not
+  code" rule; it marks where the rule ends.** The rule is about geodesy and analysis,
+  where the two tools genuinely disagree — the viewer measures on the FAI sphere because
+  that is what a scored distance is measured on, and airspace is published against WGS84,
+  which is why `airspaces/geo.py` exists beside `tracklog_viewer/geo.py`. A map widget is
+  not that. The alternative was copying 120 KB of JavaScript. The right end state is a
+  third package; what stops it today is that `view3d.data()` and `cursor_track()` in the
+  same module *are* flight code, so it is a refactor rather than a move. Both imports are
+  lazy, so either tool still builds with the other absent.
+
+- **No tile layer on the *flat* map.** Same constraint as the rest of the repository: a
   published artifact reaches no external host, so the backdrop is an embedded Natural
   Earth border simplified to 900 m, plus twelve city labels. Equirectangular projection
   with longitude scaled by cos(lat) at the country's centre — under a pixel of shape

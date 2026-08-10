@@ -9,13 +9,24 @@ from pathlib import Path
 from . import build, openair, render_html, sources
 
 
-def _page(article: str, title: str) -> str:
+def _page(article: str, title: str, *, three_d: bool = False) -> str:
     """A standalone document holding just the airspace tab.
 
     Deliberately the same shape as the tracklog report's own page so the article can be
     lifted into it later without changing: one `<article data-flight-report>` switched
     by the report's existing tab strip.
+
+    With a 3D map it also has to carry the view's own stylesheet and script, which in the
+    report come from the page around it. `view3d.STYLE` after this file's own, so the
+    panel's rules win where the two name the same thing.
     """
+    view_style, view_script = "", ""
+    if three_d:
+        from tracklog_viewer import view3d, view3d_gl
+
+        view_style = view3d.STYLE + view3d_gl.STYLE
+        view_script = (f"<script>{view3d.SCRIPT}\n{view3d_gl.SCRIPT}</script>\n"
+                       f"<script>{render_html.SCRIPT3D}</script>")
     return f"""<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -35,11 +46,13 @@ h1 {{ font-size:26px; margin:0 0 6px; }}
 button {{ font:inherit; padding:3px 10px; background:var(--panel);
   color:var(--ink); border:1px solid var(--rule); border-radius:3px; cursor:pointer; }}
 {render_html.STYLE}
+{view_style}
 </style>
 <div class="wrap">
 {article}
 </div>
 <script>{render_html.SCRIPT}</script>
+{view_script}
 """
 
 
@@ -52,6 +65,13 @@ def main(argv=None) -> int:
                         help="write the XCTrack overlay (ATZ + circuits)")
     parser.add_argument("--html", metavar="FILE", type=Path,
                         help="write the airspace map as a standalone page")
+    parser.add_argument("--flat", action="store_true",
+                        help="the old flat SVG map instead of the 3D view. Needs no "
+                             "network at build time and carries no imagery")
+    parser.add_argument("--online", action="store_true",
+                        help="let the page fetch its own imagery at view time instead "
+                             "of embedding a stitch. Sharper and much smaller, and it "
+                             "only works where the page can reach a tile server")
     parser.add_argument("--raw", action="store_true",
                         help="reproduce the ATZ publication unchanged, datum error and all")
     parser.add_argument("--no-circuits", action="store_true",
@@ -103,10 +123,20 @@ def main(argv=None) -> int:
         args.html.parent.mkdir(parents=True, exist_ok=True)
         beside = args.html.parent / name
         beside.write_text(text, encoding="utf-8", newline="")
+        payload = None
+        if not args.flat:
+            from . import scene as airspace_scene
+
+            payload = airspace_scene.fetch(list(base) + list(overlay.airspaces),
+                                           online=args.online)
+            if payload is None:
+                print("terrain unavailable, falling back to the flat map")
         article = render_html.body(
-            overlay, base, base_version, openair_name=name, openair_size=len(text)
+            overlay, base, base_version, openair_name=name, openair_size=len(text),
+            scene=payload,
         )
-        args.html.write_text(_page(article, "Czech airspace"), encoding="utf-8")
+        args.html.write_text(_page(article, "Czech airspace",
+                                   three_d=payload is not None), encoding="utf-8")
         print(f"{args.html}: {len(base)} base airspaces + {len(overlay.airspaces)} added")
         print(f"{beside}: linked from the page ({len(text) / 1024:.0f} KB)")
 

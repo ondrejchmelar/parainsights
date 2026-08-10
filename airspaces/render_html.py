@@ -389,7 +389,7 @@ def _area(airspace) -> float:
     return abs(total) / 2
 
 
-def controls(top: int) -> str:
+def controls(top: int, flat: bool = True) -> str:
     """The class checkboxes and the floor slider.
 
     The slider's range is the data's, not a round number: `CZ_low` stops at FL95, so its
@@ -413,7 +413,11 @@ def controls(top: int) -> str:
         f'value="{top}" data-top="{top}">'
         '<span class="asp-readout" id="asp-readout"></span></span>'
         '<span class="asp-readout" id="asp-count"></span>'
-        '<button type="button" id="asp-reset">Reset view</button>'
+        # The 3D view carries its own reset in the bar across the bottom of the canvas,
+        # and two buttons that both say "reset" and do different amounts is worse than
+        # one. There, this button clears the filters *and* presses that one.
+        f'<button type="button" id="asp-reset">'
+        f'{"Reset view" if flat else "Reset"}</button>'
         "</div>"
     )
 
@@ -538,8 +542,101 @@ def download_link(filename: str, label: str, note: str) -> str:
     )
 
 
+SCRIPT3D = """
+(function () {
+  var panel = document.querySelector('.airspace-article .view3d-panel');
+  if (!panel || typeof initView3d !== 'function') return;
+  var handle = initView3d(panel, null);
+  if (!handle) return;
+  var tip = document.getElementById('asp-name');
+  var canvas = panel.querySelector('canvas.view3d');
+
+  // The filter is a predicate handed to the view, not a pass over the DOM: on the flat
+  // map every airspace was an SVG element with a `display` to set, and here they are
+  // entries in a payload that the canvas redraws from scratch every frame.
+  function refilter() {
+    var on = {};
+    document.querySelectorAll('[data-asp-class]').forEach(function (box) {
+      on[box.dataset.aspClass] = box.checked;
+    });
+    var slider = document.getElementById('asp-floor');
+    var limit = slider ? Number(slider.value) : Infinity;
+    var top = slider ? Number(slider.dataset.top) : 0;
+    var out = document.getElementById('asp-readout');
+    if (out) out.textContent = limit >= top ? 'every floor'
+      : 'floor at or below ' + limit + ' m';
+    var shown = 0;
+    var spaces = handle.scene().airspaces || [];
+    for (var i = 0; i < spaces.length; i++) {
+      if (on[spaces[i].k] !== false && spaces[i].f <= limit) shown++;
+    }
+    var count = document.getElementById('asp-count');
+    if (count) count.textContent = shown + ' shown';
+    handle.setAirspaceFilter(function (space) {
+      return on[space.k] !== false && space.f <= limit;
+    });
+  }
+  document.querySelectorAll('[data-asp-class]').forEach(function (box) {
+    box.addEventListener('change', refilter);
+  });
+  var slider = document.getElementById('asp-floor');
+  if (slider) slider.addEventListener('input', refilter);
+
+  // Hover on a mouse, tap-to-pin on a touchscreen — the same split the flat map made,
+  // and for the same reason: a touchscreen's pointerout means the finger lifted, not
+  // that the label stopped being wanted. Not while a gesture is running, or every drag
+  // would fight the label for the frame.
+  function placeTip(x, y, above) {
+    var holder = tip.parentNode.getBoundingClientRect();
+    var left = x - holder.left + (above ? -tip.offsetWidth / 2 : 12);
+    var top = y - holder.top + (above ? -tip.offsetHeight - 16 : 12);
+    left = Math.max(4, Math.min(left, holder.width - tip.offsetWidth - 4));
+    tip.style.left = left + 'px';
+    tip.style.top = Math.max(4, top) + 'px';
+  }
+  function show(space, x, y, above) {
+    tip.textContent = space.n;
+    tip.classList.add('is-on');
+    placeTip(x, y, above);
+  }
+  function hide() { if (tip) tip.classList.remove('is-on'); }
+
+  if (canvas && tip) {
+    canvas.addEventListener('pointermove', function (e) {
+      if (e.pointerType === 'touch' || e.buttons) return;
+      var space = handle.airspaceAt(e.clientX, e.clientY);
+      if (space) show(space, e.clientX, e.clientY, false); else hide();
+    });
+    canvas.addEventListener('pointerleave', hide);
+    canvas.addEventListener('pointerdown', function (e) {
+      if (e.pointerType !== 'touch') return;
+      var space = handle.airspaceAt(e.clientX, e.clientY);
+      if (space) show(space, e.clientX, e.clientY, true); else hide();
+    });
+    document.addEventListener('pointerdown', function (e) {
+      if (tip && e.pointerType === 'touch' && !panel.contains(e.target)) hide();
+    });
+  }
+
+  var reset = document.getElementById('asp-reset');
+  if (reset) reset.addEventListener('click', function () {
+    document.querySelectorAll('[data-asp-class]').forEach(function (box) {
+      box.checked = true;
+    });
+    if (slider) slider.value = slider.dataset.top;
+    refilter();
+    var act = panel.querySelector('[data-view3d-act="reset"]');
+    if (act) act.click();
+  });
+
+  refilter();
+})();
+"""
+
+
 def body(overlay, base, base_version: str, uid: str = "airspace",
-         openair_name: str = "", openair_size: int = 0, openair_href: str = "") -> str:
+         openair_name: str = "", openair_size: int = 0, openair_href: str = "",
+         scene: dict | None = None) -> str:
     """The airspace article, ready to drop into the report.
 
     Carries no `data-flight-report` and is not hidden: in the report it sits inside a
@@ -587,11 +684,25 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
   circuit at {overlay.circuit_fields} fields and ultralight strips. A paraglider may fly
   inside the zone but must stay out of the circuit, and no instrument draws either.
   Scroll to zoom, drag to pan, hover for the name and limits.</p>
-  {controls(top)}
+  {controls(top, flat=scene is None)}
   <div class="asp-holder">
-    {map_svg(airspaces, project)}
+    {_map(airspaces, project, scene, uid)}
     <div class="asp-name" id="asp-name"></div>
   </div>
   {download}
   {sources_table(overlay, base_version, shift)}
 </article>"""
+
+
+def _map(airspaces, project, scene: dict | None, uid: str) -> str:
+    """The map itself: the 3D view where a scene was built for it, the flat SVG where
+    one could not be — no network at build time, or no Pillow to stitch imagery with.
+
+    The fallback is not a courtesy. The 3D view needs an elevation grid and a stitched
+    basemap, both fetched, and the one thing this page must never do is fail to draw the
+    airspace because a tile server was slow."""
+    if scene is None:
+        return map_svg(airspaces, project)
+    from tracklog_viewer import view3d
+
+    return view3d.panel(scene, uid)

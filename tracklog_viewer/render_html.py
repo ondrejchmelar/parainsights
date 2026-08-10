@@ -2505,6 +2505,17 @@ VIEW_SCRIPT = """
       button.classList.toggle('is-on', on);
       button.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
+    // A 3D panel inside a hidden section has a zero-sized box, so it drew nothing and
+    // its first frame never came — the airspace view opened as an empty canvas until
+    // something was dragged in it. Now the view that has just been revealed is redrawn.
+    if (window.__view3dAll) {
+      Object.keys(window.__view3dAll).forEach(function (id) {
+        // Every panel, not only the revealed one: a hidden canvas measures zero, so
+        // `resize()` bails and redrawing it costs nothing.
+        var handle = window.__view3dAll[id];
+        if (handle && handle.redraw) handle.redraw();
+      });
+    }
     window.scrollTo({ top: 0, behavior: 'auto' });
   }
   nav.addEventListener('click', function (event) {

@@ -150,17 +150,30 @@ def main(argv: list[str] | None = None) -> int:
         target = (args.html.parent / args.airspace / name) if args.html else Path(name)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(text, encoding="utf-8", newline="")
+        base = airspace_openair.read(base_text)
+        # The same 3D view the flights use, over the same terrain. It needs a network at
+        # build time and falls back to the flat SVG map without one — a page that draws
+        # no airspace because a tile server was slow would be the wrong trade.
+        payload = None
+        if args.terrain:
+            from airspaces import scene as airspace_scene
+
+            payload = airspace_scene.fetch(
+                list(base) + list(overlay.airspaces), online=args.online
+            )
         extras.append(render_html.Extra(
             uid="airspace",
             label="Airspace",
             meta=f"{overlay.atz_count} zones &middot; {overlay.circuits} okruhy",
             body=airspace_html.body(
-                overlay, airspace_openair.read(base_text), base_version,
+                overlay, base, base_version,
                 openair_name=name, openair_size=len(text),
                 openair_href=f"{args.airspace}{name}",
+                scene=payload,
             ),
             style=airspace_html.STYLE,
-            script=airspace_html.SCRIPT,
+            script=(airspace_html.SCRIPT
+                    + (airspace_html.SCRIPT3D if payload else "")),
         ))
         print(f"wrote {target}")
 

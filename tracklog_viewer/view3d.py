@@ -281,6 +281,19 @@ def panel(payload: dict, uid: str, *, kmz_uri: str | None = None,
         f'aria-label="Vertical exaggeration &#215;{level}">&#215;{level}</button>'
         for level in (1, 2, 4)
     )
+    # The phase switches only exist where there are phases. A scene with no flight in it
+    # — the airspace map is one — would otherwise carry two buttons that label nothing,
+    # on a bar that is already tight on a phone.
+    labels = (
+        '<div class="view3d-seg view3d-labels" role="group" aria-label="Phase labels">'
+        '<button type="button" data-view3d-act="labels-toggle" data-kind="climb"'
+        ' aria-pressed="false" aria-label="Label each climb with its rate and gain"'
+        '>climbs</button>'
+        '<button type="button" data-view3d-act="labels-toggle" data-kind="glide"'
+        ' aria-pressed="false"'
+        ' aria-label="Label each glide with its ratio and distance">glides</button>'
+        "</div>"
+    ) if payload.get("phases") else ""
     return f"""
     <div class="panel view3d-panel">
       <!-- `tabindex` is what makes the view itself reachable. Without it the only
@@ -331,14 +344,7 @@ def panel(payload: dict, uid: str, *, kmz_uri: str | None = None,
         <!-- Two independent switches, not a segmented control: the reader can want both,
              either, or — the default — neither. Both on at once over a long flight is
              more label than terrain, which is why neither starts on. -->
-        <div class="view3d-seg view3d-labels" role="group" aria-label="Phase labels">
-          <button type="button" data-view3d-act="labels-toggle" data-kind="climb"
-                  aria-pressed="false" aria-label="Label each climb with its rate and gain"
-            >climbs</button>
-          <button type="button" data-view3d-act="labels-toggle" data-kind="glide"
-                  aria-pressed="false"
-                  aria-label="Label each glide with its ratio and distance">glides</button>
-        </div>
+        {labels}
         <!-- The zoom pair survives on a desktop because pinch is the one gesture that is
              genuinely awkward on a trackpad. Rotate and tilt do not: they are a drag, a
              ctrl-drag and a right-drag, the caption above teaches exactly that, and they
@@ -627,6 +633,12 @@ function initView3d(root, cursorTrack) {
   var payload = root.querySelector('.view3d-data');
   if (!canvas || !payload) return null;
   var scene = JSON.parse(payload.textContent);
+  // A scene need not carry a flight. The airspace map is the same widget over the same
+  // terrain with no track in it, so the flight-shaped members are defaulted here once
+  // rather than guarded at each of the dozen places that read them.
+  if (!scene.track) scene.track = { lon: [], lat: [], alt: [], c: [] };
+  if (!scene.climbs) scene.climbs = [];
+  if (!scene.palette) scene.palette = [[120, 120, 120]];
   var dem = scene.terrain;
   var ctx = canvas.getContext('2d');
   // The canvas has no width/height attributes: CSS sizes the box and this matches the
@@ -671,8 +683,17 @@ function initView3d(root, cursorTrack) {
   // panX/panY are screen-space offsets applied after the fit, which is what lets the
   // view be dragged off centre — the fit alone always recentres, so without these the
   // camera was welded to the middle of the flight.
-  var view = { yaw: -0.42, pitch: 0.46, zoom: 1, vertical: baseVertical, map: true,
-               panX: 0, panY: 0 };
+  // The opening camera. A flight wants the oblique three-quarter view — that is the
+  // angle a pilot recognises — while a scene that is a map of a whole country wants to
+  // open nearly flat, because at 0.46 the far half of it is a sliver. So the payload may
+  // name its own, and `reset` goes back to whatever it named.
+  var HOME = { yaw: -0.42, pitch: 0.46 };
+  if (scene.view) {
+    if (typeof scene.view.yaw === 'number') HOME.yaw = scene.view.yaw;
+    if (typeof scene.view.pitch === 'number') HOME.pitch = scene.view.pitch;
+  }
+  var view = { yaw: HOME.yaw, pitch: HOME.pitch, zoom: 1, vertical: baseVertical,
+               map: true, panX: 0, panY: 0 };
 
   // The basemap carries the place names, which is the whole reason it is here: a
   // hillshade shows the shape of a ridge but never tells you which village it is above.
@@ -1540,6 +1561,76 @@ function initView3d(root, cursorTrack) {
     }
   }
 
+  // ---- airspace ----------------------------------------------------------------------
+  //
+  // A second thing this view can carry, and the reason it is a map widget rather than a
+  // flight renderer: `scene.airspaces` is a list of rings with a floor, and nothing in
+  // here knows what an ATZ is. Each ring is drawn *at its own floor altitude*, which is
+  // the whole argument for showing airspace in 3D at all — a CTR whose floor is 1 000 ft
+  // above you is a different object from one that starts at the ground, and on a flat map
+  // they are the same red outline.
+  //
+  // A ring with `g` set floors on the terrain instead, sampling the DEM under each vertex,
+  // because "GND" is a surface and not an altitude.
+  //
+  // No depth buffer is involved: this is the 2D overlay canvas, so airspace always draws
+  // over the terrain. That is right far more often than it is wrong — the floors that
+  // matter are above the ground under them — and a wrong occlusion here would hide the
+  // thing the layer exists to show.
+  var airspaceFilter = null;
+  var airspaceHits = [];    // { path, space }, in draw order; hit-tested back to front
+
+  function airspaceRing(space) {
+    var ring = new Path2D();
+    var n = space.lon.length;
+    for (var i = 0; i < n; i++) {
+      var m = toMetres(space.lon[i], space.lat[i]);
+      var z = space.g ? groundAt(space.lon[i], space.lat[i]) : space.f;
+      var p = project(m[0], m[1], z);
+      if (i === 0) ring.moveTo(p[0], p[1]); else ring.lineTo(p[0], p[1]);
+    }
+    ring.closePath();
+    return ring;
+  }
+
+  function drawAirspaces() {
+    var spaces = scene.airspaces || [];
+    airspaceHits = [];
+    if (!spaces.length) return;
+    var colours = scene.airspaceColours || {};
+    ctx.save();
+    ctx.lineJoin = 'round';
+    for (var i = 0; i < spaces.length; i++) {
+      var space = spaces[i];
+      if (airspaceFilter && !airspaceFilter(space)) continue;
+      var colour = colours[space.k] || '#888888';
+      var ring = airspaceRing(space);
+      ctx.fillStyle = colour;
+      ctx.globalAlpha = space.k === 'circuit' ? 0.30 : 0.16;
+      ctx.fill(ring);
+      ctx.globalAlpha = 0.95;
+      ctx.strokeStyle = colour;
+      ctx.lineWidth = 1.3;
+      ctx.stroke(ring);
+      airspaceHits.push({ path: ring, space: space });
+    }
+    ctx.restore();
+  }
+
+  // Which airspace is under a client point, or null. The last one drawn wins, because
+  // the payload is ordered back to front and the smallest zone — the one a reader is
+  // actually pointing at — is on top.
+  function airspaceAt(clientX, clientY) {
+    if (!airspaceHits.length) return null;
+    var box = canvas.getBoundingClientRect();
+    var x = (clientX - box.left) / box.width * W;
+    var y = (clientY - box.top) / box.height * H;
+    for (var i = airspaceHits.length - 1; i >= 0; i--) {
+      if (ctx.isPointInPath(airspaceHits[i].path, x, y)) return airspaceHits[i].space;
+    }
+    return null;
+  }
+
   function drawTrack() {
     var t = scene.track;
     var n = t.lon.length;
@@ -1820,6 +1911,9 @@ function initView3d(root, cursorTrack) {
     // cursor — a few thousand points and some text, which 2D draws well and which is
     // already wired to the charts. The heightfield goes underneath it in GL.
     if (renderer) renderer.terrain(mapped); else drawTerrain(mapped);
+    // Under the track: where a report carries both, the flight is the subject and the
+    // airspace is the context it happened in.
+    drawAirspaces();
     drawTrack();
     // After the track and before the cursor: the labels annotate the track, and the
     // cursor is the one thing that must never be written over.
@@ -2251,7 +2345,8 @@ function initView3d(root, cursorTrack) {
         button.setAttribute('aria-pressed', on ? 'true' : 'false');
       });
     } else if (act === 'reset') {
-      view.yaw = -0.42; view.pitch = 0.46; view.zoom = 1; view.panX = 0; view.panY = 0;
+      view.yaw = HOME.yaw; view.pitch = HOME.pitch;
+      view.zoom = 1; view.panX = 0; view.panY = 0;
       setVertical(baseVertical);
       if (order.length) setBasemapStyle(order[0]);
     }
@@ -2575,6 +2670,11 @@ function initView3d(root, cursorTrack) {
     // anchors through this, so "the twist is centred on the wrong place" is a claim
     // about it and cannot be checked without it.
     groundUnder: function (clientX, clientY) { return groundUnder(clientX, clientY); },
+    // The airspace layer's two controls. The page owns the filter UI and the label —
+    // this widget only knows how to draw rings and say which one a point is inside.
+    setAirspaceFilter: function (fn) { airspaceFilter = fn || null; draw(); },
+    scene: function () { return scene; },
+    airspaceAt: function (clientX, clientY) { return airspaceAt(clientX, clientY); },
     // Exposed for tests: the sun and wind arrows as angles rather than as pixels.
     rose: function () { return roseAngles(); },
     toMetres: function (lon, lat) { return toMetres(lon, lat); },

@@ -766,3 +766,57 @@ def test_map_escapes_a_name_that_would_break_the_svg(zones):
     svg = render_html.map_svg([space], project)
     assert "<b>" not in svg
     assert "&amp; co" in svg
+
+
+# ------------------------------------------- the 3D map
+
+
+def test_a_ring_carries_its_own_floor(zones):
+    """The argument for airspace in 3D: a CTR whose floor is 1 000 ft above you is a
+    different object from one that starts at the ground, and on a flat map both are the
+    same red outline. So each ring ships the floor it is drawn at, in metres AMSL, and
+    it is the same number the floor slider filters on."""
+    from airspaces import scene as airspace_scene
+
+    high = openair.Airspace("TMA TEST", "C", floor="FL 95", ceiling="FL 195",
+                            points=[(50.0, 15.0), (50.2, 15.0), (50.2, 15.3)])
+    ground = atz.to_airspace(zones[0], "ATZ TEST")
+    rings = airspace_scene.rings([high, ground])
+    tma = next(r for r in rings if r["n"].startswith("TMA"))
+    assert tma["f"] == round(render_html.floor_metres(high))
+    assert tma["f"] > 2800 and not tma["g"], "FL95 was drawn on the ground"
+
+    atz_ring = next(r for r in rings if r["n"].startswith("ATZ"))
+    assert atz_ring["g"] is True, "a GND floor must follow the terrain, not sit at 0 m"
+
+
+def test_rings_are_ordered_biggest_first(zones):
+    """Paint order is hit order on a canvas exactly as it is in SVG, so the smallest
+    thing under the pointer has to be drawn last or a dropzone cannot be read through
+    the zone around it."""
+    from airspaces import scene as airspace_scene
+
+    big = openair.Airspace("BIG", "C", floor="GND", ceiling="FL 195",
+                           points=[(50.0, 15.0), (51.0, 15.0), (51.0, 16.0)])
+    small = openair.Airspace("SMALL", "C", floor="GND", ceiling="FL 195",
+                             points=[(50.1, 15.1), (50.2, 15.1), (50.2, 15.2)])
+    names = [r["n"].split(" ")[0] for r in airspace_scene.rings([small, big])]
+    assert names.index("BIG") < names.index("SMALL")
+
+
+def test_the_scene_needs_no_flight_in_it(zones):
+    """The whole reason `view3d` can be reused here: its payload is a map, and the
+    track, the climbs and the phases are optional passengers."""
+    from airspaces import scene as airspace_scene
+
+    payload = airspace_scene.build([atz.to_airspace(z, f"ATZ {z.icao}") for z in zones])
+    assert "track" not in payload and "climbs" not in payload
+    assert payload["airspaces"] and payload["airspaceColours"]["atz"]
+    # Nearly flat: the flight camera's 0.46 turns 500 km of country into a sliver.
+    assert payload["view"]["pitch"] > 1.0
+
+
+def test_the_page_falls_back_to_the_flat_map_without_terrain(zones):
+    """A tile server being slow must never cost the reader the airspace itself."""
+    _, article = airspace_article(zones)
+    assert "asp-map" in article and "view3d" not in article
