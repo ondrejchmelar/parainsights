@@ -27,7 +27,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["tracklog_viewer*", "airspaces*"]
+include = ["tracklog_viewer*", "airspaces*", "meteo*"]
 
 # Set explicitly so pytest does not walk up and adopt an enclosing project's config.
 [tool.pytest.ini_options]

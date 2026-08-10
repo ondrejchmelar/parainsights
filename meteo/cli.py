@@ -1,0 +1,78 @@
+"""Command line: write the meteo page, or refresh the site list behind it."""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+from . import render_html, sites, sources
+
+
+def page(article: str, title: str) -> str:
+    """A standalone document holding just the meteo view.
+
+    The same shell `airspaces.cli` writes, and for the same reason: the article is meant
+    to be liftable into the report's view switch without changing.
+    """
+    return f"""<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title}</title>
+<style>
+:root {{ --paper:#fff; --panel:#f7f7f5; --panel-2:#eeeeea; --rule:#dcdcd6;
+  --ink:#1b1b19; --ink-2:#4a4a45; --ink-3:#82827a; }}
+@media (prefers-color-scheme: dark) {{
+  :root {{ --paper:#151513; --panel:#1e1e1b; --panel-2:#262622; --rule:#3a3a34;
+    --ink:#eeeee8; --ink-2:#c0c0b8; --ink-3:#8a8a80; }}
+}}
+body {{ margin:0; background:var(--paper); color:var(--ink); font:15px/1.55
+  system-ui,-apple-system,"Segoe UI",sans-serif; }}
+.wrap {{ max-width:1100px; margin:0 auto; padding:26px 18px 60px; }}
+h1 {{ font-size:26px; margin:0 0 6px; }}
+.lede {{ color:var(--ink-2); margin:0 0 14px; max-width:70ch; }}
+a {{ color: inherit; }}
+button {{ font:inherit; padding:3px 10px; background:var(--panel);
+  color:var(--ink); border:1px solid var(--rule); border-radius:3px; cursor:pointer; }}
+{render_html.STYLE}
+</style>
+<div class="wrap">
+{article}
+</div>
+<script>{render_html.SCRIPT}</script>
+"""
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="meteo",
+        description="The day's forecast against the Czech takeoffs.",
+    )
+    parser.add_argument("--html", metavar="FILE", type=Path,
+                        help="write the meteo page")
+    parser.add_argument("--refresh-sites", action="store_true",
+                        help="re-fetch the takeoff list from ParaglidingEarth and "
+                             "rewrite meteo/sites.py")
+    parser.add_argument("--country", default="CZ",
+                        help="ISO country code for --refresh-sites (default CZ)")
+    args = parser.parse_args(argv)
+
+    if not (args.html or args.refresh_sites):
+        parser.error("nothing to do: pass --html or --refresh-sites")
+
+    if args.refresh_sites:
+        fetched = sources.fetch(args.country)
+        target = Path(sites.__file__)
+        sources.write(target, fetched, iso=args.country)
+        with_rose = sum(1 for site in fetched if site["winds"])
+        print(f"{target}: {len(fetched)} takeoffs, {with_rose} with a wind rose")
+
+    if args.html:
+        args.html.parent.mkdir(parents=True, exist_ok=True)
+        args.html.write_text(page(render_html.body(), "Will it fly?"), encoding="utf-8")
+        print(f"{args.html}: {len(sites.SITES)} takeoffs, forecast fetched at view time")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
