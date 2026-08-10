@@ -17,6 +17,8 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 
+import parainsights_common as common
+
 from . import (airmass, charts, debrief, geo, insolation, metrics, quicklook,
                terrain as terrain_module, view3d, view3d_gl)
 from numpy import asarray as np_asarray, median as np_median
@@ -2533,6 +2535,10 @@ VIEW_STYLE = """
   padding: 9px 15px 8px; cursor: pointer; margin-bottom: -1px; }
 .view-tab:hover { color: var(--ink-2); }
 .view-tab.is-on { color: var(--ink); border-bottom-color: var(--climb); }
+/* The other tools are links, not buttons, and must not inherit an anchor's underline
+   or the browser's link colour — they sit in the same row as the view buttons and any
+   difference reads as a mistake rather than as a distinction. */
+a.view-tab { text-decoration: none; display: inline-block; }
 .view-tab:focus-visible { outline: 2px solid var(--climb); outline-offset: -2px; }
 """
 
@@ -2548,9 +2554,24 @@ def _flights_view(tabs: str, bodies: list[str], extras: "list[Extra]") -> str:
 
 
 def _view_nav(extras: "list[Extra]") -> str:
-    """The switch across the top. Absent entirely when there is nothing to switch to."""
+    """The switch across the top. Absent entirely when there is nothing to switch to.
+
+    Two kinds of destination, deliberately side by side: the views *in this document* are
+    buttons that the script shows and hides, and the other tools are ordinary links. The
+    reader should not have to know which is which, so they look the same — but a link is
+    a link, because those pages are separate files and a button that navigated would be
+    lying about what it does.
+
+    The links assume the published layout under `public/`, and only ever appear on a
+    report that has extras, which is the same report that is published there.
+    """
     if not extras:
         return ""
+    links = "".join(
+        f'<a class="view-tab" href="{where}">{label}</a>'
+        for key, label, where in common.PAGES
+        if key not in {"flights"} and not any(e.uid == key for e in extras)
+    )
     buttons = [
         '<button type="button" class="view-tab is-on" data-view-tab="flights" '
         'aria-pressed="true">Flights</button>'
@@ -2562,7 +2583,7 @@ def _view_nav(extras: "list[Extra]") -> str:
     ]
     return (
         '<nav class="views" id="views" role="group" aria-label="Choose a view">'
-        f'{"".join(buttons)}</nav>'
+        f'{"".join(buttons)}{links}</nav>'
     )
 
 

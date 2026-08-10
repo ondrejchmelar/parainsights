@@ -11,6 +11,8 @@ import argparse
 import sys
 from pathlib import Path
 
+import parainsights_common as common
+
 from . import render_html
 
 
@@ -42,9 +44,11 @@ button {{ font:inherit; padding:3px 10px; background:var(--panel);
 {airspace_html.STYLE}
 {view3d.STYLE}{view3d_gl.STYLE}
 {render_html.STYLE}
+{common.STYLE}
 {extra_style}
 </style>
 <div class="wrap">
+{common.nav("planner", depth=1)}
 {article}
 </div>
 <script>{view3d.SCRIPT}

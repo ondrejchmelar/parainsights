@@ -1,30 +1,54 @@
 # parainsights
 
-Tools for paragliding flight analysis. One repository, two tools: the **tracklog
-viewer** and **airspaces**.
+Tools for paragliding. One repository, four tools, answering a question each:
+
+| tool | the question | published at |
+|---|---|---|
+| **tracklog viewer** | how did that flight go? | `public/index.html` |
+| **airspaces** | what is above me, and what does my instrument not know? | `public/airspace/` |
+| **meteo** | is it worth driving anywhere today, and where? | `public/meteo/` |
+| **planner** | what is that task worth, and what does it cross? | `public/planner/` |
 
 ```
 parainsights/
 ├── CLAUDE.md              this file
 ├── pyproject.toml         one project, one venv, one test suite
 ├── tracklog_viewer/       IGC/KML/KMZ → analysis → HTML, KMZ, 3D map
-├── airspaces/             Czech airspace + the ATZ nobody else carries → OpenAir, map
-├── tests/                 pytest, 441 tests, no network
+├── airspaces/             Czech airspace + the airfields nobody else carries → OpenAir, map
+├── meteo/                 the day's sounding against every Czech takeoff
+├── planner/               a task drawn on the airspace it crosses
+├── parainsights_common/   the one thing every page shares: the strip between the tools
+├── tests/                 pytest, 507 tests, no network
 └── docs/
     ├── formats.md            IGC and KML/KMZ format research, measured on real files
     ├── plan.md               tracklog viewer: scope, decisions and status
     ├── ux-review.md          the report's UX, measured; the debrief layer, planned
     ├── analysis-plan.md      what more the data can say, and what data would help
     ├── airspaces.md          airspaces: sources, decisions and status
+    ├── meteo.md              meteo: why Open-Meteo and not Windy, and what it fetches
+    ├── planner.md            planner: the scoring rules and where they come from
     └── atz-datum-hlaseni.md  draft report to RLP of the datum error found in LKR315A
 ```
 
-A third tool goes in as a sibling package (`parainsights/<tool_name>/`) sharing this
-`pyproject.toml` and `tests/`. If shared code appears, put it in `parainsights_common/`
-rather than importing across tools — which is why `airspaces/geo.py` exists alongside
-`tracklog_viewer/geo.py` rather than importing it. They are not the same geodesy: the
-viewer works on the FAI sphere because that is what a scored distance is measured on,
-and airspace is published against WGS84.
+A fifth tool goes in as a sibling package (`parainsights/<tool_name>/`) sharing this
+`pyproject.toml` and `tests/`, and adds itself to `parainsights_common.PAGES` so the
+other three link to it.
+
+**Where the "no shared code" rule applies, and where it does not.** `airspaces/geo.py`
+exists alongside `tracklog_viewer/geo.py` rather than importing it, because they are not
+the same geodesy: the viewer works on the FAI sphere because that is what a scored
+distance is measured on, and airspace is published against WGS84. That is the rule, and
+it is about *geodesy and analysis*, where the tools genuinely disagree.
+
+`view3d` is the exception that shows the edge of it. It is a **map widget** — hand it a
+terrain grid, some imagery and a list of things to draw and it never asks what a flight
+is — so `airspaces`, `meteo` and `planner` all use it rather than carrying a copy of
+120 KB of JavaScript. The right end state is a third package holding it; what stops that
+today is that `view3d.data()` and `cursor_track()` in the same module *are* flight code,
+so it is a refactor rather than a move. Every such import is lazy, so no tool fails to
+build because another is absent. Likewise `planner` reads its scoring constants from
+`tracklog_viewer/xc.py` — a planner that scored a task differently from the report that
+later measures the flight would be worse than no planner.
 
 ## Getting set up
 
@@ -33,7 +57,7 @@ as the packages, so there is nothing to line up by hand:
 
 ```bash
 uv sync --extra dev          # creates .venv on the pinned Python, from uv.lock
-uv run pytest -c pyproject.toml     # 441 tests, ~4 min, no network
+uv run pytest -c pyproject.toml     # 507 tests, ~5 min, no network
 ```
 
 `-c pyproject.toml` matters when the repo sits inside another project — pytest otherwise
@@ -56,12 +80,21 @@ uv run python -m tracklog_viewer.cli FLIGHT.igc --kmz flight.kmz         # Googl
 uv run python -m tracklog_viewer.cli FLIGHT.igc --map map.html           # 3D map
 
 uv run python -m airspaces.cli --openair CZ_airfields.txt  # aerodrome zones + okruhy for XCTrack
-uv run python -m airspaces.cli --html airspace.html    # the airspace map
+uv run python -m airspaces.cli --html airspace.html --online   # the airspace map, in 3D
 uv run python -m airspaces.cli --report                # what built, and what did not
+
+uv run python -m meteo.cli --html meteo.html           # the day, against every takeoff
+uv run python -m meteo.cli --refresh-sites             # re-fetch the takeoff list
+
+uv run python -m planner.cli --html plan.html --online # draw a task, score it
 ```
 
 Only `--meteo` and `--terrain` touch the network. Everything else in the viewer is
-offline. `airspaces` fetches from four public sources and caches them under
+offline. `meteo` and `planner` both need one at build time, and the meteo *page* needs
+one at view time — it is the one artifact here that is deliberately not self-contained,
+because a forecast built at 03:00 and published is wrong by lunchtime.
+
+`airspaces` fetches from four public sources and caches them under
 `~/.cache/parainsights/airspace`; `--refresh` re-fetches. Its tests use fixtures.
 
 ## airspaces, in one paragraph
@@ -69,9 +102,12 @@ offline. `airspaces` fetches from four public sources and caches them under
 A paraglider may fly inside a Czech ATZ but must keep out of the traffic circuit, and
 **no ATZ is in the airspace XCTrack or XContest carries** — one of the 251 airspaces in
 the Aeroklub base file is an ATZ, and only because it is a controlled aerodrome. So this
-builds an overlay: 82 ATZ as class `W` (XCTrack paints `W` green) and 114 traffic-circuit
-bands as class `Q` (orange, silent), imported alongside the normal airspace rather than
-replacing it. Read `docs/airspaces.md` before changing it; the four things most likely
+builds an overlay: 82 aerodrome zones as class `W` (XCTrack paints `W` green) and 205
+traffic circuits as class `Q` (orange, silent) at 156 fields, drawn as 410 rectangles
+because a circuit is two of them meeting on the runway — imported alongside the normal
+airspace rather than replacing it. The page's own copy says *aerodrome zone* rather than
+*ATZ*, because half of those 156 fields have no ATZ at all. Read `docs/airspaces.md`
+before changing it; the four things most likely
 to be re-litigated are that the writer emits only `AC AN AH AL AF V DP DC DB` because
 XCTrack rejects `AG` and misreports a missing `AH` against the *next* airspace, that the
 circuit is a hollow band on **both** sides of the runway because the glider circuit

@@ -67,8 +67,18 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
 .met-links { margin:14px 0 0; font-size:12.5px; color:var(--ink-3); }
 .met-legend { font-size:11.5px; color:var(--ink-3); margin:6px 0 0; }
 
+
+.site-nav { display:flex; gap:4px; flex-wrap:wrap; margin:0 0 18px;
+  border-bottom:1px solid var(--rule); }
+.site-nav a, .site-nav span { font-size:15px; font-weight:600; letter-spacing:0.01em;
+  color:var(--ink-3); text-decoration:none; padding:9px 15px 8px; margin-bottom:-1px;
+  border-bottom:2px solid transparent; }
+.site-nav a:hover { color:var(--ink-2); }
+.site-nav .is-on { color:var(--ink); border-bottom-color:#eb6834; }
+
 </style>
 <div class="wrap">
+<nav class="site-nav" aria-label="The tools here"><span class="is-on">Meteo</span><a href="../planner/">Planner</a><a href="../airspace/">Airspace</a><a href="../index.html">Flights</a></nav>
 <article class="flight meteo-article" id="meteo-article">
   <h1>Will it fly?</h1>
   <p class="lede">The day's forecast against 159 Czech takeoffs, sorted

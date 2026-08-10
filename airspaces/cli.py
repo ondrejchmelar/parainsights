@@ -6,6 +6,8 @@ import argparse
 import sys
 from pathlib import Path
 
+import parainsights_common as common
+
 from . import build, openair, render_html, sources
 
 
@@ -46,9 +48,11 @@ h1 {{ font-size:26px; margin:0 0 6px; }}
 button {{ font:inherit; padding:3px 10px; background:var(--panel);
   color:var(--ink); border:1px solid var(--rule); border-radius:3px; cursor:pointer; }}
 {render_html.STYLE}
+{common.STYLE}
 {view_style}
 </style>
 <div class="wrap">
+{common.nav("airspace", depth=1)}
 {article}
 </div>
 <script>{render_html.SCRIPT}</script>

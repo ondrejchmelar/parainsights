@@ -75,6 +75,15 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
 .asp-src-when { white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 
+.site-nav { display:flex; gap:4px; flex-wrap:wrap; margin:0 0 18px;
+  border-bottom:1px solid var(--rule); }
+.site-nav a, .site-nav span { font-size:15px; font-weight:600; letter-spacing:0.01em;
+  color:var(--ink-3); text-decoration:none; padding:9px 15px 8px; margin-bottom:-1px;
+  border-bottom:2px solid transparent; }
+.site-nav a:hover { color:var(--ink-2); }
+.site-nav .is-on { color:var(--ink); border-bottom-color:#eb6834; }
+
+
 /* Full-bleed: the map is the one thing worth more than the page's reading width. The
    clip has to go on the *root* — html is the scroll container, so clipping body alone
    leaves the page scrolling sideways by the scrollbar's width, which 100vw includes.
@@ -321,6 +330,7 @@ canvas.view3d.is-dragging { cursor: grabbing; }
 
 </style>
 <div class="wrap">
+<nav class="site-nav" aria-label="The tools here"><a href="../meteo/">Meteo</a><a href="../planner/">Planner</a><span class="is-on">Airspace</span><a href="../index.html">Flights</a></nav>
 <article class="flight airspace-article" id="airspace-article">
   <h1>Czech airspace</h1>
   <p class="lede">Everything the published airspace carries, plus the airfields it leaves
@@ -2632,6 +2642,17 @@ function initView3d(root, cursorTrack) {
     // this widget only knows how to draw rings and say which one a point is inside.
     setAirspaceFilter: function (fn) { airspaceFilter = fn || null; draw(); },
     scene: function () { return scene; },
+    // What is under this point on the map, in the coordinates a plan is written in.
+    // `groundUnder` answers in the local metric frame, which is an implementation
+    // detail of the projection; a turnpoint is a longitude and a latitude.
+    groundLonLat: function (clientX, clientY) {
+      var point = groundUnder(clientX, clientY);
+      if (!point) return null;
+      return [lon0 + point[0] / mPerDegLon, lat0 + point[1] / mPerDegLat];
+    },
+    // The terrain height under a coordinate, so a planned line can be drawn on the
+    // ground rather than at an altitude nobody chose.
+    groundAt: function (lon, lat) { return groundAt(lon, lat); },
     airspaceAt: function (clientX, clientY) { return airspaceAt(clientX, clientY); },
     // Exposed for tests: the sun and wind arrows as angles rather than as pixels.
     rose: function () { return roseAngles(); },

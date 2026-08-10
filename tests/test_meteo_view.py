@@ -113,3 +113,35 @@ def test_the_verdict_is_the_sites_own_rose(winds, speed, direction, expected):
         return "brisk" if speed > 20 else "flyable"
 
     assert verdict(winds, speed, direction) == expected
+
+
+class TestTheSiteStrip:
+    """Four pages published side by side under `public/` with no way between them are
+    four orphans. The strip is the only thing every tool's page shares."""
+
+    def test_the_page_you_are_on_is_not_a_link_to_itself(self):
+        import parainsights_common as common
+
+        strip = common.nav("meteo", depth=1)
+        assert '<span class="is-on">Meteo</span>' in strip
+        assert 'href="../meteo/"' not in strip
+
+    def test_a_page_one_level_down_reaches_its_siblings(self):
+        import parainsights_common as common
+
+        strip = common.nav("airspace", depth=1)
+        assert 'href="../meteo/"' in strip
+        assert 'href="../index.html"' in strip
+
+    def test_the_report_at_the_top_level_does_not_climb(self):
+        import parainsights_common as common
+
+        strip = common.nav("flights", depth=0)
+        assert 'href="meteo/"' in strip
+        assert ".." not in strip
+
+    def test_every_tool_is_in_the_strip(self):
+        import parainsights_common as common
+
+        keys = {key for key, _, _ in common.PAGES}
+        assert keys == {"flights", "airspace", "meteo", "planner"}

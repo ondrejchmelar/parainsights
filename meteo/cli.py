@@ -6,6 +6,8 @@ import argparse
 import sys
 from pathlib import Path
 
+import parainsights_common as common
+
 from . import render_html, sites, sources
 
 
@@ -35,8 +37,10 @@ a {{ color: inherit; }}
 button {{ font:inherit; padding:3px 10px; background:var(--panel);
   color:var(--ink); border:1px solid var(--rule); border-radius:3px; cursor:pointer; }}
 {render_html.STYLE}
+{common.STYLE}
 </style>
 <div class="wrap">
+{common.nav("meteo", depth=1)}
 {article}
 </div>
 <script>{render_html.SCRIPT}</script>

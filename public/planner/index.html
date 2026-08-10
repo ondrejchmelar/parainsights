@@ -339,8 +339,18 @@ canvas.view3d.is-dragging { cursor: grabbing; }
 .plan-legs span { margin-right:14px; white-space:nowrap; }
 
 
+.site-nav { display:flex; gap:4px; flex-wrap:wrap; margin:0 0 18px;
+  border-bottom:1px solid var(--rule); }
+.site-nav a, .site-nav span { font-size:15px; font-weight:600; letter-spacing:0.01em;
+  color:var(--ink-3); text-decoration:none; padding:9px 15px 8px; margin-bottom:-1px;
+  border-bottom:2px solid transparent; }
+.site-nav a:hover { color:var(--ink-2); }
+.site-nav .is-on { color:var(--ink); border-bottom-color:#eb6834; }
+
+
 </style>
 <div class="wrap">
+<nav class="site-nav" aria-label="The tools here"><a href="../meteo/">Meteo</a><span class="is-on">Planner</span><a href="../airspace/">Airspace</a><a href="../index.html">Flights</a></nav>
 <article class="flight planner-article" id="planner-article">
   <h1>Plan a task</h1>
   <p class="lede">Drop turnpoints on the ground you are going to fly over, and see what
