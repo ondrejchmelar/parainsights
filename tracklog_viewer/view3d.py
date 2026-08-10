@@ -2674,6 +2674,17 @@ function initView3d(root, cursorTrack) {
     // this widget only knows how to draw rings and say which one a point is inside.
     setAirspaceFilter: function (fn) { airspaceFilter = fn || null; draw(); },
     scene: function () { return scene; },
+    // What is under this point on the map, in the coordinates a plan is written in.
+    // `groundUnder` answers in the local metric frame, which is an implementation
+    // detail of the projection; a turnpoint is a longitude and a latitude.
+    groundLonLat: function (clientX, clientY) {
+      var point = groundUnder(clientX, clientY);
+      if (!point) return null;
+      return [lon0 + point[0] / mPerDegLon, lat0 + point[1] / mPerDegLat];
+    },
+    // The terrain height under a coordinate, so a planned line can be drawn on the
+    // ground rather than at an altitude nobody chose.
+    groundAt: function (lon, lat) { return groundAt(lon, lat); },
     airspaceAt: function (clientX, clientY) { return airspaceAt(clientX, clientY); },
     // Exposed for tests: the sun and wind arrows as angles rather than as pixels.
     rose: function () { return roseAngles(); },
