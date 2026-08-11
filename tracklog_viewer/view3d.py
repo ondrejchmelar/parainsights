@@ -1732,33 +1732,83 @@ function initView3d(root, cursorTrack) {
   // ---- airspace ----------------------------------------------------------------------
   //
   // A second thing this view can carry, and the reason it is a map widget rather than a
-  // flight renderer: `scene.airspaces` is a list of rings with a floor, and nothing in
-  // here knows what an ATZ is. Each ring is drawn *at its own floor altitude*, which is
-  // the whole argument for showing airspace in 3D at all — a CTR whose floor is 1 000 ft
-  // above you is a different object from one that starts at the ground, and on a flat map
-  // they are the same red outline.
+  // flight renderer: `scene.airspaces` is a list of rings with a floor and a lid, and
+  // nothing in here knows what an ATZ is. Each one is drawn as the *box* it is — from its
+  // own floor to its own ceiling — which is the whole argument for showing airspace in 3D
+  // at all. A CTR whose floor is 1 000 ft above you is a different object from one that
+  // starts at the ground and a different object again from one that stops at 2 000 ft,
+  // and on a flat map all three are the same red outline.
   //
-  // A ring with `g` set floors on the terrain instead, sampling the DEM under each vertex,
-  // because "GND" is a surface and not an altitude.
+  // Four numbers describe the vertical, and each is a height *or* a height above the
+  // terrain, because the sources publish both: `f` is the floor as an altitude, `g` says
+  // that floor is the ground itself, `fu`/`cu` are heights above the ground, and `c` is
+  // the lid as an altitude. Anything ground-relative samples the DEM under each vertex,
+  // so the box follows the hill rather than slicing through it.
+  //
+  // `t` marks a lid that is a cap rather than the airspace's own ceiling — see
+  // `airspaces/scene.py` for why 21 zones get one — and a capped box is drawn without
+  // its top face, so the eye reads it as continuing rather than as ending there.
   //
   // No depth buffer is involved: this is the 2D overlay canvas, so airspace always draws
   // over the terrain. That is right far more often than it is wrong — the floors that
   // matter are above the ground under them — and a wrong occlusion here would hide the
   // thing the layer exists to show.
   var airspaceFilter = null;
-  var airspaceHits = [];    // { path, space }, in draw order; hit-tested back to front
+  var airspaceHits = [];    // { box, space }, in draw order; hit-tested back to front
 
-  function airspaceRing(space) {
-    var ring = new Path2D();
+  // Floor and lid at one vertex, in metres AMSL.
+  function airspaceFloorAt(space, lon, lat) {
+    if (space.g) return groundAt(lon, lat);
+    if (space.fu != null) return groundAt(lon, lat) + space.fu;
+    return space.f;
+  }
+  function airspaceTopAt(space, lon, lat) {
+    if (space.cu != null) return groundAt(lon, lat) + space.cu;
+    return space.c != null ? space.c : airspaceFloorAt(space, lon, lat);
+  }
+
+  // The box as three paths: the floor ring, the lid, and every wall in one path.
+  //
+  // The walls are one Path2D holding a subpath per side rather than a fill per side, and
+  // that is the whole trick that makes a translucent box readable: filled once under the
+  // nonzero rule, the union of overlapping quads takes the alpha exactly once. Filling
+  // them one at a time doubles the alpha wherever a near wall crosses a far one, and a
+  // 70-sided circle then paints itself into an opaque drum.
+  function airspaceBox(space) {
     var n = space.lon.length;
+    var floor = new Path2D(), lid = new Path2D(), walls = new Path2D();
+    var fx = new Array(n), fy = new Array(n), tx = new Array(n), ty = new Array(n);
+    var flat = true;
     for (var i = 0; i < n; i++) {
-      var m = toMetres(space.lon[i], space.lat[i]);
-      var z = space.g ? groundAt(space.lon[i], space.lat[i]) : space.f;
-      var p = project(m[0], m[1], z);
-      if (i === 0) ring.moveTo(p[0], p[1]); else ring.lineTo(p[0], p[1]);
+      var lon = space.lon[i], lat = space.lat[i];
+      var m = toMetres(lon, lat);
+      var bottom = airspaceFloorAt(space, lon, lat);
+      // Never under its own floor. An AMSL lid over ground that rises past it would
+      // otherwise turn the box inside out — walls crossing, the lid painted below the
+      // floor — where the honest picture is a zone with nothing left of it up there.
+      var top = Math.max(airspaceTopAt(space, lon, lat), bottom);
+      var a = project(m[0], m[1], bottom), b = project(m[0], m[1], top);
+      fx[i] = a[0]; fy[i] = a[1]; tx[i] = b[0]; ty[i] = b[1];
+      if (Math.abs(b[1] - a[1]) > 0.7) flat = false;
+      if (i === 0) { floor.moveTo(a[0], a[1]); lid.moveTo(b[0], b[1]); }
+      else { floor.lineTo(a[0], a[1]); lid.lineTo(b[0], b[1]); }
     }
-    ring.closePath();
-    return ring;
+    floor.closePath();
+    lid.closePath();
+    // Under a pixel of height on screen there is no box to draw, only a ring drawn three
+    // times: at country scale a 300 m okruh is a tenth of a pixel tall. Say so, and the
+    // painter falls back to the flat ring rather than spending three paths on it.
+    if (!flat) {
+      for (var j = 0; j < n; j++) {
+        var k = (j + 1) % n;
+        walls.moveTo(fx[j], fy[j]);
+        walls.lineTo(fx[k], fy[k]);
+        walls.lineTo(tx[k], ty[k]);
+        walls.lineTo(tx[j], ty[j]);
+        walls.closePath();
+      }
+    }
+    return { floor: floor, lid: lid, walls: walls, flat: flat };
   }
 
   function drawAirspaces() {
@@ -1772,15 +1822,35 @@ function initView3d(root, cursorTrack) {
       var space = spaces[i];
       if (airspaceFilter && !airspaceFilter(space)) continue;
       var colour = colours[space.k] || '#888888';
-      var ring = airspaceRing(space);
+      var box = airspaceBox(space);
+      var solid = space.k === 'circuit' ? 0.30 : 0.16;
       ctx.fillStyle = colour;
-      ctx.globalAlpha = space.k === 'circuit' ? 0.30 : 0.16;
-      ctx.fill(ring);
-      ctx.globalAlpha = 0.95;
       ctx.strokeStyle = colour;
+      ctx.globalAlpha = solid;
+      ctx.fill(box.floor);
+      if (!box.flat) {
+        // Walls lighter than the floor: a box seen through its own two near walls is
+        // already twice the ink of the ring it replaces, and the layer has to stay
+        // something you can see the country through.
+        ctx.globalAlpha = solid * 0.55;
+        ctx.fill(box.walls);
+        // The lid filled only where the box is its own ceiling. A capped box gets an
+        // outline and no fill, which is what makes "this goes on up" visible at a glance.
+        if (!space.t) {
+          ctx.globalAlpha = solid * 0.7;
+          ctx.fill(box.lid);
+        }
+        ctx.globalAlpha = 0.55;
+        ctx.lineWidth = 1;
+        ctx.save();
+        if (space.t) ctx.setLineDash([4, 3]);
+        ctx.stroke(box.lid);
+        ctx.restore();
+      }
+      ctx.globalAlpha = 0.95;
       ctx.lineWidth = 1.3;
-      ctx.stroke(ring);
-      airspaceHits.push({ path: ring, space: space });
+      ctx.stroke(box.floor);
+      airspaceHits.push({ box: box, space: space });
     }
     ctx.restore();
   }
@@ -1788,13 +1858,22 @@ function initView3d(root, cursorTrack) {
   // Which airspace is under a client point, or null. The last one drawn wins, because
   // the payload is ordered back to front and the smallest zone — the one a reader is
   // actually pointing at — is on top.
+  //
+  // The whole box answers, not just its floor: with the view tilted, most of what a
+  // reader can see of a zone is its walls and its lid, and a hit test that only knew the
+  // floor made two thirds of the drawn shape unpointable.
   function airspaceAt(clientX, clientY) {
     if (!airspaceHits.length) return null;
     var box = canvas.getBoundingClientRect();
     var x = (clientX - box.left) / box.width * W;
     var y = (clientY - box.top) / box.height * H;
     for (var i = airspaceHits.length - 1; i >= 0; i--) {
-      if (ctx.isPointInPath(airspaceHits[i].path, x, y)) return airspaceHits[i].space;
+      var hit = airspaceHits[i].box;
+      if (ctx.isPointInPath(hit.floor, x, y)
+          || (!hit.flat && (ctx.isPointInPath(hit.lid, x, y)
+                            || ctx.isPointInPath(hit.walls, x, y)))) {
+        return airspaceHits[i].space;
+      }
     }
     return null;
   }

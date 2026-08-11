@@ -1,4 +1,9 @@
-"""The airspace map as a 3D scene: terrain, imagery, and rings at their own floors.
+"""The airspace map as a 3D scene: terrain, imagery, and airspace as boxes.
+
+Each airspace ships as a ring plus the two heights that make it a solid — its floor and
+its lid — because that is the shape of the question. "What is above me?" is answered by
+a volume: a CTR based at 1 000 ft with its top at FL95 and the same outline based at the
+ground are different objects, and flat on a map they are the same red line.
 
 Why this imports from `tracklog_viewer`. The repository's rule is that the two tools
 share a page and not code, and `airspaces/geo.py` exists beside `tracklog_viewer/geo.py`
@@ -21,7 +26,7 @@ produces does not, beyond the tiles it is explicitly told to fetch at view time.
 from __future__ import annotations
 
 from . import basemap as border
-from .render_html import CLASSES, classify, floor_metres
+from .render_html import CLASSES, ceiling_metres, classify, floor_metres, limit_metres
 
 # One grid for the whole country. 320 columns over 6.7 degrees of longitude is about
 # 1.4 km a node, which is coarse for a mountain and about right for a backdrop that
@@ -33,6 +38,23 @@ MAX_NODES = 26000
 # Rings are simplified before they ship: at the zoom this map opens on, a 5 500 m circle
 # is 40 pixels across and its 72 published vertices are 36 of them wasted.
 RING_TOLERANCE_DEG = 0.0015    # about 110 m
+
+# Where a drawn box stops being the airspace's own ceiling and becomes a cap.
+#
+# 21 of the 251 base airspaces run to FL165, FL245 or FL660 — 5, 7.5 and 20 km. Drawn
+# true they are towers a hundred times taller than anything a paraglider meets, and at any
+# zoom close enough to read a CTR they fill the frame and hide it. So the box is capped,
+# the ring says so (`t`), and the label keeps the published ceiling — the number a reader
+# takes away is the text, not the height of a translucent wall.
+#
+# 4 000 m is chosen off the data rather than rounded to taste: it clears FL125 (3 810 m),
+# which is the highest ceiling in the file that is not one of those 21, so every airspace
+# this map exists for is drawn true. It is also above the highest floor here (FL75,
+# 2 286 m), so no box is capped below its own floor.
+DRAWN_TOP = 4000.0
+
+# A capped or zero-height box still has to be visible as a box.
+MIN_BOX_M = 150.0
 
 
 def bounds(airspaces, margin: float = 0.12):
@@ -75,6 +97,42 @@ def _is_ground(airspace) -> bool:
     return floor_metres(airspace) <= 0
 
 
+def _box(airspace) -> dict:
+    """The vertical half of a ring: where its floor and its lid go.
+
+    Three shapes, because that is what the sources publish. An altitude is a number the
+    box sits at; `GND` is the terrain itself; and anything AGL is the terrain plus a
+    height, which has to stay a *height* all the way into the renderer — flattened to
+    AMSL at build time, a `1000 AGL` lid lands at 305 m, under the ground it belongs to
+    everywhere but the lowlands.
+    """
+    out: dict = {}
+    floor = floor_metres(airspace)
+    ground = _is_ground(airspace)
+    out["f"] = round(floor)
+    out["g"] = ground
+    above, floor_agl = limit_metres(airspace.floor)
+    if not ground and floor_agl and above:
+        out["fu"] = round(above)
+
+    ceiling, ceiling_agl = ceiling_metres(airspace)
+    if ceiling is not None and ceiling_agl:
+        # An AGL lid over an AGL or ground floor: both follow the terrain, so the box has
+        # a constant thickness and never needs a cap.
+        out["cu"] = round(max(ceiling, (out.get("fu") or 0) + MIN_BOX_M))
+        return out
+    if ceiling is None or ceiling > DRAWN_TOP:
+        # An unlimited ceiling is capped for the same reason FL660 is, and marked the
+        # same way: the drawn top is this tool's, not the airspace's.
+        out["t"] = True
+        top = DRAWN_TOP
+    else:
+        top = ceiling
+    # Only meaningful against an altitude floor; over the ground the terrain decides.
+    out["c"] = round(max(top, (0 if ground else floor) + MIN_BOX_M))
+    return out
+
+
 def rings(airspaces) -> list[dict]:
     """Every airspace as a ring the view can draw, ordered back to front.
 
@@ -94,9 +152,9 @@ def rings(airspaces) -> list[dict]:
             "k": classify(airspace),
             "n": label,
             # Metres AMSL, and the number the floor filter compares against, so the
-            # slider and the drawing height can never disagree.
-            "f": round(floor_metres(airspace)),
-            "g": _is_ground(airspace),
+            # slider and the drawing height can never disagree. `_box` adds the rest of
+            # the vertical: the lid, and whether either end follows the terrain.
+            **_box(airspace),
             "lon": [round(lon, 4) for _, lon in points],
             "lat": [round(lat, 4) for lat, _ in points],
         }

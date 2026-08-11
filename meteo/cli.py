@@ -57,12 +57,14 @@ def main(argv=None) -> int:
     parser.add_argument("--refresh-sites", action="store_true",
                         help="re-fetch the takeoff list from ParaglidingEarth and "
                              "rewrite meteo/sites.py")
+    parser.add_argument("--refresh-flymet", action="store_true",
+                        help="re-read flymet's station map and rewrite meteo/flymet.py")
     parser.add_argument("--country", default="CZ",
                         help="ISO country code for --refresh-sites (default CZ)")
     args = parser.parse_args(argv)
 
-    if not (args.html or args.refresh_sites):
-        parser.error("nothing to do: pass --html or --refresh-sites")
+    if not (args.html or args.refresh_sites or args.refresh_flymet):
+        parser.error("nothing to do: pass --html, --refresh-sites or --refresh-flymet")
 
     if args.refresh_sites:
         fetched = sources.fetch(args.country)
@@ -70,6 +72,23 @@ def main(argv=None) -> int:
         sources.write(target, fetched, iso=args.country)
         with_rose = sum(1 for site in fetched if site["winds"])
         print(f"{target}: {len(fetched)} takeoffs, {with_rose} with a wind rose")
+
+    if args.refresh_flymet:
+        from . import flymet
+
+        stations, worst, scale = sources.fetch_flymet()
+        # Refused rather than written. The stations carry no coordinates of their own —
+        # they are solved from where flymet draws them — so a redrawn map would quietly
+        # move every one of them, and a page that hands a takeoff the wrong airfield's
+        # meteogram looks exactly like a page that works.
+        if worst > sources.FLYMET_TOLERANCE_M:
+            parser.exit(1, f"the station map no longer fits: {worst:.0f} m at the worst "
+                           f"anchor, against a {sources.FLYMET_TOLERANCE_M:.0f} m limit. "
+                           "Check meteo/sources.py FLYMET_ANCHORS against the map.\n")
+        target = Path(flymet.__file__)
+        sources.write_flymet(target, stations, worst, scale)
+        print(f"{target}: {len(stations)} stations, worst anchor {worst:.0f} m "
+              f"at {scale:.0f} m a pixel")
 
     if args.html:
         args.html.parent.mkdir(parents=True, exist_ok=True)

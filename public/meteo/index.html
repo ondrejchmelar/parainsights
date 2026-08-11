@@ -63,6 +63,13 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
 .met-figures .k { font-size:10.5px; text-transform:uppercase; letter-spacing:.07em;
   color:var(--ink-3); }
 .met-figures .v { font-variant-numeric:tabular-nums; font-size:15px; }
+.met-flymet { margin:16px 0 0; }
+/* Its own width, not the panel's: the meteogram is 1024 px of small type and axis
+   labels, and stretched past that it is a blurred picture of a chart. */
+.met-flymet img { display:block; width:100%; max-width:1024px; border-radius:3px;
+  background:var(--panel); }
+.met-flymet figcaption { font-size:11.5px; color:var(--ink-3); margin:5px 0 0; }
+.met-flymet a { color:inherit; }
 .met-status { color:var(--ink-3); font-size:13px; margin:10px 0 0; }
 .met-links { margin:14px 0 0; font-size:12.5px; color:var(--ink-3); }
 .met-legend { font-size:11.5px; color:var(--ink-3); margin:6px 0 0; }
@@ -82,9 +89,10 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
 <article class="flight meteo-article" id="meteo-article">
   <h1>Will it fly?</h1>
   <p class="lede">The day's forecast against 159 Czech takeoffs, sorted
-  by how the wind sits on each one. Pick a site for its sounding and its hour-by-hour
-  meteogram. The numbers are fetched when you open this page, so they are as current as
-  the model is — and there are none at all without a network.</p>
+  by how the wind sits on each one. Pick a site for its sounding, its hour-by-hour
+  meteogram, and flymet's own meteogram for the airfield nearest it. The numbers are
+  fetched when you open this page, so they are as current as the model is — and there are
+  none at all without a network.</p>
   <div class="met-head">
     <div class="met-days" id="met-days" role="group" aria-label="Which day"></div>
     <span class="met-status" id="met-status">Fetching the forecast…</span>
@@ -104,7 +112,12 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
         <div>
           <canvas class="met-canvas" id="met-sounding" width="380" height="300"></canvas>
           <p class="met-legend">Sounding at the chosen hour: temperature solid, dew point
-            dashed, the dry adiabat from the surface faint.</p>
+            dashed, the dry adiabat from the surface faint. The dotted blue line is the
+            estimated cloudbase; a shaded band is a layer the thermals stop at
+            (<em>zadržná vrstva</em> — under 2 °C/km, red where the air warms
+            with height), read between the model's pressure levels and so no finer than
+            they are. Point at it — or drag a finger up it — for the numbers at that
+            height.</p>
         </div>
       </div>
       <div class="met-hour">
@@ -113,17 +126,22 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
         <span id="met-hour-readout" style="min-width:3.5em">14:00</span>
       </div>
       <div class="met-figures" id="met-figures"></div>
+      <figure class="met-flymet" id="met-flymet" hidden>
+        <img id="met-flymet-img" alt="flymet meteogram" loading="lazy">
+        <figcaption id="met-flymet-cap"></figcaption>
+      </figure>
       <p class="met-links" id="met-links"></p>
     </div>
   </div>
   <p class="met-links">Forecast from <a href="https://open-meteo.com/"
     rel="noreferrer">Open-Meteo</a> (GFS/ICON), fetched in this page.
     Takeoffs from ParaglidingEarth, CC BY-SA, list taken 2026-08-10.
-    Glider-style meteograms for the airfields are at <a
-    href="http://flymet.meteopress.cz/meteogram/" rel="noreferrer">flymet</a>.
+    Meteograms by FLYMET, Meteopress, loaded from <a
+    href="https://flymet.meteopress.cz/meteogram/" rel="noreferrer">flymet</a> when you open a takeoff —
+    186 stations, matched to the nearest takeoff here.
     <strong>A forecast is not a decision.</strong> Check the airspace, the NOTAMs and the
     sky before you fly.</p>
-  <script type="application/json" class="met-data">{"sites":[{"name":"Adolfovice","lat":50.1971,"lon":17.2049,"alt":536,"winds":[0,0,0,0,0,0,2,1],"id":22451},{"name":"Bazantnice","lat":49.6086,"lon":15.0773,"alt":494,"winds":[2,2,2,2,2,0,0,0],"id":11370},{"name":"Beroun","lat":49.9708,"lon":14.0567,"alt":395,"winds":[0,0,0,2,0,0,0,0],"id":16961},{"name":"Besiny","lat":49.3002,"lon":13.2986,"alt":596,"winds":[],"id":16663},{"name":"Bitov","lat":49.9361,"lon":14.0641,"alt":444,"winds":[0,0,0,0,2,0,0,0],"id":16962},{"name":"Blov","lat":50.3352,"lon":13.291,"alt":480,"winds":[0,0,1,2,1,0,0,0],"id":19486},{"name":"Bohdalov","lat":49.4962,"lon":15.8536,"alt":613,"winds":[],"id":13018},{"name":"Bohdankov","lat":50.6789,"lon":15.0554,"alt":410,"winds":[0,0,0,1,2,1,0,0],"id":10107},{"name":"Bournak","lat":50.6868,"lon":13.7117,"alt":771,"winds":[0,2,0,0,0,0,0,0],"id":12205},{"name":"Brna","lat":50.6356,"lon":14.074,"alt":454,"winds":[0,0,0,0,2,0,0,0],"id":16956},{"name":"Bukov\u00e1 hora","lat":50.0075,"lon":16.7092,"alt":926,"winds":[],"id":23356},{"name":"Bykovice B1","lat":49.427,"lon":16.5504,"alt":377,"winds":[2,1,0,0,0,0,0,1],"id":14838},{"name":"Bykovice B2","lat":49.4342,"lon":16.5414,"alt":399,"winds":[0,1,2,1,0,0,0,0],"id":14861},{"name":"Cerna Hora","lat":50.6496,"lon":15.74,"alt":1254,"winds":[0,0,0,1,2,1,0,0],"id":7188},{"name":"Cerny vrch","lat":50.3617,"lon":13.1703,"alt":598,"winds":[2,0,0,0,0,0,0,2],"id":15991},{"name":"Certak","lat":50.6197,"lon":14.0541,"alt":412,"winds":[2,0,0,0,0,0,0,0],"id":14509},{"name":"Certova Hora","lat":50.7615,"lon":15.429,"alt":1014,"winds":[0,2,2,0,0,0,0,0],"id":7189},{"name":"Chlum [Byst\u0159ice podHost\u00fdnem]","lat":49.3791,"lon":17.6582,"alt":413,"winds":[0,0,0,0,2,2,0,0],"id":21875},{"name":"C\u00edtov","lat":50.3926,"lon":14.3893,"alt":233,"winds":[],"id":21858},{"name":"Damn\u00edkov SE","lat":49.8775,"lon":16.5231,"alt":522,"winds":[],"id":23358},{"name":"Dlouhy Vrch","lat":50.5894,"lon":14.1528,"alt":636,"winds":[0,0,2,0,0,0,0,0],"id":6759},{"name":"Dlouhy vrch","lat":50.1052,"lon":13.1383,"alt":696,"winds":[0,2,0,0,0,0,0,0],"id":16958},{"name":"Dobrichovice","lat":49.9422,"lon":14.2704,"alt":324,"winds":[0,0,0,2,0,0,0,0],"id":16964},{"name":"Dolnai Lhota","lat":49.1563,"lon":17.8109,"alt":432,"winds":[2,1,0,1,2,1,0,1],"id":10292},{"name":"Dolni Zalezly","lat":50.6071,"lon":14.0359,"alt":436,"winds":[0,0,0,2,2,2,0,0],"id":12334},{"name":"Doln\u00ed Morava - Z\u00e1pad","lat":50.1498,"lon":16.8284,"alt":1074,"winds":[0,0,0,0,0,1,2,0],"id":16013},{"name":"Doubrava","lat":49.4328,"lon":13.2028,"alt":715,"winds":[0,0,0,0,0,0,2,0],"id":12436},{"name":"Doubravice","lat":49.7224,"lon":16.7336,"alt":460,"winds":[2,0,0,0,0,0,1,1],"id":23724},{"name":"Dubicak","lat":48.9784,"lon":14.5402,"alt":533,"winds":[0,0,0,0,0,0,0,2],"id":19802},{"name":"dul Tuchlovice","lat":50.1236,"lon":13.9933,"alt":483,"winds":[0,1,2,2,0,1,2,1],"id":22314},{"name":"D\u011bv\u00edn","lat":48.8674,"lon":16.6523,"alt":504,"winds":[0,0,2,2,0,0,0,0],"id":22931},{"name":"D\u011b\u010d\u00edn - Priper","lat":50.7891,"lon":14.2122,"alt":304,"winds":[0,0,0,2,0,0,0,0],"id":22323},{"name":"Hartmanice","lat":49.1645,"lon":13.4564,"alt":770,"winds":[0,2,0,0,0,0,0,0],"id":14881},{"name":"Havrani skala","lat":50.5923,"lon":14.0851,"alt":495,"winds":[0,0,0,0,1,2,1,0],"id":10110},{"name":"Hazmburk","lat":50.4341,"lon":14.0147,"alt":395,"winds":[0,0,0,0,0,2,0,0],"id":10104},{"name":"Hodkovice","lat":50.6636,"lon":15.0777,"alt":438,"winds":[0,0,0,0,0,1,2,1],"id":10106},{"name":"Homole","lat":50.6249,"lon":13.9999,"alt":339,"winds":[0,0,0,0,0,2,0,0],"id":13984},{"name":"Hostovice","lat":50.6449,"lon":14.0122,"alt":245,"winds":[0,0,0,0,0,0,0,2],"id":15998},{"name":"Hudlice","lat":49.966,"lon":14.0001,"alt":384,"winds":[0,0,0,0,2,0,0,0],"id":16965},{"name":"Jablonov","lat":49.3184,"lon":16.0707,"alt":474,"winds":[],"id":14011},{"name":"Jakubovice","lat":49.9992,"lon":16.8199,"alt":644,"winds":[0,0,0,2,1,0,0,0],"id":21874},{"name":"Jansky vrh","lat":50.3262,"lon":17.0718,"alt":412,"winds":[0,2,2,2,1,0,0,0],"id":22447},{"name":"Javorn\u00edk","lat":50.3953,"lon":16.996,"alt":341,"winds":[],"id":22449},{"name":"Javorovy","lat":49.6288,"lon":18.6273,"alt":915,"winds":[2,2,1,0,0,0,1,2],"id":7194},{"name":"Jelenovska","lat":49.1215,"lon":17.9939,"alt":636,"winds":[1,0,0,0,0,0,1,2],"id":10279},{"name":"Jested","lat":50.7287,"lon":14.9965,"alt":874,"winds":[0,2,0,0,0,0,0,0],"id":10105},{"name":"Jilove","lat":50.7539,"lon":14.1043,"alt":412,"winds":[0,2,0,0,0,0,0,0],"id":16957},{"name":"Kadanska Jesen","lat":50.3386,"lon":13.2634,"alt":569,"winds":[2,0,0,0,0,0,0,0],"id":15995},{"name":"Kalovy","lat":49.2333,"lon":13.5455,"alt":708,"winds":[0,0,0,0,0,0,0,2],"id":13754},{"name":"Kamen","lat":49.4182,"lon":15.013,"alt":589,"winds":[0,2,2,2,0,2,2,2],"id":6689},{"name":"Kamenec","lat":50.0794,"lon":17.1381,"alt":1191,"winds":[0,0,0,0,0,1,2,1],"id":10065},{"name":"Kameni\u010dka","lat":50.4229,"lon":16.929,"alt":470,"winds":[0,2,1,0,0,0,0,0],"id":22448},{"name":"Kamen\u00e1\u010d ZJZ, Z, SZ","lat":50.0544,"lon":16.7637,"alt":677,"winds":[0,0,0,0,0,2,1,2],"id":10199},{"name":"Kapucin","lat":50.5745,"lon":13.5183,"alt":548,"winds":[0,0,0,2,0,0,0,0],"id":22225},{"name":"Keblice","lat":50.4706,"lon":14.1133,"alt":200,"winds":[0,1,0,0,0,0,0,0],"id":21921},{"name":"Klenovec","lat":50.4863,"lon":13.3264,"alt":738,"winds":[0,0,0,0,2,2,2,0],"id":16000},{"name":"Klinovec","lat":50.3976,"lon":12.9687,"alt":1236,"winds":[0,2,1,0,0,0,0,0],"id":11814},{"name":"Kobylice","lat":50.2578,"lon":15.5553,"alt":236,"winds":[],"id":16183},{"name":"Kobylsk\u00e1 sk\u00e1la","lat":48.9408,"lon":16.9114,"alt":242,"winds":[2,1,0,0,0,0,0,1],"id":22961},{"name":"Koterov","lat":49.7217,"lon":13.4351,"alt":380,"winds":[0,0,0,0,0,0,2,0],"id":16003},{"name":"Koukolova hora","lat":49.9181,"lon":14.0085,"alt":350,"winds":[0,0,0,0,0,0,0,2],"id":16960},{"name":"Kozakov","lat":50.5933,"lon":15.2632,"alt":737,"winds":[0,0,0,1,2,2,2,1],"id":7197},{"name":"Kralovecky Spicak","lat":50.6575,"lon":15.9885,"alt":869,"winds":[0,0,0,0,0,2,2,0],"id":10911},{"name":"Krasne Brezno","lat":50.6788,"lon":14.0684,"alt":407,"winds":[0,0,0,0,2,0,0,0],"id":13985},{"name":"Krupka","lat":50.6964,"lon":13.8769,"alt":644,"winds":[0,0,0,1,2,1,0,0],"id":6737},{"name":"Ledcice - Jevineves","lat":50.3381,"lon":14.3228,"alt":264,"winds":[0,0,2,2,0,0,0,0],"id":7191},{"name":"Letovice","lat":49.5927,"lon":16.5283,"alt":495,"winds":[0,0,2,0,0,0,0,0],"id":16012},{"name":"Lhotka","lat":49.605,"lon":18.2944,"alt":497,"winds":[],"id":11578},{"name":"Lovos","lat":50.5277,"lon":14.018,"alt":544,"winds":[0,0,0,1,2,1,0,0],"id":10109},{"name":"Luzn\u00fd S, SSV, SSZ","lat":50.0447,"lon":16.7618,"alt":714,"winds":[2,0,0,0,0,0,0,1],"id":21873},{"name":"Lysa hora","lat":50.7537,"lon":15.5006,"alt":1244,"winds":[0,0,0,0,0,2,0,0],"id":6731},{"name":"Lysa hora NW","lat":49.5471,"lon":18.4478,"alt":1273,"winds":[0,0,0,0,0,0,0,2],"id":19479},{"name":"Lysa hora SW","lat":49.544,"lon":18.4468,"alt":1261,"winds":[0,0,0,0,0,2,0,0],"id":19480},{"name":"Lysice","lat":49.4451,"lon":16.5351,"alt":455,"winds":[0,0,2,0,0,0,0,0],"id":16014},{"name":"Maly Pecin","lat":49.1053,"lon":15.4712,"alt":508,"winds":[],"id":13595},{"name":"Mesit","lat":48.9337,"lon":17.7669,"alt":728,"winds":[0,0,0,0,0,2,2,1],"id":10281},{"name":"Mikulcak","lat":48.9399,"lon":17.8267,"alt":778,"winds":[0,0,0,1,2,1,0,0],"id":10272},{"name":"Misecky - SE","lat":50.741,"lon":15.5829,"alt":1226,"winds":[0,0,0,2,0,0,0,0],"id":16009},{"name":"Misecky - SW","lat":50.7397,"lon":15.5782,"alt":1203,"winds":[0,0,0,0,0,2,0,0],"id":14720},{"name":"Mokropsy","lat":49.9381,"lon":14.3353,"alt":311,"winds":[1,0,0,0,0,0,1,2],"id":7195},{"name":"Mracna","lat":50.1824,"lon":17.0838,"alt":1099,"winds":[0,0,0,0,0,0,1,0],"id":22453},{"name":"Muronak","lat":50.3167,"lon":17.1786,"alt":355,"winds":[0,0,2,2,0,0,0,0],"id":10727},{"name":"Mustek","lat":49.1961,"lon":13.2297,"alt":891,"winds":[],"id":15497},{"name":"Nechranice","lat":50.3456,"lon":13.4159,"alt":278,"winds":[1,1,2,2,2,2,1,1],"id":19313},{"name":"Nechranice - dam","lat":50.3512,"lon":13.4186,"alt":243,"winds":[0,0,2,0,0,0,0,0],"id":19404},{"name":"Nemcany","lat":49.1562,"lon":16.9249,"alt":278,"winds":[1,0,0,0,0,0,1,2],"id":14862},{"name":"Nove Mesto nad Metuji","lat":50.364,"lon":16.1135,"alt":300,"winds":[],"id":13017},{"name":"Oblik","lat":50.4107,"lon":13.8068,"alt":478,"winds":[0,0,0,2,2,2,1,0],"id":16955},{"name":"Obrvan","lat":49.7078,"lon":15.2531,"alt":474,"winds":[0,0,0,0,0,2,0,0],"id":21914},{"name":"Ochmelov","lat":49.32,"lon":18.0963,"alt":604,"winds":[],"id":14721},{"name":"Omlenicka","lat":48.7461,"lon":14.437,"alt":765,"winds":[0,0,0,2,0,0,0,0],"id":16005},{"name":"Orlik","lat":49.6065,"lon":14.1989,"alt":481,"winds":[0,2,0,0,0,0,0,0],"id":16966},{"name":"Ostplatz","lat":49.1717,"lon":13.1765,"alt":1333,"winds":[0,0,0,0,0,2,0,0],"id":12093},{"name":"Ov\u010d\u00edn","lat":50.0146,"lon":16.5223,"alt":478,"winds":[],"id":23355},{"name":"Penensky Tynec","lat":50.305,"lon":13.9268,"alt":363,"winds":[0,1,2,1,0,1,2,1],"id":11815},{"name":"Perstejn","lat":50.3838,"lon":13.1174,"alt":537,"winds":[0,0,0,0,1,2,0,0],"id":15993},{"name":"Pesvice","lat":50.4689,"lon":13.4685,"alt":340,"winds":[0,2,0,2,0,2,0,2],"id":15996},{"name":"Plane","lat":50.7101,"lon":15.6174,"alt":1138,"winds":[0,0,0,0,0,0,0,2],"id":15301},{"name":"Podho\u00c5\u2122any","lat":49.9454,"lon":15.5361,"alt":345,"winds":[0,0,0,0,1,2,1,0],"id":15462},{"name":"Policka","lat":49.7408,"lon":16.2665,"alt":569,"winds":[],"id":6644},{"name":"Prackovice","lat":50.5703,"lon":14.0135,"alt":440,"winds":[0,0,2,0,0,0,0,0],"id":16954},{"name":"Prasiva","lat":49.6368,"lon":18.4814,"alt":688,"winds":[0,0,0,0,0,1,2,0],"id":10762},{"name":"Prerovska Hurka","lat":50.1639,"lon":14.8417,"alt":233,"winds":[0,0,0,2,2,2,0,0],"id":7196},{"name":"Pribyslav","lat":49.5822,"lon":15.7642,"alt":529,"winds":[],"id":10761},{"name":"Radhost","lat":49.4896,"lon":18.2245,"alt":1117,"winds":[0,0,0,1,2,1,0,0],"id":10039},{"name":"Radobyl","lat":50.5303,"lon":14.0932,"alt":399,"winds":[0,0,0,2,2,2,0,0],"id":10912},{"name":"Rana","lat":50.4075,"lon":13.7715,"alt":426,"winds":[2,0,0,2,2,0,0,2],"id":10099},{"name":"Rasovka","lat":50.708,"lon":15.0176,"alt":820,"winds":[0,0,0,1,2,1,0,0],"id":10108},{"name":"Revnicov","lat":50.1864,"lon":13.7912,"alt":499,"winds":[0,0,0,0,0,2,0,0],"id":15302},{"name":"Rip","lat":50.3853,"lon":14.2908,"alt":417,"winds":[0,0,2,2,0,0,0,0],"id":7190},{"name":"Serak","lat":50.187,"lon":17.1086,"alt":1331,"winds":[0,2,2,0,0,1,1,0],"id":10726},{"name":"Serak-Mracna","lat":50.1839,"lon":17.0904,"alt":1234,"winds":[0,0,0,0,0,1,1,0],"id":22452},{"name":"Skalka","lat":49.5541,"lon":18.2993,"alt":927,"winds":[0,0,0,0,1,2,1,0],"id":7198},{"name":"Slamn\u00edk","lat":50.1544,"lon":16.8377,"alt":1228,"winds":[0,0,0,1,2,1,0,0],"id":21878},{"name":"Slavicin","lat":49.08,"lon":17.8676,"alt":421,"winds":[1,1,1,2,1,1,1,2],"id":10311},{"name":"Smilov","lat":50.378,"lon":13.0898,"alt":600,"winds":[0,0,0,2,0,0,0,0],"id":16015},{"name":"Solany","lat":50.4504,"lon":13.9272,"alt":226,"winds":[0,0,0,2,0,0,0,2],"id":15142},{"name":"Spicak","lat":49.1718,"lon":13.2108,"alt":1174,"winds":[0,0,0,2,0,0,0,0],"id":16001},{"name":"Spirutka","lat":49.5776,"lon":17.6248,"alt":365,"winds":[0,0,0,0,1,2,1,0],"id":10420},{"name":"Srn\u00ed","lat":50.3721,"lon":13.0519,"alt":762,"winds":[0,0,2,0,0,0,0,0],"id":14883},{"name":"Stankovka","lat":49.97,"lon":14.3233,"alt":370,"winds":[0,0,1,2,1,0,0,0],"id":10103},{"name":"Stara Vozice","lat":49.4922,"lon":14.7771,"alt":510,"winds":[2,2,0,2,2,2,0,2],"id":15141},{"name":"Stitna nad Vlari","lat":49.06,"lon":17.9689,"alt":479,"winds":[2,2,1,0,0,0,1,2],"id":10278},{"name":"Stolova Hora","lat":48.8403,"lon":16.6356,"alt":433,"winds":[0,0,0,0,0,2,1,0],"id":14675},{"name":"Stranna","lat":50.3672,"lon":13.4689,"alt":309,"winds":[0,0,0,0,0,2,0,0],"id":21913},{"name":"Stremosice","lat":49.8863,"lon":16.082,"alt":446,"winds":[0,0,0,0,0,2,0,0],"id":19487},{"name":"Strizovice","lat":50.6845,"lon":13.9831,"alt":308,"winds":[1,2,0,0,0,0,0,0],"id":15997},{"name":"Stropnik","lat":50.6447,"lon":13.6811,"alt":835,"winds":[0,0,0,2,0,0,0,0],"id":11834},{"name":"Str\u00e1\u017eovice","lat":49.014,"lon":17.0592,"alt":392,"winds":[0,0,0,1,2,0,0,0],"id":22962},{"name":"Studenov","lat":50.7466,"lon":15.4399,"alt":932,"winds":[0,0,0,2,0,0,0,0],"id":16010},{"name":"Suchomasty","lat":49.901,"lon":14.0617,"alt":388,"winds":[0,0,0,0,0,2,0,0],"id":16963},{"name":"Susina","lat":50.1626,"lon":16.8729,"alt":679,"winds":[0,1,2,1,0,0,0,0],"id":10332},{"name":"Svatobor","lat":49.2357,"lon":13.4883,"alt":836,"winds":[0,2,0,0,0,0,0,0],"id":16002},{"name":"Svihov","lat":49.4934,"lon":13.2667,"alt":481,"winds":[0,1,2,1,0,0,0,0],"id":10872},{"name":"Tachov","lat":49.7982,"lon":12.7058,"alt":488,"winds":[],"id":14984},{"name":"Trabice","lat":50.5781,"lon":14.0642,"alt":378,"winds":[0,0,0,0,0,2,0,0],"id":16051},{"name":"Trebounak","lat":50.0135,"lon":13.0027,"alt":809,"winds":[0,0,0,2,0,0,0,0],"id":15999},{"name":"Uhost","lat":50.3649,"lon":13.239,"alt":538,"winds":[2,1,0,0,0,0,1,1],"id":19405},{"name":"Uhrinov","lat":49.5776,"lon":17.6645,"alt":426,"winds":[0,0,0,1,2,1,0,0],"id":21876},{"name":"Valchov","lat":49.463,"lon":16.7202,"alt":583,"winds":[1,2,0,0,0,0,0,0],"id":21877},{"name":"Velky Javornik","lat":49.5278,"lon":18.1614,"alt":910,"winds":[1,2,2,0,1,0,0,0],"id":10038},{"name":"Vendryne","lat":49.6664,"lon":18.7042,"alt":350,"winds":[],"id":11577},{"name":"Vir","lat":49.5862,"lon":16.3258,"alt":670,"winds":[0,0,0,0,2,0,0,0],"id":14824},{"name":"Vitovka","lat":49.6803,"lon":17.8448,"alt":365,"winds":[0,0,0,1,2,2,0,0],"id":10280},{"name":"Vlachovice","lat":49.121,"lon":17.9345,"alt":384,"winds":[1,2,2,1,0,0,0,0],"id":10368},{"name":"Vl\u010dice","lat":50.3457,"lon":17.0321,"alt":446,"winds":[0,1,2,0,0,0,0,0],"id":22450},{"name":"Vl\u010dovice","lat":49.5915,"lon":18.1713,"alt":381,"winds":[2,2,0,0,0,0,0,0],"id":22673},{"name":"Vrbice NNE kontrolovat NOTAM","lat":50.0921,"lon":16.2619,"alt":415,"winds":[],"id":23531},{"name":"Vrhavec","lat":49.3447,"lon":13.2835,"alt":544,"winds":[],"id":14965},{"name":"Vsechov","lat":49.4379,"lon":14.6222,"alt":489,"winds":[1,1,1,2,1,1,1,2],"id":10333},{"name":"Vsetaty","lat":50.2711,"lon":14.6117,"alt":211,"winds":[0,0,0,0,1,2,0,0],"id":7193},{"name":"V\u011btrn\u00edk","lat":49.1977,"lon":16.9772,"alt":361,"winds":[0,0,0,0,2,2,0,0],"id":21871},{"name":"Zadni Treban","lat":49.9162,"lon":14.1903,"alt":308,"winds":[2,0,0,0,0,0,0,0],"id":16959},{"name":"Zasada","lat":50.7047,"lon":15.2644,"alt":674,"winds":[0,0,0,2,0,0,0,0],"id":16008},{"name":"zdounky-ol\u0161ina","lat":49.2488,"lon":17.3372,"alt":258,"winds":[0,0,0,1,2,2,0,0],"id":21872},{"name":"Zlatnik","lat":50.5144,"lon":13.7152,"alt":446,"winds":[0,0,0,0,2,2,1,0],"id":6643},{"name":"Zvicina - E","lat":50.4536,"lon":15.6983,"alt":651,"winds":[0,0,2,0,0,0,0,0],"id":16011},{"name":"Zvicina - NE","lat":50.4572,"lon":15.6943,"alt":632,"winds":[2,2,2,0,0,0,0,0],"id":7192},{"name":"\u010cernov\u00edr ZSZ","lat":49.9794,"lon":16.4394,"alt":433,"winds":[],"id":23690}],"octants":["N","NE","E","SE","S","SW","W","NW"],"levels":[1000,975,950,925,900,850,800,700,600,500],"endpoint":"https://api.open-meteo.com/v1/forecast","attribution":"Takeoffs from ParaglidingEarth, CC BY-SA","fetched":"2026-08-10"}</script>
+  <script type="application/json" class="met-data">{"sites":[{"name":"Adolfovice","lat":50.1971,"lon":17.2049,"alt":536,"winds":[0,0,0,0,0,0,2,1],"id":22451},{"name":"Bazantnice","lat":49.6086,"lon":15.0773,"alt":494,"winds":[2,2,2,2,2,0,0,0],"id":11370},{"name":"Beroun","lat":49.9708,"lon":14.0567,"alt":395,"winds":[0,0,0,2,0,0,0,0],"id":16961},{"name":"Besiny","lat":49.3002,"lon":13.2986,"alt":596,"winds":[],"id":16663},{"name":"Bitov","lat":49.9361,"lon":14.0641,"alt":444,"winds":[0,0,0,0,2,0,0,0],"id":16962},{"name":"Blov","lat":50.3352,"lon":13.291,"alt":480,"winds":[0,0,1,2,1,0,0,0],"id":19486},{"name":"Bohdalov","lat":49.4962,"lon":15.8536,"alt":613,"winds":[],"id":13018},{"name":"Bohdankov","lat":50.6789,"lon":15.0554,"alt":410,"winds":[0,0,0,1,2,1,0,0],"id":10107},{"name":"Bournak","lat":50.6868,"lon":13.7117,"alt":771,"winds":[0,2,0,0,0,0,0,0],"id":12205},{"name":"Brna","lat":50.6356,"lon":14.074,"alt":454,"winds":[0,0,0,0,2,0,0,0],"id":16956},{"name":"Bukov\u00e1 hora","lat":50.0075,"lon":16.7092,"alt":926,"winds":[],"id":23356},{"name":"Bykovice B1","lat":49.427,"lon":16.5504,"alt":377,"winds":[2,1,0,0,0,0,0,1],"id":14838},{"name":"Bykovice B2","lat":49.4342,"lon":16.5414,"alt":399,"winds":[0,1,2,1,0,0,0,0],"id":14861},{"name":"Cerna Hora","lat":50.6496,"lon":15.74,"alt":1254,"winds":[0,0,0,1,2,1,0,0],"id":7188},{"name":"Cerny vrch","lat":50.3617,"lon":13.1703,"alt":598,"winds":[2,0,0,0,0,0,0,2],"id":15991},{"name":"Certak","lat":50.6197,"lon":14.0541,"alt":412,"winds":[2,0,0,0,0,0,0,0],"id":14509},{"name":"Certova Hora","lat":50.7615,"lon":15.429,"alt":1014,"winds":[0,2,2,0,0,0,0,0],"id":7189},{"name":"Chlum [Byst\u0159ice podHost\u00fdnem]","lat":49.3791,"lon":17.6582,"alt":413,"winds":[0,0,0,0,2,2,0,0],"id":21875},{"name":"C\u00edtov","lat":50.3926,"lon":14.3893,"alt":233,"winds":[],"id":21858},{"name":"Damn\u00edkov SE","lat":49.8775,"lon":16.5231,"alt":522,"winds":[],"id":23358},{"name":"Dlouhy Vrch","lat":50.5894,"lon":14.1528,"alt":636,"winds":[0,0,2,0,0,0,0,0],"id":6759},{"name":"Dlouhy vrch","lat":50.1052,"lon":13.1383,"alt":696,"winds":[0,2,0,0,0,0,0,0],"id":16958},{"name":"Dobrichovice","lat":49.9422,"lon":14.2704,"alt":324,"winds":[0,0,0,2,0,0,0,0],"id":16964},{"name":"Dolnai Lhota","lat":49.1563,"lon":17.8109,"alt":432,"winds":[2,1,0,1,2,1,0,1],"id":10292},{"name":"Dolni Zalezly","lat":50.6071,"lon":14.0359,"alt":436,"winds":[0,0,0,2,2,2,0,0],"id":12334},{"name":"Doln\u00ed Morava - Z\u00e1pad","lat":50.1498,"lon":16.8284,"alt":1074,"winds":[0,0,0,0,0,1,2,0],"id":16013},{"name":"Doubrava","lat":49.4328,"lon":13.2028,"alt":715,"winds":[0,0,0,0,0,0,2,0],"id":12436},{"name":"Doubravice","lat":49.7224,"lon":16.7336,"alt":460,"winds":[2,0,0,0,0,0,1,1],"id":23724},{"name":"Dubicak","lat":48.9784,"lon":14.5402,"alt":533,"winds":[0,0,0,0,0,0,0,2],"id":19802},{"name":"dul Tuchlovice","lat":50.1236,"lon":13.9933,"alt":483,"winds":[0,1,2,2,0,1,2,1],"id":22314},{"name":"D\u011bv\u00edn","lat":48.8674,"lon":16.6523,"alt":504,"winds":[0,0,2,2,0,0,0,0],"id":22931},{"name":"D\u011b\u010d\u00edn - Priper","lat":50.7891,"lon":14.2122,"alt":304,"winds":[0,0,0,2,0,0,0,0],"id":22323},{"name":"Hartmanice","lat":49.1645,"lon":13.4564,"alt":770,"winds":[0,2,0,0,0,0,0,0],"id":14881},{"name":"Havrani skala","lat":50.5923,"lon":14.0851,"alt":495,"winds":[0,0,0,0,1,2,1,0],"id":10110},{"name":"Hazmburk","lat":50.4341,"lon":14.0147,"alt":395,"winds":[0,0,0,0,0,2,0,0],"id":10104},{"name":"Hodkovice","lat":50.6636,"lon":15.0777,"alt":438,"winds":[0,0,0,0,0,1,2,1],"id":10106},{"name":"Homole","lat":50.6249,"lon":13.9999,"alt":339,"winds":[0,0,0,0,0,2,0,0],"id":13984},{"name":"Hostovice","lat":50.6449,"lon":14.0122,"alt":245,"winds":[0,0,0,0,0,0,0,2],"id":15998},{"name":"Hudlice","lat":49.966,"lon":14.0001,"alt":384,"winds":[0,0,0,0,2,0,0,0],"id":16965},{"name":"Jablonov","lat":49.3184,"lon":16.0707,"alt":474,"winds":[],"id":14011},{"name":"Jakubovice","lat":49.9992,"lon":16.8199,"alt":644,"winds":[0,0,0,2,1,0,0,0],"id":21874},{"name":"Jansky vrh","lat":50.3262,"lon":17.0718,"alt":412,"winds":[0,2,2,2,1,0,0,0],"id":22447},{"name":"Javorn\u00edk","lat":50.3953,"lon":16.996,"alt":341,"winds":[],"id":22449},{"name":"Javorovy","lat":49.6288,"lon":18.6273,"alt":915,"winds":[2,2,1,0,0,0,1,2],"id":7194},{"name":"Jelenovska","lat":49.1215,"lon":17.9939,"alt":636,"winds":[1,0,0,0,0,0,1,2],"id":10279},{"name":"Jested","lat":50.7287,"lon":14.9965,"alt":874,"winds":[0,2,0,0,0,0,0,0],"id":10105},{"name":"Jilove","lat":50.7539,"lon":14.1043,"alt":412,"winds":[0,2,0,0,0,0,0,0],"id":16957},{"name":"Kadanska Jesen","lat":50.3386,"lon":13.2634,"alt":569,"winds":[2,0,0,0,0,0,0,0],"id":15995},{"name":"Kalovy","lat":49.2333,"lon":13.5455,"alt":708,"winds":[0,0,0,0,0,0,0,2],"id":13754},{"name":"Kamen","lat":49.4182,"lon":15.013,"alt":589,"winds":[0,2,2,2,0,2,2,2],"id":6689},{"name":"Kamenec","lat":50.0794,"lon":17.1381,"alt":1191,"winds":[0,0,0,0,0,1,2,1],"id":10065},{"name":"Kameni\u010dka","lat":50.4229,"lon":16.929,"alt":470,"winds":[0,2,1,0,0,0,0,0],"id":22448},{"name":"Kamen\u00e1\u010d ZJZ, Z, SZ","lat":50.0544,"lon":16.7637,"alt":677,"winds":[0,0,0,0,0,2,1,2],"id":10199},{"name":"Kapucin","lat":50.5745,"lon":13.5183,"alt":548,"winds":[0,0,0,2,0,0,0,0],"id":22225},{"name":"Keblice","lat":50.4706,"lon":14.1133,"alt":200,"winds":[0,1,0,0,0,0,0,0],"id":21921},{"name":"Klenovec","lat":50.4863,"lon":13.3264,"alt":738,"winds":[0,0,0,0,2,2,2,0],"id":16000},{"name":"Klinovec","lat":50.3976,"lon":12.9687,"alt":1236,"winds":[0,2,1,0,0,0,0,0],"id":11814},{"name":"Kobylice","lat":50.2578,"lon":15.5553,"alt":236,"winds":[],"id":16183},{"name":"Kobylsk\u00e1 sk\u00e1la","lat":48.9408,"lon":16.9114,"alt":242,"winds":[2,1,0,0,0,0,0,1],"id":22961},{"name":"Koterov","lat":49.7217,"lon":13.4351,"alt":380,"winds":[0,0,0,0,0,0,2,0],"id":16003},{"name":"Koukolova hora","lat":49.9181,"lon":14.0085,"alt":350,"winds":[0,0,0,0,0,0,0,2],"id":16960},{"name":"Kozakov","lat":50.5933,"lon":15.2632,"alt":737,"winds":[0,0,0,1,2,2,2,1],"id":7197},{"name":"Kralovecky Spicak","lat":50.6575,"lon":15.9885,"alt":869,"winds":[0,0,0,0,0,2,2,0],"id":10911},{"name":"Krasne Brezno","lat":50.6788,"lon":14.0684,"alt":407,"winds":[0,0,0,0,2,0,0,0],"id":13985},{"name":"Krupka","lat":50.6964,"lon":13.8769,"alt":644,"winds":[0,0,0,1,2,1,0,0],"id":6737},{"name":"Ledcice - Jevineves","lat":50.3381,"lon":14.3228,"alt":264,"winds":[0,0,2,2,0,0,0,0],"id":7191},{"name":"Letovice","lat":49.5927,"lon":16.5283,"alt":495,"winds":[0,0,2,0,0,0,0,0],"id":16012},{"name":"Lhotka","lat":49.605,"lon":18.2944,"alt":497,"winds":[],"id":11578},{"name":"Lovos","lat":50.5277,"lon":14.018,"alt":544,"winds":[0,0,0,1,2,1,0,0],"id":10109},{"name":"Luzn\u00fd S, SSV, SSZ","lat":50.0447,"lon":16.7618,"alt":714,"winds":[2,0,0,0,0,0,0,1],"id":21873},{"name":"Lysa hora","lat":50.7537,"lon":15.5006,"alt":1244,"winds":[0,0,0,0,0,2,0,0],"id":6731},{"name":"Lysa hora NW","lat":49.5471,"lon":18.4478,"alt":1273,"winds":[0,0,0,0,0,0,0,2],"id":19479},{"name":"Lysa hora SW","lat":49.544,"lon":18.4468,"alt":1261,"winds":[0,0,0,0,0,2,0,0],"id":19480},{"name":"Lysice","lat":49.4451,"lon":16.5351,"alt":455,"winds":[0,0,2,0,0,0,0,0],"id":16014},{"name":"Maly Pecin","lat":49.1053,"lon":15.4712,"alt":508,"winds":[],"id":13595},{"name":"Mesit","lat":48.9337,"lon":17.7669,"alt":728,"winds":[0,0,0,0,0,2,2,1],"id":10281},{"name":"Mikulcak","lat":48.9399,"lon":17.8267,"alt":778,"winds":[0,0,0,1,2,1,0,0],"id":10272},{"name":"Misecky - SE","lat":50.741,"lon":15.5829,"alt":1226,"winds":[0,0,0,2,0,0,0,0],"id":16009},{"name":"Misecky - SW","lat":50.7397,"lon":15.5782,"alt":1203,"winds":[0,0,0,0,0,2,0,0],"id":14720},{"name":"Mokropsy","lat":49.9381,"lon":14.3353,"alt":311,"winds":[1,0,0,0,0,0,1,2],"id":7195},{"name":"Mracna","lat":50.1824,"lon":17.0838,"alt":1099,"winds":[0,0,0,0,0,0,1,0],"id":22453},{"name":"Muronak","lat":50.3167,"lon":17.1786,"alt":355,"winds":[0,0,2,2,0,0,0,0],"id":10727},{"name":"Mustek","lat":49.1961,"lon":13.2297,"alt":891,"winds":[],"id":15497},{"name":"Nechranice","lat":50.3456,"lon":13.4159,"alt":278,"winds":[1,1,2,2,2,2,1,1],"id":19313},{"name":"Nechranice - dam","lat":50.3512,"lon":13.4186,"alt":243,"winds":[0,0,2,0,0,0,0,0],"id":19404},{"name":"Nemcany","lat":49.1562,"lon":16.9249,"alt":278,"winds":[1,0,0,0,0,0,1,2],"id":14862},{"name":"Nove Mesto nad Metuji","lat":50.364,"lon":16.1135,"alt":300,"winds":[],"id":13017},{"name":"Oblik","lat":50.4107,"lon":13.8068,"alt":478,"winds":[0,0,0,2,2,2,1,0],"id":16955},{"name":"Obrvan","lat":49.7078,"lon":15.2531,"alt":474,"winds":[0,0,0,0,0,2,0,0],"id":21914},{"name":"Ochmelov","lat":49.32,"lon":18.0963,"alt":604,"winds":[],"id":14721},{"name":"Omlenicka","lat":48.7461,"lon":14.437,"alt":765,"winds":[0,0,0,2,0,0,0,0],"id":16005},{"name":"Orlik","lat":49.6065,"lon":14.1989,"alt":481,"winds":[0,2,0,0,0,0,0,0],"id":16966},{"name":"Ostplatz","lat":49.1717,"lon":13.1765,"alt":1333,"winds":[0,0,0,0,0,2,0,0],"id":12093},{"name":"Ov\u010d\u00edn","lat":50.0146,"lon":16.5223,"alt":478,"winds":[],"id":23355},{"name":"Penensky Tynec","lat":50.305,"lon":13.9268,"alt":363,"winds":[0,1,2,1,0,1,2,1],"id":11815},{"name":"Perstejn","lat":50.3838,"lon":13.1174,"alt":537,"winds":[0,0,0,0,1,2,0,0],"id":15993},{"name":"Pesvice","lat":50.4689,"lon":13.4685,"alt":340,"winds":[0,2,0,2,0,2,0,2],"id":15996},{"name":"Plane","lat":50.7101,"lon":15.6174,"alt":1138,"winds":[0,0,0,0,0,0,0,2],"id":15301},{"name":"Podho\u00c5\u2122any","lat":49.9454,"lon":15.5361,"alt":345,"winds":[0,0,0,0,1,2,1,0],"id":15462},{"name":"Policka","lat":49.7408,"lon":16.2665,"alt":569,"winds":[],"id":6644},{"name":"Prackovice","lat":50.5703,"lon":14.0135,"alt":440,"winds":[0,0,2,0,0,0,0,0],"id":16954},{"name":"Prasiva","lat":49.6368,"lon":18.4814,"alt":688,"winds":[0,0,0,0,0,1,2,0],"id":10762},{"name":"Prerovska Hurka","lat":50.1639,"lon":14.8417,"alt":233,"winds":[0,0,0,2,2,2,0,0],"id":7196},{"name":"Pribyslav","lat":49.5822,"lon":15.7642,"alt":529,"winds":[],"id":10761},{"name":"Radhost","lat":49.4896,"lon":18.2245,"alt":1117,"winds":[0,0,0,1,2,1,0,0],"id":10039},{"name":"Radobyl","lat":50.5303,"lon":14.0932,"alt":399,"winds":[0,0,0,2,2,2,0,0],"id":10912},{"name":"Rana","lat":50.4075,"lon":13.7715,"alt":426,"winds":[2,0,0,2,2,0,0,2],"id":10099},{"name":"Rasovka","lat":50.708,"lon":15.0176,"alt":820,"winds":[0,0,0,1,2,1,0,0],"id":10108},{"name":"Revnicov","lat":50.1864,"lon":13.7912,"alt":499,"winds":[0,0,0,0,0,2,0,0],"id":15302},{"name":"Rip","lat":50.3853,"lon":14.2908,"alt":417,"winds":[0,0,2,2,0,0,0,0],"id":7190},{"name":"Serak","lat":50.187,"lon":17.1086,"alt":1331,"winds":[0,2,2,0,0,1,1,0],"id":10726},{"name":"Serak-Mracna","lat":50.1839,"lon":17.0904,"alt":1234,"winds":[0,0,0,0,0,1,1,0],"id":22452},{"name":"Skalka","lat":49.5541,"lon":18.2993,"alt":927,"winds":[0,0,0,0,1,2,1,0],"id":7198},{"name":"Slamn\u00edk","lat":50.1544,"lon":16.8377,"alt":1228,"winds":[0,0,0,1,2,1,0,0],"id":21878},{"name":"Slavicin","lat":49.08,"lon":17.8676,"alt":421,"winds":[1,1,1,2,1,1,1,2],"id":10311},{"name":"Smilov","lat":50.378,"lon":13.0898,"alt":600,"winds":[0,0,0,2,0,0,0,0],"id":16015},{"name":"Solany","lat":50.4504,"lon":13.9272,"alt":226,"winds":[0,0,0,2,0,0,0,2],"id":15142},{"name":"Spicak","lat":49.1718,"lon":13.2108,"alt":1174,"winds":[0,0,0,2,0,0,0,0],"id":16001},{"name":"Spirutka","lat":49.5776,"lon":17.6248,"alt":365,"winds":[0,0,0,0,1,2,1,0],"id":10420},{"name":"Srn\u00ed","lat":50.3721,"lon":13.0519,"alt":762,"winds":[0,0,2,0,0,0,0,0],"id":14883},{"name":"Stankovka","lat":49.97,"lon":14.3233,"alt":370,"winds":[0,0,1,2,1,0,0,0],"id":10103},{"name":"Stara Vozice","lat":49.4922,"lon":14.7771,"alt":510,"winds":[2,2,0,2,2,2,0,2],"id":15141},{"name":"Stitna nad Vlari","lat":49.06,"lon":17.9689,"alt":479,"winds":[2,2,1,0,0,0,1,2],"id":10278},{"name":"Stolova Hora","lat":48.8403,"lon":16.6356,"alt":433,"winds":[0,0,0,0,0,2,1,0],"id":14675},{"name":"Stranna","lat":50.3672,"lon":13.4689,"alt":309,"winds":[0,0,0,0,0,2,0,0],"id":21913},{"name":"Stremosice","lat":49.8863,"lon":16.082,"alt":446,"winds":[0,0,0,0,0,2,0,0],"id":19487},{"name":"Strizovice","lat":50.6845,"lon":13.9831,"alt":308,"winds":[1,2,0,0,0,0,0,0],"id":15997},{"name":"Stropnik","lat":50.6447,"lon":13.6811,"alt":835,"winds":[0,0,0,2,0,0,0,0],"id":11834},{"name":"Str\u00e1\u017eovice","lat":49.014,"lon":17.0592,"alt":392,"winds":[0,0,0,1,2,0,0,0],"id":22962},{"name":"Studenov","lat":50.7466,"lon":15.4399,"alt":932,"winds":[0,0,0,2,0,0,0,0],"id":16010},{"name":"Suchomasty","lat":49.901,"lon":14.0617,"alt":388,"winds":[0,0,0,0,0,2,0,0],"id":16963},{"name":"Susina","lat":50.1626,"lon":16.8729,"alt":679,"winds":[0,1,2,1,0,0,0,0],"id":10332},{"name":"Svatobor","lat":49.2357,"lon":13.4883,"alt":836,"winds":[0,2,0,0,0,0,0,0],"id":16002},{"name":"Svihov","lat":49.4934,"lon":13.2667,"alt":481,"winds":[0,1,2,1,0,0,0,0],"id":10872},{"name":"Tachov","lat":49.7982,"lon":12.7058,"alt":488,"winds":[],"id":14984},{"name":"Trabice","lat":50.5781,"lon":14.0642,"alt":378,"winds":[0,0,0,0,0,2,0,0],"id":16051},{"name":"Trebounak","lat":50.0135,"lon":13.0027,"alt":809,"winds":[0,0,0,2,0,0,0,0],"id":15999},{"name":"Uhost","lat":50.3649,"lon":13.239,"alt":538,"winds":[2,1,0,0,0,0,1,1],"id":19405},{"name":"Uhrinov","lat":49.5776,"lon":17.6645,"alt":426,"winds":[0,0,0,1,2,1,0,0],"id":21876},{"name":"Valchov","lat":49.463,"lon":16.7202,"alt":583,"winds":[1,2,0,0,0,0,0,0],"id":21877},{"name":"Velky Javornik","lat":49.5278,"lon":18.1614,"alt":910,"winds":[1,2,2,0,1,0,0,0],"id":10038},{"name":"Vendryne","lat":49.6664,"lon":18.7042,"alt":350,"winds":[],"id":11577},{"name":"Vir","lat":49.5862,"lon":16.3258,"alt":670,"winds":[0,0,0,0,2,0,0,0],"id":14824},{"name":"Vitovka","lat":49.6803,"lon":17.8448,"alt":365,"winds":[0,0,0,1,2,2,0,0],"id":10280},{"name":"Vlachovice","lat":49.121,"lon":17.9345,"alt":384,"winds":[1,2,2,1,0,0,0,0],"id":10368},{"name":"Vl\u010dice","lat":50.3457,"lon":17.0321,"alt":446,"winds":[0,1,2,0,0,0,0,0],"id":22450},{"name":"Vl\u010dovice","lat":49.5915,"lon":18.1713,"alt":381,"winds":[2,2,0,0,0,0,0,0],"id":22673},{"name":"Vrbice NNE kontrolovat NOTAM","lat":50.0921,"lon":16.2619,"alt":415,"winds":[],"id":23531},{"name":"Vrhavec","lat":49.3447,"lon":13.2835,"alt":544,"winds":[],"id":14965},{"name":"Vsechov","lat":49.4379,"lon":14.6222,"alt":489,"winds":[1,1,1,2,1,1,1,2],"id":10333},{"name":"Vsetaty","lat":50.2711,"lon":14.6117,"alt":211,"winds":[0,0,0,0,1,2,0,0],"id":7193},{"name":"V\u011btrn\u00edk","lat":49.1977,"lon":16.9772,"alt":361,"winds":[0,0,0,0,2,2,0,0],"id":21871},{"name":"Zadni Treban","lat":49.9162,"lon":14.1903,"alt":308,"winds":[2,0,0,0,0,0,0,0],"id":16959},{"name":"Zasada","lat":50.7047,"lon":15.2644,"alt":674,"winds":[0,0,0,2,0,0,0,0],"id":16008},{"name":"zdounky-ol\u0161ina","lat":49.2488,"lon":17.3372,"alt":258,"winds":[0,0,0,1,2,2,0,0],"id":21872},{"name":"Zlatnik","lat":50.5144,"lon":13.7152,"alt":446,"winds":[0,0,0,0,2,2,1,0],"id":6643},{"name":"Zvicina - E","lat":50.4536,"lon":15.6983,"alt":651,"winds":[0,0,2,0,0,0,0,0],"id":16011},{"name":"Zvicina - NE","lat":50.4572,"lon":15.6943,"alt":632,"winds":[2,2,2,0,0,0,0,0],"id":7192},{"name":"\u010cernov\u00edr ZSZ","lat":49.9794,"lon":16.4394,"alt":433,"winds":[],"id":23690}],"octants":["N","NE","E","SE","S","SW","W","NW"],"levels":[1000,975,950,925,900,850,800,700,600,500],"endpoint":"https://api.open-meteo.com/v1/forecast","attribution":"Takeoffs from ParaglidingEarth, CC BY-SA","fetched":"2026-08-10","flymet":{"near":[{"slug":"LIPOVA","name":"Lipova","km":6.7},{"slug":"STRAZISTE","name":"Straziste","km":10.0},{"slug":"BUBOVICE","name":"Bubovice","km":8.4},{"slug":"NYRSKO","name":"Nyrsko","km":11.4},{"slug":"BUBOVICE","name":"Bubovice","km":8.9},{"slug":"STRAZ.N.O","name":"Straz.N.O","km":17.3},{"slug":"PRIBYSLAV","name":"P\u0159ibyslav","km":11.3},{"slug":"HODKOVICE","name":"Hodkovice","km":2.8},{"slug":"ALTENBERG","name":"Altenberg","km":9.0},{"slug":"USTI-NL","name":"\u00dast\u00ed n.L.","km":4.7},{"slug":"COTKYTLE","name":"Cotkytle","km":8.1},{"slug":"LETOVICE","name":"Letovice","km":12.7},{"slug":"LETOVICE","name":"Letovice","km":12.0},{"slug":"VRCHLABI","name":"Vrchlab\u00ed","km":7.3},{"slug":"STRAZ.N.O","name":"Straz.N.O","km":9.3},{"slug":"USTI-NL","name":"\u00dast\u00ed n.L.","km":5.2},{"slug":"DRZKOV","name":"Drzkov","km":12.4},{"slug":"HOLESOV","name":"Hole\u0161ov","km":9.7},{"slug":"ROUDNICE","name":"Roudnice","km":12.1},{"slug":"USTI-NO","name":"\u00dast\u00ed n.O.","km":13.0},{"slug":"USTI-NL","name":"\u00dast\u00ed n.L.","km":12.2},{"slug":"LUBENEC","name":"Lubenec","km":12.5},{"slug":"BUBOVICE","name":"Bubovice","km":7.8},{"slug":"VAL.KLOBOUKY","name":"Val.Klobouky","km":14.1},{"slug":"USTI-NL","name":"\u00dast\u00ed n.L.","km":6.2},{"slug":"KRALIKY","name":"Kraliky","km":9.2},{"slug":"KLATOVY","name":"Klatovy","km":8.7},{"slug":"MORAVSKA-TREBOVA","name":"Mor. T\u0159ebov\u00e1","km":9.2},{"slug":"HOSIN","name":"Hos\u00edn","km":8.0},{"slug":"KLADNO","name":"Kladno","km":7.0},{"slug":"BRECLAV","name":"B\u0159eclav","km":19.9},{"slug":"DECIN","name":"Decin","km":1.7},{"slug":"MODRAVA","name":"Modrava","km":16.0},{"slug":"USTI-NL","name":"\u00dast\u00ed n.L.","km":8.9},{"slug":"ROUDNICE","name":"Roudnice","km":14.8},{"slug":"HODKOVICE","name":"Hodkovice","km":0.8},{"slug":"USTI-NL","name":"\u00dast\u00ed n.L.","km":4.5},{"slug":"USTI-NL","name":"\u00dast\u00ed n.L.","km":2.1},{"slug":"BUBOVICE","name":"Bubovice","km":12.5},{"slug":"KRIZANOV","name":"K\u0159i\u017eanov","km":6.7},{"slug":"COTKYTLE","name":"Cotkytle","km":10.3},{"slug":"LIPOVA","name":"Lipova","km":12.0},{"slug":"LIPOVA","name":"Lipova","km":21.1},{"slug":"TRINEC","name":"Trinec","km":7.1},{"slug":"VAL.KLOBOUKY","name":"Val.Klobouky","km":2.4},{"slug":"LIBEREC","name":"Liberec","km":4.7},{"slug":"DECIN","name":"Decin","km":7.8},{"slug":"STRAZ.N.O","name":"Straz.N.O","km":15.4},{"slug":"TUZICE","name":"Tuzice","km":11.5},{"slug":"STRAZISTE","name":"Straziste","km":12.9},{"slug":"SUMPERK","name":"\u0160umperk","km":16.0},{"slug":"KLODSKO","name":"Klodsko","km":19.7},{"slug":"KRALIKY","name":"Kraliky","km":3.1},{"slug":"MOST","name":"Most","km":11.2},{"slug":"ROUDNICE","name":"Roudnice","km":10.2},{"slug":"CHOMUTOV","name":"Chomutov","km":10.3},{"slug":"STRAZ.N.O","name":"Straz.N.O","km":9.1},{"slug":"HORICE","name":"Ho\u0159ice","km":11.2},{"slug":"KYJOV","name":"Kyjov","km":16.0},{"slug":"LETKOV","name":"Letkov","km":1.2},{"slug":"HOROVICE","name":"Horovice","km":12.1},{"slug":"DRZKOV","name":"Drzkov","km":10.7},{"slug":"TRUTNOV","name":"Trutnov","km":11.8},{"slug":"USTI-NL","name":"\u00dast\u00ed n.L.","km":3.7},{"slug":"USTI-NL","name":"\u00dast\u00ed n.L.","km":11.0},{"slug":"SAZENA","name":"Sazena","km":5.0},{"slug":"LETOVICE","name":"Letovice","km":6.4},{"slug":"FRYDLANT","name":"Fr\u00fddlant","km":6.3},{"slug":"USTI-NL","name":"\u00dast\u00ed n.L.","km":15.0},{"slug":"KRALIKY","name":"Kraliky","km":4.2},{"slug":"DRZKOV","name":"Drzkov","km":16.0},{"slug":"FRYDLANT","name":"Fr\u00fddlant","km":6.8},{"slug":"FRYDLANT","name":"Fr\u00fddlant","km":7.0},{"slug":"LETOVICE","name":"Letovice","km":10.9},{"slug":"DACICE","name":"Dacice","km":4.3},{"slug":"TRENCIN","name":"Trencin","km":19.7},{"slug":"TRENCIN","name":"Trencin","km":15.9},{"slug":"VRCHLABI","name":"Vrchlab\u00ed","km":14.0},{"slug":"VRCHLABI","name":"Vrchlab\u00ed","km":13.9},{"slug":"TOCNA","name":"To\u010dn\u00e1","km":8.5},{"slug":"LIPOVA","name":"Lipova","km":5.2},{"slug":"MIKULOVICE","name":"Mikulovice","km":8.7},{"slug":"Z.RUDA","name":"Z.Ruda","km":7.0},{"slug":"ZATEC","name":"Zatec","km":8.7},{"slug":"ZATEC","name":"Zatec","km":8.7},{"slug":"TURANY","name":"Tu\u0159any","km":16.4},{"slug":"NOVE-MESTO","name":"Nov\u00e9 M\u011bsto","km":0.5},{"slug":"RANA","name":"Rana","km":4.0},{"slug":"ZBRASLAVICE","name":"Zbraslavice","km":12.7},{"slug":"ROZNOV.P.R","name":"Roznov.P.R","km":15.9},{"slug":"KAPLICE","name":"Kaplice","km":3.6},{"slug":"LETY","name":"Lety","km":13.2},{"slug":"Z.RUDA","name":"Z.Ruda","km":5.6},{"slug":"USTI-NO","name":"\u00dast\u00ed n.O.","km":8.1},{"slug":"SLANY","name":"Slan\u00fd","km":15.2},{"slug":"STRAZ.N.O","name":"Straz.N.O","km":7.6},{"slug":"CHOMUTOV","name":"Chomutov","km":0.1},{"slug":"VRCHLABI","name":"Vrchlab\u00ed","km":10.0},{"slug":"PODHORANY","name":"Podho\u0159any","km":0.8},{"slug":"POLICKA","name":"Poli\u010dka","km":0.7},{"slug":"USTI-NL","name":"\u00dast\u00ed n.L.","km":10.3},{"slug":"FRYDLANT","name":"Fr\u00fddlant","km":9.1},{"slug":"MILOVICE","name":"Milovice","km":9.4},{"slug":"PRIBYSLAV","name":"P\u0159ibyslav","km":0.4},{"slug":"ROZNOV.P.R","name":"Roznov.P.R","km":6.7},{"slug":"USTI-NL","name":"\u00dast\u00ed n.L.","km":15.5},{"slug":"RANA","name":"Rana","km":1.5},{"slug":"LIBEREC","name":"Liberec","km":6.7},{"slug":"RAKOVNIK","name":"Rakovn\u00edk","km":12.9},{"slug":"ROUDNICE","name":"Roudnice","km":5.7},{"slug":"LIPOVA","name":"Lipova","km":4.1},{"slug":"LIPOVA","name":"Lipova","km":4.9},{"slug":"FRYDLANT","name":"Fr\u00fddlant","km":6.9},{"slug":"KRALIKY","name":"Kraliky","km":10.0},{"slug":"VAL.KLOBOUKY","name":"Val.Klobouky","km":12.1},{"slug":"STRAZ.N.O","name":"Straz.N.O","km":5.9},{"slug":"RANA","name":"Rana","km":13.5},{"slug":"Z.RUDA","name":"Z.Ruda","km":4.4},{"slug":"HRANICE","name":"Hranice","km":6.6},{"slug":"STRAZ.N.O","name":"Straz.N.O","km":4.4},{"slug":"TOCNA","name":"To\u010dn\u00e1","km":7.7},{"slug":"MILICIN","name":"Milicin","km":11.9},{"slug":"VAL.KLOBOUKY","name":"Val.Klobouky","km":9.5},{"slug":"BRECLAV","name":"B\u0159eclav","km":19.9},{"slug":"ZATEC","name":"Zatec","km":6.5},{"slug":"SKUTEC","name":"Skute\u010d","km":8.5},{"slug":"USTI-NL","name":"\u00dast\u00ed n.L.","km":3.7},{"slug":"MOST","name":"Most","km":8.5},{"slug":"KYJOV","name":"Kyjov","km":5.7},{"slug":"DRZKOV","name":"Drzkov","km":11.9},{"slug":"BUBOVICE","name":"Bubovice","km":11.5},{"slug":"KRALIKY","name":"Kraliky","km":12.3},{"slug":"TUZICE","name":"Tuzice","km":11.0},{"slug":"KLATOVY","name":"Klatovy","km":9.5},{"slug":"TACHOV","name":"Tachov","km":0.4},{"slug":"USTI-NL","name":"\u00dast\u00ed n.L.","km":9.8},{"slug":"TOUZIM","name":"Tou\u017eim","km":8.8},{"slug":"STRAZ.N.O","name":"Straz.N.O","km":14.1},{"slug":"HRANICE","name":"Hranice","km":4.4},{"slug":"DRAHANY","name":"Drahany","km":13.2},{"slug":"ROZNOV.P.R","name":"Roznov.P.R","km":7.7},{"slug":"TRINEC","name":"Trinec","km":4.1},{"slug":"POLICKA","name":"Poli\u010dka","km":17.0},{"slug":"HRANICE","name":"Hranice","km":18.0},{"slug":"VAL.KLOBOUKY","name":"Val.Klobouky","km":5.5},{"slug":"LIPOVA","name":"Lipova","km":15.0},{"slug":"MOSNOV","name":"Mo\u0161nov","km":12.8},{"slug":"ZAMBERK","name":"\u017damberk","km":12.4},{"slug":"KLATOVY","name":"Klatovy","km":8.3},{"slug":"TABOR","name":"T\u00e1bor","km":8.5},{"slug":"VODOCHODY","name":"Vodochody","km":16.3},{"slug":"VYSKOV","name":"Vy\u0161kov","km":12.0},{"slug":"BUBOVICE","name":"Bubovice","km":6.6},{"slug":"DRZKOV","name":"Drzkov","km":3.2},{"slug":"KROMERIZ","name":"Krom\u011b\u0159\u00ed\u017e","km":8.6},{"slug":"MOST","name":"Most","km":6.6},{"slug":"DVUR_KRALOVE","name":"Dv\u016fr Kr\u00e1lov\u00e9","km":10.5},{"slug":"DVUR_KRALOVE","name":"Dv\u016fr Kr\u00e1lov\u00e9","km":10.9},{"slug":"USTI-NO","name":"\u00dast\u00ed n.O.","km":1.0}],"today":"https://flymet.meteopress.cz/meteogram/{slug}.png","tomorrow":"https://flymet.meteopress.cz/meteogram2/{slug}.png","index":"https://flymet.meteopress.cz/meteogram/"}}</script>
 </article>
 </div>
 <script>
@@ -131,7 +149,11 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
   var holder = document.querySelector('.meteo-article');
   if (!holder) return;
   var conf = JSON.parse(holder.querySelector('.met-data').textContent);
-  var state = { day: 0, site: null, hour: 14, surface: null, profile: null };
+  // `probe` is the height the pointer is at in the sounding, in metres, and `probeX`
+  // where it is across it — the readout follows the pointer sideways but reads the
+  // profile, so what it says never depends on which temperature you happen to be over.
+  var state = { day: 0, site: null, hour: 14, surface: null, profile: null,
+                probe: null, probeX: 0 };
 
   var status = document.getElementById('met-status');
   function say(text) { status.textContent = text; }
@@ -312,6 +334,101 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
     return ground + Math.max(temperature - dewPoint, 0) * 125;
   }
 
+  // ---- the layer that stops the day ---------------------------------------------------
+  //
+  // The *zadržná vrstva*: a layer stable enough that a thermal arriving at it stops. A
+  // parcel rising dry cools at 9.8 °C per km, so it keeps going while the air around it
+  // cools faster than that and is stopped where the air cools slowly, not at all
+  // (isothermal), or warms with height (an inversion). Two degrees a kilometre is drawn
+  // as the line between "still climbing" and "this is the lid": it is well below the 6-9
+  // of a working day and above the noise of a level pair 250 m apart.
+  //
+  // It is read between adjacent pressure levels and no finer, because that is the
+  // resolution the model publishes — 220 m near the ground and 1 000 m at 4 km. A shallow
+  // morning inversion 100 m thick sits inside one of those gaps and cannot be seen here at
+  // all, which is why the caption says what the shading is read from.
+  var CAP_LAPSE = 2.0;    // °C per km
+
+  // The sounding's frame, shared by the chart and by the pointer that reads heights off
+  // it. Two copies of these three numbers is a readout that quietly points at the wrong
+  // height the first time the chart is retuned.
+  var SOUND_TOP = 10, SOUND_BOTTOM = 24, SOUND_CEILING = 4000;
+
+  function cappingLayers(hourly, at, ground, ceiling) {
+    var heights = levelSeries(hourly, 'geopotential_height');
+    var temps = levelSeries(hourly, 'temperature');
+    var out = [];
+    for (var l = 0; l + 1 < conf.levels.length; l++) {
+      if (!heights[l] || !heights[l + 1] || !temps[l] || !temps[l + 1]) continue;
+      var base = heights[l][at], top = heights[l + 1][at];
+      var below = temps[l][at], above = temps[l + 1][at];
+      if (base == null || top == null || below == null || above == null) continue;
+      if (top <= ground || base >= ceiling || top <= base) continue;
+      // Positive is the ordinary case, air cooling with height; negative is an inversion.
+      var lapse = (below - above) / (top - base) * 1000;
+      if (lapse >= CAP_LAPSE) continue;
+      var band = { base: Math.max(base, ground), top: Math.min(top, ceiling),
+                   lapse: lapse, inversion: lapse < 0 };
+      // Two level pairs that meet are one layer, and drawing them as two puts a seam
+      // through the middle of it and offers to label it twice.
+      var last = out[out.length - 1];
+      if (last && Math.abs(last.top - band.base) < 1) {
+        last.top = band.top;
+        last.lapse = Math.min(last.lapse, band.lapse);
+        last.inversion = last.inversion || band.inversion;
+      } else {
+        out.push(band);
+      }
+    }
+    return out;
+  }
+
+  // The profile at any height, for the readout: linear between the levels either side,
+  // which is the same line the chart draws, and the 2 m values below the lowest level.
+  // Wind is interpolated as components — averaging 350 and 010 as numbers gives 180,
+  // which is the one wrong answer a reader would act on.
+  function sampleProfile(hourly, at, metres, ground) {
+    var heights = levelSeries(hourly, 'geopotential_height');
+    var temps = levelSeries(hourly, 'temperature');
+    var dews = levelSeries(hourly, 'dew_point');
+    var speeds = levelSeries(hourly, 'wind_speed');
+    var dirs = levelSeries(hourly, 'wind_direction');
+    var have = [];
+    for (var l = 0; l < conf.levels.length; l++) {
+      var z = heights[l] ? heights[l][at] : null;
+      if (z == null) continue;
+      have.push({ z: z, t: temps[l] ? temps[l][at] : null,
+                  td: dews[l] ? dews[l][at] : null,
+                  speed: speeds[l] ? speeds[l][at] : null,
+                  dir: dirs[l] ? dirs[l][at] : null });
+    }
+    var surface = { z: ground, t: hourly.temperature_2m[at], td: hourly.dew_point_2m[at],
+                    speed: hourly.wind_speed_10m[at], dir: hourly.wind_direction_10m[at] };
+    have = have.filter(function (level) { return level.z > ground; });
+    have.unshift(surface);
+    if (metres <= have[0].z) return have[0];
+    for (var i = 1; i < have.length; i++) {
+      if (metres > have[i].z) continue;
+      var lo = have[i - 1], hi = have[i];
+      var f = (metres - lo.z) / (hi.z - lo.z);
+      var mix = function (a, b) {
+        return a == null || b == null ? null : a + (b - a) * f;
+      };
+      var wind = null;
+      if (lo.speed != null && hi.speed != null && lo.dir != null && hi.dir != null) {
+        var u = mix(-lo.speed * Math.sin(lo.dir * Math.PI / 180),
+                    -hi.speed * Math.sin(hi.dir * Math.PI / 180));
+        var v = mix(-lo.speed * Math.cos(lo.dir * Math.PI / 180),
+                    -hi.speed * Math.cos(hi.dir * Math.PI / 180));
+        wind = { speed: Math.hypot(u, v),
+                 dir: (Math.atan2(-u, -v) * 180 / Math.PI + 360) % 360 };
+      }
+      return { z: metres, t: mix(lo.t, hi.t), td: mix(lo.td, hi.td),
+               speed: wind && wind.speed, dir: wind && wind.dir };
+    }
+    return have[have.length - 1];
+  }
+
   function drawMeteogram() {
     var canvas = document.getElementById('met-gram');
     var frame = fit(canvas);
@@ -392,8 +509,8 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
     var hourly = state.profile.hourly;
     var at = indexFor(hourly.time, state.day, state.hour);
     var ground = state.profile.elevation;
-    var left = 34, right = 10, top = 10, bottom = 24;
-    var top_m = 4000, minT = -20, maxT = 35;
+    var left = 34, right = 10, top = SOUND_TOP, bottom = SOUND_BOTTOM;
+    var top_m = SOUND_CEILING, minT = -20, maxT = 35;
     function x(celsius) { return left + (celsius - minT) / (maxT - minT) * (W - left - right); }
     function y(metres) { return top + (1 - metres / top_m) * (H - top - bottom); }
 
@@ -411,6 +528,55 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
     for (var c = -20; c <= 30; c += 10) {
       ctx.beginPath(); ctx.moveTo(x(c), top); ctx.lineTo(x(c), H - bottom); ctx.stroke();
       ctx.fillText(c + '°', x(c), H - bottom + 4);
+    }
+
+    // The ground, so every height on this chart has something to be measured from. The
+    // meteogram beside it has had one all along and the sounding read as if the site were
+    // at sea level.
+    ctx.fillStyle = ink('--panel-2');
+    ctx.fillRect(left, y(ground), W - left - right, H - bottom - y(ground));
+
+    // The layer that stops the day, under the traces it is read from.
+    var caps = cappingLayers(hourly, at, ground, top_m);
+    caps.forEach(function (band, index) {
+      var height = Math.max(y(band.base) - y(band.top), 2);
+      ctx.save();
+      ctx.fillStyle = band.inversion ? 'rgba(178,58,58,0.20)' : 'rgba(140,140,150,0.22)';
+      ctx.fillRect(left, y(band.top), W - left - right, height);
+      ctx.strokeStyle = band.inversion ? 'rgba(178,58,58,0.55)' : 'rgba(140,140,150,0.5)';
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(left, y(band.base)); ctx.lineTo(W - right, y(band.base));
+      ctx.stroke();
+      // Only the lowest one is named. It is the one a thermal meets first, and stacking
+      // three labels down a 300 px chart says less than one.
+      if (index === 0) {
+        ctx.setLineDash([]);
+        ctx.fillStyle = ink('--ink-2');
+        ctx.textAlign = 'left';
+        ctx.textBaseline = height > 15 ? 'middle' : 'bottom';
+        ctx.fillText(band.inversion ? 'inversion' : 'capping layer',
+                     left + 4, height > 15 ? y(band.top) + height / 2 : y(band.top) - 2);
+      }
+      ctx.restore();
+    });
+
+    // The cloudbase, drawn where the figures below already print it.
+    var base = cloudbase(hourly.temperature_2m[at], hourly.dew_point_2m[at], ground);
+    if (base != null && base > ground && base < top_m) {
+      ctx.save();
+      ctx.strokeStyle = '#2f6fb3';
+      ctx.setLineDash([2, 3]);
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(left, y(base)); ctx.lineTo(W - right, y(base));
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#2f6fb3';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText('cloudbase', W - right - 3, y(base) - 2);
+      ctx.restore();
     }
 
     // The dry adiabat from the surface temperature: where it meets the profile is the
@@ -446,6 +612,65 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
     }
     trace(levelSeries(hourly, 'temperature'), false, '#c2410c');
     trace(levelSeries(hourly, 'dew_point'), true, '#2f6fb3');
+
+    // ---- what it says at one height --------------------------------------------------
+    //
+    // A sounding is two lines against a scale, and reading a number off it by eye is
+    // three conversions a reader should not have to do. So the pointer names the height
+    // it is at and everything the model says there — including the wind, which the chart
+    // does not draw at all and which decides where the day is flyable.
+    if (state.probe == null) return;
+    var metres = Math.min(Math.max(state.probe, ground), top_m);
+    var here = sampleProfile(hourly, at, metres, ground);
+    ctx.save();
+    ctx.strokeStyle = ink('--ink-3');
+    ctx.setLineDash([1, 3]);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(left, y(metres)); ctx.lineTo(W - right, y(metres));
+    ctx.stroke();
+    ctx.setLineDash([]);
+    [[here.t, '#c2410c'], [here.td, '#2f6fb3']].forEach(function (pair) {
+      if (pair[0] == null) return;
+      ctx.fillStyle = pair[1];
+      ctx.beginPath();
+      ctx.arc(x(pair[0]), y(metres), 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    var lines = [Math.round(metres) + ' m · ' + Math.round(metres - ground) + ' m agl'];
+    if (here.t != null) {
+      lines.push(here.t.toFixed(1) + ' °C'
+        + (here.td == null ? ''
+           : ' · dew ' + here.td.toFixed(1) + ' · spread '
+             + (here.t - here.td).toFixed(1)));
+    }
+    if (here.speed != null && here.dir != null) {
+      lines.push(Math.round(here.speed) + ' km/h from ' + compass(here.dir)
+                 + ' (' + Math.round(here.dir) + '°)');
+    }
+    ctx.font = '11px ui-sans-serif, sans-serif';
+    var width = 0;
+    lines.forEach(function (line) { width = Math.max(width, ctx.measureText(line).width); });
+    var boxW = width + 12, boxH = lines.length * 13 + 7;
+    // Above the pointer where there is room and below it near the top, and always inside
+    // the chart: a readout that hangs off the edge is a readout with a number cut in half.
+    var boxY = y(metres) - boxH - 8;
+    if (boxY < top) boxY = y(metres) + 8;
+    var boxX = Math.min(Math.max(left + 2, state.probeX - boxW / 2), W - right - boxW);
+    ctx.globalAlpha = 0.93;
+    ctx.fillStyle = ink('--paper');
+    ctx.fillRect(boxX, boxY, boxW, boxH);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = ink('--rule');
+    ctx.strokeRect(boxX + 0.5, boxY + 0.5, boxW, boxH);
+    ctx.fillStyle = ink('--ink');
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    lines.forEach(function (line, i) {
+      ctx.fillText(line, boxX + 6, boxY + 5 + i * 13);
+    });
+    ctx.restore();
   }
 
   function drawFigures() {
@@ -475,6 +700,60 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
     });
   }
 
+  // ---- the flymet meteogram ------------------------------------------------------
+  //
+  // The one thing on this page that is neither drawn here nor computed from Open-Meteo: a
+  // picture from flymet, in the form Czech glider pilots already read. It is a second
+  // opinion from a different model and a different hand, and where it disagrees with the
+  // charts above that disagreement is worth seeing.
+  //
+  // It is *linked*, not copied: the reader's browser fetches it from flymet, and the
+  // caption names flymet and links back to its own page. Two days exist — today and
+  // tomorrow — so the other two days of the strip show nothing rather than yesterday's
+  // picture under today's heading.
+  function drawFlymet() {
+    var figure = document.getElementById('met-flymet');
+    var image = document.getElementById('met-flymet-img');
+    var caption = document.getElementById('met-flymet-cap');
+    var near = (conf.flymet.near || [])[state.site];
+    var template = state.day === 0 ? conf.flymet.today
+      : (state.day === 1 ? conf.flymet.tomorrow : null);
+    if (!near || !template) {
+      figure.hidden = true;
+      return;
+    }
+    figure.hidden = false;
+    // Stamped with the hour. flymet sends no cache lifetime, so a browser is free to
+    // guess one from the file's age — and today's meteogram is regenerated through the
+    // day, which makes a guessed cache an old picture under a current heading. The stamp
+    // is the hour and not the minute, so it is still one fetch an hour and not one a view.
+    var stamp = new Date();
+    var hour = stamp.getFullYear() + ('0' + (stamp.getMonth() + 1)).slice(-2)
+      + ('0' + stamp.getDate()).slice(-2) + ('0' + stamp.getHours()).slice(-2);
+    var url = template.replace('{slug}', encodeURIComponent(near.slug)) + '?h=' + hour;
+    image.hidden = false;
+    // Only when it actually changed: the hour slider redraws this panel on every step,
+    // and reassigning the same src makes the picture blink on each one.
+    if (image.getAttribute('src') !== url) {
+      image.src = url;
+      image.alt = 'flymet meteogram for ' + near.name;
+    }
+    image.onerror = function () {
+      image.hidden = true;
+      caption.textContent = 'flymet has no meteogram for ' + near.name + ' just now.';
+    };
+    caption.innerHTML = '';
+    var link = document.createElement('a');
+    link.href = conf.flymet.index;
+    link.rel = 'noreferrer';
+    link.textContent = 'flymet';
+    caption.appendChild(link);
+    caption.appendChild(document.createTextNode(
+      ' — ' + near.name + ', ' + near.km + ' km from this takeoff, for '
+      + (state.day === 0 ? 'today' : 'tomorrow')
+      + '. Cloud, rain, stability with the convective cloud height, and wind by height.'));
+  }
+
   function drawSite() {
     if (state.site == null) return;
     var site = conf.sites[state.site];
@@ -497,6 +776,7 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
     drawMeteogram();
     drawSounding();
     drawFigures();
+    drawFlymet();
   }
 
   function loadProfile() {
@@ -511,6 +791,39 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
     });
   }
 
+  // Hover on a mouse, drag-to-read on a touchscreen. The same split the airspace map
+  // makes, and for the same reason: a touchscreen's pointerout means the finger lifted,
+  // not that the reader stopped wanting the number.
+  (function () {
+    var canvas = document.getElementById('met-sounding');
+    function read(event) {
+      if (!state.profile) return;
+      var box = canvas.getBoundingClientRect();
+      var y = event.clientY - box.top;
+      var plot = box.height - SOUND_TOP - SOUND_BOTTOM;
+      state.probe = (1 - (y - SOUND_TOP) / plot) * SOUND_CEILING;
+      state.probeX = event.clientX - box.left;
+      drawSounding();
+    }
+    function clear() { state.probe = null; drawSounding(); }
+    canvas.addEventListener('pointermove', function (event) {
+      if (event.pointerType === 'touch' && !event.buttons) return;
+      read(event);
+    });
+    canvas.addEventListener('pointerdown', function (event) {
+      if (event.pointerType !== 'touch') return;
+      // Held rather than tapped: a finger dragged up the chart reads it off, and lifting
+      // it puts the readout away.
+      canvas.setPointerCapture(event.pointerId);
+      read(event);
+    });
+    canvas.addEventListener('pointerup', clear);
+    canvas.addEventListener('pointercancel', clear);
+    canvas.addEventListener('pointerleave', function (event) {
+      if (event.pointerType !== 'touch') clear();
+    });
+  })();
+
   var hourInput = document.getElementById('met-hour-input');
   hourInput.addEventListener('input', function () {
     state.hour = Number(hourInput.value);
@@ -519,6 +832,20 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
     drawSite();
   });
   window.addEventListener('resize', function () { drawSite(); });
+
+  // Exposed for tests, and only what a test cannot reach any other way: the two rules
+  // that read a sounding, the state the pointer writes into, and a redraw. Everything
+  // else about this page is observable in the DOM. The alternative was a second copy of
+  // the capping rule in Python, which is exactly the drift `quicklook.py` is a warning
+  // about.
+  window.__meteo = {
+    state: state,
+    cappingLayers: cappingLayers,
+    sampleProfile: sampleProfile,
+    cloudbase: cloudbase,
+    draw: drawSite,
+    at: function () { return indexFor(state.profile.hourly.time, state.day, state.hour); }
+  };
 
   drawDays();
   get(surfaceUrl()).then(function (answer) {

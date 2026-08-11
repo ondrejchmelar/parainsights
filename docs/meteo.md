@@ -32,10 +32,46 @@ table is Windy's *map*, which is genuinely better than a static chart; an embed 
 possible future layer, and it would be the free Map Forecast tier, which is dev-only —
 so that too would have to be paid for or done without.
 
-Flymet (`flymet.meteopress.cz`) stays as a **link, not a fetch**. Its meteograms are
-images generated per site with no documented API and no licence to redistribute them,
-and `tracklog_viewer/meteo.py` already records that they carry no archive endpoint. A
-pilot who wants the flymet reading should get flymet's own page.
+Flymet (`flymet.meteopress.cz`) is now shown as well, and it is worth being precise about
+what that means. Its meteograms are images generated per station with no documented API,
+no archive endpoint (`tracklog_viewer/meteo.py` already records that) and no licence to
+redistribute them — so **nothing here copies, caches or rebuilds one**. The page carries a
+URL; the reader's own browser fetches the picture from flymet, with flymet named in the
+caption and the caption a link back to its own page. That is the same relationship as the
+Open-Meteo call beside it, and the opposite of republishing.
+
+It earns its place because it is not another view of the same numbers: a different model,
+run by somebody else, drawn in the form Czech glider pilots already read — cloud, rain,
+stability with the convective cloud height, and wind by height, all against the hour.
+Where it disagrees with the charts above, that disagreement is the most useful thing on
+the page.
+
+Two consequences the page has to state rather than hide. **Only two days exist** —
+`/meteogram/` is today and `/meteogram2/` is tomorrow — so the third and fourth day of the
+strip show no picture rather than yesterday's under today's heading. And the station is
+the *nearest airfield*, not the takeoff: the caption gives its name and how far away it
+is, because 12 km down the valley is a fair proxy for the day and a poor one for the hill.
+
+### Where the stations are, given flymet never says
+
+The one derived dataset in this repository. flymet publishes its 186 stations as an HTML
+image map over an 800x600 picture of the country: the only statement anywhere of where a
+station *is* is the pixel its circle sits on. So `sources.flymet_frame` solves the map's
+projection — a full six-parameter affine, since nothing published says which projection it
+is or whether it is square to north — from twelve stations whose real position is known
+from OurAirports, and puts every station's pixel through it.
+
+It is checked rather than trusted, in three places. The refresh **refuses to write** if the
+worst anchor comes out more than a kilometre from where it belongs, which is what a
+redrawn map would look like and would otherwise pass silently. The committed file keeps
+the pixels, so a test re-solves the fit and re-places all 186. And the anchors are
+airfields rather than towns, because matching flymet's names against a gazetteer put
+Černovice u Tábora on Brno-Černovice, 170 pixels away — the error this construction exists
+to avoid.
+
+Measured: worst anchor 239 m against a map scale of 664 m a pixel, and Mnichovo Hradiště —
+picked because it is the station the whole feature was asked for — lands 150 m from the
+real airfield. Every Czech takeoff has a station within 21 km, median 9 km.
 
 ## The forecast is fetched in the page, not baked into it
 
@@ -63,7 +99,10 @@ rather than guessed at, and the page says so: inventing a direction for a hill n
 recorded is the one error this page must not make.
 
 `meteo.cli --refresh-sites` rewrites `meteo/sites.py`, provenance and fetch date first.
-Takeoffs do not move, so the file is committed and the build needs no network.
+Takeoffs do not move, so the file is committed and the build needs no network. The flymet
+station list is the same shape — `--refresh-flymet` rewrites `meteo/flymet.py` — and the
+two are paired at build time by `render_html.nearest_stations`, because neither list moves
+and 159 × 186 distances are arithmetic no reader's browser should be asked to repeat.
 
 ## Two requests, and why not one or a hundred and sixty
 
@@ -73,18 +112,47 @@ trip and about half a megabyte, which is what the ranking needs. The **pressure 
 are fetched for one site only, when that site is opened**: asking for the profile of
 every takeoff up front would be tens of megabytes to answer a question about one hill.
 
+## What the sounding says
+
+The chart is two lines against a scale, and two things a pilot wants from it are not
+lines. Both are drawn now, and both are marked as what they are.
+
+**The cloudbase** is the surface spread at 125 m a degree — a rule of thumb, drawn dotted
+and printed in the figures under the chart, with the model's own cloud cover on the
+meteogram beside it so the two can disagree in front of the reader.
+
+**The capping layer — the *zadržná vrstva*** — is shaded. A parcel rising dry cools at
+9.8 °C/km, so it keeps going while the air around it cools faster than that and stops
+where the air cools slowly, not at all, or warms with height. The threshold drawn is
+2 °C/km: well below the 6-9 of a working day, above the noise of two levels 220 m apart,
+and named in the caption because it is a judgement and not a measurement. An inversion —
+air that warms with height — is shaded red and labelled as one; only the lowest band is
+named, because it is the one a thermal meets first. The honest limitation is stated on the
+page: this is read *between the model's pressure levels* and is no finer than they are, so
+a 100 m morning inversion inside one of those gaps cannot be seen here at all.
+
+**The pointer reads it off.** Hover — or drag a finger up it on a touchscreen — and the
+chart names the height, the height above the site, the temperature, the dew point, the
+spread and the wind there. The wind is the reason it exists: it is the number that decides
+where the day is flyable and the only one on this chart that is not drawn at all. Values
+between levels are interpolated along the same line the chart draws, and the wind as *u/v
+components* — 350° and 010° averaged as numbers give 180, due south, which is the one
+wrong answer a pilot would act on.
+
 ## Status
 
 Started, and the page works end to end: the day strip, the ranked site list with a
-verdict per takeoff, the sounding, the meteogram and the day's figures. Published at
-`public/meteo/`.
+verdict per takeoff, the sounding with its cloudbase, capping layer and hover readout, the
+meteogram, the day's figures and flymet's own meteogram for the nearest airfield.
+Published at `public/meteo/`.
 
 Wanted next:
 
-- **The verdict rule needs a browser test.** `tests/test_meteo_view.py` keeps a second
-  copy of it in Python and pins the two thresholds; it cannot fail on a change to the
-  rule's *shape*. Driving the real function with `fetch` stubbed is the fix, the way
-  `tests/test_view3d_gestures.py` drives the real gestures.
+- **The verdict rule still keeps a second copy in Python.** `tests/test_meteo_view.py`
+  pins the two thresholds but cannot fail on a change to the rule's *shape*. The harness
+  that fixes it now exists — the sounding tests drive the real page with `fetch` answering
+  from a built profile — so this is exposing `verdict` on `window.__meteo` and one test,
+  rather than the piece of work it used to be.
 - **A map, instead of a scrolling list.** The airspace view is already the widget for it,
   and a takeoff is a point with a colour.
 - **A wind-direction arrow per site**, rather than the compass point in text.

@@ -695,6 +695,29 @@ def test_floor_parses_the_forms_the_base_file_uses():
     assert floor("500m AMSL") == pytest.approx(500, abs=1)
 
 
+def test_a_limit_carries_its_datum_as_well_as_its_number():
+    """The number alone is not enough to draw a lid with. `1000 AGL` and `1000 MSL` are
+    the same integer and 700 m apart over the Šumava."""
+    assert render_html.limit_metres("GND") == (0.0, True)
+    assert render_html.limit_metres("0 AGL") == (0.0, True)
+    assert render_html.limit_metres("")[1] is True
+    metres, ground = render_html.limit_metres("1000 AGL")
+    assert metres == pytest.approx(305, abs=2) and ground is True
+    metres, ground = render_html.limit_metres("4000 MSL")
+    assert metres == pytest.approx(1219, abs=2) and ground is False
+    assert render_html.limit_metres("FL 95")[0] == pytest.approx(2895, abs=5)
+    assert render_html.limit_metres("UNL") == (None, False)
+
+
+def test_the_ceiling_reads_the_forms_the_two_sources_write():
+    def ceiling(text):
+        return render_html.ceiling_metres(openair.Airspace("n", "R", "GND", text))
+
+    assert ceiling("FL 95")[0] == pytest.approx(2895, abs=5)
+    assert ceiling("4000ft AMSL")[0] == pytest.approx(1219, abs=2)
+    assert ceiling("1000 AGL") == (pytest.approx(305, abs=2), True)
+
+
 def test_our_own_airspaces_classify_by_kind_not_by_name(zones):
     assert render_html.classify(atz.to_airspace(zones[0], "ATZ LKHB")) == "atz"
     field = vfr("lkta")
@@ -951,6 +974,58 @@ def test_a_ring_carries_its_own_floor(zones):
     assert atz_ring["g"] is True, "a GND floor must follow the terrain, not sit at 0 m"
 
 
+def test_a_ring_carries_the_lid_that_makes_it_a_box(zones):
+    """The other half of the same argument. A floor says where a zone starts and says
+    nothing about whether it is a 300 m band over a field or a wall to FL95, and those
+    are different answers to "can I climb here"."""
+    from airspaces import scene as airspace_scene
+
+    points = [(50.0, 15.0), (50.2, 15.0), (50.2, 15.3)]
+    tma = openair.Airspace("TMA TEST", "C", floor="1000 ft AMSL", ceiling="FL 95",
+                           points=points)
+    ring = airspace_scene.rings([tma])[0]
+    assert ring["c"] == pytest.approx(2895, abs=5)
+    assert "t" not in ring, "FL95 is drawn true and must not be marked as capped"
+    assert "cu" not in ring, "an AMSL ceiling is an altitude, not a height above ground"
+
+
+def test_a_lid_above_the_cap_is_drawn_short_and_says_so(zones):
+    """21 of the 251 base airspaces run to FL165 or higher. Drawn true they are towers
+    that hide every zone a paraglider meets, so the box stops at the cap — and carries
+    the mark that says the drawn top is not the published one."""
+    from airspaces import scene as airspace_scene
+
+    points = [(50.0, 15.0), (50.2, 15.0), (50.2, 15.3)]
+    high = openair.Airspace("LKR TEST", "R", floor="GND", ceiling="FL 660", points=points)
+    ring = airspace_scene.rings([high])[0]
+    assert ring["c"] == pytest.approx(airspace_scene.DRAWN_TOP, abs=1)
+    assert ring["t"] is True
+    # The reader is never left to infer the real ceiling from the drawn one.
+    assert "FL 660" in ring["n"]
+
+
+def test_an_agl_lid_stays_a_height_above_the_ground(zones):
+    """A traffic circuit is 1 000 ft *above the field*, and the 19 base airspaces with an
+    AGL ceiling are the same shape. Flattened to an altitude at build time the lid lands
+    at 305 m — under the terrain it belongs to everywhere but the lowlands — so the height
+    has to survive all the way into the renderer."""
+    from airspaces import scene as airspace_scene
+
+    points = [(50.0, 15.0), (50.2, 15.0), (50.2, 15.3)]
+    band = openair.Airspace("TSA TEST", "R", floor="GND", ceiling="1000 AGL",
+                            points=points)
+    ring = airspace_scene.rings([band])[0]
+    assert ring["cu"] == pytest.approx(305, abs=2)
+    assert "c" not in ring, "an AGL lid has no altitude to be drawn at"
+    assert ring["g"] is True
+
+    over = openair.Airspace("TSA HIGH", "R", floor="300 AGL", ceiling="1000 AGL",
+                            points=points)
+    high = airspace_scene.rings([over])[0]
+    assert high["fu"] == pytest.approx(91, abs=2), "an AGL floor is a height too"
+    assert high["g"] is False
+
+
 def test_only_a_ring_with_published_hours_carries_a_schedule(zones):
     """The time filter can only ever speak for the layer it has hours for. The 251 base
     airspaces get their activation from NOTAMs this repository does not fetch, and the
@@ -1174,3 +1249,109 @@ def test_the_3d_map_gives_the_same_answer_as_the_flat_one():
     }
     var all = names().length;
     """ + _ASK))
+
+
+# ------------------------------------------- the boxes, in a browser
+#
+# The claim is geometric and about pixels, so it cannot be made from Python: that a zone
+# is drawn as a solid between two heights, and that the solid — not only the outline on
+# its floor — is what the reader can point at. Both were wrong in the flat version by
+# construction, and both are what somebody looking for "what is above me" is doing.
+
+
+def _box_page():
+    """One base airspace over flat ground, on the real published page."""
+    import numpy as np
+
+    from airspaces import cli as airspace_cli
+    from airspaces import scene as airspace_scene
+    from tracklog_viewer import terrain as terrain_module
+
+    overlay, base = _hours_fixture()
+    ground = terrain_module.Terrain(
+        west=14.0, east=16.0, south=49.0, north=51.0,
+        elevations=np.full((24, 24), 400.0),
+    )
+    payload = airspace_scene.build(base + overlay.airspaces, terrain=ground,
+                                   basemaps={}, tiles=False)
+    return airspace_cli._page(
+        render_html.body(overlay, base, "26-04-01", scene=payload),
+        "Czech airspace", three_d=True,
+    )
+
+
+# Tilted well off the top-down opening camera, because a box seen from straight above is
+# its own floor and this test would pass on the flat renderer. North up (`yaw = 0`) so
+# that "above the northmost vertex on screen" is a place the floor ring does not reach.
+#
+# Zoomed in, too, and that is not a convenience: heights are drawn at true scale, so a
+# 2 500 m box on a map of the whole country is five pixels tall. Reading it needs the
+# zoom a reader looking at one CTR would have used anyway.
+_BOX = """
+var canvas = document.querySelector('canvas.view3d');
+var handle = window.__view3dAll[canvas.id];
+handle.view.yaw = 0; handle.view.pitch = 0.45; handle.view.zoom = 6;
+handle.view.panX = 0; handle.view.panY = 0;
+handle.redraw();
+var space = handle.scene().airspaces.filter(function (s) {
+  return s.n.indexOf('MCTR') === 0;
+})[0];
+var centre = handle.toMetres(space.lon[0], space.lat[0]);
+var middle = handle.worldProject(centre[0], centre[1], 1500);
+var size = handle.metrics();
+handle.view.panX += size.W / 2 - middle[0];
+handle.view.panY += size.H / 2 - middle[1];
+handle.redraw();
+var north = 0;
+for (var i = 1; i < space.lat.length; i++) {
+  if (space.lat[i] > space.lat[north]) north = i;
+}
+function screenAt(lon, lat, z) {
+  var m = handle.toMetres(lon, lat);
+  var p = handle.worldProject(m[0], m[1], z);
+  var box = canvas.getBoundingClientRect();
+  return { x: box.left + p[0] / canvas.width * box.width,
+           y: box.top + p[1] / canvas.height * box.height };
+}
+var lon = space.lon[north], lat = space.lat[north];
+var onFloor = screenAt(lon, lat, handle.groundAt(lon, lat));
+var onLid = screenAt(lon, lat, space.c);
+"""
+
+
+@needs_chrome
+def test_the_box_is_drawn_between_its_two_heights():
+    """A ceiling at FL95 over ground at 400 m is 2 500 m of box, and at true scale and
+    this zoom that is a measurable number of pixels — up the screen, because the lid is
+    above the floor and not merely inside it."""
+    answer = _probe(_box_page(), _BOX + """
+    return { rise: onFloor.y - onLid.y, ceiling: space.c,
+             capped: !!space.t, label: space.n };
+    """)
+    assert answer["ceiling"] > 2800, "FL95 did not survive into the payload"
+    assert not answer["capped"], "FL95 is under the cap and must be drawn true"
+    assert answer["rise"] > 25, (
+        f"the lid landed {answer['rise']:.1f} px above the floor: not a box")
+    assert "FL 95" in answer["label"], "the published ceiling left the label"
+
+
+@needs_chrome
+def test_pointing_at_the_wall_names_the_airspace():
+    """What the reader gains, and the reason the hit test had to change with the drawing.
+    Tilted, most of what can be seen of a zone is its walls and its lid; a hit test that
+    knew only the floor made two thirds of the drawn shape unpointable — and the second
+    half of this asserts the point really is off the floor, so it cannot pass by the old
+    route."""
+    answer = _probe(_box_page(), _BOX + """
+    var onBox = handle.airspaceAt(onLid.x, onLid.y);
+    // The same page with the lid taken away is the flat renderer, and the same point
+    // must then find nothing: that is what makes this a test of the walls.
+    delete space.c;
+    handle.redraw();
+    var flat = handle.airspaceAt(onLid.x, onLid.y);
+    return { box: onBox ? onBox.n : null, flat: flat ? flat.n : null };
+    """)
+    assert answer["box"] and answer["box"].startswith("MCTR"), (
+        "a point on the lid found nothing: the box is not hit-tested")
+    assert answer["flat"] is None, (
+        "the point was inside the floor ring anyway, so this proves nothing about walls")

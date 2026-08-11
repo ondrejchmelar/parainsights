@@ -33,7 +33,7 @@ airspaces/
 ├── circuits.py     the okruh band
 ├── basemap.py      embedded Czech border and city list, for the map backdrop
 ├── build.py        assembles the overlay from all of it
-├── scene.py        the 3D payload: rings at their floors, over fetched terrain
+├── scene.py        the 3D payload: airspace as boxes, over fetched terrain
 ├── render_html.py  the map: the viewer's 3D panel, or inline SVG; filters, labels
 └── cli.py          airspaces [--openair FILE] [--html FILE] [--flat] [--online] [--report]
 ```
@@ -335,11 +335,11 @@ so its filename is read from the directory listing instead of computed.
   map widget, not flight code — hand it a terrain grid, some imagery and a list of things
   to draw and it never asks what a flight is — so the airspace map is that same panel with
   no track in it: terrain, a satellite/map/relief switch, and the same gestures a reader
-  already learned on the flights tab. Two consequences worth knowing. **Each ring is drawn
-  at its own floor**, which is the entire argument for showing airspace in three
-  dimensions: a CTR whose floor is FL95 and one that starts at the ground are the same red
-  outline on a flat map and obviously different objects here; a `GND` floor samples the
-  DEM under each vertex, because "ground" is a surface and not an altitude. And **it opens
+  already learned on the flights tab. Two consequences worth knowing. **Each airspace is
+  drawn as the box it is**, floor to ceiling, which is the entire argument for showing
+  airspace in three dimensions: a CTR whose floor is FL95, one that starts at the ground
+  and one that stops at 2 000 ft are the same red outline on a flat map and obviously
+  different objects here. See "The boxes" below for how one is built. And **it opens
   nearly flat** (`view.pitch` 1.32 from the payload, against the flight camera's 0.46),
   because over 500 km of country the three-quarter view turns the far half into a sliver.
   The scene needs terrain and imagery, both fetched, so `airspaces.cli --html` falls back
@@ -423,10 +423,11 @@ so its filename is read from the directory listing instead of computed.
 ## Status
 
 Done: both goals. 82 aerodrome zones and 205 traffic circuits at 156 fields (410
-rectangles, two per circuit), 197 KB of OpenAir; the map renders all 743 airspaces with
-class, floor and operating-hours filters, and offers the OpenAir file for download. 68 of
+rectangles, two per circuit), 197 KB of OpenAir; the map renders all 743 airspaces as
+boxes between their published limits, with class, floor and operating-hours filters, and
+offers the OpenAir file for download. 68 of
 the 82 aerodromes carry their published hours, in the airspace name and on the map.
-Published at `public/airspace/` and as a view in the report. 95 tests; two drive a real
+Published at `public/airspace/` and as a view in the report. 102 tests; four drive a real
 browser, and none touches the network.
 
 The map ships two ways: as a standalone page (`airspaces.cli --html`) and as a top-level
@@ -446,6 +447,51 @@ view in the tracklog report (`tracklog_viewer.cli --airspace`). Both are publish
   answer rather than computing a worse one.
 - **The 15 aerodromes with no published circuit direction** could be filled in by hand
   from the ADC charts, which are images and so not parseable.
+
+## The boxes
+
+An airspace is a volume, and the map draws it as one: `scene.rings` ships the outline and
+both heights, and `view3d` extrudes it. What is worth writing down is the four ways a
+published limit can behave and the one place the drawing is deliberately not the data.
+
+**A limit is a number *and* a datum.** `limit_metres` answers both, because `1000 AGL` and
+`1000 MSL` are the same integer and 700 m apart over the Šumava. So a ring carries `f` (the
+floor as an altitude, and the number the slider filters on), `g` (that floor is the ground
+itself), `fu`/`cu` (heights above the ground, where the source quoted one) and `c` (the lid
+as an altitude). Anything ground-relative is resolved against the DEM *in the renderer*,
+one sample per vertex, so the box follows the hill. Flattening an AGL lid to an altitude at
+build time puts a traffic circuit's roof at 305 m — under the terrain it belongs to
+everywhere but the lowlands — which is the same class of error as drawing a `GND` floor at
+sea level, and that one had already been made once.
+
+**The cap is the one lie, and it is marked.** 21 of the 251 base airspaces run to FL165,
+FL245 or FL660 — 5, 7.5 and 20 km. Drawn true they are towers a hundred times taller than
+anything a paraglider meets, and at any zoom close enough to read a CTR they fill the
+frame and hide it. So `DRAWN_TOP` stops the box at 4 000 m, the ring carries `t`, the
+renderer draws that lid dashed and unfilled, the lede says how many are capped and the
+label keeps the published ceiling. 4 000 m is off the data rather than rounded to taste:
+it clears FL125 (3 810 m), the highest ceiling in the file that is not one of those 21,
+and it is above the highest floor here (FL75, 2 286 m), so no box is ever capped below
+its own floor.
+
+**Walls are one path, filled once.** Each side is a subpath of a single `Path2D` filled
+under the nonzero rule, so the union takes the alpha exactly once. Filling side by side
+doubles it wherever a near wall crosses a far one, and a 70-sided circle paints itself into
+an opaque drum. The floor keeps the old fill, the walls take 55% of it and the lid 70%,
+because a box seen through its own two near walls is already twice the ink of the ring it
+replaced and the layer has to stay something you can see the country through.
+
+**Under a pixel of height there is no box.** At the opening camera — the whole country,
+true vertical scale — a 300 m circuit is a tenth of a pixel tall, and drawing three paths
+for it is three times the cost of the one it needs. A ring whose lid projects within 0.7 px
+of its floor is drawn flat, exactly as before. Measured over the real 743 airspaces in
+software rendering: 8.1 → 9.8 ms a frame at the country view, 7.1 → 14.8 ms zoomed in to a
+CTR, which is where the boxes are the point.
+
+**The hit test is the whole box.** Tilted, most of what a reader can see of a zone is its
+walls and its lid; a hit test that knew only the floor left two thirds of the drawn shape
+unpointable. `airspaceAt` tries floor, lid and walls, still back to front so the smallest
+thing under the pointer wins.
 
 ## When the field is open
 

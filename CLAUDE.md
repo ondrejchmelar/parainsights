@@ -18,7 +18,7 @@ parainsights/
 ├── meteo/                 the day's sounding against every Czech takeoff
 ├── planner/               a task drawn on the airspace it crosses
 ├── parainsights_common/   the one thing every page shares: the strip between the tools
-├── tests/                 pytest, 507 tests, no network
+├── tests/                 pytest, 551 tests, no network
 └── docs/
     ├── formats.md            IGC and KML/KMZ format research, measured on real files
     ├── plan.md               tracklog viewer: scope, decisions and status
@@ -57,7 +57,7 @@ as the packages, so there is nothing to line up by hand:
 
 ```bash
 uv sync --extra dev          # creates .venv on the pinned Python, from uv.lock
-uv run pytest -c pyproject.toml     # 507 tests, ~5 min, no network
+uv run pytest -c pyproject.toml     # 551 tests, ~5 min, no network
 ```
 
 `-c pyproject.toml` matters when the repo sits inside another project — pytest otherwise
@@ -85,6 +85,7 @@ uv run python -m airspaces.cli --report                # what built, and what di
 
 uv run python -m meteo.cli --html meteo.html           # the day, against every takeoff
 uv run python -m meteo.cli --refresh-sites             # re-fetch the takeoff list
+uv run python -m meteo.cli --refresh-flymet            # re-read flymet's station map
 
 uv run python -m planner.cli --html plan.html          # draw a task, score it
 ```
@@ -117,6 +118,15 @@ published ATZ geometry is 117 m out and gets corrected. The okruh is **not** an 
 obstacle and cannot be — obstacles are a curated per-country download with no Czech
 coverage and no import path.
 
+The map draws each airspace as the **box** it is, floor to ceiling and at true vertical
+scale, which is the whole reason it is a 3D view: three zones with the same outline and
+different limits are one red line on a flat map. Two things there are decisions and not
+details — a limit carries its *datum* as well as its number, so anything AGL stays a
+height and is resolved against the terrain in the renderer; and the 21 airspaces that run
+to FL165 or higher are **capped at 4 000 m**, drawn with a dashed open lid and their real
+ceiling in the label, because drawn true they hide everything a paraglider meets. See
+"The boxes" in `docs/airspaces.md`.
+
 ## A network is assumed
 
 **This was not always true and the code still remembers it.** Everything here was built
@@ -142,6 +152,12 @@ What is *not* retired, because it is still true and still worth keeping:
 And two things now *require* a network at view time rather than merely preferring one:
 the meteo page has no numbers of its own, and the imagery on every 3D map is fetched.
 Both say so on screen when the fetch fails rather than drawing an empty frame.
+
+One image on the meteo page comes from a **third party at view time**: flymet's meteogram
+for the airfield nearest the chosen takeoff. It is linked and not copied — the reader's
+browser fetches it from flymet, flymet is named in the caption and the caption links back
+— so nothing here republishes it. Over `https`, because the site is https and a browser
+drops a mixed-content image without drawing anything or saying why.
 
 Publishing is a build and a commit — the site is `public/`, handed to GitLab Pages by
 the `pages` job in `.gitlab-ci.yml`:
@@ -781,18 +797,20 @@ Still wanted:
   nothing.** It checks the file exists and hands the directory to GitLab, so a green
   pipeline republishes whatever was last committed — the site sat weeks out of date behind
   successful pipelines until someone noticed the rose was still bottom-left. Rebuild and
-  commit it whenever the renderer changes. The current copy carries everything up to the
-  basemap spinner, but **it was built without `--meteo`**, because Open-Meteo is blocked
-  from the environment it was built in; the page now fetches the sounding at view time
-  instead, so the section is there, but a local rebuild with `--meteo` is still better.
-  It also owes the third flight its `--label`: the logger recorded no pilot, site or
-  glider, so the masthead is bare where the other two are not. The rebuild is
+  commit it whenever the renderer changes. **Including when only `airspaces` or `view3d`
+  changed**: the report carries the airspace map as one of its views, with its own copy of
+  the ring payload, so a change to either leaves the report a version behind the standalone
+  page. The current copy was rebuilt locally with `--meteo` and `--terrain`, so it has the
+  soundings and the 3D airspace both. The rebuild is
   ```bash
-  uv run python -m tracklog_viewer.cli A.igc B.igc PK-Hunza.igc --terrain --meteo --online \
+  uv run python -m tracklog_viewer.cli A.igc B.igc PK-Hunza.igc --terrain --meteo \
+    --airspace airspace/ \
     --label '' --label '' --label 'Antoine Girard|PK Hunza|OZONE Zeolite 2' \
     --html public/index.html
   ```
-  — one `--label` per flight, in order, empty where the file already says it.
+  — one `--label` per flight, in order, empty where the file already says it, and
+  `--airspace` is where the OpenAir download sits *relative to the report*. Without
+  `--terrain` the airspace view silently falls back to the flat SVG map.
 - FAI/flat triangle scoring with multipliers is not implemented; `xc.py` does free
   distance only.
 - Historical weather is surface-only: the ERA5 archive returns nulls on every pressure

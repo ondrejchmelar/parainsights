@@ -451,27 +451,53 @@ def classify(airspace) -> str:
 _FL = 100 * FEET
 
 
+def limit_metres(text: str) -> tuple[float | None, bool]:
+    """A published limit as metres, and whether it is measured from the ground.
+
+    Every form the two sources write: `GND`, `SFC`, `0 AGL`, `FL 95`, `4000 MSL`,
+    `1000ft AMSL`, `500m AMSL`, `1000 AGL`. `None` is unlimited, which nothing in the
+    Czech low airspace says today but an OpenAir file is entitled to.
+
+    The second half of the answer only became worth having when the map started drawing
+    boxes: for the filter, a limit quoted above ground can be read as an altitude, and
+    for a box it cannot — `1000 AGL` drawn at 305 m AMSL is a lid *under* the terrain
+    over most of this country.
+    """
+    raw = (text or "").upper().replace(" ", "")
+    if not raw or raw.startswith("GND") or raw.startswith("SFC"):
+        return 0.0, True
+    if raw.startswith("UNL"):
+        return None, False
+    match = re.search(r"FL(\d+)", raw)
+    if match:
+        return float(match.group(1)) * _FL, False
+    ground = bool(re.search(r"AGL|AAL", raw))
+    # Strip the datum words *before* looking for a unit. `4000 MSL` is 4000 feet, and
+    # testing for an "M" in the string reads it as 4000 metres — a 2 800 m error on the
+    # 18 airspaces in the base file that use that form.
+    body = re.sub(r"A?(MSL|GND|AGL|AAL|SFC|ALT)", "", raw)
+    match = re.search(r"(\d+(?:\.\d+)?)", body)
+    if not match:
+        return 0.0, True
+    value = float(match.group(1))
+    metres = value if re.search(r"\d\s*M$|\dM(?![A-Z])", body) else value * FEET
+    return metres, ground
+
+
 def floor_metres(airspace) -> float:
     """The floor as metres AMSL, for the altitude filter.
 
     AGL is treated as AMSL: the filter's question is "could this be in my way low
     down", and a floor quoted above ground is by definition low down.
     """
-    raw = (airspace.floor or "").upper().replace(" ", "")
-    if not raw or raw.startswith("GND") or raw.startswith("SFC") or raw.startswith("0"):
-        return 0.0
-    match = re.search(r"FL(\d+)", raw)
-    if match:
-        return float(match.group(1)) * _FL
-    # Strip the datum words *before* looking for a unit. `4000 MSL` is 4000 feet, and
-    # testing for an "M" in the string reads it as 4000 metres — a 2 800 m error on the
-    # 18 airspaces in the base file that use that form.
-    body = re.sub(r"A?(MSL|GND|AGL|SFC|ALT)", "", raw)
-    match = re.search(r"(\d+(?:\.\d+)?)", body)
-    if not match:
-        return 0.0
-    value = float(match.group(1))
-    return value if re.search(r"\d\s*M$|\dM(?![A-Z])", body) else value * FEET
+    metres, _ = limit_metres(airspace.floor)
+    return 0.0 if metres is None else metres
+
+
+def ceiling_metres(airspace) -> tuple[float | None, bool]:
+    """The ceiling as metres and whether it is above the ground — what the 3D map needs
+    to put a lid on the box. `None` metres is an unlimited ceiling."""
+    return limit_metres(airspace.ceiling)
 
 
 def _path(points, project) -> str:
@@ -871,6 +897,21 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
     shift = math.hypot(east, north)
     top = int(math.ceil(max(floor_metres(a) for a in airspaces) / 50.0) * 50)
 
+    # Only where there is a 3D view to say it about. The flat fallback draws outlines,
+    # and a page that described boxes nobody could see would be worse than silent.
+    boxes = ""
+    if scene is not None:
+        from .scene import DRAWN_TOP
+
+        capped = sum(1 for ring in scene.get("airspaces", []) if ring.get("t"))
+        boxes = (
+            " Each zone is the box it really is — floor to ceiling, at true height, so "
+            "drag with the right button to tilt and see what sits over what."
+            + (f" The {capped} that run above {DRAWN_TOP / 1000:.0f} km are cut off at a "
+               "dashed lid, which is a cap and not their ceiling; the label says how high "
+               "they go." if capped else "")
+        )
+
     download = ""
     if openair_name:
         download = (
@@ -900,7 +941,7 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
   out: a zone around each of the {overlay.atz_count} public aerodromes, and the traffic
   circuit at {overlay.circuit_fields} fields and ultralight strips. A paraglider may fly
   inside the zone but must stay out of the circuit, and no instrument draws either.
-  Scroll to zoom, drag to pan, hover for the name and limits.</p>
+  Scroll to zoom, drag to pan, hover for the name and limits.{boxes}</p>
   {controls(top, flat=scene is None)}
   <div class="asp-holder">
     {_map(airspaces, project, scene, uid)}
