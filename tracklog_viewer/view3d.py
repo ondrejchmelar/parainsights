@@ -56,8 +56,15 @@ TILE_SOURCES = {
 
 
 def data(analysis: Analysis, terrain, *, tolerance: float | None = None,
-         basemaps: dict | None = None, tiles: bool = True) -> dict:
-    """Terrain grid, track and climbs, in the compact form the renderer wants."""
+         basemaps: dict | None = None, tiles: bool = True,
+         airspace: dict | None = None) -> dict:
+    """Terrain grid, track and climbs, in the compact form the renderer wants.
+
+    `airspace` is a layer built by `airspaces.scene.layer` — rings and their colours,
+    already cut to this terrain's box. It arrives prepared rather than as airspace
+    objects because nothing in this module knows what an ATZ is, which is the property
+    that lets the airspace tool reuse this view at all.
+    """
     flight = analysis.flight
     series = analysis.series
     altitude = flight.alt_gps if np.any(flight.alt_gps) else series.alt
@@ -157,6 +164,12 @@ def data(analysis: Analysis, terrain, *, tolerance: float | None = None,
             "from": round(analysis.wind.direction, 1),
             "cardinal": analysis.wind.cardinal,
         } if analysis.wind else None),
+        # The airspace over this flight's own ground, and the switch that says the reader
+        # owns it. On a map whose subject *is* the airspace there is no switch and the
+        # layer is simply on; here the flight is the subject, so it starts off and the bar
+        # carries a button — the same call the phase labels make, for the same reason.
+        **(airspace or {}),
+        **({"airspaceToggle": True} if airspace else {}),
     }
 
 
@@ -294,6 +307,22 @@ def panel(payload: dict, uid: str, *, kmz_uri: str | None = None,
         ' aria-label="Label each glide with its ratio and distance">glides</button>'
         "</div>"
     ) if payload.get("phases") else ""
+    # Only where the payload says the reader owns the layer. The airspace map's own panel
+    # carries the same rings and no button: there the airspace is the subject, the page
+    # has class and floor and time filters of its own, and a second way to hide the whole
+    # thing would leave its "743 shown" count describing something nobody can see.
+    airspace = (
+        '<div class="view3d-seg view3d-airspace" role="group" aria-label="Airspace">'
+        '<button type="button" data-view3d-act="airspace-toggle" aria-pressed="false"'
+        ' aria-label="Draw the airspace over this flight">airspace</button>'
+        "</div>"
+    ) if payload.get("airspaceToggle") else ""
+    # The label the layer needs to be worth anything: a translucent shape with no name
+    # says something is there and not what. Placed by the widget, which is the only thing
+    # that knows what is under a point.
+    airspace_name = (
+        '<div class="view3d-asp" hidden></div>' if payload.get("airspaceToggle") else ""
+    )
     return f"""
     <div class="panel view3d-panel">
       <!-- `tabindex` is what makes the view itself reachable. Without it the only
@@ -306,6 +335,7 @@ def panel(payload: dict, uid: str, *, kmz_uri: str | None = None,
                           question mark for the key list.">
       </canvas>
       {earth}
+      {airspace_name}
       <p class="view3d-credit">{credit}</p>
       <p class="view3d-hint" hidden>arrows pan &middot; shift + arrows turn and tilt &middot;
         <kbd>?</kbd> for keys</p>
@@ -331,6 +361,7 @@ def panel(payload: dict, uid: str, *, kmz_uri: str | None = None,
           <dt>+ &minus;</dt><dd>zoom</dd>
           <dt>1 2 4</dt><dd>exaggeration</dd>
           <dt>s m r</dt><dd>satellite, map, relief</dd>
+          {'<dt>a</dt><dd>airspace</dd>' if payload.get("airspaceToggle") else ''}
           <dt>f</dt><dd>full screen</dd>
           <dt>0</dt><dd>reset view</dd>
         </dl>
@@ -345,6 +376,7 @@ def panel(payload: dict, uid: str, *, kmz_uri: str | None = None,
              either, or — the default — neither. Both on at once over a long flight is
              more label than terrain, which is why neither starts on. -->
         {labels}
+        {airspace}
         <!-- The zoom pair survives on a desktop because pinch is the one gesture that is
              genuinely awkward on a trackpad. Rotate and tilt do not: they are a drag, a
              ctrl-drag and a right-drag, the caption above teaches exactly that, and they
@@ -429,6 +461,13 @@ canvas.view3d { display: block; width: 100%; aspect-ratio: 21 / 9; cursor: grab;
   color: var(--ink-2); background: color-mix(in srgb, var(--panel) 78%, transparent);
   padding: 3px 7px; border-radius: 2px; max-width: 46%; text-align: right; }
 canvas.view3d.is-dragging { cursor: grabbing; }
+/* The airspace label. `pointer-events: none` or it would sit under the cursor, take the
+   next pointermove for itself and flicker the label it is showing. Positioned by the
+   widget in the panel's own coordinates, which is why the panel is the containing block
+   and not the canvas. */
+.view3d-asp { position: absolute; pointer-events: none; z-index: 5; max-width: 62%;
+  background: var(--ink); color: var(--paper); font-size: 12px; line-height: 1.35;
+  padding: 5px 8px; border-radius: 3px; }
 /* The sun and the wind are drawn *on the canvas*, not in the DOM: both are geographic
    directions and have to turn with the view, which means living in the same coordinate
    system as the terrain they describe. There is no control here any more — the sun
@@ -1755,6 +1794,9 @@ function initView3d(root, cursorTrack) {
   // thing the layer exists to show.
   var airspaceFilter = null;
   var airspaceHits = [];    // { box, space }, in draw order; hit-tested back to front
+  // Off to begin with wherever the payload offers a button, on wherever it does not: a
+  // map of the airspace draws it, a map of a flight offers it.
+  var airspaceOn = !scene.airspaceToggle;
 
   // Floor and lid at one vertex, in metres AMSL.
   function airspaceFloorAt(space, lon, lat) {
@@ -1812,7 +1854,9 @@ function initView3d(root, cursorTrack) {
   }
 
   function drawAirspaces() {
-    var spaces = scene.airspaces || [];
+    var spaces = airspaceOn ? (scene.airspaces || []) : [];
+    // Cleared, not kept: a hit list left behind by the last frame would still answer for
+    // a layer that is no longer on screen.
     airspaceHits = [];
     if (!spaces.length) return;
     var colours = scene.airspaceColours || {};
@@ -1876,6 +1920,49 @@ function initView3d(root, cursorTrack) {
       }
     }
     return null;
+  }
+
+  // The airspace label, for a panel that carries the layer as an option rather than as
+  // its subject. The airspace *map* wires its own — it has a tooltip, a class legend and
+  // a floor slider around it — so this only runs where the page has none of that and a
+  // translucent shape would otherwise be an unnamed colour.
+  //
+  // Hover on a mouse, tap-to-pin on a touchscreen, and never while a gesture is running:
+  // a touchscreen's pointerout means the finger lifted, not that the label stopped being
+  // wanted, and a drag that fought the label for the frame would drop the frame rate of
+  // the drag itself.
+  var airspaceName = root.querySelector('.view3d-asp');
+
+  function hideAirspaceName() {
+    if (airspaceName) airspaceName.hidden = true;
+  }
+
+  function placeAirspaceName(space, clientX, clientY, above) {
+    if (!airspaceName) return;
+    airspaceName.textContent = space.n;
+    airspaceName.hidden = false;
+    var host = root.getBoundingClientRect();
+    var left = clientX - host.left + (above ? -airspaceName.offsetWidth / 2 : 14);
+    var top = clientY - host.top + (above ? -airspaceName.offsetHeight - 18 : 14);
+    left = Math.max(6, Math.min(left, host.width - airspaceName.offsetWidth - 6));
+    airspaceName.style.left = left + 'px';
+    airspaceName.style.top = Math.max(6, top) + 'px';
+  }
+
+  if (airspaceName) {
+    canvas.addEventListener('pointermove', function (event) {
+      if (event.pointerType === 'touch' || event.buttons || !airspaceOn) return;
+      var space = airspaceAt(event.clientX, event.clientY);
+      if (space) placeAirspaceName(space, event.clientX, event.clientY, false);
+      else hideAirspaceName();
+    });
+    canvas.addEventListener('pointerleave', hideAirspaceName);
+    canvas.addEventListener('pointerdown', function (event) {
+      if (event.pointerType !== 'touch' || !airspaceOn) return;
+      var space = airspaceAt(event.clientX, event.clientY);
+      if (space) placeAirspaceName(space, event.clientX, event.clientY, true);
+      else hideAirspaceName();
+    });
   }
 
   function drawTrack() {
@@ -2591,6 +2678,18 @@ function initView3d(root, cursorTrack) {
         button.classList.toggle('is-on', on);
         button.setAttribute('aria-pressed', on ? 'true' : 'false');
       });
+    } else if (act === 'airspace-toggle') {
+      // Only where the reader was offered the switch. Without this, `a` on the airspace
+      // map — whose subject is the layer, and which has no button — would turn the whole
+      // map off with nothing on screen saying it had.
+      if (!scene.airspaceToggle) return;
+      airspaceOn = !airspaceOn;
+      if (!airspaceOn) hideAirspaceName();
+      root.querySelectorAll('[data-view3d-act="airspace-toggle"]').forEach(
+        function (button) {
+          button.classList.toggle('is-on', airspaceOn);
+          button.setAttribute('aria-pressed', airspaceOn ? 'true' : 'false');
+        });
     } else if (act === 'reset') {
       view.yaw = HOME.yaw; view.pitch = HOME.pitch;
       view.zoom = 1; view.panX = 0; view.panY = 0;
@@ -2630,7 +2729,8 @@ function initView3d(root, cursorTrack) {
     ArrowLeft: 'pan-left', ArrowRight: 'pan-right',
     ArrowUp: 'pan-up', ArrowDown: 'pan-down',
     '+': 'zoom-in', '=': 'zoom-in', '-': 'zoom-out', '_': 'zoom-out',
-    f: 'fullscreen', F: 'fullscreen', '0': 'reset'
+    f: 'fullscreen', F: 'fullscreen', '0': 'reset',
+    a: 'airspace-toggle', A: 'airspace-toggle'
   };
   var SHIFT_ACTS = {
     ArrowLeft: 'rotate-left', ArrowRight: 'rotate-right',

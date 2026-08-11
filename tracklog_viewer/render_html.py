@@ -2030,7 +2030,7 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
                  basemaps=None, fetch_tiles: bool = True,
                  kmz: bytes | None = None, uid: str = "f0",
                  hidden: bool = False, archive=None, peers=None,
-                 flight_plan=None) -> str:
+                 flight_plan=None, airspace=None) -> str:
     """One flight's sections, from masthead to footer.
 
     ``meteo`` and ``route`` are optional: the report degrades to the flight's own
@@ -2166,7 +2166,7 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
         # A shared document carries several flights, so trade 3D track detail for size.
         payload = view3d.data(
             analysis, terrain, tolerance=4.0 if uid == "f0" else 12.0,
-            basemaps=basemaps, tiles=fetch_tiles
+            basemaps=basemaps, tiles=fetch_tiles, airspace=airspace
         )
         kmz_uri = None
         if kmz:
@@ -2182,7 +2182,10 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
       <p>Hovering a moment in the side view marks the same moment on the map above, and in
          the top view below. Click to keep it there while you look; click again, or press
          <kbd>Esc</kbd>, to let go. A row in the climbs or glides table does the same for
-         where that phase began.</p>
+         where that phase began.{
+        " <strong>Airspace</strong> draws the zones over this flight's own ground as the "
+        "boxes they are, floor to ceiling — hover one for its name and limits."
+        if payload.get("airspaceToggle") else ""}</p>
     </div>
     {view3d.panel(payload, uid, kmz_uri=kmz_uri,
                   kmz_name=f"{summary.date}-{(summary.site or 'flight').replace(' ', '-')}.kmz")}
@@ -2652,7 +2655,8 @@ ADD_TAB = (
 
 def render(analysis: Analysis, *, meteo=None, route=None, terrain=None,
            basemaps=None, fetch_tiles: bool = True, kmz: bytes | None = None,
-           archive=None, flight_plan=None, extras: "list[Extra]" = ()) -> str:
+           archive=None, flight_plan=None, airspace=None,
+           extras: "list[Extra]" = ()) -> str:
     """A report for a single flight, with the own-track picker alongside it."""
     summary = analysis.summary
     title = f"{summary.date} · {summary.site or 'flight'} — flight review"
@@ -2673,7 +2677,7 @@ def render(analysis: Analysis, *, meteo=None, route=None, terrain=None,
             _flight_body(
                 analysis, meteo=meteo, route=route, terrain=terrain,
                 basemaps=basemaps, fetch_tiles=fetch_tiles, kmz=kmz, uid="f0",
-                archive=archive, flight_plan=flight_plan,
+                archive=archive, flight_plan=flight_plan, airspace=airspace,
             )
         ],
         tabs,
@@ -2705,6 +2709,7 @@ def render_multi(reports: list[dict], *, archive=None, extras: "list[Extra]" = (
                 uid=uid,
                 archive=archive,
                 flight_plan=report.get("plan"),
+                airspace=report.get("airspace"),
                 # Every other flight in this document, so each one can say where it
                 # stands among them. The document held three flights and never once put
                 # them side by side.
@@ -2750,12 +2755,13 @@ def render_multi(reports: list[dict], *, archive=None, extras: "list[Extra]" = (
 
 def write(analysis: Analysis, path, *, meteo=None, route=None, terrain=None,
           basemaps=None, fetch_tiles: bool = True, kmz: bytes | None = None,
-          archive=None, flight_plan=None, extras: "list[Extra]" = ()) -> Path:
+          archive=None, flight_plan=None, airspace=None,
+          extras: "list[Extra]" = ()) -> Path:
     path = Path(path)
     path.write_text(
         render(analysis, meteo=meteo, route=route, terrain=terrain, basemaps=basemaps,
-               fetch_tiles=fetch_tiles,
-               kmz=kmz, archive=archive, flight_plan=flight_plan, extras=extras),
+               fetch_tiles=fetch_tiles, kmz=kmz, archive=archive,
+               flight_plan=flight_plan, airspace=airspace, extras=extras),
         encoding="utf-8",
     )
     return path

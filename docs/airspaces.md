@@ -435,10 +435,20 @@ view in the tracklog report (`tracklog_viewer.cli --airspace`). Both are publish
 
 ## Wanted next
 
-- **Draw the flight's own track over the airspace map.** The view is in the report now,
-  but the two do not yet know about each other.
+- ~~**Draw the flight's own track over the airspace map.**~~ **Done, the other way
+  round** — the airspace goes over the flight's map rather than the flight over the
+  country. `scene.layer` cuts the 743 zones to the box the flight's terrain was fetched
+  for and hands them to `view3d.data`; the panel carries an `airspace` switch, off until
+  pressed, and names a zone on hover. A flight the layer does not reach — Pakistan, the
+  Dolomites — gets no layer and so no button. It needs `--airspace` *and* `--terrain`:
+  the first is what fetches the airspace at all, the second is what gives the flight a
+  3D map to put it on.
 - **Airspace against the track**: which zones a flight entered, how close it came, and
-  at what height — the natural bridge to `tracklog_viewer/analysis.py`.
+  at what height — the natural bridge to `tracklog_viewer/analysis.py`. Half of it is
+  now cheap: the report already knows which zones are over the flight, in the payload the
+  switch draws from. What is missing is the geometry against the track, and the vertical
+  test in particular — a ring the track crosses at 800 m under a floor of FL95 is not an
+  infringement and must not be reported as one.
 - **Activation state for the *base* airspace.** Dropzones, TSAs and TRAs are only live
   sometimes, and the AUP and NOTAM feeds say when. The aerodrome layers now carry their
   published hours — see *When the field is open* — but everything red and amber here is

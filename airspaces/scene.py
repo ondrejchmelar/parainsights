@@ -232,3 +232,43 @@ def build(airspaces, *, terrain=None, basemaps=None, tiles: bool = True) -> dict
         "view": {"yaw": 0.0, "pitch": 1.32},
     }
     return payload
+
+
+def near(airspaces, west: float, east: float, south: float, north: float):
+    """Only the airspace that reaches into this box.
+
+    Bounding box against bounding box, not "has a vertex inside": a TMA the size of
+    Bohemia can contain a whole flight without putting a single one of its own vertices
+    anywhere near it, and that is exactly the airspace a pilot most wants drawn.
+
+    The box the caller passes is the map's own — the terrain grid it fetched — so
+    "nearby" means "on this map" rather than a radius nobody chose. Airspace off the edge
+    of the ground is airspace with nothing to draw it against.
+    """
+    out = []
+    for airspace in airspaces:
+        if len(airspace.points) < 3:
+            continue
+        lats = [lat for lat, _ in airspace.points]
+        lons = [lon for _, lon in airspace.points]
+        if max(lons) < west or min(lons) > east:
+            continue
+        if max(lats) < south or min(lats) > north:
+            continue
+        out.append(airspace)
+    return out
+
+
+def layer(airspaces, terrain) -> dict:
+    """The airspace layer for a map of this terrain, ready to merge into a scene.
+
+    Empty when nothing reaches the box — which is the answer for a flight in Pakistan,
+    and the reason a report of one carries no airspace button rather than an empty one.
+    """
+    found = near(airspaces, terrain.west, terrain.east, terrain.south, terrain.north)
+    if not found:
+        return {}
+    return {
+        "airspaces": rings(found),
+        "airspaceColours": {key: colour for key, _, colour in CLASSES},
+    }

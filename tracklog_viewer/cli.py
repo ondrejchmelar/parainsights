@@ -181,6 +181,23 @@ def main(argv: list[str] | None = None) -> int:
         ))
         print(f"wrote {target}")
 
+        # And over each flight's own map, behind a switch. The whole set is 743 airspaces
+        # over a country; what belongs on a map of one flight is what that map can draw,
+        # so each report gets only the airspace reaching its own terrain box — which for a
+        # flight in Pakistan is none, and it then carries no button rather than an empty
+        # one.
+        from airspaces import scene as airspace_scene
+
+        spaces = list(base) + list(overlay.airspaces)
+        for report in reports:
+            if report.get("terrain") is None:
+                continue
+            report["airspace"] = airspace_scene.layer(spaces, report["terrain"])
+        counted = sum(len(r.get("airspace", {}).get("airspaces", [])) for r in reports)
+        if counted:
+            print(f"airspace over {sum(1 for r in reports if r.get('airspace'))} "
+                  f"of {len(reports)} flights, {counted} zones in all")
+
     if args.html:
         if len(reports) == 1:
             render_html.write(
@@ -189,7 +206,8 @@ def main(argv: list[str] | None = None) -> int:
                 terrain=reports[0]["terrain"], basemaps=reports[0]["basemaps"],
                 fetch_tiles=reports[0]["fetch_tiles"], kmz=reports[0]["kmz"],
                 archive=held if args.archive else None,
-                flight_plan=reports[0]["plan"], extras=extras,
+                flight_plan=reports[0]["plan"],
+                airspace=reports[0].get("airspace"), extras=extras,
             )
         else:
             render_html.write_multi(

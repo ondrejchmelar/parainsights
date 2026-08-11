@@ -127,6 +127,13 @@ to FL165 or higher are **capped at 4 000 m**, drawn with a dashed open lid and t
 ceiling in the label, because drawn true they hide everything a paraglider meets. See
 "The boxes" in `docs/airspaces.md`.
 
+The same layer goes over **each flight's own 3D map** in the report, behind an `airspace`
+switch that starts off — the flight is the subject there and the airspace is context, the
+same call the phase labels make. Each flight gets only the zones reaching the box its
+terrain was fetched for (`scene.layer`), so a flight in Pakistan carries no layer and no
+button, and the report grows by the airspace it can actually draw. It needs `--airspace`
+*and* `--terrain`.
+
 ## A network is assumed
 
 **This was not always true and the code still remembers it.** Everything here was built

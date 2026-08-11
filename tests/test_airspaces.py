@@ -1355,3 +1355,63 @@ def test_pointing_at_the_wall_names_the_airspace():
         "a point on the lid found nothing: the box is not hit-tested")
     assert answer["flat"] is None, (
         "the point was inside the floor ring anyway, so this proves nothing about walls")
+
+
+# ------------------------------------------- the layer over a flight
+
+
+def _terrain_box(west=14.0, east=14.5, south=50.0, north=50.4):
+    import numpy as np
+
+    from tracklog_viewer import terrain as terrain_module
+
+    return terrain_module.Terrain(west=west, east=east, south=south, north=north,
+                                  elevations=np.full((8, 8), 400.0))
+
+
+def _band(name, west, east, south, north):
+    return openair.Airspace(name, "C", floor="GND", ceiling="FL 95", points=[
+        (south, west), (south, east), (north, east), (north, west),
+    ])
+
+
+def test_a_flight_gets_the_airspace_that_reaches_its_own_map():
+    """743 airspaces over a country is not a layer for a map of one flight. What belongs
+    on it is what it can draw: the box the terrain was fetched for."""
+    from airspaces import scene as airspace_scene
+
+    over = _band("OVER", 14.1, 14.3, 50.1, 50.3)
+    beside = _band("BESIDE", 16.0, 16.2, 50.1, 50.3)
+    found = airspace_scene.near(
+        [over, beside], west=14.0, east=14.5, south=50.0, north=50.4)
+    assert [a.name for a in found] == ["OVER"]
+
+
+def test_an_airspace_bigger_than_the_map_is_still_over_it():
+    """Boxes against boxes, not "has a vertex inside": a TMA the size of Bohemia can
+    contain a whole flight without putting one of its own vertices near it, and that is
+    exactly the airspace a pilot most wants drawn."""
+    from airspaces import scene as airspace_scene
+
+    huge = _band("HUGE", 12.0, 19.0, 48.5, 51.0)
+    found = airspace_scene.near(
+        [huge], west=14.0, east=14.5, south=50.0, north=50.4)
+    assert [a.name for a in found] == ["HUGE"]
+
+
+def test_the_layer_carries_the_rings_and_their_colours():
+    from airspaces import scene as airspace_scene
+
+    layer = airspace_scene.layer([_band("OVER", 14.1, 14.3, 50.1, 50.3)], _terrain_box())
+    assert len(layer["airspaces"]) == 1
+    assert layer["airspaces"][0]["c"] == pytest.approx(2895, abs=5)
+    assert layer["airspaceColours"]["base"]
+
+
+def test_a_flight_with_nothing_near_it_gets_no_layer_at_all():
+    """A flight in Pakistan must carry no button rather than an empty one, and no bytes
+    for a layer with nothing in it."""
+    from airspaces import scene as airspace_scene
+
+    away = _band("AWAY", 74.0, 74.2, 36.0, 36.2)
+    assert airspace_scene.layer([away], _terrain_box()) == {}

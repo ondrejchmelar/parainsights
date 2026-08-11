@@ -111,7 +111,7 @@ def _basemap(size: int = 256) -> dict:
 def _scene(*, terrain: dict | None = None, basemap: bool = True,
            basemap_size: int = 256, sun: dict | None = None,
            wind: dict | None = None, cursor: dict | None = None,
-           tiles: bool = False) -> dict:
+           tiles: bool = False, airspace: bool = False) -> dict:
     dem = terrain or _terrain()
     track = {"lon": [], "lat": [], "alt": [], "c": []}
     for i in range(120):
@@ -147,6 +147,19 @@ def _scene(*, terrain: dict | None = None, basemap: bool = True,
         # uploaded track may have no wind estimate, and neither may draw anything then.
         **({"sun": sun} if sun else {}),
         **({"wind": wind} if wind else {}),
+        # One zone over the flight, behind the switch a flight map offers — the shape
+        # the viewer sees, which is not the shape the airspace map sees: there the layer
+        # is the subject, is on, and has no button.
+        **({
+            "airspaces": [{
+                "k": "base", "n": "TMA TEST  (GND – FL 95)", "f": 0, "g": True,
+                "c": 2896,
+                "lon": [14.05, 14.20, 14.20, 14.05],
+                "lat": [49.05, 49.05, 49.20, 49.20],
+            }],
+            "airspaceColours": {"base": "#c2410c"},
+            "airspaceToggle": True,
+        } if airspace else {}),
         # Not part of the payload: the cursor track is initView3d's second argument, and
         # `_probe` lifts it out of here and hands it over as one.
         **({"__cursor": cursor} if cursor else {}),
@@ -813,3 +826,96 @@ def test_the_detail_patch_reaches_the_pixels_and_only_where_it_covers():
     assert before[1] > after[1], "the base imagery was already magenta"
     assert abs(cleared[1] - before[1]) < 25, (
         f"clearing the patch did not put the base image back: {cleared} vs {before}")
+
+
+# ---------------------------------------------------------------- the airspace switch
+#
+# The layer is the airspace tool's, and this is the viewer's half of it: a flight map
+# carries the airspace over its own ground behind a button, off until asked. Three claims
+# that can only be made in a browser — that nothing is drawn or pointable until the button
+# is pressed, that pressing it draws and names the zone, and that the same widget with no
+# button on it keeps drawing the layer it exists for.
+
+_TOGGLE = """
+var h = window.__handle;
+var panel = document.querySelector('.view3d-panel');
+var button = panel.querySelector('[data-view3d-act="airspace-toggle"]');
+var canvas = document.querySelector('canvas.view3d');
+h.view.yaw = 0; h.view.pitch = 0.7; h.redraw();
+// The middle of the test zone, in client pixels.
+function overZone() {
+  var m = h.toMetres(14.125, 49.125);
+  var p = h.worldProject(m[0], m[1], h.groundAt(14.125, 49.125));
+  var box = canvas.getBoundingClientRect();
+  return { x: box.left + p[0] / canvas.width * box.width,
+           y: box.top + p[1] / canvas.height * box.height };
+}
+function hover(at) {
+  canvas.dispatchEvent(new PointerEvent('pointermove', {
+    clientX: at.x, clientY: at.y, bubbles: true, pointerType: 'mouse', buttons: 0 }));
+}
+function label() {
+  var tip = panel.querySelector('.view3d-asp');
+  return tip && !tip.hidden ? tip.textContent : null;
+}
+"""
+
+
+@needs_chrome
+def test_the_flight_map_hides_the_airspace_until_it_is_asked_for():
+    """The flight is the subject and the airspace is context, so the layer starts off —
+    the same call the phase labels make. Off has to mean *off*: not drawn, and not
+    answering the pointer either, or a reader would be naming zones they cannot see."""
+    answer = _probe(_scene(airspace=True), _TOGGLE + """
+    var at = overZone();
+    hover(at);
+    return { hasButton: !!button, pressed: button.getAttribute('aria-pressed'),
+             found: !!h.airspaceAt(at.x, at.y), label: label() };
+    """)
+    assert answer["hasButton"], "a flight map with airspace in it carries no switch"
+    assert answer["pressed"] == "false"
+    assert not answer["found"], "the hidden layer still answered the pointer"
+    assert answer["label"] is None
+
+
+@needs_chrome
+def test_pressing_it_draws_the_airspace_and_names_it_on_hover():
+    """A translucent shape with no name says something is there and not what, and the
+    flight report has none of the airspace page's legend, slider or tooltip around it."""
+    answer = _probe(_scene(airspace=True), _TOGGLE + """
+    button.click();
+    // `draw` schedules an animation frame and this probe returns before one arrives —
+    // on the page that is 16 ms and nobody sees it, in here it is the whole answer.
+    h.redraw();
+    var at = overZone();
+    hover(at);
+    var named = label();
+    button.click();
+    h.redraw();
+    hover(at);
+    return { pressed: button.getAttribute('aria-pressed'), named: named,
+             after: label(), found: !!h.airspaceAt(at.x, at.y) };
+    """)
+    assert answer["named"] and answer["named"].startswith("TMA TEST"), answer
+    assert "FL 95" in answer["named"], "the limits left the label"
+    assert answer["pressed"] == "false", "the second press did not turn it back off"
+    assert answer["after"] is None, "the label outlived the layer"
+    assert not answer["found"]
+
+
+@needs_chrome
+def test_a_map_whose_subject_is_the_airspace_keeps_no_switch():
+    """The airspace map hands the same widget the same rings without `airspaceToggle`,
+    and there the layer is simply on. `a` must do nothing there — bound blindly it would
+    turn the whole map off with nothing on screen saying it had."""
+    scene = _scene(airspace=True)
+    del scene["airspaceToggle"]
+    answer = _probe(scene, _TOGGLE + """
+    var at = overZone();
+    canvas.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
+    h.redraw();
+    return { hasButton: !!button, found: !!h.airspaceAt(at.x, at.y), label: label() };
+    """)
+    assert not answer["hasButton"], "the airspace map grew a redundant switch"
+    assert answer["found"], "pressing 'a' turned the airspace map's own layer off"
+    assert answer["label"] is None, "the widget's label fought the page's own tooltip"
