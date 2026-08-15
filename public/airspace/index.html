@@ -148,6 +148,13 @@ canvas.view3d { display: block; width: 100%; aspect-ratio: 21 / 9; cursor: grab;
   color: var(--ink-2); background: color-mix(in srgb, var(--panel) 78%, transparent);
   padding: 3px 7px; border-radius: 2px; max-width: 46%; text-align: right; }
 canvas.view3d.is-dragging { cursor: grabbing; }
+/* The airspace label. `pointer-events: none` or it would sit under the cursor, take the
+   next pointermove for itself and flicker the label it is showing. Positioned by the
+   widget in the panel's own coordinates, which is why the panel is the containing block
+   and not the canvas. */
+.view3d-asp { position: absolute; pointer-events: none; z-index: 5; max-width: 62%;
+  background: var(--ink); color: var(--paper); font-size: 12px; line-height: 1.35;
+  padding: 5px 8px; border-radius: 3px; }
 /* The sun and the wind are drawn *on the canvas*, not in the DOM: both are geographic
    directions and have to turn with the view, which means living in the same coordinate
    system as the terrain they describe. There is no control here any more — the sun
@@ -356,6 +363,7 @@ canvas.view3d.is-dragging { cursor: grabbing; }
                           question mark for the key list.">
       </canvas>
       
+      
       <p class="view3d-credit">Imagery © Esri, Maxar, Earthstar Geographics</p>
       <p class="view3d-hint" hidden>arrows pan &middot; shift + arrows turn and tilt &middot;
         <kbd>?</kbd> for keys</p>
@@ -381,6 +389,7 @@ canvas.view3d.is-dragging { cursor: grabbing; }
           <dt>+ &minus;</dt><dd>zoom</dd>
           <dt>1 2 4</dt><dd>exaggeration</dd>
           <dt>s m r</dt><dd>satellite, map, relief</dd>
+          
           <dt>f</dt><dd>full screen</dd>
           <dt>0</dt><dd>reset view</dd>
         </dl>
@@ -394,6 +403,7 @@ canvas.view3d.is-dragging { cursor: grabbing; }
         <!-- Two independent switches, not a segmented control: the reader can want both,
              either, or — the default — neither. Both on at once over a long flight is
              more label than terrain, which is why neither starts on. -->
+        
         
         <!-- The zoom pair survives on a desktop because pinch is the one gesture that is
              genuinely awkward on a trackpad. Rotate and tilt do not: they are a drag, a
@@ -1864,6 +1874,9 @@ function initView3d(root, cursorTrack) {
   // thing the layer exists to show.
   var airspaceFilter = null;
   var airspaceHits = [];    // { box, space }, in draw order; hit-tested back to front
+  // Off to begin with wherever the payload offers a button, on wherever it does not: a
+  // map of the airspace draws it, a map of a flight offers it.
+  var airspaceOn = !scene.airspaceToggle;
 
   // Floor and lid at one vertex, in metres AMSL.
   function airspaceFloorAt(space, lon, lat) {
@@ -1921,7 +1934,9 @@ function initView3d(root, cursorTrack) {
   }
 
   function drawAirspaces() {
-    var spaces = scene.airspaces || [];
+    var spaces = airspaceOn ? (scene.airspaces || []) : [];
+    // Cleared, not kept: a hit list left behind by the last frame would still answer for
+    // a layer that is no longer on screen.
     airspaceHits = [];
     if (!spaces.length) return;
     var colours = scene.airspaceColours || {};
@@ -1985,6 +2000,49 @@ function initView3d(root, cursorTrack) {
       }
     }
     return null;
+  }
+
+  // The airspace label, for a panel that carries the layer as an option rather than as
+  // its subject. The airspace *map* wires its own — it has a tooltip, a class legend and
+  // a floor slider around it — so this only runs where the page has none of that and a
+  // translucent shape would otherwise be an unnamed colour.
+  //
+  // Hover on a mouse, tap-to-pin on a touchscreen, and never while a gesture is running:
+  // a touchscreen's pointerout means the finger lifted, not that the label stopped being
+  // wanted, and a drag that fought the label for the frame would drop the frame rate of
+  // the drag itself.
+  var airspaceName = root.querySelector('.view3d-asp');
+
+  function hideAirspaceName() {
+    if (airspaceName) airspaceName.hidden = true;
+  }
+
+  function placeAirspaceName(space, clientX, clientY, above) {
+    if (!airspaceName) return;
+    airspaceName.textContent = space.n;
+    airspaceName.hidden = false;
+    var host = root.getBoundingClientRect();
+    var left = clientX - host.left + (above ? -airspaceName.offsetWidth / 2 : 14);
+    var top = clientY - host.top + (above ? -airspaceName.offsetHeight - 18 : 14);
+    left = Math.max(6, Math.min(left, host.width - airspaceName.offsetWidth - 6));
+    airspaceName.style.left = left + 'px';
+    airspaceName.style.top = Math.max(6, top) + 'px';
+  }
+
+  if (airspaceName) {
+    canvas.addEventListener('pointermove', function (event) {
+      if (event.pointerType === 'touch' || event.buttons || !airspaceOn) return;
+      var space = airspaceAt(event.clientX, event.clientY);
+      if (space) placeAirspaceName(space, event.clientX, event.clientY, false);
+      else hideAirspaceName();
+    });
+    canvas.addEventListener('pointerleave', hideAirspaceName);
+    canvas.addEventListener('pointerdown', function (event) {
+      if (event.pointerType !== 'touch' || !airspaceOn) return;
+      var space = airspaceAt(event.clientX, event.clientY);
+      if (space) placeAirspaceName(space, event.clientX, event.clientY, true);
+      else hideAirspaceName();
+    });
   }
 
   function drawTrack() {
@@ -2700,6 +2758,18 @@ function initView3d(root, cursorTrack) {
         button.classList.toggle('is-on', on);
         button.setAttribute('aria-pressed', on ? 'true' : 'false');
       });
+    } else if (act === 'airspace-toggle') {
+      // Only where the reader was offered the switch. Without this, `a` on the airspace
+      // map — whose subject is the layer, and which has no button — would turn the whole
+      // map off with nothing on screen saying it had.
+      if (!scene.airspaceToggle) return;
+      airspaceOn = !airspaceOn;
+      if (!airspaceOn) hideAirspaceName();
+      root.querySelectorAll('[data-view3d-act="airspace-toggle"]').forEach(
+        function (button) {
+          button.classList.toggle('is-on', airspaceOn);
+          button.setAttribute('aria-pressed', airspaceOn ? 'true' : 'false');
+        });
     } else if (act === 'reset') {
       view.yaw = HOME.yaw; view.pitch = HOME.pitch;
       view.zoom = 1; view.panX = 0; view.panY = 0;
@@ -2739,7 +2809,8 @@ function initView3d(root, cursorTrack) {
     ArrowLeft: 'pan-left', ArrowRight: 'pan-right',
     ArrowUp: 'pan-up', ArrowDown: 'pan-down',
     '+': 'zoom-in', '=': 'zoom-in', '-': 'zoom-out', '_': 'zoom-out',
-    f: 'fullscreen', F: 'fullscreen', '0': 'reset'
+    f: 'fullscreen', F: 'fullscreen', '0': 'reset',
+    a: 'airspace-toggle', A: 'airspace-toggle'
   };
   var SHIFT_ACTS = {
     ArrowLeft: 'rotate-left', ArrowRight: 'rotate-right',
