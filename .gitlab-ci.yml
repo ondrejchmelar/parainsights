@@ -80,20 +80,44 @@ browser-tests:
   # a permanently-allowed-to-fail test job is decoration.
   allow_failure: true
 
-# The job has to be called `pages`, and what it publishes has to be the `public/`
-# artifact — that pairing is the whole contract. It runs after `tests` because of the
-# stage order, so a red suite does not deploy.
+# What this job can and cannot build, and why the difference matters.
+#
+# **The report cannot be built here.** It needs the IGC files and flight tracks stay out
+# of this repository, so `public/index.html` is a committed artifact — which is exactly
+# how the site once sat weeks out of date behind a wall of green pipelines: the renderer
+# changed, nobody rebuilt, and the job had nothing to notice with. `stale.sh` is what
+# notices now. It asks whether the commit that last built the page contains the last
+# change to everything that renders it, and fails when it does not. That is the whole
+# guard: it cannot rebuild the page, but it can refuse to publish a page that no longer
+# matches the code in the same commit.
+#
+# **The other three pages can be built here**, and are — `meteo` needs nothing but its
+# own committed data, and `airspace` and `planner` fetch from public sources. Building
+# them means three quarters of the site can never be stale, and the two that need a
+# network fail the job rather than publishing yesterday's copy if a source is down.
 pages:
+  extends: .uv
   stage: deploy
-  # Nearly irrelevant: this job builds nothing, it only hands GitLab the `public/`
-  # directory. All it needs is a shell, and busybox covers `test`, `echo` and `du`.
-  # Two things do matter — omitting `image:` makes gitlab.com's shared runners pull a
-  # heavy default to run one `echo`, and `:latest` is a CI base that changes under you.
-  image: alpine:3.20
+  # A deploy is not interruptible: cancelling it half way through publishes nothing and
+  # leaves the last deploy standing, which is a confusing state to debug.
+  interruptible: false
+  before_script:
+    # `stale.sh` reads commit dates, and the runner's helper image does the clone — the
+    # job image is Debian slim with uv and nothing else, so `git` has to be installed or
+    # the check quietly answers "no idea" and passes. That is the exact failure it
+    # exists to prevent, so `stale.sh` refuses to run without it rather than shrugging.
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends git
   script:
+    - uv sync --locked
     # Fail loudly rather than deploying an empty site: without this the job goes green
     # and publishes nothing, which looks like Pages being broken.
     - test -f public/index.html || (echo "no public/index.html to publish — build one locally, see the header of this file" && exit 1)
+    # The committed report against the code that renders it.
+    - sh ci/stale.sh
+    # The three pages that need no tracklogs, rebuilt every deploy.
+    - uv run python -m airspaces.cli --html public/airspace/index.html
+    - uv run python -m meteo.cli --html public/meteo/index.html
+    - uv run python -m planner.cli --html public/planner/index.html
     # Every page in the nav strip, because the strip links to all of them from all of
     # them: a missing sibling is not a smaller site, it is three dead links on every
     # page that is there.

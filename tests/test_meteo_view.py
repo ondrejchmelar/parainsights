@@ -468,3 +468,180 @@ def test_flymet_is_shown_for_today_and_tomorrow_and_not_beyond():
     assert not tomorrow["hidden"] and "/meteogram2/" in tomorrow["src"]
     assert third["hidden"] and fourth["hidden"]
     assert "km from this takeoff" in answer["caption"]
+
+
+# ------------------------------------------- choosing takeoffs, in a browser
+#
+# The picker used to be a 159-row list holding the top-left corner of the page: it was
+# the first thing a reader met, it needed scrolling to get past, and it stayed there for
+# as long as the page was open. It is a dialog now, and the page keeps up to three
+# takeoffs and compares them. These are the behaviours that rework has to have, and the
+# ones a screenshot cannot check.
+
+
+@needs_chrome
+class TestChoosingTakeoffs:
+    def test_the_page_opens_with_the_best_takeoff_already_chosen(self):
+        """A page that shows nothing until the reader picks a hill hides its own answer
+        to "is it worth going anywhere today"."""
+        answer = _probe_page("""
+        var m = window.__meteo;
+        return { chosen: m.chosen().length, focused: m.state.site,
+                 panel: document.getElementById('met-panel').hidden,
+                 chips: document.querySelectorAll('.met-chip').length };
+        """)
+        assert answer["chosen"] == 1
+        assert answer["focused"] is not None
+        assert answer["panel"] is False
+        assert answer["chips"] == 1
+
+    def test_the_list_is_behind_the_dialog_and_not_on_the_page(self):
+        """The whole point of the rework: 159 rows are not the page's furniture."""
+        answer = _probe_page("""
+        var modal = document.getElementById('met-modal');
+        var before = modal.open === true;
+        window.__meteo.open();
+        return { openBefore: before, openAfter: modal.open === true,
+                 rows: document.querySelectorAll('.met-site').length,
+                 inDialog: !!document.getElementById('met-list').closest('dialog') };
+        """)
+        assert answer["openBefore"] is False, "the picker is open before it is asked for"
+        assert answer["openAfter"] is True
+        assert answer["inDialog"] is True
+        assert answer["rows"] > 100, "the dialog should hold the whole list"
+
+    def test_searching_narrows_the_list(self):
+        answer = _probe_page("""
+        var m = window.__meteo;
+        m.open();
+        var all = document.querySelectorAll('.met-site').length;
+        var search = document.getElementById('met-search');
+        search.value = 'rana';
+        search.dispatchEvent(new Event('input', { bubbles: true }));
+        var narrowed = Array.prototype.map.call(
+          document.querySelectorAll('.met-site-name'), function (n) { return n.textContent; });
+        search.value = 'zzzznothing';
+        search.dispatchEvent(new Event('input', { bubbles: true }));
+        return { all: all, narrowed: narrowed,
+                 empty: document.querySelectorAll('.met-empty').length };
+        """)
+        assert answer["all"] > 100
+        assert answer["narrowed"], "searching for a real takeoff found nothing"
+        assert all("rana" in name.lower() for name in answer["narrowed"])
+        assert answer["empty"] == 1, "a search with no hits must say so"
+
+    def test_three_takeoffs_can_be_compared_and_a_fourth_is_refused(self):
+        """Three is the palette's limit, not a whim — the fourth categorical slot fails
+        the normal-vision floor against the third. What matters here is that the refusal
+        is explicit rather than an eviction the reader cannot see."""
+        answer = _probe_page("""
+        var m = window.__meteo;
+        var picked = [];
+        for (var i = 0; i < 5 && picked.length < 5; i++) {
+          if (m.chosen().indexOf(i) < 0) { m.add(i); picked.push(i); }
+        }
+        return { chosen: m.chosen().length,
+                 chips: document.querySelectorAll('.met-chip').length,
+                 rows: document.querySelectorAll('.met-compare tbody tr').length,
+                 hidden: document.getElementById('met-compare').hidden,
+                 status: document.getElementById('met-status').textContent };
+        """)
+        assert answer["chosen"] == 3
+        assert answer["chips"] == 3
+        assert answer["hidden"] is False
+        assert answer["rows"] == 3
+        assert "Three at a time" in answer["status"]
+
+    def test_the_comparison_appears_only_with_something_to_compare(self):
+        answer = _probe_page("""
+        var m = window.__meteo;
+        var table = document.getElementById('met-compare');
+        var alone = table.hidden;
+        var free = null;
+        for (var i = 0; i < 6; i++) if (m.chosen().indexOf(i) < 0) { free = i; break; }
+        m.add(free);
+        return { alone: alone, withTwo: table.hidden };
+        """)
+        assert answer["alone"] is True, "one takeoff is not a comparison"
+        assert answer["withTwo"] is False
+
+    def test_dropping_one_leaves_the_others_their_colour(self):
+        """Colour follows the takeoff, not its position in the list. A reader who has
+        just learned that the orange line is Raná must not find Raná blue a second later
+        because something above it was removed."""
+        answer = _probe_page("""
+        var m = window.__meteo;
+        var first = m.chosen()[0];
+        var added = [];
+        for (var i = 0; i < 8 && added.length < 2; i++) {
+          if (m.chosen().indexOf(i) < 0) { m.add(i); added.push(i); }
+        }
+        var before = m.state.slots.slice();
+        m.drop(first);
+        return { before: before, after: m.state.slots.slice() };
+        """)
+        before, after = answer["before"], answer["after"]
+        assert after[0] is None, "the dropped takeoff freed its own slot"
+        assert after[1] == before[1] and after[2] == before[2], (
+            f"the survivors were repainted: {before} became {after}")
+
+    def test_the_focused_takeoff_is_the_one_the_panel_describes(self):
+        answer = _probe_page("""
+        var m = window.__meteo;
+        var free = null;
+        for (var i = 0; i < 8; i++) if (m.chosen().indexOf(i) < 0) { free = i; break; }
+        m.add(free);
+        m.focus(free);
+        var conf = JSON.parse(document.querySelector('.met-data').textContent);
+        return { name: document.getElementById('met-name').textContent,
+                 wanted: conf.sites[free].name,
+                 focusedRows: document.querySelectorAll('.met-compare tr.is-focus').length,
+                 focusedChips: document.querySelectorAll('.met-chip.is-focus').length };
+        """)
+        assert answer["name"] == answer["wanted"]
+        assert answer["focusedRows"] == 1
+        assert answer["focusedChips"] == 1
+
+    def test_every_line_on_the_meteogram_is_named_somewhere_that_is_not_colour(self):
+        """Two of the three light-mode series sit under 3:1 against the panel, which the
+        palette's relief rule permits only where identity is carried by something other
+        than colour. Here it is carried twice: the legend and the comparison table."""
+        answer = _probe_page("""
+        var m = window.__meteo;
+        for (var i = 0; i < 8 && m.chosen().length < 3; i++) {
+          if (m.chosen().indexOf(i) < 0) m.add(i);
+        }
+        var conf = JSON.parse(document.querySelector('.met-data').textContent);
+        return {
+          chosen: m.chosen().map(function (i) { return conf.sites[i].name; }),
+          keys: document.getElementById('met-keys').textContent,
+          table: document.querySelector('.met-compare tbody').textContent
+        };
+        """)
+        assert len(answer["chosen"]) == 3
+        for name in answer["chosen"]:
+            assert name in answer["keys"], f"{name} is on the chart but not in the legend"
+            assert name in answer["table"], f"{name} is on the chart but not in the table"
+
+
+@needs_chrome
+def test_the_hour_applies_to_everything_at_once():
+    """The slider used to sit under the sounding, where it read as a control for that one
+    chart. It ranks the list, fills the comparison and picks the sounding's hour."""
+    answer = _probe_page("""
+    var m = window.__meteo;
+    var free = null;
+    for (var i = 0; i < 8; i++) if (m.chosen().indexOf(i) < 0) { free = i; break; }
+    m.add(free);
+    var input = document.getElementById('met-hour-input');
+    input.value = '9';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    return { hour: m.state.hour,
+             readout: document.getElementById('met-hour-readout').textContent,
+             inHead: !!document.getElementById('met-hour-input').closest('.met-head'),
+             rows: document.querySelectorAll('.met-compare tbody tr').length };
+    """)
+    assert answer["hour"] == 9
+    assert answer["readout"] == "9:00"
+    assert answer["inHead"] is True
+    assert answer["rows"] == 2

@@ -42,36 +42,77 @@ from .analysis import Analysis
 # change, change them there too; there is no shared source"*. Cheap enough to be worth
 # doing on the first finding rather than the tenth.
 #
-# **These values are provisional and the plan says why.** `docs/analysis-plan.md`:
-# *"A metric that fires on most flights is not a finding, it is a constant. Thresholds
-# come from the distribution over the archive, not from a round number that sounds
-# right."* Calibrating them needs the 50-file archive, which is `--archive` (see
-# `baseline.py`) and is not in this repository — `*.igc` is gitignored. Until then these
-# are seeded from the three flights measured in `docs/analysis-plan.md` and are the first
-# thing `--archive` should be pointed at.
+# **Calibrated against the archive, not chosen.** `docs/analysis-plan.md`: *"A metric
+# that fires on most flights is not a finding, it is a constant. Thresholds come from
+# the distribution over the archive, not from a round number that sounds right."*
+#
+# The rule applied here, uniformly: **each threshold is the percentile of its own
+# quantity that puts the card on no more than a third of flights**, with the percentile
+# and the resulting rate recorded beside it. Both halves matter — a percentile alone is
+# not enough, because most of these findings carry a cost gate as well, and a threshold
+# at p67 can still leave the card on 14% or on 35% depending on what else has to be true.
+# So the rates below are *measured card rates*, not predictions from the distribution.
+#
+# `python -m tracklog_viewer.calibrate DIR` re-measures the lot and prints both the
+# firing rates and the distributions. Run it before changing any number here, and again
+# afterwards. The figures in the comments are from 63 IGC flights on 2026-08-15;
+# `docs/analysis-plan.md` records the before-and-after.
+#
+# Two are **still uncalibrated and say so**: `low_clearance` needs a DEM per flight and
+# `ceiling_used` needs a sounding per flight, and the ERA5 archive is surface-only for
+# anything older than 60 days — so the distribution behind them cannot be measured from
+# the tracklogs alone. They keep their round numbers and their reasoning.
 THRESHOLDS = {
-    # Fraction of circling time in climbs under half the day's best before it is worth
-    # saying. Measured: 32% Rodella, 58% flatland, 56% tow day.
-    "weak_climb_share": 0.45,
-    # A gap this many times the day's own median is the expensive one.
-    "gap_over_median": 2.0,
+    # Fraction of circling time in climbs under half the day's best. Archive: median
+    # 0.53, p70 0.65 — the old 0.45 sat below the *median*, so this fired on half the
+    # archive and was closer to a description of thermalling than to a finding.
+    "weak_climb_share": 0.65,          # p70; was 0.45 on 49% of flights, now 27%
+    # A gap this many times the day's own median is the expensive one. Archive: median
+    # 2.82, p65 3.25. At 2.0 the "unusually long gap" was shorter than the typical
+    # longest gap, which is the same fault as above and louder, because it fired on
+    # nearly three flights in four. 3.0 was tried and left the card on 38%.
+    "gap_over_median": 3.25,           # p65; was 2.0 on 70% of flights, now 32%
+    # An absolute floor under the relative test: a four-minute gap is not a finding on a
+    # twenty-minute flight however far above that flight's median it is. Nearly inert on
+    # this archive (the shortest longest-gap is 249 s), and kept for the short flights
+    # that are not in it.
     "gap_minimum_seconds": 300,
-    # First minute against the rest. Measured: 0.86 Rodella, 0.48 flatland, 0.99 tow day.
-    "centring_ratio": 0.75,
+    # First minute against the rest. Archive: p34 0.75, median 0.88 — the number it
+    # already held puts this on 21% of flights, so it stays. Measured, not assumed.
+    "centring_ratio": 0.75,            # p34; unchanged, on 21% of flights
+    # How far under the day's own ceiling the best climb was left before that is worth a
+    # card. Archive: median 65 m, p58 100 m. The old rule was a bare 50 m floor inside
+    # the builder with nothing in this dict; it left the card on exactly a third, which
+    # is the line rather than a margin, and it called a 60 m difference a finding when
+    # 60 m is the noise between a climb's last fix and the day's best.
+    "best_climb_left_metres": 100.0,   # p58; was 50 on 33% of flights, now 22%
+    # The lossy part of the `other` slice — straight sink plus scratching — as a share of
+    # airtime. Archive: median 0.14, p71 0.18. This had no threshold at all and fired on
+    # **94%** of flights, which is the plain definition of a constant: every flight has
+    # some unclassified air in it, and saying so about all of them says nothing.
+    "other_lossy_share": 0.18,         # p71; new gate, was on 94% of flights, now 27%
     # Ground clearance under this, in metres, is a headline rather than a caption.
+    # **Uncalibrated**: needs a DEM per flight, which is a tile fetch per flight.
     "low_clearance": 100.0,
     # Below this AGL the flight is on the ground rather than near it. The lowest
     # clearance of *any* flight is its own launch or landing, so the search has to start
     # after the first and end before the last.
     "ground_margin": 100.0,
-    # Share of the top altitude band's circling time before "the top band was slow" is
-    # worth printing.
-    "band_share": 0.20,
+    # Share of the smallest altitude third's circling time before the shape of the
+    # column is worth printing. Archive: this pair leaves the card on 6% of flights —
+    # rare, which is what a finding is allowed to be; the rule is about firing too often.
+    # Loosening `band_share` to 0.10 moves it to 8%, so the second gate is what makes it
+    # rare and it is the one doing the real work.
+    "band_share": 0.20,                # p53; unchanged, the pair is on 6% of flights
     "band_ratio": 0.75,
     # Ceiling use: below this fraction of the modelled cloudbase is worth a card.
+    # **Uncalibrated**: needs a sounding per flight, and the ERA5 archive returns nulls
+    # on every pressure level for a flight older than 60 days.
     "ceiling_used": 0.85,
     # How close the triangle came to closing, as a fraction of its perimeter, before the
     # near miss is worth printing. `xc.MAX_CLOSING` is the rule; this is "nearly".
+    # Uncalibrated for a different reason: it needs `xc.triangle()` per flight, and only
+    # the flights that nearly closed a triangle are in the distribution at all.
     "near_close": 0.35,
     # Minimum cost share before a finding is worth a card at all.
     "minimum_share": 0.02,
@@ -183,7 +224,10 @@ def _best_climb_left(analysis: Analysis) -> Finding | None:
         return None
     ceiling = max(s.finish_altitude for s in thermals)
     under = ceiling - best.finish_altitude
-    if under < 50:
+    # Leaving the best climb *a little* under the day's ceiling is what every flight
+    # does — the archive's median is 65 m — so the gate is the archive's p67 rather than
+    # the 50 m floor that used to live here and fired on half of it.
+    if under < THRESHOLDS["best_climb_left_metres"]:
         return None
 
     index = thermals.index(best)
@@ -453,6 +497,13 @@ def _other_slice(analysis: Analysis) -> Finding | None:
         return None
     lossy = slice_.straight_sink + slice_.scratching
     if lossy < 300:
+        return None
+    # And it has to be a *large* unclassified slice, not merely a present one. Every
+    # flight has air that is neither a climb nor a glide — the archive's median lossy
+    # share is 14% of airtime — so before this gate the card appeared on 94% of flights
+    # and told the reader something true about all of them, which is a constant and not
+    # a finding. The gate is the archive's p67.
+    if lossy / max(analysis.summary.duration, 1) < THRESHOLDS["other_lossy_share"]:
         return None
 
     net = slice_.net_altitude

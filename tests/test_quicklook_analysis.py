@@ -120,11 +120,24 @@ window.addEventListener('load', function () {
 """
 
 
-def _upload(igc: str) -> dict:
+_RULES_RE = re.compile(
+    r'(<script type="application/json" id="ql-constants">)(.*?)(</script>)', re.S
+)
+
+
+def _upload(igc: str, **rules) -> dict:
     page = render_html._page("probe", [])
     original = "'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'"
     assert original in page, "the DEM tile URL moved; this test rewrites it by hand"
     page = page.replace(original, json.dumps("about:blank#{z}/{x}/{y}"))
+    if rules:
+        # Rewriting the payload rather than the script is the whole point: if the page
+        # still holds its own copy of a threshold, changing the payload changes nothing
+        # and the test that depends on it fails.
+        match = _RULES_RE.search(page)
+        assert match, "the shared-constants payload is not in the page"
+        patched = {**json.loads(match.group(2)), **rules}
+        page = page[:match.start(2)] + json.dumps(patched) + page[match.end(2):]
     page += _PROBE % igc
 
     with tempfile.TemporaryDirectory() as folder:
@@ -167,6 +180,47 @@ class TestTheBrowserFindsTheClimbsPythonDoes:
             found = analysis.analyse(igc.parse(path))
         assert len(found.thermals) >= 1, (
             "the fixture does not contain a climb by the Python rule either")
+
+
+class TestTheThresholdsComeFromPython:
+    """The other half of the documented gap: the page had its own copies of these.
+
+    `debrief.THRESHOLDS` was already serialised beside the debrief; what was missing was
+    the analysis constants and a reader for either. The Python check below is the cheap
+    one — it says the payload carries what the modules say. The browser check is the one
+    that matters: it moves a number in the payload only, and the page has to change its
+    answer, which it cannot do if it is still reading a literal.
+    """
+
+    def test_the_payload_is_the_modules_own_numbers(self):
+        from tracklog_viewer import analysis, debrief, flight, quicklook
+
+        rules = quicklook.constants()
+        assert rules["window"] == flight.WINDOW
+        assert rules["glideProgress"] == analysis.GLIDE_PROGRESS
+        assert rules["minThermalSeconds"] == analysis.MIN_THERMAL_SECONDS
+        assert rules["minThermalGain"] == analysis.MIN_THERMAL_GAIN
+        assert rules["minGlideSeconds"] == analysis.MIN_GLIDE_SECONDS
+        assert rules["condenseThermal"] == analysis.CONDENSE_THERMAL
+        assert rules["thermalSlowKmh"] == analysis.THERMAL_SLOW_KMH
+        assert rules["turnResolutionLimit"] == analysis.TURN_RESOLUTION_LIMIT
+        assert rules["thresholds"] is debrief.THRESHOLDS
+
+    def test_the_page_carries_the_payload(self):
+        from tracklog_viewer import quicklook
+
+        assert 'id="ql-constants"' in quicklook.panel()
+        assert "RULES.minThermalGain" in quicklook.SCRIPT
+
+    @needs_chrome
+    def test_moving_a_threshold_in_the_payload_moves_the_page(self):
+        """A gain floor no climb can clear, changed nowhere but in the payload."""
+        answer = _upload(_surging_igc(), minThermalGain=100000)
+        assert answer["uploaded"] is True
+        assert answer["climbs"] == 0, (
+            "the page found climbs under a 100 km gain floor, so it is not reading the "
+            f"shared thresholds: {answer['body']!r}")
+        assert "No climbs met the thresholds" in answer["body"]
 
 
 @needs_chrome

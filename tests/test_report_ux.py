@@ -379,7 +379,9 @@ class TestPageText:
 
         html = render_html.render(self._analysis(tmp_path), terrain=None)
         assert "The flight from the side" in html
-        assert 'data-profile-view="flown"' in html
+        # The side view is drawn in the page now, so what the document carries is the
+        # host it is drawn into rather than the SVG itself.
+        assert 'data-chart="profile"' in html
 
 
 class TestBasemapSpinner:

@@ -19,8 +19,8 @@ from pathlib import Path
 
 import parainsights_common as common
 
-from . import (airmass, charts, debrief, geo, insolation, metrics, quicklook,
-               terrain as terrain_module, view3d, view3d_gl)
+from . import (airmass, certification, charts, charts_client, debrief, geo, insolation,
+               metrics, quicklook, terrain as terrain_module, view3d, view3d_gl)
 from numpy import asarray as np_asarray, median as np_median
 from .analysis import TURN_RESOLUTION_LIMIT, Analysis, Phase
 
@@ -205,6 +205,12 @@ body {
   color: var(--ink-3);
 }
 .identity .val { font-size: 14px; }
+/* The certification class, as a chip on the glider's name. Outlined rather than filled:
+   it is a fact about the wing, not a warning about it, and an EN D painted red would be
+   this report telling a pilot what to fly. */
+.cert { display: inline-block; margin-left: 7px; padding: 1px 6px; border-radius: 3px;
+  border: 1px solid var(--rule); font-size: 11px; letter-spacing: .04em;
+  color: var(--ink-2); vertical-align: 1px; white-space: nowrap; cursor: help; }
 
 /* Panels ------------------------------------------------------------------ */
 section { margin-top: 34px; }
@@ -374,7 +380,6 @@ section { margin-top: 34px; }
 .toggle-button + .toggle-button { border-left: 1px solid var(--rule-strong); }
 .toggle-button:hover { color: var(--ink); }
 .toggle-button.is-on { background: var(--ink); color: var(--paper); }
-.profile[hidden] { display: none; }
 .flight[hidden] { display: none; }
 
 /* Flight picker ----------------------------------------------------------- */
@@ -766,6 +771,168 @@ SCRIPT = """
                  'W','WNW','NW','NNW'];
     return names[Math.round(((deg % 360) + 360) % 360 / 22.5) % 16];
   }
+  // ---- the model wind profile, into a chart Python drew without one ------------------
+  //
+  // `charts.wind_profile` publishes its axis mapping in `data-wind-frame` and each point
+  // carries the speed and altitude it was placed from. That is what lets this draw into
+  // an SVG it did not build — and, more to the point, *rescale* it: the measured winds
+  // are drift inside thermals and the model is the free air above, so the model is
+  // routinely two or three times the fastest thing the glider felt. Clipping it to the
+  // existing axis would draw a straight line up the right-hand edge and call it a
+  // profile. So the axis grows, the measured points move with it, and the chart still
+  // means what its labels say.
+  //
+  // Only the levels within `band` metres of the climbs are drawn, which is
+  // `wind_profile`'s own rule: the point of the comparison is the air the glider was
+  // actually in.
+  var SVGNS = 'http://www.w3.org/2000/svg';
+  function plotModelWind(svg, levels) {
+    if (!svg || !levels || levels.length < 2) return false;
+    var frame;
+    try { frame = JSON.parse(svg.getAttribute('data-wind-frame')); } catch (e) { return false; }
+    if (!frame || frame.hasModel) return false;      // built with --meteo already
+    var group = svg.querySelector('.model');
+    if (!group || group.childNodes.length) return false;
+
+    var points = Array.prototype.slice.call(svg.querySelectorAll('.wind-point'));
+    if (!points.length) return false;
+    var alts = points.map(function (p) { return parseFloat(p.dataset.alt); });
+    var lowest = Math.min.apply(null, alts), highest = Math.max.apply(null, alts);
+    var inside = levels.filter(function (level) {
+      return level.height >= lowest - frame.band && level.height <= highest + frame.band;
+    });
+    if (inside.length < 2) return false;
+
+    // The same rounding `wind_profile` applies, over the measured points and the model
+    // together — the steps come from the frame rather than being retyped here.
+    var speedMax = frame.speedMax, altMin = frame.altMin, altMax = frame.altMax;
+    inside.forEach(function (level) {
+      speedMax = Math.max(speedMax,
+        Math.ceil(level.speed / frame.speedStep) * frame.speedStep);
+      altMin = Math.min(altMin, Math.floor(level.height / frame.altStep) * frame.altStep);
+      altMax = Math.max(altMax, Math.ceil(level.height / frame.altStep) * frame.altStep);
+    });
+
+    function sx(kmh) { return frame.left + frame.plotW * kmh / speedMax; }
+    function sy(m) {
+      return frame.top + frame.plotH * (1 - (m - altMin) / Math.max(altMax - altMin, 1));
+    }
+
+    // Re-place the measured points, but only when the axis actually moved: an untouched
+    // chart should come out of this byte-identical to the one Python drew.
+    if (speedMax !== frame.speedMax || altMin !== frame.altMin || altMax !== frame.altMax) {
+      points.forEach(function (point) {
+        var speed = parseFloat(point.dataset.speed), alt = parseFloat(point.dataset.alt);
+        var direction = parseFloat(point.dataset.dir);
+        var x = sx(speed), y = sy(alt);
+        var dot = point.querySelector('.wind-dot');
+        var number = point.querySelector('.wind-number');
+        var arrow = point.querySelector('.wind-arrow');
+        var time = point.querySelector('.wind-time');
+        if (dot) { dot.setAttribute('cx', x.toFixed(1)); dot.setAttribute('cy', y.toFixed(1)); }
+        if (number) {
+          number.setAttribute('x', x.toFixed(1));
+          number.setAttribute('y', (y + 3.4).toFixed(1));
+        }
+        if (arrow) {
+          // The tail points downwind — `direction` is where the air comes *from*, and
+          // drawing along it is the 180° error that still looks like a good arrow.
+          var angle = (direction + 180) * Math.PI / 180;
+          var ux = Math.sin(angle), uy = -Math.cos(angle);
+          arrow.setAttribute('x1', (x + ux * 9).toFixed(1));
+          arrow.setAttribute('y1', (y + uy * 9).toFixed(1));
+          arrow.setAttribute('x2', (x + ux * 22).toFixed(1));
+          arrow.setAttribute('y2', (y + uy * 22).toFixed(1));
+        }
+        if (time) {
+          var anchor = time.getAttribute('text-anchor');
+          time.setAttribute('x', (x + (anchor === 'end' ? -13 : 13)).toFixed(1));
+          time.setAttribute('y', (y + 3.5).toFixed(1));
+        }
+      });
+
+      // The grid and the axis labels are regenerated rather than nudged: the number of
+      // gridlines changes with the range, so there is nothing to nudge.
+      var grid = svg.querySelector('.grid');
+      var axes = svg.querySelector('.axes');
+      if (grid && axes) {
+        var titles = Array.prototype.filter.call(axes.childNodes, function (node) {
+          return node.nodeType === 1 && node.getAttribute('class') === 'axis-title';
+        });
+        grid.textContent = '';
+        axes.textContent = '';
+        for (var kmh = 0; kmh <= speedMax; kmh += frame.speedStep) {
+          var gx = sx(kmh);
+          grid.appendChild(make('line', { x1: gx.toFixed(1), y1: frame.top,
+            x2: gx.toFixed(1), y2: frame.top + frame.plotH }));
+          axes.appendChild(make('text', { x: gx.toFixed(1),
+            y: frame.top + frame.plotH + 17, 'class': 'axis-label axis-x' }, String(kmh)));
+        }
+        for (var m = altMin; m <= altMax; m += frame.altStep) {
+          var gy = sy(m);
+          grid.appendChild(make('line', { x1: frame.left, y1: gy.toFixed(1),
+            x2: frame.width - frame.right, y2: gy.toFixed(1) }));
+          axes.appendChild(make('text', { x: frame.left - 9, y: (gy + 3.5).toFixed(1),
+            'class': 'axis-label axis-y' }, String(m)));
+        }
+        titles.forEach(function (title) { axes.appendChild(title); });
+      }
+    }
+
+    var path = inside.map(function (level) {
+      return sx(level.speed).toFixed(1) + ',' + sy(level.height).toFixed(1);
+    }).join(' ');
+    group.appendChild(make('polyline', { points: path }));
+    inside.forEach(function (level) {
+      var dot = make('circle', { cx: sx(level.speed).toFixed(1),
+        cy: sy(level.height).toFixed(1), r: 2.5, 'class': 'model-dot' });
+      dot.appendChild(make('title', {}, 'model ' + Math.round(level.speed) +
+        ' km/h from ' + Math.round(level.direction) + '° at ' +
+        Math.round(level.height) + ' m (' + level.pressure + ' hPa)'));
+      group.appendChild(dot);
+    });
+    return true;
+  }
+
+  function make(tag, attributes, text) {
+    var node = document.createElementNS(SVGNS, tag);
+    Object.keys(attributes).forEach(function (key) {
+      node.setAttribute(key, attributes[key]);
+    });
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  // The legend and the caption were written by Python for a report with no model in it,
+  // and both say so. Once the line is drawn they are wrong, so they are corrected here
+  // rather than left to contradict the chart the reader is looking at.
+  function sayTheModelArrived(article, chart) {
+    // The legend is the chart panel's next sibling, walked to rather than selected from
+    // the article: an article holds several legends and the wrong one is worse than none.
+    var legend = null;
+    for (var node = chart.closest('.panel'); node; node = node.nextElementSibling) {
+      if (node !== chart.closest('.panel') && node.classList.contains('legend')) {
+        legend = node;
+        break;
+      }
+    }
+    if (legend && !legend.querySelector('.model-swatch')) {
+      var item = document.createElement('li');
+      item.innerHTML = '<span class="swatch model-swatch" ' +
+        'style="background:var(--neutral)"></span>model profile for the day, fetched ' +
+        'when you opened this page';
+      legend.appendChild(item);
+    }
+    article.querySelectorAll('.caption').forEach(function (caption) {
+      var text = caption.textContent;
+      var at = text.indexOf("The day's forecast profile would be drawn behind these");
+      if (at < 0) return;
+      caption.textContent = text.slice(0, at) +
+        "The day's forecast profile is drawn behind these — fetched when you opened " +
+        'this page, not built into the report.';
+    });
+  }
+
   function run() {
     if (!window.__fetchMeteo) return;
     document.querySelectorAll('.air-fetch').forEach(function (section) {
@@ -774,12 +941,20 @@ SCRIPT = """
       stats.dataset.done = '1';
       stats.innerHTML = tile('weather', 'fetching…', '');
       var top = parseFloat(section.dataset.airTop);
+      var article = section.closest('[data-flight-report]') || document;
+      var windChart = article.querySelector('.chart-wind');
+      // The profile is only worth thirty extra fields when there is a chart waiting for
+      // it: a flight with too few circled climbs to sound the wind has none.
+      var wantProfile = !!(windChart && windChart.getAttribute('data-wind-frame'));
       window.__fetchMeteo({
         dated: true,
         lat: [parseFloat(section.dataset.airLat)],
         lon: [parseFloat(section.dataset.airLon)],
         epoch: parseFloat(section.dataset.airEpoch)
-      }).then(function (m) {
+      }, { profile: wantProfile }).then(function (m) {
+        if (wantProfile && plotModelWind(windChart, m.levels)) {
+          sayTheModelArrived(article, windChart);
+        }
         var used = m.cloudbase > 0 ? Math.round(top / m.cloudbase * 100) : null;
         var spread = Math.round(m.temperature - m.dew);
         var html =
@@ -892,22 +1067,31 @@ function initFlight(root) {
   // Every chart that can host the cursor publishes its own projected sample
   // coordinates on its hit rect, so one index drives a dot in all of them and
   // none of the projection maths is repeated here.
+  //
+  // Rebuilt rather than collected once, because the side view is now *drawn* in the page
+  // and the axis toggle replaces its SVG: the views array would otherwise still point at
+  // an element that is no longer in the document. Listeners are bound per hit rect and
+  // only once — a replaced SVG takes its own listeners with it, and the charts that
+  // survived must not collect a second copy.
   var views = [];
-  root.querySelectorAll('.hit[data-px]').forEach(function (hit) {
-    if (!hit.dataset.px) return;
-    var svg = hit.ownerSVGElement;
-    views.push({
-      svg: svg,
-      hit: hit,
-      mode: hit.dataset.mode || 'x',
-      px: hit.dataset.px.split(',').map(Number),
-      py: hit.dataset.py.split(',').map(Number),
-      cursor: svg.querySelector('.cursor'),
-      dot: svg.querySelector('.cursor-dot'),
-      crosshair: svg.querySelector('.crosshair')
+  function collectViews() {
+    views = [];
+    root.querySelectorAll('.hit[data-px]').forEach(function (hit) {
+      if (!hit.dataset.px) return;
+      var svg = hit.ownerSVGElement;
+      views.push({
+        svg: svg,
+        hit: hit,
+        mode: hit.dataset.mode || 'x',
+        px: hit.dataset.px.split(',').map(Number),
+        py: hit.dataset.py.split(',').map(Number),
+        cursor: svg.querySelector('.cursor'),
+        dot: svg.querySelector('.cursor-dot'),
+        crosshair: svg.querySelector('.crosshair')
+      });
     });
-  });
-  if (!views.length) return;
+    views.forEach(bindView);
+  }
 
   function svgPoint(view, event) {
     var box = view.svg.getBoundingClientRect();
@@ -1037,7 +1221,9 @@ function initFlight(root) {
     armPin();
   }
 
-  views.forEach(function (view) {
+  function bindView(view) {
+    if (view.hit.__cursorBound) return;
+    view.hit.__cursorBound = true;
     function show(event) {
       var point = svgPoint(view, event);
       place(nearestIndex(view, point), view, point);
@@ -1055,7 +1241,13 @@ function initFlight(root) {
     view.hit.addEventListener('touchmove', function (event) {
       if (event.touches.length) { show(event.touches[0]); event.preventDefault(); }
     }, { passive: false });
-  });
+  }
+
+  collectViews();
+  // How a redrawn chart gets back into the cursor. `charts_client.js` calls this after
+  // the axis toggle rebuilds the side view; without it the toggle silently produces a
+  // chart the cursor cannot drive, which looks exactly like the cursor being broken.
+  root.__relinkCharts = collectViews;
 
   // Escape lets go from anywhere, which is the one shortcut a reader will guess.
   root.addEventListener('keydown', function (event) {
@@ -1100,9 +1292,9 @@ function initFlight(root) {
         other.classList.toggle('is-on', on);
         other.setAttribute('aria-pressed', on ? 'true' : 'false');
       });
-      root.querySelectorAll('[data-profile-view]').forEach(function (view) {
-        view.hidden = view.dataset.profileView !== wanted;
-      });
+      // The side view is drawn in the page now, so this redraws it rather than
+      // unhiding one of three copies the document used to carry.
+      if (window.__drawProfile) window.__drawProfile(root, wanted);
     });
   });
 
@@ -2055,14 +2247,26 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
     # No recorder chip: which phone logged the track answers no question a pilot asks,
     # and the one thing the logger does decide — baro or GPS altitude — is already said
     # in "How to read this", where it comes with its consequences.
+    # The certification, beside the wing it belongs to. Nothing is added when the match
+    # is not certain — see `certification.lookup`, which would rather say nothing than
+    # print a class from a wing one character away. The chip carries the register and
+    # the reference in its tooltip, because a certification claim a reader cannot check
+    # is a certification claim they have to take on trust.
+    wing = certification.lookup(summary.glider or "")
+    chip = ""
+    if wing is not None:
+        cite = f"{wing.name} — {wing.certificate}, {wing.source}"
+        chip = (f'<span class="cert" title="{charts.escape(cite)}">'
+                f'{charts.escape(wing.label)}</span>')
     identity = [
-        ("pilot", summary.pilot or "—"),
-        ("glider", summary.glider or "—"),
-        ("site", summary.site or "—"),
+        ("pilot", summary.pilot or "—", ""),
+        ("glider", summary.glider or "—", chip),
+        ("site", summary.site or "—", ""),
     ]
     identity_html = "".join(
-        f'<div><span class="key">{key}</span><span class="val">{charts.escape(value)}</span></div>'
-        for key, value in identity
+        f'<div><span class="key">{key}</span>'
+        f'<span class="val">{charts.escape(value)}{extra}</span></div>'
+        for key, value, extra in identity
     )
 
     peak_index = int(analysis.series.alt.argmax())
@@ -2073,6 +2277,10 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
     # One set of sample indices shared by the cursor data and by every chart that
     # hosts the cursor, so an index means the same fix everywhere.
     sample = _sample_indices(analysis)
+    # The top view's height follows the flight's own aspect ratio, and the box is
+    # reserved before the chart is drawn into it: a panel that is 0 px tall until the
+    # script runs moves everything under it the moment it does.
+    plan_height = charts.plan_height(analysis)
 
     tiles = [
         _stat("airtime", _duration(summary.duration), "",
@@ -2142,14 +2350,11 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
     <div class="panel hero">
       <p class="chart-title">Side view — height above the ground axis. Shading is the detected
         phase; the trace itself is coloured by climb rate.</p>
-      <div class="profile" data-profile-view="flown">
-        {charts.altitude_profile(analysis, meteo=meteo, mode="flown", sample=sample)}
-      </div>
-      <div class="profile" data-profile-view="from_start" hidden>
-        {charts.altitude_profile(analysis, meteo=meteo, mode="from_start", sample=sample)}
-      </div>
-      <div class="profile" data-profile-view="time" hidden>
-        {charts.altitude_profile(analysis, meteo=meteo, mode="time", sample=sample)}
+      <div class="profile chart-host" data-chart="profile" data-mode="flown"
+           style="aspect-ratio:{charts_client.PROFILE['width']}/{charts_client.PROFILE['height']}">
+        <p class="chart-missing">The side view is drawn in this page, from the same
+          numbers the hover cursor reads. It needs JavaScript; everything above it does
+          not.</p>
       </div>
     </div>
     <ul class="legend">
@@ -2308,8 +2513,11 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
                   aria-pressed="false">size = climb rate</button>
         </div>
       </div>
-      {charts.plan_view(analysis, route=route, sample=sample,
-                        height=charts.plan_height(analysis))}
+      <div class="chart-host" data-chart="plan"
+           style="aspect-ratio:{charts_client.PLAN['width']}/{plan_height}">
+        <p class="chart-missing">The top view is drawn in this page. It needs
+          JavaScript.</p>
+      </div>
     </div>
   </section>
 {debrief_section}
@@ -2456,6 +2664,16 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
         differently from the air around it, and one tracklog cannot tell that from a ridge
         climb holding station or a badly sounded wind. Without terrain there is nothing to
         check and the column shows a dash rather than guessing.</p>
+      {'<p><strong>The class beside the glider is the register\'s, not ours.</strong> '
+       'It is %s in the %s register, under %s; hover the chip for the reference. '
+       'A class is looked up on the wing\'s name and is only shown when every certified '
+       'size of that model carries the same one — a model certified differently in its '
+       'smallest size shows nothing at all, rather than a class that might not be the '
+       'one this pilot was flying under. LTF and EN are never translated into each '
+       'other. Certification describes the wing\'s behaviour in a test, and says '
+       'nothing about this flight.</p>'
+       % (charts.escape(wing.label), charts.escape(wing.source),
+          charts.escape(wing.certificate)) if wing is not None else ''}
       <p>The {len(analysis.glides)} glides and {len(thermals)} climbs account for
         {(1 - budget.fractions()["other"]) * 100:.0f}% of airtime. The rest is transitions too
         short or too ambiguous to call, which is honest rather than tidy.</p>
@@ -2468,6 +2686,8 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
     <span>tracklog viewer · your track is analysed in this page and never uploaded</span>
   </footer>
   <script type="application/json" class="cursor-data">{json.dumps(_cursor_data(analysis))}</script>
+  <script type="application/json" class="chart-data">{json.dumps(charts_client.payload(
+    analysis, meteo=meteo, route=route, sample=sample, plan_height=plan_height))}</script>
 </article>
 """
 
@@ -2606,7 +2826,7 @@ def _page(title: str, bodies: list[str], tabs: str = "", extras: "list[Extra]" =
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{charts.escape(title)}</title>
-<style>{_font_face()}{STYLE}{view3d.STYLE}{view3d_gl.STYLE}{quicklook.STYLE}
+<style>{_font_face()}{STYLE}{view3d.STYLE}{view3d_gl.STYLE}{quicklook.STYLE}{charts_client.STYLE}
 {VIEW_STYLE if extras else ""}{"".join(e.style for e in extras)}</style>
 <div class="wrap">
 {_view_nav(extras)}
@@ -2616,6 +2836,7 @@ def _page(title: str, bodies: list[str], tabs: str = "", extras: "list[Extra]" =
 <div class="tooltip" id="tip" role="status" aria-live="polite"></div>
 <script>{view3d.SCRIPT}
 {view3d_gl.SCRIPT}
+{charts_client.SCRIPT}
 {SCRIPT}</script>
 <script>{quicklook.SCRIPT}</script>
 {"".join(f"<script>{e.script}</script>" for e in extras)}

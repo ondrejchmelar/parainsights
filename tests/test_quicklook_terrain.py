@@ -80,6 +80,11 @@ window.addEventListener('load', function () {
         out.uploaded = !!article;
         if (article) {
           out.note = article.querySelector('.ql-3d-note').textContent;
+          var clearance = article.querySelector('.ql-clearance');
+          out.clearance = clearance
+            ? clearance.querySelector('.stat-value').textContent : null;
+          out.clearanceSub = clearance
+            ? clearance.querySelector('.sub').textContent : null;
           var data = article.querySelector('.view3d-data');
           var terrain = data ? JSON.parse(data.textContent).terrain : null;
           out.terrain = terrain && { cols: terrain.cols, rows: terrain.rows,
@@ -161,6 +166,37 @@ class TestAnUploadedTrackGetsRealTerrain:
         assert terrain["min"] == terrain["max"], "a flat plane"
         assert "flat plane" in answer["note"]
         assert "could not be fetched" in answer["note"]
+
+
+@needs_chrome
+class TestTheClearanceSeriesIsWritten:
+    """The DEM was fetched and then only drawn: height above ground was never derived.
+
+    The fixture flies from 1 200 m upwards over the western half of the tile, which
+    encodes 100 m — so the lowest clearance is the launch altitude less the ground, and
+    a page that forgot to subtract the ground reports 1 200.
+    """
+
+    def test_the_lowest_clearance_is_the_track_less_the_ground(self):
+        answer = _upload()
+        assert answer["clearance"], "no clearance tile after the DEM arrived"
+        metres = int(answer["clearance"].split()[0])
+        assert abs(metres - (1200 - LOW)) <= 60, (
+            f"clearance came out {metres} m against an expected {1200 - LOW}")
+
+    def test_it_says_the_launch_and_the_landing_are_out_of_it(self):
+        """The lowest clearance of any flight is the ground it started on, so the window
+        excludes both ends — the same `ground_margin` the report's low-point card uses.
+        A number that does not say this is a number about the takeoff."""
+        answer = _upload()
+        assert "launch and landing excluded" in answer["clearanceSub"]
+
+    def test_no_ground_means_no_clearance_rather_than_a_wrong_one(self):
+        """The published-artifact case. A flat plane at the flight's own lowest point
+        would report a clearance measured against an invention."""
+        answer = _upload(tiles=False)
+        assert answer["uploaded"] is True
+        assert answer["clearance"] is None
 
 
 @needs_chrome

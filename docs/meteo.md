@@ -109,8 +109,32 @@ and 159 × 186 distances are arithmetic no reader's browser should be asked to r
 Every site's *surface* forecast comes in one multi-coordinate call — Open-Meteo accepts
 comma-separated coordinates and answers with an array, so 159 takeoffs cost one round
 trip and about half a megabyte, which is what the ranking needs. The **pressure levels
-are fetched for one site only, when that site is opened**: asking for the profile of
-every takeoff up front would be tens of megabytes to answer a question about one hill.
+are fetched per chosen takeoff, when it is chosen** — at most three, since that is the
+comparison's cap: asking for the profile of every takeoff up front would be tens of
+megabytes to answer a question about three hills.
+
+## Three takeoffs, compared
+
+The page's question is *is it worth driving anywhere, and where*, and the second half of
+it needs more than one hill on screen. Up to three are chosen at a time — the cap is the
+categorical palette's, not a whim, see below — each with a chip, a row in the comparison
+table and its own boundary-layer line on the shared meteogram. The takeoff being *looked
+at* keeps the sounding, the figures and flymet's picture; the others are there to be
+compared against it.
+
+**Why three.** Slots 1–3 of the design system's categorical order pass every check in the
+dataviz skill's `validate_palette.js` on the all-pairs list in both themes; the documented
+fourth slot is yellow, and yellow against this orange fails the normal-vision floor at
+ΔE 13.7. A documented palette may not be re-stepped and no ordering fixes an all-pairs
+failure, so a fourth line would be one nobody could tell from the third. The page says so
+rather than evicting a takeoff the reader chose. Because two of the three light-mode
+series sit under 3:1 against the panel, identity is also carried by a label at the end of
+each line, by the legend, and by the table — the palette's relief rule, and a browser test
+holds it.
+
+The full list lives in a `<dialog>` rather than on the page. `docs/meteo-ux.md` measures
+what that was costing: 571 px of the layout, and 166 tab stops before a keyboard user
+reached the forecast.
 
 ## What the sounding says
 
@@ -141,10 +165,11 @@ wrong answer a pilot would act on.
 
 ## Status
 
-Started, and the page works end to end: the day strip, the ranked site list with a
-verdict per takeoff, the sounding with its cloudbase, capping layer and hover readout, the
-meteogram, the day's figures and flymet's own meteogram for the nearest airfield.
-Published at `public/meteo/`.
+Started, and the page works end to end: the day strip, one hour slider over everything,
+the takeoff picker behind a dialog, up to three chosen takeoffs compared in a table and on
+one meteogram, and for the one being looked at the sounding with its cloudbase, capping
+layer and hover readout, the day's figures and flymet's own meteogram for the nearest
+airfield. The choice is remembered between visits. Published at `public/meteo/`.
 
 Wanted next:
 
@@ -153,8 +178,10 @@ Wanted next:
   that fixes it now exists — the sounding tests drive the real page with `fetch` answering
   from a built profile — so this is exposing `verdict` on `window.__meteo` and one test,
   rather than the piece of work it used to be.
-- **A map, instead of a scrolling list.** The airspace view is already the widget for it,
-  and a takeoff is a point with a colour.
+- **A map, instead of a list.** The airspace view is already the widget for it, and a
+  takeoff is a point with a colour. The list is behind a dialog now, which takes the
+  pressure off this — but a map is still the right way to pick a hill, and it would answer
+  "what else is near the one I am looking at", which no list does.
 - **A wind-direction arrow per site**, rather than the compass point in text.
 - **The site's own airspace.** Both halves exist in this repository and neither knows
   about the other yet: a takeoff sits under something, and it would be worth saying what.

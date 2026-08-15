@@ -245,13 +245,55 @@ consume only those.
   no shared source"* — and it is cheap enough to be worth doing on the first finding
   rather than the tenth.
 
+## The calibration, and what it changed
+
+Run on **63 IGC files, 2026-08-15**, with `python -m tracklog_viewer.calibrate ~/Downloads`.
+KMZ and KML are excluded on purpose: a scoring site's export is ~500 points and everything
+measured along the track comes out low, which is half of these quantities, so a decimated
+file moves a percentile by an artefact of the export format.
+
+The rule applied, uniformly: **each threshold is the percentile of its own quantity that
+puts the card on no more than a third of flights.** The percentile alone is not enough,
+because most findings carry a cost gate as well — a threshold at p67 can leave the card on
+14% or on 35% depending on what else has to be true — so what is recorded is the *measured
+card rate*.
+
+| finding | threshold | was | fired on | now | fires on |
+|---|---|---|---|---|---|
+| climb-selection | `weak_climb_share` | 0.45 | 49% | **0.65** (p70) | 27% |
+| expensive-gap | `gap_over_median` | 2.0 | 70% | **3.25** (p65) | 32% |
+| other-slice | `other_lossy_share` | *(no gate)* | 94% | **0.18** (p71) | 27% |
+| best-climb-left | `best_climb_left_metres` | 50, inline | 33% | **100** (p58) | 22% |
+| centring | `centring_ratio` | 0.75 | 21% | 0.75 (p34) | 21% |
+| working-band | `band_share`/`band_ratio` | 0.20 / 0.75 | 6% | unchanged | 6% |
+
+Three things the exercise found that the seeded numbers hid:
+
+* **`other-slice` had no threshold at all** and fired on 94% of flights. Every flight has
+  air that is neither a climb nor a glide — the archive's median lossy share is 14% of
+  airtime — so the card was a true statement about nearly every flight, which is the plain
+  definition of a constant. It now needs the lossy part to be p71 of airtime or more.
+* **Two thresholds sat below their own median.** `weak_climb_share` at 0.45 against a
+  median of 0.53, and `gap_over_median` at 2.0 against a median of 2.82 — so the
+  "unusually long gap" was *shorter than the typical longest gap*. Both were seeded from
+  three flights, and three flights cannot show you that.
+* **A percentile does not predict a card rate.** `best_climb_left_metres` at p67 (148 m)
+  left the card on 14%, well under the target; p58 (100 m) lands at 22%. The cost gate is
+  why, and it is why the calibrator reports rates rather than only distributions.
+
+Three thresholds are **still uncalibrated, and the tool says so rather than reporting them
+as fine**: `low_clearance` and `ground_margin` need a DEM per flight, `ceiling_used` needs
+a sounding per flight and the ERA5 archive is surface-only past 60 days, and `near_close`
+needs a scored triangle — with only the near-closures in the distribution at all.
+
 ## Validation
 
 The repo's habit is that numbers are checkable, so:
 
 - **Measure every tier-1 metric across all 50 files and report the distribution**, not the
   showcase three. A metric whose finding would fire on more than a third of flights has its
-  threshold set wrong (or is not a finding).
+  threshold set wrong (or is not a finding). **Done, and it is a command:**
+  `python -m tracklog_viewer.calibrate DIR` — see the record below.
 - **The air-mass work checks against the model.** Correcting a glide with the measured wind
   and with `meteo.wind_at()` should agree within the wind's own uncertainty; where they
   disagree systematically, one of them is wrong and the flight can say which.

@@ -41,8 +41,31 @@ ENDPOINT = "https://api.open-meteo.com/v1/forecast"
 # the script, and a test holds the two to the same number.
 CAP_LAPSE = 2.0
 
+# How many takeoffs can be compared at once, and it is a number the *palette* chose.
+# Slots 1–3 of the design system's categorical order validate all-pairs in both themes;
+# the fourth slot is yellow, and yellow against this orange fails the normal-vision floor
+# (ΔE 13.7 against a 15 floor). Re-stepping a documented palette is not allowed and no
+# reordering fixes an all-pairs failure, so the honest cap is three — see the comment at
+# the top of `STYLE`. It is also about the number of hills a pilot really chooses between
+# on a Saturday morning, which is why it does not feel like a limitation.
+MAX_CHOSEN = 3
+
 STYLE = """
-.met-head { display:flex; flex-wrap:wrap; gap:10px 18px; align-items:baseline;
+/* The three series colours, and the reason there are three of them.
+   Slots 1–3 of the design system's categorical palette — the same blue, orange and aqua
+   the report paints phases with — checked with the dataviz skill's `validate_palette.js`
+   against this page's own panel colour in both themes: all-pairs CVD ΔE 9.2 light /
+   9.4 dark, normal vision 24.0 / 20.9. **A fourth site is not a fourth colour.** The
+   documented order puts yellow next, and yellow against this orange fails the
+   normal-vision floor (ΔE 13.7) — no re-stepping is allowed and no ordering fixes an
+   all-pairs failure, so the comparison caps at three and says so on screen.
+   Light aqua and orange sit under 3:1 on the light panel, which the palette's relief
+   rule permits only with direct labels or a table: this has both. */
+:root { --series-1:#2a78d6; --series-2:#eb6834; --series-3:#1baf7a; }
+@media (prefers-color-scheme: dark) {
+  :root { --series-1:#3987e5; --series-2:#d95926; --series-3:#199e70; }
+}
+.met-head { display:flex; flex-wrap:wrap; gap:10px 18px; align-items:center;
   margin: 0 0 12px; }
 .met-days { display:inline-flex; border:1px solid var(--rule); border-radius:3px;
   overflow:hidden; }
@@ -50,21 +73,71 @@ STYLE = """
   padding:5px 13px; background:var(--panel); }
 .met-days button:last-child { border-right:0; }
 .met-days button.is-on { background:var(--ink); color:var(--paper); }
-.met-grid { display:grid; grid-template-columns: minmax(0,340px) minmax(0,1fr);
-  gap:18px; align-items:start; }
-@media (max-width: 820px) { .met-grid { grid-template-columns: 1fr; } }
-.met-list { border:1px solid var(--rule); border-radius:4px; overflow:hidden;
-  max-height:70vh; overflow-y:auto; }
-.met-site { display:grid; grid-template-columns: 1fr auto; gap:2px 10px; width:100%;
-  text-align:left; border:0; border-bottom:1px solid var(--rule); border-radius:0;
-  padding:8px 11px; background:var(--paper); cursor:pointer; }
+
+/* The chosen takeoffs, as chips. This is what replaced a 159-row list holding the top
+   left corner of the page: the list is now behind a button, and what stays on screen is
+   the three or fewer places the reader actually asked about. */
+.met-chosen { display:flex; flex-wrap:wrap; gap:8px; align-items:center;
+  margin:0 0 14px; }
+.met-chip { display:inline-flex; align-items:center; gap:8px; padding:5px 6px 5px 10px;
+  border:1px solid var(--rule); border-radius:999px; background:var(--panel);
+  font-size:13.5px; }
+.met-chip.is-focus { border-color:var(--ink-3); background:var(--panel-2); }
+.met-chip .swatch { width:10px; height:10px; border-radius:50%; flex:none; }
+.met-chip-name { background:none; border:0; padding:0; font:inherit; color:inherit;
+  cursor:pointer; }
+.met-chip-drop { border:0; background:none; padding:0 5px; line-height:1;
+  font-size:15px; color:var(--ink-3); cursor:pointer; border-radius:50%; }
+.met-chip-drop:hover { color:var(--ink); background:var(--panel-2); }
+.met-add { border-style:dashed; border-radius:999px; padding:6px 14px; }
+.met-cap { font-size:12px; color:var(--ink-3); }
+
+/* The comparison. It is also the palette's *table view*, which is what makes the two
+   light-mode series that fall under 3:1 against the panel legitimate. */
+.met-compare { width:100%; border-collapse:collapse; margin:0 0 16px;
+  font-variant-numeric:tabular-nums; }
+.met-compare th, .met-compare td { text-align:left; padding:7px 10px; font-size:13px;
+  border-bottom:1px solid var(--rule); }
+.met-compare thead th { font-size:11px; text-transform:uppercase; letter-spacing:.06em;
+  color:var(--ink-3); font-weight:600; }
+.met-compare tbody tr { cursor:pointer; }
+.met-compare tbody tr:hover { background:var(--panel); }
+.met-compare tbody tr.is-focus { background:var(--panel-2); }
+.met-compare .site { display:flex; align-items:center; gap:8px; font-weight:600; }
+.met-compare .site .swatch { width:10px; height:10px; border-radius:50%; flex:none; }
+.met-compare .best { font-weight:700; }
+@media (max-width: 620px) {
+  .met-compare .hide-narrow { display:none; }
+}
+
+/* The picker, in a dialog: Escape closes it, the backdrop closes it, and focus stays
+   inside it — all of which a hand-rolled overlay would have to reimplement worse. */
+.met-modal { width:min(560px, 94vw); max-height:82vh; padding:0; border:1px solid
+  var(--rule); border-radius:6px; background:var(--paper); color:var(--ink); }
+.met-modal::backdrop { background:rgba(0,0,0,0.45); }
+.met-modal-head { display:flex; gap:10px; align-items:center; padding:12px 14px;
+  border-bottom:1px solid var(--rule); }
+.met-modal-head h2 { margin:0; font-size:16px; flex:none; }
+.met-search { flex:1; font:inherit; padding:6px 10px; border:1px solid var(--rule);
+  border-radius:3px; background:var(--panel); color:var(--ink); min-width:0; }
+.met-modal-foot { display:flex; justify-content:space-between; align-items:center;
+  gap:10px; padding:10px 14px; border-top:1px solid var(--rule);
+  font-size:12.5px; color:var(--ink-3); }
+.met-list { max-height:56vh; overflow-y:auto; }
+.met-site { display:grid; grid-template-columns: auto 1fr auto; gap:2px 10px;
+  width:100%; text-align:left; border:0; border-bottom:1px solid var(--rule);
+  border-radius:0; padding:8px 11px; background:var(--paper); cursor:pointer; }
 .met-site:last-child { border-bottom:0; }
 .met-site:hover { background:var(--panel); }
 .met-site.is-on { background:var(--panel-2); }
+.met-site .tick { grid-row:1 / span 2; align-self:center; width:16px; text-align:center;
+  color:var(--ink-3); }
+.met-site.is-on .tick { color:var(--ink); }
 .met-site-name { font-weight:600; font-size:13.5px; }
-.met-site-note { grid-column:1; font-size:11.5px; color:var(--ink-3);
+.met-site-note { grid-column:2; font-size:11.5px; color:var(--ink-3);
   font-variant-numeric:tabular-nums; }
-.met-verdict { grid-column:2; grid-row:1 / span 2; align-self:center; font-size:11px;
+.met-empty { padding:18px 14px; color:var(--ink-3); font-size:13px; }
+.met-verdict { align-self:center; font-size:11px;
   text-transform:uppercase; letter-spacing:.06em; padding:3px 7px; border-radius:3px;
   white-space:nowrap; }
 .met-good { background:#15803d; color:#fff; }
@@ -78,9 +151,13 @@ STYLE = """
   gap:16px; }
 @media (max-width: 700px) { .met-charts { grid-template-columns: 1fr; } }
 .met-canvas { width:100%; display:block; background:var(--panel); border-radius:3px; }
-.met-hour { display:flex; align-items:center; gap:10px; margin:10px 0 0;
-  font-size:12.5px; color:var(--ink-2); }
-.met-hour input { flex:1; }
+/* The hour is in the head, above everything, because it applies to everything: the
+   ranking, the comparison and both charts all answer "at what time". It used to sit
+   under the sounding, where it read as a control for that one chart. */
+.met-hour { display:flex; align-items:center; gap:9px; font-size:12.5px;
+  color:var(--ink-2); flex:1 1 240px; min-width:200px; }
+.met-hour input { flex:1; min-width:120px; }
+.met-hour output { min-width:3.6em; font-variant-numeric:tabular-nums; }
 .met-figures { display:flex; flex-wrap:wrap; gap:6px 22px; margin:12px 0 0;
   font-size:12.5px; }
 .met-figures div { display:flex; flex-direction:column; }
@@ -88,15 +165,25 @@ STYLE = """
   color:var(--ink-3); }
 .met-figures .v { font-variant-numeric:tabular-nums; font-size:15px; }
 .met-flymet { margin:16px 0 0; }
+.met-flymet > summary { font-size:12.5px; color:var(--ink-2); cursor:pointer;
+  padding:4px 0; }
 /* Its own width, not the panel's: the meteogram is 1024 px of small type and axis
    labels, and stretched past that it is a blurred picture of a chart. */
 .met-flymet img { display:block; width:100%; max-width:1024px; border-radius:3px;
-  background:var(--panel); }
-.met-flymet figcaption { font-size:11.5px; color:var(--ink-3); margin:5px 0 0; }
+  background:var(--panel); margin-top:6px; }
+.met-flymet p { font-size:11.5px; color:var(--ink-3); margin:5px 0 0; }
 .met-flymet a { color:inherit; }
-.met-status { color:var(--ink-3); font-size:13px; margin:10px 0 0; }
+.met-status { color:var(--ink-3); font-size:13px; margin:0; flex-basis:100%; }
+.met-status:empty { display:none; }
 .met-links { margin:14px 0 0; font-size:12.5px; color:var(--ink-3); }
 .met-legend { font-size:11.5px; color:var(--ink-3); margin:6px 0 0; }
+/* Identity is never colour alone: every series in the meteogram is named here as well
+   as drawn, and the lines carry their own labels at the right-hand end. */
+.met-keys { display:flex; flex-wrap:wrap; gap:4px 16px; margin:6px 0 0; font-size:11.5px;
+  color:var(--ink-2); }
+.met-keys span { display:inline-flex; align-items:center; gap:6px; }
+.met-keys i { width:14px; height:0; border-top-width:2px; border-top-style:solid;
+  display:inline-block; }
 """
 
 
@@ -145,51 +232,90 @@ def body(uid: str = "meteo") -> str:
     }, separators=(",", ":"))
     return f"""<article class="flight meteo-article" id="{uid}-article">
   <h1>Will it fly?</h1>
-  <p class="lede">The day's forecast against {len(site_data.SITES)} Czech takeoffs, sorted
-  by how the wind sits on each one. Pick a site for its sounding, its hour-by-hour
-  meteogram, and flymet's own meteogram for the airfield nearest it. The numbers are
-  fetched when you open this page, so they are as current as the model is — and there are
-  none at all without a network.</p>
+  <p class="lede">The day's forecast against {len(site_data.SITES)} Czech takeoffs, ranked
+  by how the wind sits on each one. Add up to {MAX_CHOSEN} takeoffs and the page compares
+  them side by side — the same hour, the same model, one row each — then gives the one you
+  are looking at its sounding, its hour-by-hour meteogram, and flymet's meteogram for the
+  airfield nearest it. The numbers are fetched when you open this page, so they are as
+  current as the model is, and there are none at all without a network.</p>
   <div class="met-head">
     <div class="met-days" id="met-days" role="group" aria-label="Which day"></div>
-    <span class="met-status" id="met-status">Fetching the forecast…</span>
-  </div>
-  <div class="met-grid">
-    <div class="met-list" id="met-list"></div>
-    <div class="met-panel" id="met-panel">
-      <h3 id="met-name">Pick a takeoff</h3>
-      <p class="met-sub" id="met-sub">Its sounding and meteogram appear here.</p>
-      <div class="met-charts">
-        <div>
-          <canvas class="met-canvas" id="met-gram" width="720" height="300"></canvas>
-          <p class="met-legend">Meteogram — height against the hour. The shading is cloud
-            cover on the pressure levels, the line is the convective boundary layer, and
-            the dashes are the estimated cloudbase. Barbs are the wind at 900 hPa.</p>
-        </div>
-        <div>
-          <canvas class="met-canvas" id="met-sounding" width="380" height="300"></canvas>
-          <p class="met-legend">Sounding at the chosen hour: temperature solid, dew point
-            dashed, the dry adiabat from the surface faint. The dotted blue line is the
-            estimated cloudbase; a shaded band is a layer the thermals stop at
-            (<em>zadržná vrstva</em> — under {CAP_LAPSE:.0f} °C/km, red where the air warms
-            with height), read between the model's pressure levels and so no finer than
-            they are. Point at it — or drag a finger up it — for the numbers at that
-            height.</p>
-        </div>
-      </div>
-      <div class="met-hour">
-        <label for="met-hour-input">Hour</label>
-        <input type="range" id="met-hour-input" min="6" max="20" step="1" value="14">
-        <span id="met-hour-readout" style="min-width:3.5em">14:00</span>
-      </div>
-      <div class="met-figures" id="met-figures"></div>
-      <figure class="met-flymet" id="met-flymet" hidden>
-        <img id="met-flymet-img" alt="flymet meteogram" loading="lazy">
-        <figcaption id="met-flymet-cap"></figcaption>
-      </figure>
-      <p class="met-links" id="met-links"></p>
+    <div class="met-hour">
+      <label for="met-hour-input">Hour</label>
+      <input type="range" id="met-hour-input" min="6" max="20" step="1" value="14"
+             aria-describedby="met-hour-readout">
+      <output id="met-hour-readout" for="met-hour-input">14:00</output>
     </div>
+    <p class="met-status" id="met-status" role="status">Fetching the forecast…</p>
   </div>
+
+  <div class="met-chosen" id="met-chosen">
+    <button type="button" class="met-add" id="met-add">+ add a takeoff</button>
+  </div>
+
+  <table class="met-compare" id="met-compare" hidden>
+    <caption class="met-legend" style="text-align:left; margin:0 0 6px">The chosen
+      takeoffs at the chosen hour. The same numbers the charts below draw — a table
+      because three soundings on one chart is not a comparison, it is a mess.</caption>
+    <thead><tr>
+      <th scope="col">takeoff</th><th scope="col">verdict</th><th scope="col">wind</th>
+      <th scope="col">thermal top</th><th scope="col">cloudbase</th>
+      <th scope="col" class="hide-narrow">lid</th>
+      <th scope="col" class="hide-narrow">ground</th>
+    </tr></thead>
+    <tbody></tbody>
+  </table>
+
+  <div class="met-panel" id="met-panel">
+    <h3 id="met-name">No takeoff chosen</h3>
+    <p class="met-sub" id="met-sub">Add one and its sounding and meteogram appear here.</p>
+    <div class="met-charts">
+      <div>
+        <canvas class="met-canvas" id="met-gram" width="720" height="300"></canvas>
+        <p class="met-legend">Meteogram — height against the hour. The shading is cloud
+          cover on the pressure levels for the takeoff named above; the lines are the
+          convective boundary layer for <em>every</em> chosen takeoff, so the comparison
+          is when each one works rather than only how high. Dashes are its estimated
+          cloudbase.</p>
+        <p class="met-keys" id="met-keys"></p>
+      </div>
+      <div>
+        <canvas class="met-canvas" id="met-sounding" width="380" height="300"></canvas>
+        <p class="met-legend">Sounding at the chosen hour, for the takeoff named above:
+          temperature solid, dew point dashed, the dry adiabat from the surface faint.
+          The dotted blue line is the estimated cloudbase; a shaded band is a layer the
+          thermals stop at (<em>zadržná vrstva</em> — under {CAP_LAPSE:.0f} °C/km, red
+          where the air warms with height), read between the model's pressure levels and
+          so no finer than they are. Point at it — or drag a finger up it — for the
+          numbers at that height.</p>
+      </div>
+    </div>
+    <div class="met-figures" id="met-figures"></div>
+    <!-- Foldable, and open by default. It is a second opinion worth having in front of
+         the reader — but it is 700 px of someone else's chart under 300 px of ours, and
+         a page whose own answer scrolls off the top to make room for it has its
+         priorities the wrong way round. -->
+    <details class="met-flymet" id="met-flymet" open hidden>
+      <summary id="met-flymet-summary">flymet's own meteogram</summary>
+      <img id="met-flymet-img" alt="flymet meteogram" loading="lazy">
+      <p id="met-flymet-cap"></p>
+    </details>
+    <p class="met-links" id="met-links"></p>
+  </div>
+
+  <dialog class="met-modal" id="met-modal" aria-labelledby="met-modal-title">
+    <div class="met-modal-head">
+      <h2 id="met-modal-title">Takeoffs</h2>
+      <input type="search" class="met-search" id="met-search" aria-label="Search takeoffs"
+             placeholder="Search {len(site_data.SITES)} takeoffs, best of the day first">
+      <button type="button" id="met-close" aria-label="Close">&times;</button>
+    </div>
+    <div class="met-list" id="met-list"></div>
+    <div class="met-modal-foot">
+      <span id="met-count"></span>
+      <button type="button" id="met-done">Done</button>
+    </div>
+  </dialog>
   <p class="met-links">Forecast from <a href="https://open-meteo.com/"
     rel="noreferrer">Open-Meteo</a> (GFS/ICON), fetched in this page.
     {site_data.ATTRIBUTION}, list taken {site_data.FETCHED}.
@@ -207,14 +333,61 @@ SCRIPT = r"""
   var holder = document.querySelector('.meteo-article');
   if (!holder) return;
   var conf = JSON.parse(holder.querySelector('.met-data').textContent);
+
+  // `slots` is the whole of the multi-site model, and it is an array of fixed length
+  // rather than a list of chosen sites *on purpose*: a slot is a colour, and colour
+  // follows the takeoff rather than its position in a list. Drop the first of three and
+  // the other two keep the colour they had — a reader who has just learned that the
+  // orange line is Raná should not find Raná blue a second later.
+  //
+  // `site` is the *focused* one: whose sounding, figures and flymet picture the panel
+  // shows, and whose cloud the meteogram shades. It is also the name `window.__meteo`
+  // has always exposed, along with `profile`, which is that site's profile.
+  //
   // `probe` is the height the pointer is at in the sounding, in metres, and `probeX`
   // where it is across it — the readout follows the pointer sideways but reads the
   // profile, so what it says never depends on which temperature you happen to be over.
-  var state = { day: 0, site: null, hour: 14, surface: null, profile: null,
+  var MAX_CHOSEN = 3;
+  var state = { day: 0, hour: 14, slots: [null, null, null], site: null,
+                surface: null, profile: null, profiles: {}, search: '',
                 probe: null, probeX: 0 };
 
   var status = document.getElementById('met-status');
   function say(text) { status.textContent = text; }
+
+  // The chosen takeoffs in slot order, skipping the empty slots.
+  function chosen() {
+    return state.slots.filter(function (index) { return index !== null; });
+  }
+  function slotOf(index) { return state.slots.indexOf(index); }
+  function seriesColour(slot) {
+    return ink('--series-' + (slot + 1)) || '#888';
+  }
+
+  // Three takeoffs, remembered. A pilot checks the same two or three hills all season,
+  // and making them pick them again every morning is the kind of small rudeness that
+  // makes a tool feel like a demo. Wrapped because a page opened from a file:// URL in
+  // some browsers throws on even reading localStorage, and a page that fails to load
+  // because it could not remember something is worse than one that forgets.
+  var REMEMBER = 'parainsights.meteo.sites';
+  function remember() {
+    try {
+      window.localStorage.setItem(REMEMBER, JSON.stringify(state.slots));
+    } catch (error) { /* private mode, file://, or a full quota: forget instead */ }
+  }
+  function recall() {
+    try {
+      var saved = JSON.parse(window.localStorage.getItem(REMEMBER) || 'null');
+      if (!Array.isArray(saved)) return;
+      for (var s = 0; s < MAX_CHOSEN; s++) {
+        var index = saved[s];
+        // Validated, not trusted: the site list is regenerated from ParaglidingEarth and
+        // an index saved against an older one could point anywhere, or nowhere.
+        state.slots[s] = (typeof index === 'number' && conf.sites[index]) ? index : null;
+      }
+      state.site = chosen().length ? chosen()[0] : null;
+    } catch (error) { /* nothing remembered, which is the normal first visit */ }
+  }
 
   // ---- the wind, against the takeoff -------------------------------------------------
   //
@@ -312,39 +485,70 @@ SCRIPT = r"""
     return times.length - 1;
   }
 
-  // ---- the list ----------------------------------------------------------------------
+  // ---- what the surface forecast says about one takeoff, this hour --------------------
+  function surfaceAt(index) {
+    var series = state.surface && state.surface[index];
+    if (!series || !series.hourly) return null;
+    var at = indexFor(series.hourly.time, state.day, state.hour);
+    var speed = series.hourly.wind_speed_10m[at];
+    var direction = series.hourly.wind_direction_10m[at];
+    return {
+      index: index, site: conf.sites[index], speed: speed, direction: direction,
+      cloud: series.hourly.cloud_cover[at],
+      temperature: series.hourly.temperature_2m[at],
+      verdict: verdict(conf.sites[index], speed, direction)
+    };
+  }
+
+  // ---- the picker ---------------------------------------------------------------------
+  //
+  // 159 takeoffs used to be a scrolling column occupying the top-left of the page for as
+  // long as the page was open — a list nobody reads twice, in the space the answer wants.
+  // It is a dialog now: opened deliberately, searched rather than scrolled, and closed
+  // again. What stays on the page is the two or three places the reader chose.
   var RANK = { good: 0, fair: 1, none: 2, poor: 3 };
+  var modal = document.getElementById('met-modal');
+
   function drawList() {
     var list = document.getElementById('met-list');
     if (!state.surface) return;
-    var rows = conf.sites.map(function (site, i) {
-      var series = state.surface[i];
-      if (!series || !series.hourly) return null;
-      var at = indexFor(series.hourly.time, state.day, state.hour);
-      var speed = series.hourly.wind_speed_10m[at];
-      var direction = series.hourly.wind_direction_10m[at];
-      return {
-        site: site, speed: speed, direction: direction,
-        cloud: series.hourly.cloud_cover[at],
-        temperature: series.hourly.temperature_2m[at],
-        verdict: verdict(site, speed, direction), index: i
-      };
-    }).filter(Boolean);
+    var needle = state.search.trim().toLowerCase();
+    var rows = conf.sites.map(function (site, i) { return surfaceAt(i); })
+      .filter(Boolean)
+      .filter(function (row) {
+        return !needle || row.site.name.toLowerCase().indexOf(needle) >= 0;
+      });
+    // Ranked by the verdict, then by name. The chosen ones are *not* pulled to the top:
+    // the list is a ranking of the day and re-sorting it under the reader's own choices
+    // would move the row they are about to click.
     rows.sort(function (a, b) {
       var by = RANK[a.verdict.key] - RANK[b.verdict.key];
       return by || a.site.name.localeCompare(b.site.name);
     });
 
-    list.innerHTML = '';
+    list.textContent = '';
+    if (!rows.length) {
+      var empty = document.createElement('p');
+      empty.className = 'met-empty';
+      empty.textContent = 'No takeoff matches “' + state.search.trim() + '”.';
+      list.appendChild(empty);
+    }
     rows.forEach(function (row) {
+      var on = slotOf(row.index) >= 0;
       var button = document.createElement('button');
       button.type = 'button';
-      button.className = 'met-site' + (state.site === row.index ? ' is-on' : '');
+      button.className = 'met-site' + (on ? ' is-on' : '');
       button.dataset.index = row.index;
+      button.setAttribute('aria-pressed', on ? 'true' : 'false');
       button.innerHTML =
-        '<span class="met-site-name"></span>'
+        '<span class="tick"></span>'
+        + '<span class="met-site-name"></span>'
         + '<span class="met-verdict met-' + row.verdict.key + '"></span>'
         + '<span class="met-site-note"></span>';
+      // The tick is the state, and it is a character rather than a colour: this row is
+      // already carrying a coloured verdict badge, and two colours competing to mean two
+      // different things in 30 px of row is one too many.
+      button.querySelector('.tick').textContent = on ? '✓' : '+';
       button.querySelector('.met-site-name').textContent = row.site.name;
       button.querySelector('.met-verdict').textContent = row.verdict.text;
       button.querySelector('.met-site-note').textContent =
@@ -352,14 +556,182 @@ SCRIPT = r"""
         + ' · ' + row.site.alt + ' m · ' + Math.round(row.cloud) + '% cloud';
       list.appendChild(button);
     });
-    list.onclick = function (event) {
-      var button = event.target.closest('.met-site');
-      if (!button) return;
-      state.site = Number(button.dataset.index);
-      state.profile = null;
-      drawList();
-      loadProfile();
-    };
+
+    var count = document.getElementById('met-count');
+    var picked = chosen().length;
+    count.textContent = picked
+      ? picked + ' of ' + MAX_CHOSEN + ' chosen'
+        + (picked >= MAX_CHOSEN ? ' — drop one to add another' : '')
+      : 'Choose up to ' + MAX_CHOSEN + ' takeoffs to compare';
+  }
+
+  function toggle(index) {
+    var slot = slotOf(index);
+    if (slot >= 0) {
+      drop(index);
+      return;
+    }
+    var free = state.slots.indexOf(null);
+    if (free < 0) {
+      // Refuse rather than silently evicting the oldest: three lines is the palette's
+      // limit, and a reader who has just added a fourth takeoff and had one of their
+      // own disappear has no way to know which or why.
+      say('Three at a time — drop one first. A fourth line could not be told from the '
+          + 'other three.');
+      return;
+    }
+    state.slots[free] = index;
+    if (state.site === null) state.site = index;
+    remember();
+    drawChosen();
+    drawList();
+    drawCompare();
+    // Redrawn now rather than when the sounding lands: adding a takeoff has to change
+    // the page in the same gesture, or the reader taps it again. The row and the legend
+    // entry appear at once and say they are waiting; the line arrives with the numbers.
+    drawSite();
+    loadProfiles();
+  }
+
+  function drop(index) {
+    var slot = slotOf(index);
+    if (slot < 0) return;
+    state.slots[slot] = null;
+    delete state.profiles[index];
+    if (state.site === index) {
+      var left = chosen();
+      state.site = left.length ? left[0] : null;
+      state.profile = state.site === null ? null : (state.profiles[state.site] || null);
+    }
+    remember();
+    drawChosen();
+    drawList();
+    drawCompare();
+    drawSite();
+  }
+
+  function focus(index) {
+    if (slotOf(index) < 0 || state.site === index) return;
+    state.site = index;
+    state.profile = state.profiles[index] || null;
+    drawChosen();
+    drawCompare();
+    drawSite();
+    if (!state.profile) loadProfiles();
+  }
+
+  // ---- the chips ----------------------------------------------------------------------
+  function drawChosen() {
+    var box = document.getElementById('met-chosen');
+    var add = document.getElementById('met-add');
+    Array.prototype.slice.call(box.querySelectorAll('.met-chip, .met-cap'))
+      .forEach(function (node) { node.remove(); });
+    state.slots.forEach(function (index, slot) {
+      if (index === null) return;
+      var site = conf.sites[index];
+      var chip = document.createElement('span');
+      chip.className = 'met-chip' + (state.site === index ? ' is-focus' : '');
+      chip.innerHTML = '<i class="swatch"></i>'
+        + '<button type="button" class="met-chip-name"></button>'
+        + '<button type="button" class="met-chip-drop" aria-label="Remove"></button>';
+      chip.querySelector('.swatch').style.background = seriesColour(slot);
+      var name = chip.querySelector('.met-chip-name');
+      name.textContent = site.name;
+      name.setAttribute('aria-pressed', state.site === index ? 'true' : 'false');
+      name.onclick = function () { focus(index); };
+      var close = chip.querySelector('.met-chip-drop');
+      close.textContent = '×';
+      close.setAttribute('aria-label', 'Remove ' + site.name);
+      close.onclick = function () { drop(index); };
+      box.insertBefore(chip, add);
+    });
+    add.textContent = chosen().length ? '+ add another' : '+ add a takeoff';
+    add.disabled = false;
+    if (chosen().length >= MAX_CHOSEN) {
+      var cap = document.createElement('span');
+      cap.className = 'met-cap';
+      cap.textContent = 'three at a time';
+      box.appendChild(cap);
+      add.disabled = true;
+    }
+  }
+
+  // ---- the comparison ------------------------------------------------------------------
+  //
+  // The answer to "where should I drive", in one table: every chosen takeoff on the same
+  // row shape, at the same hour, from the same model. It is also the palette's *table
+  // view* — two of the three light-mode series sit under 3:1 against the panel, which the
+  // colour rules allow only where identity is also carried by something that is not
+  // colour. Here it is carried twice: this table, and a label on each line.
+  function drawCompare() {
+    var table = document.getElementById('met-compare');
+    var body = table.querySelector('tbody');
+    var rows = chosen();
+    table.hidden = rows.length < 2;
+    body.textContent = '';
+    if (rows.length < 2) return;
+
+    var measured = rows.map(function (index) {
+      var surface = surfaceAt(index);
+      var profile = state.profiles[index];
+      var top = null, base = null, lid = null, ground = null;
+      if (profile && profile.hourly) {
+        var at = indexFor(profile.hourly.time, state.day, state.hour);
+        ground = profile.elevation;
+        var blh = profile.hourly.boundary_layer_height[at];
+        top = blh == null ? null : ground + blh;
+        base = cloudbase(profile.hourly.temperature_2m[at],
+                         profile.hourly.dew_point_2m[at], ground);
+        var caps = cappingLayers(profile.hourly, at, ground, SOUND_CEILING);
+        lid = caps.length ? caps[0] : null;
+      }
+      return { index: index, surface: surface, top: top, base: base, lid: lid,
+               ground: ground };
+    });
+    // The best figure in each column is marked, which is the comparison doing its job:
+    // three numbers in a column are three numbers until one of them is the answer.
+    var bestTop = Math.max.apply(null, measured.map(function (m) {
+      return m.top == null ? -Infinity : m.top; }));
+    var bestBase = Math.max.apply(null, measured.map(function (m) {
+      return m.base == null ? -Infinity : m.base; }));
+
+    measured.forEach(function (m) {
+      var row = document.createElement('tr');
+      row.className = state.site === m.index ? 'is-focus' : '';
+      row.tabIndex = 0;
+      var slot = slotOf(m.index);
+      var verdictKey = m.surface ? m.surface.verdict.key : 'none';
+      row.innerHTML =
+        '<th scope="row"><span class="site"><i class="swatch"></i><span></span></span></th>'
+        + '<td><span class="met-verdict met-' + verdictKey + '"></span></td>'
+        + '<td class="wind"></td><td class="top"></td><td class="base"></td>'
+        + '<td class="lid hide-narrow"></td><td class="ground hide-narrow"></td>';
+      row.querySelector('.swatch').style.background = seriesColour(slot);
+      row.querySelector('.site span').textContent = conf.sites[m.index].name;
+      row.querySelector('.met-verdict').textContent =
+        m.surface ? m.surface.verdict.text : '—';
+      row.querySelector('.wind').textContent = m.surface
+        ? Math.round(m.surface.speed) + ' km/h ' + compass(m.surface.direction) : '—';
+      var top = row.querySelector('.top');
+      top.textContent = m.top == null ? '…' : Math.round(m.top) + ' m';
+      if (m.top != null && m.top === bestTop) top.className = 'top best';
+      var base = row.querySelector('.base');
+      base.textContent = m.base == null ? '…' : Math.round(m.base) + ' m';
+      if (m.base != null && m.base === bestBase) base.className = 'base best';
+      row.querySelector('.lid').textContent = m.lid
+        ? Math.round(m.lid.base) + ' m' + (m.lid.inversion ? ' inv' : '')
+        : (m.top == null ? '…' : 'none');
+      row.querySelector('.ground').textContent =
+        m.ground == null ? conf.sites[m.index].alt + ' m' : Math.round(m.ground) + ' m';
+      row.onclick = function () { focus(m.index); };
+      row.onkeydown = function (event) {
+        if (event.key === 'Enter' || event.key === ' ') {
+          focus(m.index);
+          event.preventDefault();
+        }
+      };
+      body.appendChild(row);
+    });
   }
 
   // ---- charts ------------------------------------------------------------------------
@@ -518,34 +890,70 @@ SCRIPT = r"""
       }
     }
 
-    // The ground, the boundary layer and the cloudbase.
+    // The ground under the focused takeoff. The others are drawn on this same frame and
+    // stand on their own ground, which is why the table carries a "ground" column: two
+    // hills 300 m apart in elevation have boundary layers that are not comparable as
+    // heights above sea level alone.
     ctx.fillStyle = ink('--panel-2');
     ctx.fillRect(left, y(ground), W - left - right, H - bottom - y(ground));
-    function line(values, dashed, colour) {
+
+    function line(profile, values, dashed, colour, width) {
       ctx.save();
+      // Clipped to the plot box. A cloudbase of 4 290 m on a chart that stops at 4 000
+      // otherwise draws a dashed line across the caption above it, which reads as a
+      // rendering fault rather than as "higher than this chart goes".
+      ctx.beginPath();
+      ctx.rect(left, top, W - left - right, H - top - bottom);
+      ctx.clip();
       ctx.beginPath();
       ctx.setLineDash(dashed ? [5, 4] : []);
       ctx.strokeStyle = colour;
-      ctx.lineWidth = 1.8;
-      var started = false;
+      ctx.lineWidth = width;
+      ctx.lineJoin = 'round';
+      var started = false, lastX = null, lastY = null;
       for (var h = 5; h <= 21; h++) {
-        var value = values(indexFor(hourly.time, state.day, h));
+        var value = values(indexFor(profile.hourly.time, state.day, h));
         if (value == null) continue;
-        if (!started) { ctx.moveTo(x(h), y(value)); started = true; }
-        else ctx.lineTo(x(h), y(value));
+        lastX = x(h); lastY = y(value);
+        if (!started) { ctx.moveTo(lastX, lastY); started = true; }
+        else ctx.lineTo(lastX, lastY);
       }
       ctx.stroke();
       ctx.restore();
+      return started ? [lastX, lastY] : null;
     }
-    line(function (at) {
-      return hourly.boundary_layer_height[at] == null ? null
-        : ground + hourly.boundary_layer_height[at];
-    }, false, '#eb6834');
-    line(function (at) {
-      return cloudbase(hourly.temperature_2m[at], hourly.dew_point_2m[at], ground);
-    }, true, '#2f6fb3');
 
-    // Axes last, over everything.
+    function boundaryLayer(profile) {
+      return function (at) {
+        var blh = profile.hourly.boundary_layer_height[at];
+        return blh == null ? null : profile.elevation + blh;
+      };
+    }
+
+    // Every chosen takeoff's boundary layer, in its own slot colour, and the focused
+    // one's cloudbase besides. This is the comparison the page exists for — *when* each
+    // hill works, not only how high it goes — and it is why the meteogram is one chart
+    // with three lines rather than three charts nobody can align by eye.
+    //
+    // Two things carry identity besides the colour, which is the rule for a palette
+    // whose light steps sit under 3:1 on this panel: a label at the end of each line,
+    // and the legend under the chart.
+    var labels = [];
+    state.slots.forEach(function (index, slot) {
+      if (index === null) return;
+      var profile = state.profiles[index];
+      if (!profile || !profile.hourly) return;
+      var focused = index === state.site;
+      var end = line(profile, boundaryLayer(profile), false, seriesColour(slot),
+                     focused ? 2.4 : 2);
+      if (end) labels.push({ x: end[0], y: end[1], slot: slot,
+                             name: conf.sites[index].name });
+    });
+    line(state.profile, function (at) {
+      return cloudbase(hourly.temperature_2m[at], hourly.dew_point_2m[at], ground);
+    }, true, ink('--ink-3'), 1.6);
+
+    // Axes, over the lines and under the labels.
     ctx.strokeStyle = ink('--rule');
     ctx.fillStyle = ink('--ink-3');
     ctx.font = '10px ui-sans-serif, sans-serif';
@@ -557,6 +965,57 @@ SCRIPT = r"""
     }
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     for (var t = 6; t <= 20; t += 2) ctx.fillText(t + ':00', x(t), H - bottom + 5);
+
+    // The direct labels, last so nothing crosses them, and pushed apart where two
+    // takeoffs end the day at the same height — which on a good day they do.
+    labels.forEach(function (label) {
+      label.y = Math.min(Math.max(label.y, top + 7), H - bottom - 7);
+    });
+    labels.sort(function (a, b) { return a.y - b.y; });
+    for (var i = 1; i < labels.length; i++) {
+      if (labels[i].y - labels[i - 1].y < 12) labels[i].y = labels[i - 1].y + 12;
+    }
+    ctx.font = '600 10px ui-sans-serif, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    labels.forEach(function (label) {
+      var text = label.name.length > 14 ? label.name.slice(0, 13) + '…' : label.name;
+      var width = ctx.measureText(text).width;
+      // A pad behind the text: these lines cross each other and the cloud shading, and
+      // a label read against a line is a label read twice.
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = ink('--panel');
+      ctx.fillRect(label.x - width - 5, label.y - 7, width + 6, 14);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = seriesColour(label.slot);
+      ctx.fillText(text, label.x - 2, label.y);
+    });
+  }
+
+  // The legend, in the DOM rather than on the canvas: it is text, and text in a canvas
+  // is invisible to a screen reader and to a find-in-page.
+  function drawKeys() {
+    var box = document.getElementById('met-keys');
+    box.textContent = '';
+    state.slots.forEach(function (index, slot) {
+      if (index === null) return;
+      var key = document.createElement('span');
+      key.innerHTML = '<i></i><span></span>';
+      key.querySelector('i').style.borderTopColor = seriesColour(slot);
+      // A legend entry for a line that is not on the chart yet is a small lie, so it
+      // says which it is rather than waiting for the fetch to make it true.
+      key.querySelector('span').textContent = conf.sites[index].name
+        + (state.profiles[index] ? ' — boundary layer' : ' — fetching…');
+      box.appendChild(key);
+    });
+    if (state.site !== null) {
+      var base = document.createElement('span');
+      base.innerHTML = '<i style="border-top-style:dashed"></i><span></span>';
+      base.querySelector('i').style.borderTopColor = ink('--ink-3');
+      base.querySelector('span').textContent =
+        'cloudbase at ' + conf.sites[state.site].name;
+      box.appendChild(base);
+    }
   }
 
   function drawSounding() {
@@ -781,6 +1240,8 @@ SCRIPT = r"""
       return;
     }
     figure.hidden = false;
+    document.getElementById('met-flymet-summary').textContent =
+      'flymet’s own meteogram for ' + near.name + ', ' + near.km + ' km away';
     // Stamped with the hour. flymet sends no cache lifetime, so a browser is free to
     // guess one from the file's age — and today's meteogram is regenerated through the
     // day, which makes a guessed cache an old picture under a current heading. The stamp
@@ -813,7 +1274,13 @@ SCRIPT = r"""
   }
 
   function drawSite() {
-    if (state.site == null) return;
+    var panel = document.getElementById('met-panel');
+    if (state.site == null) {
+      panel.hidden = true;
+      drawKeys();
+      return;
+    }
+    panel.hidden = false;
     var site = conf.sites[state.site];
     document.getElementById('met-name').textContent = site.name;
     var good = (site.winds || []).length
@@ -835,17 +1302,33 @@ SCRIPT = r"""
     drawSounding();
     drawFigures();
     drawFlymet();
+    drawKeys();
   }
 
-  function loadProfile() {
-    var site = conf.sites[state.site];
-    say('Fetching the sounding for ' + site.name + '…');
-    get(profileUrl(site)).then(function (answer) {
-      state.profile = answer;
-      say('');
+  // One profile per chosen takeoff, fetched once and kept. Three requests where there
+  // used to be one, and they are the reason the surface call is separate: asking for the
+  // pressure levels of all 159 takeoffs to rank them would be tens of megabytes to
+  // answer a question about three hills.
+  function loadProfiles() {
+    var wanted = chosen().filter(function (index) { return !state.profiles[index]; });
+    if (!wanted.length) return;
+    var names = wanted.map(function (index) { return conf.sites[index].name; });
+    say('Fetching the sounding for ' + names.join(', ') + '…');
+    var failed = [];
+    Promise.all(wanted.map(function (index) {
+      return get(profileUrl(conf.sites[index])).then(function (answer) {
+        // Still chosen? A reader who drops a takeoff while its sounding is in the air
+        // should not have it reappear when the answer lands.
+        if (slotOf(index) < 0) return;
+        state.profiles[index] = answer;
+        if (index === state.site) state.profile = answer;
+      }).catch(function (error) {
+        failed.push(conf.sites[index].name + ' (' + error.message + ')');
+      });
+    })).then(function () {
+      say(failed.length ? 'No sounding for ' + failed.join(', ') : '');
+      drawCompare();
       drawSite();
-    }).catch(function (error) {
-      say('No sounding: ' + error.message);
     });
   }
 
@@ -882,14 +1365,64 @@ SCRIPT = r"""
     });
   })();
 
+  // ---- the picker's controls -----------------------------------------------------------
+  //
+  // A real `<dialog>`: Escape closes it, the backdrop closes it, focus stays inside it
+  // and the page behind it is inert — four behaviours a hand-rolled overlay has to
+  // reimplement and usually gets two of. `showModal` is missing only on browsers old
+  // enough that the fallback matters more than the polish, and there it opens inline.
+  var search = document.getElementById('met-search');
+
+  function openPicker() {
+    state.search = '';
+    search.value = '';
+    drawList();
+    if (modal.showModal) modal.showModal(); else modal.setAttribute('open', '');
+    // Not focused on a touchscreen: raising the keyboard covers the list the reader
+    // came here to look at, and they can tap the field if they want to type.
+    if (!window.matchMedia('(hover: none)').matches) search.focus();
+  }
+  function closePicker() {
+    if (modal.close) modal.close(); else modal.removeAttribute('open');
+  }
+
+  document.getElementById('met-add').onclick = openPicker;
+  document.getElementById('met-close').onclick = closePicker;
+  document.getElementById('met-done').onclick = closePicker;
+  // Clicking the backdrop. A dialog's own box is the click target for everything inside
+  // it, so "outside" is a click whose coordinates fall beyond its rectangle.
+  modal.addEventListener('click', function (event) {
+    if (event.target !== modal) return;
+    var box = modal.getBoundingClientRect();
+    var outside = event.clientX < box.left || event.clientX > box.right
+      || event.clientY < box.top || event.clientY > box.bottom;
+    if (outside) closePicker();
+  });
+  search.addEventListener('input', function () {
+    state.search = search.value;
+    drawList();
+  });
+  document.getElementById('met-list').addEventListener('click', function (event) {
+    var button = event.target.closest('.met-site');
+    if (!button) return;
+    toggle(Number(button.dataset.index));
+  });
+
   var hourInput = document.getElementById('met-hour-input');
   hourInput.addEventListener('input', function () {
     state.hour = Number(hourInput.value);
     document.getElementById('met-hour-readout').textContent = state.hour + ':00';
     drawList();
+    drawCompare();
     drawSite();
   });
-  window.addEventListener('resize', function () { drawSite(); });
+  // Debounced, because a canvas redraw per resize event is what makes a window drag
+  // stutter — and three profiles' worth of lines is three times the redraw it was.
+  var resizing = null;
+  window.addEventListener('resize', function () {
+    clearTimeout(resizing);
+    resizing = setTimeout(drawSite, 120);
+  });
 
   // Exposed for tests, and only what a test cannot reach any other way: the two rules
   // that read a sounding, the state the pointer writes into, and a redraw. Everything
@@ -902,21 +1435,34 @@ SCRIPT = r"""
     sampleProfile: sampleProfile,
     cloudbase: cloudbase,
     draw: drawSite,
+    // The multi-site controls, so a browser test can drive the page the way a reader
+    // does rather than reaching into `state` and hoping the redraws follow.
+    open: openPicker,
+    add: toggle,
+    drop: drop,
+    focus: focus,
+    chosen: chosen,
     at: function () { return indexFor(state.profile.hourly.time, state.day, state.hour); }
   };
 
   drawDays();
+  recall();
+  drawChosen();
+  drawSite();
   get(surfaceUrl()).then(function (answer) {
     state.surface = Array.isArray(answer) ? answer : [answer];
     say('');
     drawList();
-    // Open the best site rather than an empty panel: the page's answer to "is it worth
-    // going" is a sounding, and making the reader click to see one hides the point.
-    var first = document.querySelector('.met-site');
-    if (first && state.site === null) {
-      state.site = Number(first.dataset.index);
-      drawList();
-      loadProfile();
+    // Open the best takeoff of the day rather than an empty page: this page's answer to
+    // "is it worth going anywhere" is a sounding, and making the reader pick a hill
+    // before it will show them one hides the point. Only on a first visit — a reader who
+    // has chosen their own hills is not shown a fourth one they did not ask for.
+    if (!chosen().length) {
+      var first = document.querySelector('.met-site');
+      if (first) toggle(Number(first.dataset.index));
+    } else {
+      drawCompare();
+      loadProfiles();
     }
   }).catch(function (error) {
     say('The forecast could not be fetched (' + error.message + '). '

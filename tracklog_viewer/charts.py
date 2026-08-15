@@ -6,6 +6,7 @@ output is now a broken image — the lesson being that a chart should not depend
 network service that outlives neither the flight nor the tool.
 """
 
+import json
 import math
 from dataclasses import dataclass
 
@@ -25,6 +26,15 @@ CLIMB_RAMP = [
     (4.0, "var(--climb-2)"),
     (float("inf"), "var(--climb-3)"),
 ]
+
+# The wind chart's axis rounding, and how far outside the measured climbs a model level
+# may sit and still be about the same air. Named because they are published in
+# `data-wind-frame` and applied again in the browser when the page finishes the chart
+# with a profile fetched at view time — two copies of `250` in two languages is exactly
+# the drift `quicklook.constants()` exists to prevent.
+WIND_SPEED_STEP = 5      # km/h between gridlines, and what the speed axis rounds up to
+WIND_ALT_STEP = 250      # m between gridlines, and what the height axis rounds to
+WIND_MODEL_BAND = 400    # m above and below the climbs
 
 PHASE_COLOR = {
     Phase.THERMAL: "var(--climb)",
@@ -560,6 +570,15 @@ def wind_profile(analysis: Analysis, *, width: int = 620, height: int = 350, met
     wind sounding taken by the glider. When model data is supplied it is drawn behind
     as a reference line, which is the honest way to show that an inferred quantity
     agrees — or does not — with an independent source.
+
+    A report built without ``--meteo`` has no model line at build time, and the page
+    fetches the day at view time for "The air that day" anyway. So this publishes enough
+    for that fetch to finish the chart: ``data-wind-frame`` on the SVG carries the axis
+    mapping and the rounding rules, each point carries the two numbers it was placed
+    from, and an empty ``<g class="model">`` is always emitted for the page to draw into.
+    The frame is what makes that possible without a second copy of the layout — see
+    ``plotModelWind`` in ``render_html.SCRIPT``, which rescales the axes when the model
+    is stronger than anything the glider measured, and it usually is.
     """
     thermals = [s for s in analysis.thermals if s.wind and s.turns and s.turns >= 2]
     if not thermals:
@@ -575,13 +594,17 @@ def wind_profile(analysis: Analysis, *, width: int = 620, height: int = 350, met
         model_levels = [
             level
             for level in meteo.levels
-            if min(altitudes) - 400 <= level.height <= max(altitudes) + 400
+            if min(altitudes) - WIND_MODEL_BAND <= level.height
+            <= max(altitudes) + WIND_MODEL_BAND
         ]
     speed_max = max(
-        math.ceil(max(speeds + [level.wind_speed for level in model_levels]) / 5) * 5, 10
+        math.ceil(max(speeds + [level.wind_speed for level in model_levels])
+                  / WIND_SPEED_STEP) * WIND_SPEED_STEP,
+        2 * WIND_SPEED_STEP,
     )
-    alt_min = math.floor(min(altitudes + [level.height for level in model_levels]) / 250) * 250
-    alt_max = math.ceil(max(altitudes + [level.height for level in model_levels]) / 250) * 250
+    heights = altitudes + [level.height for level in model_levels]
+    alt_min = math.floor(min(heights) / WIND_ALT_STEP) * WIND_ALT_STEP
+    alt_max = math.ceil(max(heights) / WIND_ALT_STEP) * WIND_ALT_STEP
 
     def sx(value):
         return left + plot_w * value / speed_max
@@ -590,7 +613,7 @@ def wind_profile(analysis: Analysis, *, width: int = 620, height: int = 350, met
         return top + plot_h * (1 - (value - alt_min) / max(alt_max - alt_min, 1))
 
     grid, labels = [], []
-    for value in range(0, int(speed_max) + 1, 5):
+    for value in range(0, int(speed_max) + 1, WIND_SPEED_STEP):
         x = sx(value)
         grid.append(f'<line x1="{x:.1f}" y1="{top}" x2="{x:.1f}" y2="{top + plot_h}" />')
         labels.append(
@@ -598,14 +621,17 @@ def wind_profile(analysis: Analysis, *, width: int = 620, height: int = 350, met
         )
     # Every 250 m: the whole point of the chart is how wind changes with height, so
     # the height axis needs enough labels to read a value off it.
-    for value in range(int(alt_min), int(alt_max) + 1, 250):
+    for value in range(int(alt_min), int(alt_max) + 1, WIND_ALT_STEP):
         y = sy(value)
         labels.append(
             f'<text x="{left - 9}" y="{y + 3.5:.1f}" class="axis-label axis-y">{value}</text>'
         )
         grid.append(f'<line x1="{left}" y1="{y:.1f}" x2="{width - right}" y2="{y:.1f}" />')
 
-    model = ""
+    # Always emitted, empty when there is nothing to put in it: the group is where the
+    # page draws the model it fetched at view time, and creating it there would put it
+    # in front of the measured points instead of behind them.
+    model = '<g class="model"></g>'
     if len(model_levels) >= 2:
         path = " ".join(f"{sx(l.wind_speed):.1f},{sy(l.height):.1f}" for l in model_levels)
         dots = "".join(
@@ -641,7 +667,12 @@ def wind_profile(analysis: Analysis, *, width: int = 620, height: int = 350, met
                 f'text-anchor="{anchor}">{escape(segment.start_time[:5])}</text>'
             )
         points.append(
-            f'<g class="wind-point" data-segment="{segment.start}">'
+            # The two numbers this point was placed from, so the page can put it
+            # somewhere else if the model it fetches needs a wider axis than the
+            # glider's own measurements did.
+            f'<g class="wind-point" data-segment="{segment.start}" '
+            f'data-speed="{speed:.2f}" data-alt="{altitude:.0f}" '
+            f'data-dir="{segment.wind.direction:.0f}">'
             f'<line x1="{start_x:.1f}" y1="{start_y:.1f}" x2="{x + dx:.1f}" y2="{y + dy:.1f}" '
             f'class="wind-arrow" marker-end="url(#arrow{uid})" />'
             f'<circle cx="{x:.1f}" cy="{y:.1f}" r="8.5" class="wind-dot" />'
@@ -654,7 +685,16 @@ def wind_profile(analysis: Analysis, *, width: int = 620, height: int = 350, met
             f"</g>"
         )
 
+    frame = json.dumps({
+        "left": left, "right": right, "top": top, "bottom": bottom,
+        "width": width, "height": height, "plotW": plot_w, "plotH": plot_h,
+        "speedMax": speed_max, "altMin": alt_min, "altMax": alt_max,
+        "speedStep": WIND_SPEED_STEP, "altStep": WIND_ALT_STEP,
+        "band": WIND_MODEL_BAND, "hasModel": len(model_levels) >= 2,
+    }, separators=(",", ":"))
+
     return f"""<svg viewBox="0 0 {width} {height}" class="chart chart-wind" role="img"
+     data-wind-frame='{frame}'
      aria-label="Wind speed measured in each thermal against altitude, with the model
      wind profile for comparison">
   <defs>

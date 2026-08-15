@@ -32,6 +32,11 @@ CONDENSE_THERMAL = 60
 CONDENSE_GLIDE = 60
 CONDENSE_DIVE = 30
 TURNING_THRESHOLD = 3.0  # deg/s; below this the glider is not really circling
+# Ground speed under which a climb counts as a thermal whatever `progress` says. A
+# glider parked in a strong core barely moves, so the straightness test has nothing to
+# measure. Named rather than inline because `quicklook.py` reads it out of
+# `quicklook.constants()` and a bare 10.0 in two languages is the drift that gap warns of.
+THERMAL_SLOW_KMH = 10.0
 # How long the glider has to be turning before the climb counts as started. One stray
 # sample over the threshold is noise; five seconds of it is a pilot entering a turn.
 TURN_ONSET_SECONDS = 5.0
@@ -325,7 +330,7 @@ def classify(series: Series) -> np.ndarray:
     # speed — and, worse, fires on scattered single samples during a long glide, which
     # CONDENSE_THERMAL then bridges into one enormous "thermal" spanning the glide.
     thermal = (series.climb > 0.0) & (
-        (series.progress < GLIDE_PROGRESS) | (series.speed < 10.0) | circling
+        (series.progress < GLIDE_PROGRESS) | (series.speed < THERMAL_SLOW_KMH) | circling
     )
     for start, stop in _condense(_runs(thermal), t, CONDENSE_THERMAL):
         # The phase is the circling. Trim the straight run-in at the front and the

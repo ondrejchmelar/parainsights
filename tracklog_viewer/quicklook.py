@@ -18,8 +18,44 @@ used to share: the DEM is fetched here now, wherever the page is allowed to reac
 host, and falls back to a flat plane where it is not.
 """
 
-from . import view3d
+import json
+
+from . import analysis, debrief, flight, meteo, view3d
 from .render_map import RAMP_RGB
+
+
+def constants() -> dict:
+    """Every number this page shares with the Python analysis, in one payload.
+
+    The documented gap was that ``quicklook.py`` held its own copy of each threshold and
+    the two drifted — on *shape* rather than on a value the first time, which is worse,
+    because a number that differs by ten percent looks like rounding and a rule that
+    differs looks like a bug in the file the reader uploaded. ``debrief.THRESHOLDS`` was
+    already serialised beside the debrief; this is the other half, and it is emitted from
+    the drop panel rather than from a flight, so an upload into a report with no bundled
+    flights still gets it.
+
+    Names are camelCase because the only consumer is JavaScript. Anything added here has
+    to be a rule the page actually applies — a constant nobody reads is a second place
+    for the truth to live.
+    """
+    return {
+        "window": flight.WINDOW,
+        "glideProgress": analysis.GLIDE_PROGRESS,
+        "thermalSlowKmh": analysis.THERMAL_SLOW_KMH,
+        "minThermalSeconds": analysis.MIN_THERMAL_SECONDS,
+        "minThermalGain": analysis.MIN_THERMAL_GAIN,
+        "minGlideSeconds": analysis.MIN_GLIDE_SECONDS,
+        "condenseThermal": analysis.CONDENSE_THERMAL,
+        "condenseGlide": analysis.CONDENSE_GLIDE,
+        "reversalHysteresis": analysis.REVERSAL_HYSTERESIS,
+        "turnResolutionLimit": analysis.TURN_RESOLUTION_LIMIT,
+        # The levels `meteo.py` asks Open-Meteo for, so a profile fetched in the page is
+        # the same shape as one baked in at build time and the two can be read against
+        # each other.
+        "pressureLevels": list(meteo.PRESSURE_LEVELS),
+        "thresholds": debrief.THRESHOLDS,
+    }
 
 
 def panel() -> str:
@@ -34,7 +70,9 @@ def panel() -> str:
     ramp = "".join(
         f'<i style="background: rgb({r},{g},{b})"></i>' for _, (r, g, b) in RAMP_RGB
     )
+    rules = json.dumps(constants(), separators=(",", ":"))
     return f"""
+  <script type="application/json" id="ql-constants">{rules}</script>
   <article class="flight" data-flight-report="own" id="quicklook" hidden>
     <header class="masthead">
       <div>
@@ -161,6 +199,14 @@ SCRIPT = r"""
   // Every uploaded flight is a clone of the template with its own uid, so the lookups
   // below are all scoped to one article. Nothing here may use an id.
   var loaded = 0;
+
+  // Every threshold this page applies, read from the payload `quicklook.constants()`
+  // writes rather than typed again here. Not defensive: the panel and the JSON are
+  // emitted by the same function, so if this element is missing the page is broken and
+  // failing at load says so louder than analysing a flight by different rules would.
+  // `TH` is `debrief.THRESHOLDS`, the same dict the built report's debrief carries.
+  var RULES = JSON.parse(document.getElementById('ql-constants').textContent);
+  var TH = RULES.thresholds;
 
   var RAMP = [[-4, [23,80,143]], [-2, [42,120,214]], [-0.7, [143,182,230]],
               [0.7, [169,164,154]], [2, [240,160,122]], [4, [235,104,52]],
@@ -356,7 +402,10 @@ SCRIPT = r"""
   }
 
   // ---- analysis --------------------------------------------------------------
-  var WINDOW = 20, GLIDE_PROGRESS = 0.9;
+  // Both from `RULES`, so `flight.WINDOW` and `analysis.GLIDE_PROGRESS` are the only
+  // places these two exist. Aliased rather than used through `RULES` because they are
+  // read inside the per-fix loops below and the names are the ones Python uses.
+  var WINDOW = RULES.window, GLIDE_PROGRESS = RULES.glideProgress;
 
   function interpolate(ts, values, at) {
     if (at <= ts[0]) return values[0];
@@ -429,7 +478,7 @@ SCRIPT = r"""
     // the wander inside a circle extend it — and count only the runs that came all the
     // way round. Summing |dheading| instead scores a wingover as most of a turn, and
     // taking the net rotation (what this used to do) cancels a climb flown both ways.
-    var REVERSAL_HYSTERESIS = 60;
+    var REVERSAL_HYSTERESIS = RULES.reversalHysteresis;
     function revolutions(from, to) {
       var last = heading[from], way = 0, total = 0, run = 0;
       for (var r = from + 1; r < to; r++) {
@@ -472,11 +521,16 @@ SCRIPT = r"""
         for (var f2 = merged[m][0]; f2 < merged[m][1]; f2++) phases[f2] = name;
       }
     }
-    mark(function (i2) { return progress[i2] >= GLIDE_PROGRESS; }, 'glide', 120, 60);
+    mark(function (i2) { return progress[i2] >= GLIDE_PROGRESS; },
+         'glide', RULES.minGlideSeconds, RULES.condenseGlide);
+    // `analysis.py`'s thermal rule, minus the circling clause it cannot evaluate: this
+    // page has no smoothed turn rate, so `climb > 1` stands in for "turning" and is the
+    // one place the two implementations knowingly differ. Everything else — the slow
+    // speed gate, the progress gate, both windows — comes from `RULES`.
     mark(function (i2) {
       return (progress[i2] < GLIDE_PROGRESS && climb[i2] > 0) ||
-             (speed[i2] < 10 && climb[i2] > 0) || climb[i2] > 1;
-    }, 'thermal', 60, 60);
+             (speed[i2] < RULES.thermalSlowKmh && climb[i2] > 0) || climb[i2] > 1;
+    }, 'thermal', RULES.minThermalSeconds, RULES.condenseThermal);
 
     var climbs = [];
     var current = null;
@@ -486,10 +540,11 @@ SCRIPT = r"""
         var stop = i3;
         var duration = t[stop] - t[current];
         var gain = alt[stop] - alt[current];
-        if (duration >= 60 && gain > 50) {
+        if (duration >= RULES.minThermalSeconds && gain > RULES.minThermalGain) {
           var best = -Infinity;
           for (var b2 = current; b2 < stop; b2++) best = Math.max(best, climb[b2]);
-          var turns = median <= 5 ? revolutions(current, stop) : null;
+          var turns = median <= RULES.turnResolutionLimit
+            ? revolutions(current, stop) : null;
           climbs.push({
             start: current, stop: stop, duration: duration, gain: gain,
             average: gain / duration, best: best, turns: turns,
@@ -528,7 +583,7 @@ SCRIPT = r"""
       if ((phases[i4] !== 'glide' || i4 === t.length - 1) && open !== null) {
         var stop4 = i4;
         var seconds = t[stop4] - t[open];
-        if (seconds >= 120) {
+        if (seconds >= RULES.minGlideSeconds) {
           var straightM = distance(lat[open], lon[open], lat[stop4], lon[stop4]);
           var drop = alt[stop4] - alt[open];
           glides.push({
@@ -710,11 +765,32 @@ SCRIPT = r"""
     var left = 54, right = 16, top = 14, bottom = 30;
     ctx.clearRect(0, 0, W, H);
     var styles = getComputedStyle(document.body);
-    var floor = Math.floor(a.altMin / 100) * 100, ceiling = Math.ceil(a.altMax / 100) * 100;
+    // The floor drops to the ground once there is a ground: a side view whose lowest
+    // gridline is the flight's own lowest point draws the terrain off the bottom of the
+    // chart, which is the one part of it the clearance series exists to show.
+    var lowest = a.ground ? Math.min(a.altMin, groundFloor(a)) : a.altMin;
+    var floor = Math.floor(lowest / 100) * 100, ceiling = Math.ceil(a.altMax / 100) * 100;
     function sx(v) { return left + (W - left - right) * v / Math.max(a.flown, 1); }
     function sy(v) {
       return top + (H - top - bottom) * (1 - (v - floor) / Math.max(ceiling - floor, 1));
     }
+
+    // The ground under the track, where the DEM was fetched. Filled rather than lined,
+    // because the question it answers — how much air was under you — is an area, and a
+    // line alone reads as a second altitude trace.
+    if (a.ground) {
+      ctx.beginPath();
+      ctx.moveTo(sx(0), sy(floor));
+      for (var gi = 0; gi < a.ground.length; gi++) ctx.lineTo(sx(a.s[gi]), sy(a.ground[gi]));
+      ctx.lineTo(sx(a.s[a.s.length - 1]), sy(floor));
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(128,132,140,0.30)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(128,132,140,0.75)';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+    }
+
     ctx.strokeStyle = 'rgba(128,128,128,0.3)';
     ctx.fillStyle = styles.color;
     ctx.font = '10px ui-sans-serif, sans-serif';
@@ -1111,6 +1187,95 @@ SCRIPT = r"""
              rows: rows, cols: cols, min: min, max: max, z: z, zoom: zoom };
   }
 
+  // ---- the ground under the track ---------------------------------------------
+  //
+  // The DEM was already fetched for the 3D view; what was missing was the series that
+  // says how much air was under the glider, which is the number a pilot asks for after
+  // "how high was I". Bilinear rather than nearest-node: at 240 columns over a
+  // cross-country box a cell is a few hundred metres across, and nearest-node makes the
+  // ground under a glide a staircase that the clearance figure then reads the treads of.
+  //
+  // This is the *page's* copy of what `terrain.py` does for a built report, and it is
+  // the same disagreement between a DEM cell and a GPS altitude — so a clearance can
+  // come out slightly negative over steep ground and that is the model losing an
+  // argument, not the pilot. Nothing here reports a negative number as a finding; see
+  // the "no finding may assert something the run did not check" rule.
+  function groundUnder(dem, lat, lon) {
+    var fx = (lon - dem.west) / Math.max(dem.east - dem.west, 1e-9) * (dem.cols - 1);
+    var fy = (dem.north - lat) / Math.max(dem.north - dem.south, 1e-9) * (dem.rows - 1);
+    fx = Math.min(Math.max(fx, 0), dem.cols - 1);
+    fy = Math.min(Math.max(fy, 0), dem.rows - 1);
+    var c0 = Math.floor(fx), r0 = Math.floor(fy);
+    var c1 = Math.min(c0 + 1, dem.cols - 1), r1 = Math.min(r0 + 1, dem.rows - 1);
+    var tx = fx - c0, ty = fy - r0;
+    var z00 = dem.z[r0 * dem.cols + c0], z10 = dem.z[r0 * dem.cols + c1];
+    var z01 = dem.z[r1 * dem.cols + c0], z11 = dem.z[r1 * dem.cols + c1];
+    return (z00 * (1 - tx) + z10 * tx) * (1 - ty) + (z01 * (1 - tx) + z11 * tx) * ty;
+  }
+
+  // Writes `a.ground` and `a.agl` in place. Called once, when the DEM lands.
+  function addClearance(a, dem) {
+    var ground = new Float64Array(a.lat.length);
+    var agl = new Float64Array(a.lat.length);
+    for (var i = 0; i < a.lat.length; i++) {
+      ground[i] = groundUnder(dem, a.lat[i], a.lon[i]);
+      agl[i] = a.alt[i] - ground[i];
+    }
+    a.ground = ground;
+    a.agl = agl;
+  }
+
+  function groundFloor(a) {
+    var least = Infinity;
+    for (var i = 0; i < a.ground.length; i++) if (a.ground[i] < least) least = a.ground[i];
+    return least;
+  }
+
+  // The lowest the flight got, excluding its own launch and landing — `metrics.
+  // airborne_window` in the report, and the same `ground_margin` from `THRESHOLDS`,
+  // because the lowest clearance of *any* flight is the ground it started on.
+  function lowestClearance(a) {
+    if (!a.agl) return null;
+    var margin = TH.ground_margin;
+    var first = -1, last = -1;
+    for (var i = 0; i < a.agl.length; i++) {
+      if (a.agl[i] <= margin) continue;
+      if (first < 0) first = i;
+      last = i;
+    }
+    if (first < 0 || last - first < 2) return null;
+    var best = Infinity, at = first;
+    for (var k = first; k <= last; k++) {
+      if (a.agl[k] < best) { best = a.agl[k]; at = k; }
+    }
+    return { metres: best, fix: at };
+  }
+
+  // One tile, appended to the stats the moment the ground exists. Appended rather than
+  // written into the row up front: a placeholder that may never be filled is worse than
+  // a row that grows, and inside a published artifact the DEM never arrives at all.
+  //
+  // The launch and the landing are excluded, so this is the lowest the flight got while
+  // it was actually flying — `low_clearance` decides only whether the tile says the
+  // number was a low one, and the wording stays a measurement either way.
+  function showClearance(root, a) {
+    var low = lowestClearance(a);
+    if (!low) return;
+    var stats = root.querySelector('.ql-stats');
+    if (!stats || stats.querySelector('.ql-clearance')) return;
+    var cell = document.createElement('div');
+    cell.className = 'stat ql-clearance';
+    cell.innerHTML = '<span class="key"></span><span class="stat-value"></span>' +
+                     '<span class="sub"></span>';
+    cell.querySelector('.key').textContent = 'lowest clearance';
+    cell.querySelector('.stat-value').textContent = Math.round(low.metres) + ' m';
+    cell.querySelector('.sub').textContent =
+      'at ' + clock(a, a.t[low.fix]) +
+      (low.metres < TH.low_clearance ? ' · under ' + TH.low_clearance + ' m agl' : '') +
+      ' · launch and landing excluded';
+    stats.appendChild(cell);
+  }
+
   // The tile templates are already in the template's markup; read them back rather than
   // repeating the URLs here, so there is one place they can be wrong.
   var TILES = (function () {
@@ -1203,6 +1368,17 @@ SCRIPT = r"""
     // under a running view, and inventing one to save a second of waiting is the worse
     // trade. The caption says what is happening meanwhile.
     loadDem(demBox(a), function (dem) {
+      // The clearance series, before anything is drawn with it. The DEM was fetched for
+      // the 3D view and the height above ground fell out of it for free; what it needed
+      // was somewhere to be written. The side view is redrawn here rather than in
+      // `present`, because that ran while this fetch was still in the air — and it is
+      // redrawn *before* `linkCharts`, which reads `__at`/`__nearest` off the canvas
+      // that `drawSide` writes.
+      if (dem) {
+        addClearance(a, dem);
+        drawSide(root, a);
+        showClearance(root, a);
+      }
       // Unique canvas id per flight: initView3d registers itself under it, and two panels
       // sharing an id would leave the second unreachable.
       panel.querySelector('canvas.view3d').id = 'view3d-' + uid;
@@ -1222,7 +1398,8 @@ SCRIPT = r"""
       linkCharts(root, a, sample, initView3d(panel, cursorTrack));
       note.textContent = dem
         ? 'Ground from the terrarium elevation model at zoom ' + dem.zoom + ' (' +
-          dem.cols + '×' + dem.rows + ' nodes, ' + dem.min + '–' + dem.max + ' m). ' +
+          dem.cols + '×' + dem.rows + ' nodes, ' + dem.min + '–' + dem.max + ' m), and ' +
+          'the same grid gives the ground under the side view and the clearance figure. ' +
           heights
         : 'Ground drawn as a flat plane at ' + Math.round(a.altMin - 30) + ' m — ' +
           Math.round(a.altMin) + ' m was your lowest point, and the elevation model ' +
@@ -1238,7 +1415,7 @@ SCRIPT = r"""
     // the same flight read from a 500-point KMZ and from its IGC gave 476 km against
     // 623 km flown and 24 900 m against 44 900 m gained. Say so next to the numbers.
     var coarse = root.querySelector('.ql-coarse');
-    if (a.median > 5) {
+    if (a.median > RULES.turnResolutionLimit) {
       coarse.hidden = false;
       coarse.textContent = 'Sampled every ' + a.median.toFixed(0) + ' s. Distance flown, ' +
         'height gained and climb rates are measured along the track, so at this spacing ' +
@@ -1262,7 +1439,7 @@ SCRIPT = r"""
            'from ' + Math.round(a.altMin) + ' m, ' + (a.useBaro ? 'baro' : 'GPS')) +
       tile('height gained', Math.round(a.gained) + ' m', '') +
       tile('climbs', String(a.climbs.length),
-           (a.median > 5 ? 'turns not resolvable' : Math.round(turnTotal) + ' turns')) +
+           (a.median > RULES.turnResolutionLimit ? 'turns not resolvable' : Math.round(turnTotal) + ' turns')) +
       tile('wind', a.wind ? Math.round(a.wind.kmh) + ' km/h' : '—',
            a.wind ? 'from ' + cardinal(a.wind.from) + ' · from circle drift' : '') +
       tile('time', Math.round(100 * a.budget.thermal / Math.max(a.duration, 1)) + '% up',
@@ -1296,10 +1473,12 @@ SCRIPT = r"""
     }).join('') || '<tr><td colspan="7">No glides met the thresholds.</td></tr>';
 
     root.querySelector('.ql-note').textContent =
-      'Quick look: phases use the same 20 s progress heuristic as the full analysis. ' +
-      'No terrain, basemap, weather or XC optimisation — those need the command line, ' +
-      'which also reads the pressure altitude and the logger headers.' +
-      (a.median > 5 ? ' Sampled every ' + a.median.toFixed(0) +
+      'Quick look: phases use the same ' + WINDOW + ' s progress heuristic as the full ' +
+      'analysis, and the same thresholds — this page reads them out of one payload ' +
+      'rather than carrying its own copies. No basemap, and no scored triangle: those ' +
+      'need the command line, which also reads the pressure altitude and the logger ' +
+      'headers.' +
+      (a.median > RULES.turnResolutionLimit ? ' Sampled every ' + a.median.toFixed(0) +
         ' s, too coarse to resolve a circle, so turn counts are omitted.' : '');
 
     drawSide(root, a);
@@ -1333,7 +1512,12 @@ SCRIPT = r"""
   // The same source the CLI uses. A published artifact runs under a policy that blocks
   // every external request, so this can only succeed when the page is opened locally —
   // hence the explicit opt-in and the plain failure message.
-  function fetchMeteo(a) {
+  // `want.profile` adds the pressure levels — thirty more fields on the same one
+  // request, so a report can draw the model wind profile behind its own measurements.
+  // Off by default because an uploaded track has no chart to draw it in, and asking for
+  // data nobody displays is a bigger answer for nothing.
+  function fetchMeteo(a, want) {
+    want = want || {};
     // Without a date there is no day to ask about, and asking anyway returns the weather
     // of 1 January 1970 rather than an error.
     if (!a.dated) return Promise.reject(new Error('the file carries no flight date'));
@@ -1344,6 +1528,12 @@ SCRIPT = r"""
     var ageDays = (Date.now() / 1000 - a.epoch) / 86400;
     var fields = 'temperature_2m,dew_point_2m,boundary_layer_height,' +
       'wind_speed_850hPa,wind_direction_850hPa';
+    if (want.profile) {
+      RULES.pressureLevels.forEach(function (hpa) {
+        fields += ',wind_speed_' + hpa + 'hPa,wind_direction_' + hpa + 'hPa' +
+                  ',geopotential_height_' + hpa + 'hPa';
+      });
+    }
     var url;
     if (ageDays > 60) {
       url = 'https://archive-api.open-meteo.com/v1/archive?latitude=' + midLat.toFixed(3) +
@@ -1370,13 +1560,32 @@ SCRIPT = r"""
       if (temperature === null || temperature === undefined) {
         throw new Error('no surface data for that hour');
       }
+      // The profile, where it was asked for and where the answer has one. The ERA5
+      // archive returns nulls on every pressure level, so a flight older than the
+      // 60-day cutoff comes back with an empty list rather than a line of zeroes —
+      // which is the same distinction the 850 hPa tile makes between "calm" and
+      // "not known", and it is the one that matters on a windy day.
+      var levels = [];
+      if (want.profile) {
+        RULES.pressureLevels.forEach(function (hpa) {
+          var height = hourly['geopotential_height_' + hpa + 'hPa'];
+          var speed = hourly['wind_speed_' + hpa + 'hPa'];
+          var from = hourly['wind_direction_' + hpa + 'hPa'];
+          if (!height || !speed || !from) return;
+          if (height[index] == null || speed[index] == null || from[index] == null) return;
+          levels.push({ pressure: hpa, height: height[index],
+                        speed: speed[index], direction: from[index] });
+        });
+        levels.sort(function (p, q) { return p.height - q.height; });
+      }
       return {
         temperature: temperature, dew: dew,
         cloudbase: (payload.elevation || 0) + 125 * Math.max(temperature - dew, 0),
         blTop: hourly.boundary_layer_height && hourly.boundary_layer_height[index] !== null
           ? (payload.elevation || 0) + hourly.boundary_layer_height[index] : null,
         wind: hourly.wind_speed_850hPa ? hourly.wind_speed_850hPa[index] : 0,
-        windFrom: hourly.wind_direction_850hPa ? hourly.wind_direction_850hPa[index] : 0
+        windFrom: hourly.wind_direction_850hPa ? hourly.wind_direction_850hPa[index] : 0,
+        levels: levels
       };
     });
   }

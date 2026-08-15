@@ -18,7 +18,8 @@ parainsights/
 ├── meteo/                 the day's sounding against every Czech takeoff
 ├── planner/               a task drawn on the airspace it crosses
 ├── parainsights_common/   the one thing every page shares: the strip between the tools
-├── tests/                 pytest, 551 tests, no network
+├── ci/                    the checks the pipeline runs that are not tests
+├── tests/                 pytest, 644 tests, no network
 └── docs/
     ├── formats.md            IGC and KML/KMZ format research, measured on real files
     ├── plan.md               tracklog viewer: scope, decisions and status
@@ -26,6 +27,7 @@ parainsights/
     ├── analysis-plan.md      what more the data can say, and what data would help
     ├── airspaces.md          airspaces: sources, decisions and status
     ├── meteo.md              meteo: why Open-Meteo and not Windy, and what it fetches
+    ├── meteo-ux.md           the meteo page's UX, measured before and after the rework
     ├── planner.md            planner: the scoring rules and where they come from
     └── atz-datum-hlaseni.md  draft report to RLP of the datum error found in LKR315A
 ```
@@ -57,7 +59,7 @@ as the packages, so there is nothing to line up by hand:
 
 ```bash
 uv sync --extra dev          # creates .venv on the pinned Python, from uv.lock
-uv run pytest -c pyproject.toml     # 551 tests, ~5 min, no network
+uv run pytest -c pyproject.toml     # 644 tests, ~6 min, no network
 ```
 
 `-c pyproject.toml` matters when the repo sits inside another project — pytest otherwise
@@ -160,6 +162,19 @@ And two things now *require* a network at view time rather than merely preferrin
 the meteo page has no numbers of its own, and the imagery on every 3D map is fetched.
 Both say so on screen when the fetch fails rather than drawing an empty frame.
 
+**The meteo page compares up to three takeoffs, and three is the palette's number.**
+The full list of 159 sits in a `<dialog>` — on the page it was 571 px of layout and
+**166 tab stops** before a keyboard user reached the forecast, which `docs/meteo-ux.md`
+measures before and after. What stays on the page is a chip per chosen takeoff, a
+comparison table at the chosen hour, and one meteogram carrying every chosen takeoff's
+boundary layer, which is the chart the one-site-at-a-time page could not draw. The cap is
+three because slots 1–3 of the categorical palette pass `validate_palette.js` all-pairs in
+both themes and the documented fourth slot (yellow) fails the normal-vision floor against
+this orange — so the page says *three at a time* rather than drawing a line nobody can
+tell from another. Two light-mode series fall under 3:1 on the panel, so identity is
+carried by direct labels, the legend *and* the table, which is the palette's relief rule
+and is pinned by a browser test.
+
 One image on the meteo page comes from a **third party at view time**: flymet's meteogram
 for the airfield nearest the chosen takeoff. It is linked and not copied — the reader's
 browser fetches it from flymet, flymet is named in the caption and the caption links back
@@ -202,6 +217,8 @@ geometry in a renderer, no rendering in the analysis.
 | `analysis.py` | Phases, per-climb and per-glide stats, wind, time budget, the `other` decomposition |
 | `metrics.py` | Tier-1 measurements over an `Analysis`: climb selection, working band, centring, gaps, concentration, day envelope, detour, lowest save |
 | `debrief.py` | `Finding`, the ranking pass, and the one `THRESHOLDS` dict |
+| `calibrate.py` | What those thresholds do to a real archive: firing rates and distributions |
+| `certification.py` | The wing's LTF/EN class, matched against `gliders.py` — and refused when unsure |
 | `airmass.py` | Wind field from the per-thermal soundings; corrected glides, circle wander, the empirical polar |
 | `insolation.py` | Slope, aspect and sun incidence from the DEM and `sun.py`; ridge-or-thermal per climb |
 | `baseline.py` | The pilot's archive: summary JSON per flight, percentiles behind `--archive` |
@@ -212,6 +229,7 @@ geometry in a renderer, no rendering in the analysis.
 | `meteo.py` | The day's vertical profile (Open-Meteo) |
 | `sun.py` | Solar position (NOAA), and the day tabulated for the 3D view |
 | `charts.py` | All SVG charts, rendered locally |
+| `charts_client.py` | The side and top views, drawn in the browser from the cursor's own payload |
 | `view3d.py` | The 3D view: camera, gestures, tiles, track overlay — and a canvas 2D heightfield as the fallback |
 | `view3d_gl.py` | WebGL heightfield, registered as a backend for `view3d.py` |
 | `render_kmz.py` | Google Earth KMZ: LOD folders, balloons, animation, local charts |
@@ -722,29 +740,43 @@ the font stays inlined because it is one request for a document's whole appearan
 
 Written up with a plan in `docs/plan.md`:
 
-- **Move some charts to the client.** Measured again on the current `public/index.html`
-  (three flights, `--online`), because the earlier figures predate both the online build
-  and the WebGL view — the share went **up**, not down:
+- ~~**Move some charts to the client.**~~ **Done, for the two that were worth it.** The
+  side view and the top view are drawn in the page by `charts_client.py`; the document
+  carries a payload instead of the SVG. Measured on a real 3 h 39 flight, the whole
+  report goes **618 KB → 482 KB** — and on the published three-flight document it takes
+  out nine profile SVGs (577 KB) and three plan views (153 KB), because the axis toggle
+  used to ship all three modes and hide two.
 
-  | | count | bytes | share of 2.27 MB |
+  | | count | bytes | share of 2.97 MB |
   |---|---|---|---|
-  | `chart` SVGs (side and top views) | 21 | 800 KB | 35% |
-  | sparklines | 208 | 268 KB | 12% |
-  | L/D bars | 119 | 30 KB | 1% |
-  | **all inline SVG** | 352 | **1.10 MB** | **48%** |
-  | 3D payloads | 4 | 641 KB | 28% |
-  | cursor data | 3 | 236 KB | 10% |
+  | `chart` SVGs, side view (3 modes × 3 flights) | 9 | 577 KB | 19% |
+  | `chart` SVGs, top view | 3 | 153 KB | 5% |
+  | sparklines | 104 | 176 KB | 6% |
+  | L/D bars | 119 | 16 KB | 1% |
 
-  The 21 big charts are the target and they are not one shape: the largest is 99 KB and
-  1 015 shapes, and side views and top views are roughly half each. The trade is data
-  against CPU, and for the side view it is close to free — the 3D payload *already* ships
-  lon/lat/alt/climb per fix, so its polyline is a second encoding of data the file
-  carries twice. Sparklines are the opposite case: 208 little charts would each need
-  their own slice. **Not attempted yet**: it means a JavaScript renderer for the profile
-  and plan views carrying the phase bands, the ground fill, both axis modes, both themes
-  and the linked cursor — a real refactor of the two charts most looked at, which wants a
-  session that can iterate on how it looks rather than one that can only check that it
-  parses.
+  Three rules made it a renderer rather than a second design. **The browser builds the
+  same SVG** — same elements in the same order, same classes, same `data-` attributes —
+  so the linked cursor, the tooltip, the band highlight, "show me" and both themes go on
+  working and the CSS is untouched; a browser test compares the DOM element for element
+  against `charts.altitude_profile`. **One sample, shared**: the trace is drawn through
+  the very indices the cursor is indexed by, which is also why the payload is small —
+  `_cursor_data` was already shipping altitude, climb and time at those indices, so the
+  chart payload adds only distance flown, distance from launch and the plan-view metres.
+  **Nothing is recomputed that Python already knows**: the clock labels for the time
+  axis ship as data, because resolving the flight's timezone in a page is the trap the
+  timezone gap warns about.
+  Two consequences worth knowing. The axis toggle **redraws** instead of unhiding, so
+  `initFlight` had to gain `root.__relinkCharts` — the cursor binds to the SVG that was
+  there when it ran, and a replaced one is a chart the cursor cannot drive, which looks
+  exactly like the cursor being broken. And the hosts reserve their height with
+  `aspect-ratio`, because a chart landing 420 px tall into a 0 px box moves everything
+  under it.
+  `charts.altitude_profile` and `charts.plan_view` are still there, still tested, and
+  are the reference the browser test measures against — but the report calls neither.
+
+- **The sparklines are the remaining case, and they are the opposite one.** 104 little
+  charts at 176 KB: each needs its own slice of the series, so a payload for them is not
+  a payload the document already carries. Not attempted.
 
 Both `docs/ux-review.md` and `docs/analysis-plan.md` are now **implemented** — every phase
 of each. What they describe is what the code does, so read them for the reasoning and this
@@ -766,67 +798,116 @@ section for what is left.
 
 Still wanted:
 
-- **Move some charts to the client.** Unchanged and still not attempted: 352 inline SVGs
-  are 1.10 MB, 48% of the document, and the 21 big charts are the target. It wants a
-  session that can iterate on how it looks rather than one that can only check that it
-  parses.
-- **Calibrate `THRESHOLDS` against a real archive.** See the known gap below — this is the
-  one piece of both plans that could not be finished here.
-- **The glider's EN class**, beside the glider name. There is no offline source: an IGC
-  header carries `HFGTY` as free text ("OZONE Zeolite 2") and nothing about certification,
-  and the certification databases that would answer it — DHV's, para-test's — publish no
-  API and were unreachable from the sandbox, so a table could be neither built nor
-  checked. Writing one from memory would put unverifiable certification claims in front of
-  pilots, which is the one kind of error this report must not make. Wants a session with a
-  network: fetch a list once, commit it as data with its provenance and fetch date, and
-  match on the normalised glider string with an explicit "unknown" rather than a guess.
+- ~~Calibrate `THRESHOLDS` against a real archive.~~ **Done** — see the known gaps below
+  and `docs/analysis-plan.md`. Three thresholds that need a DEM, a sounding or a scored
+  triangle per flight remain uncalibrated and are named as such by the tool.
+- ~~The glider's EN class, beside the glider name.~~ **Done**, from two registers,
+  because neither is complete: the **DHV Geräteportal** (LTF *and* EN, back to the
+  1980s, but its newest Ozone is a 2018 Buzz Z6 — Ozone stopped seeking a German
+  approval) and **Air Turquoise**'s report list (the test house that runs most EN 926-2
+  flight testing, so it has the current wings, but only the ones it tested). 6 240 rows
+  in `gliders.py`, generated with `python -m tracklog_viewer.certification --refresh`,
+  every one carrying the register and the reference it can be checked under.
+  **The matching is built to refuse.** `lookup` answers only when the maker and the
+  model agree and *every certified size of that model carries the same class* — so
+  Advance's Sigma 10, which is D in 21 and C above it, gets no chip at all rather than
+  a class the pilot might not have been flying under. A header that names a maker never
+  falls through to another maker's wing of the same name (Sky and Edel both make an
+  Apollo). There is no fuzzy match: "Rush 6" against "Rush 5" is one character and a
+  whole class of wing. On the 19 distinct wings in the sample archive it answers 13 and
+  says nothing about 6 — two of those are genuinely not in either register, one is a
+  logger writing `NKN`, and one is the Sigma 10 refusing on principle.
+  **LTF and EN are never translated into each other.** LTF 1-2 is *about* EN B and every
+  pilot knows it, but "about" is not a certification, so a wing in the DHV register under
+  1-2 and in Air Turquoise's under B resolves to the EN row, and an LTF-only wing prints
+  "LTF 1-2". The *Klassenzusatz* — a class granted only with a particular harness —
+  travels with the class, because dropping it silently widens someone else's approval.
 - **Convergence as a third climb class.** `insolation.sources` labels ridge and thermal
   and deliberately stops there; see its docstring for why one tracklog cannot support the
   third.
-- **The model wind profile behind the sounded wind, for a page built without `--meteo`.**
-  The chart draws it when `meteo` is present and the caption now says why it is missing
-  otherwise, but the in-page `__fetchMeteo` that fills "The air that day" at view time
-  does not feed the wind chart. Doing so means `charts.wind_profile` publishing its axis
-  mapping so the page can plot into the SVG it did not draw. The real fix for the bundled
-  flights is simply to rebuild with `--meteo` from a machine that can reach Open-Meteo.
+- ~~The model wind profile behind the sounded wind, for a page built without
+  `--meteo`.~~ **Done.** `charts.wind_profile` publishes its axis mapping in
+  `data-wind-frame` and each point carries the speed, altitude and direction it was
+  placed from; `plotModelWind` in `render_html.SCRIPT` draws the profile the view-time
+  fetch returned into the `<g class="model">` Python leaves empty. `__fetchMeteo` takes
+  `{profile: true}` and adds the pressure levels to the same request — off by default,
+  because an uploaded track has no chart to draw them in.
+  **It is a rescale, not a plot, and that is the whole of it.** The measured winds are
+  drift inside thermals and the model is the free air, so the model is routinely two or
+  three times the fastest thing the glider felt: clipping it to the chart's existing
+  axis draws a straight line up the right-hand edge and calls it a profile. So the axis
+  grows and every measured point moves with it, which is what the point-level data
+  attributes are for. An untouched chart is left byte-identical. The legend and the
+  caption are rewritten too — Python wrote both for a report with no model in it, and a
+  caption explaining the absence of a line the reader can see is worse than no caption.
+  A flight older than the 60-day cutoff still gets nothing, because the ERA5 archive
+  returns nulls on every pressure level, and the page leaves the chart and its caption
+  alone rather than drawing an empty axis.
 
 ## Known gaps
 
-- **`debrief.THRESHOLDS` is provisional and has never been calibrated.** The analysis plan
-  is explicit that *"a metric that fires on most flights is not a finding, it is a
-  constant"* and that thresholds come from the distribution over the archive. Doing that
-  needs the 50-file archive, and `*.igc` is gitignored — no tracklogs are in this
-  repository, so the values are seeded from the three flights measured in
-  `docs/analysis-plan.md` and marked as such in the code. `--archive` is the machinery for
-  fixing this: point it at the real files and check which findings fire on more than a
-  third of them.
-- **`public/index.html` is a committed build artifact, and the `pages` job builds
-  nothing.** It checks the file exists and hands the directory to GitLab, so a green
-  pipeline republishes whatever was last committed — the site sat weeks out of date behind
-  successful pipelines until someone noticed the rose was still bottom-left. Rebuild and
-  commit it whenever the renderer changes. **Including when only `airspaces` or `view3d`
-  changed**: the report carries the airspace map as one of its views, with its own copy of
-  the ring payload, so a change to either leaves the report a version behind the standalone
-  page. The current copy was rebuilt locally with `--meteo` and `--terrain`, so it has the
-  soundings and the 3D airspace both. The rebuild is
+- ~~`debrief.THRESHOLDS` is provisional and has never been calibrated.~~ **Calibrated on
+  2026-08-15 against 63 IGC files**, and re-runnable:
+  `uv run python -m tracklog_viewer.calibrate ~/Downloads` prints how often each finding
+  fires and the distribution behind each threshold. The rule the numbers now follow is
+  *each threshold is the percentile of its own quantity that puts the card on no more
+  than a third of flights*, and both the percentile and the measured rate sit in the
+  comment beside every value. `docs/analysis-plan.md` has the before-and-after table.
+  What it found: `other-slice` had **no gate at all** and fired on 94% of flights, and
+  two thresholds sat *below their own median* — `gap_over_median` at 2.0 against a median
+  2.82, so the "unusually long gap" was shorter than the typical longest gap. Three
+  flights cannot show you that. Note that a percentile does not predict a card rate,
+  because most findings carry a cost gate too, which is why the tool reports rates.
+  **Three are still uncalibrated and are listed as such** rather than reported as fine:
+  `low_clearance` and `ground_margin` want a DEM per flight, `ceiling_used` a sounding
+  per flight (and ERA5 is surface-only past 60 days), `near_close` a scored triangle.
+  The tracklogs are still not in the repository — `*.igc` is gitignored — so the
+  calibrator reads a directory you point it at and writes nothing.
+- **`public/index.html` is a committed build artifact — the report needs the IGC files
+  and flight tracks stay out of this repository.** That is the trade, and it failed in a
+  specific way: the renderer changed, nobody rebuilt, and the site sat weeks out of date
+  behind a wall of green pipelines, because the `pages` job only checked the file
+  existed. Two things changed.
+  **`ci/stale.sh` refuses to publish a report older than the code that renders it.** It
+  asks whether the page’s last commit contains the last change to `tracklog_viewer`,
+  `airspaces` and `parainsights_common` — the last two because the report carries the
+  airspace layer and the nav strip — and fails the pipeline when it does not. Ancestry
+  rather than dates, because two commits in the same second compare equal. It cannot
+  rebuild the page; it can refuse to publish one that does not match the code beside it.
+  Run `sh ci/stale.sh` before committing a renderer change.
+  **The other three pages are built in CI now**, every deploy: `meteo` needs nothing but
+  its own committed data, and `airspace` and `planner` fetch from public sources. Three
+  quarters of the site can no longer be stale, and a source being down fails the job
+  rather than republishing yesterday.
+  The rebuild for the report is
   ```bash
-  uv run python -m tracklog_viewer.cli A.igc B.igc PK-Hunza.igc --terrain --meteo \
-    --airspace airspace/ \
+  uv run python -m tracklog_viewer.cli \
+    ~/Downloads/2018-09-28-XCT-OND-01.igc \
+    ~/Downloads/2022-05-07-XCT-KVR-01.igc \
+    ~/Downloads/flight-2026-06-16-04-46-04.igc \
+    --terrain --meteo --airspace airspace/ \
     --label '' --label '' --label 'Antoine Girard|PK Hunza|OZONE Zeolite 2' \
     --html public/index.html
   ```
   — one `--label` per flight, in order, empty where the file already says it, and
   `--airspace` is where the OpenAir download sits *relative to the report*. Without
-  `--terrain` the airspace view silently falls back to the flat SVG map.
+  `--terrain` the airspace view silently falls back to the flat SVG map. The current copy
+  is 2.51 MB, down from 3.12 MB before the side and top views moved into the page.
 - FAI/flat triangle scoring with multipliers is not implemented; `xc.py` does free
   distance only.
 - Historical weather is surface-only: the ERA5 archive returns nulls on every pressure
   level, so flights older than ~60 days get no sounding.
-- `quicklook.py` duplicates a subset of the analysis in JavaScript. If the Python
-  thresholds change, change them there too. **Half-fixed:** `debrief.THRESHOLDS` is now
-  serialised into the page with the debrief payload, so a shared source exists — but
-  `quicklook.py` does not read it yet and still holds its own copies. Finishing that is
-  cheap and is the remaining half of this gap.
+- `quicklook.py` re-implements a subset of the analysis in JavaScript, but **it no longer
+  keeps its own copy of the numbers.** `quicklook.constants()` emits one payload — the
+  `analysis.py` constants, `flight.WINDOW` and `debrief.THRESHOLDS` — into the drop panel,
+  and the script reads every threshold out of it. It hangs off the *panel* rather than a
+  flight, so an upload into a report with no bundled flights still gets it, and it fails
+  at load rather than falling back, because a page analysing a flight by rules of its own
+  is the thing this gap is about. `tests/test_quicklook_analysis.py` moves
+  `minThermalGain` in the payload alone and requires the page's answer to change; a page
+  still holding a literal cannot pass it. One rule is knowingly *not* shared and is
+  commented as such: the circling clause, because the page has no smoothed turn rate and
+  `climb > 1` stands in for it.
   This is not hypothetical: the two had already drifted on *shape* rather than on a
   number. `analysis.py` condenses runs separated by less than `CONDENSE_THERMAL` before
   applying the minimum — a thermal briefly left and re-entered is one thermal — and the
@@ -843,9 +924,13 @@ Still wanted:
 - An uploaded track gets real terrain **where the page can fetch it**, and a flat plane
   where it cannot. `quicklook.py` fetches and decodes the terrarium DEM itself; inside a
   published artifact every host is blocked, the tiles fail, and the ground falls back to
-  one plane at the flight's lowest point with the caption saying so. Height above ground
-  is still not reported for an uploaded track — the DEM is there, the clearance series is
-  not written.
+  one plane at the flight's lowest point with the caption saying so. The clearance series
+  now falls out of that grid: `addClearance` samples the ground under every fix
+  (bilinear — nearest-node makes a glide's ground a staircase), the side view gains a
+  ground fill and drops its floor to it, and one stat tile reports the lowest clearance
+  over `metrics.airborne_window`'s window, using the same `ground_margin` from
+  `THRESHOLDS` as the report's low-point card. **No DEM means no tile** rather than a
+  clearance measured against the invented flat plane.
 - Times in the quicklook tables now follow the flight's own clock, so an upload and a
   built report of the same file agree — they disagreed by the offset, 15:43 against
   17:43 on a Czech evening, which makes a reader distrust both. Two of the Python side's

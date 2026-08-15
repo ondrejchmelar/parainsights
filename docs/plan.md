@@ -367,6 +367,15 @@ from launch**. Both were arrived at by discarding something worse:
 
 The spatial picture belongs on the plan view, which also carries the scored XC legs.
 
+**Both are drawn in the browser now** (`charts_client.py`), from a payload rather than as
+SVG in the document — the three axis modes used to ship as three SVGs with two of them
+hidden, which was 577 KB of the published report on its own. The renderer builds the same
+DOM `charts.py` builds, element for element, because the linked cursor, the tooltip, the
+band highlight and "show me" were all written against it; a browser test compares the two.
+The payload is small because the hover cursor was already carrying altitude, climb and
+time at the very indices the trace is drawn through — see the module docstring for the
+three rules that keep this a second *renderer* rather than a second *design*.
+
 ## Inputs
 
 `sources.load()` takes a path or a URL and returns a `Flight`:
