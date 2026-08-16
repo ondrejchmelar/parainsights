@@ -28,10 +28,18 @@ PAGE=public/index.html
 # is the list CLAUDE.md's "including when only `airspaces` or `view3d` changed" names.
 SOURCES="tracklog_viewer airspaces parainsights_common"
 
+# One file inside those trees cannot change the report, and watching it made the guard
+# fire on a change that could not possibly have mattered. `tracklog_viewer/cli.py` builds
+# the report, so it stays watched; `airspaces/cli.py` is the *standalone* airspace page's
+# command line, and the report imports `airspaces.build`, `.openair`, `.render_html`,
+# `.scene` and `.sources` — never `.cli`. Check that list is still true before adding to
+# this one: an exclusion that is wrong makes the whole check a decoration.
+IGNORE=":(exclude)airspaces/cli.py"
+
 commit_of() {
     # The last commit that touched a path, or nothing. A shallow CI clone may not reach
     # it, and that case is handled below rather than guessed at.
-    git log -1 --format=%H -- "$1" 2>/dev/null || true
+    git log -1 --format=%H -- "$1" "$IGNORE" 2>/dev/null || true
 }
 
 if [ ! -f "$PAGE" ]; then
@@ -85,4 +93,4 @@ if [ -n "$stale" ]; then
     exit 1
 fi
 
-echo "stale.sh: $PAGE is at least as new as:$SOURCES"
+echo "stale.sh: $PAGE contains the last change to:$SOURCES ($IGNORE)"

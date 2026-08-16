@@ -872,7 +872,11 @@ Still wanted:
   asks whether the page’s last commit contains the last change to `tracklog_viewer`,
   `airspaces` and `parainsights_common` — the last two because the report carries the
   airspace layer and the nav strip — and fails the pipeline when it does not. Ancestry
-  rather than dates, because two commits in the same second compare equal. It cannot
+  rather than dates, because two commits in the same second compare equal. One file is
+  excluded and the exclusion is checked rather than assumed: `airspaces/cli.py` is the
+  *standalone* page's command line, and the report imports `airspaces.build`,
+  `.openair`, `.render_html`, `.scene` and `.sources` — never `.cli`. It fired on a flag
+  added to that file, which no report could contain. It cannot
   rebuild the page; it can refuse to publish one that does not match the code beside it.
   Run `sh ci/stale.sh` before committing a renderer change.
   **The other three pages are built in CI now**, every deploy. `meteo` needs nothing but
