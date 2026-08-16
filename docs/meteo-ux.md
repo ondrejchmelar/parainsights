@@ -56,7 +56,16 @@ old one could only answer it one hill at a time, by memory. Now:
 * the **meteogram carries all three boundary layers**, one line each, so the comparison
   is *when* each hill works and not only how high it goes. That is the chart that could
   not be built while the page held one site at a time, and it is the reason the rework
-  is worth more than the space it saved.
+  is worth more than the space it saved;
+* a **sounding each, side by side** — small multiples, not one frame with everything on
+  it. Three temperature traces and three dew points on one set of axes is six crossing
+  lines and no comparison; three small columns is the shape of each day, readable at a
+  glance. The probe height is *shared*: point at 1 500 m over one hill and all three read
+  1 500 m, which is the question being asked of all of them at once;
+* **flymet's meteogram for each**, one per *station* rather than per takeoff — two hills
+  15 km apart share their nearest airfield more often than not in a country this size,
+  and the same picture twice under two headings reads as a bug in the page and costs
+  flymet a second fetch to say the same thing.
 
 **Three, and the number came from the palette rather than from taste.** Slots 1–3 of the
 design system's categorical order — the blue, orange and aqua the report paints phases

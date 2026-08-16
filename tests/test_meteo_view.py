@@ -453,21 +453,26 @@ def test_flymet_is_shown_for_today_and_tomorrow_and_not_beyond():
     """flymet publishes two days. The third day of the strip must show nothing rather
     than yesterday's picture under a Thursday heading."""
     answer = _probe_page("""
-    var figure = document.getElementById('met-flymet');
-    var image = document.getElementById('met-flymet-img');
+    var details = document.getElementById('met-flymet');
+    var list = document.getElementById('met-flymet-list');
     var seen = [];
     for (var day = 0; day < 4; day++) {
       window.__meteo.state.day = day;
       window.__meteo.draw();
-      seen.push({ day: day, hidden: figure.hidden, src: image.getAttribute('src') });
+      var image = list.querySelector('img');
+      seen.push({ day: day, hidden: details.hidden,
+                  src: image ? image.getAttribute('src') : null,
+                  // Read per day: the panel is emptied on a day flymet has nothing for,
+                  // so reading it after the loop reads the empty one.
+                  caption: list.textContent });
     }
-    return { seen: seen, caption: document.getElementById('met-flymet-cap').textContent };
+    return { seen: seen };
     """)
     today, tomorrow, third, fourth = answer["seen"]
     assert not today["hidden"] and "/meteogram/" in today["src"]
     assert not tomorrow["hidden"] and "/meteogram2/" in tomorrow["src"]
     assert third["hidden"] and fourth["hidden"]
-    assert "km from this takeoff" in answer["caption"]
+    assert "km from this takeoff" in today["caption"]
 
 
 # ------------------------------------------- choosing takeoffs, in a browser
@@ -645,3 +650,126 @@ def test_the_hour_applies_to_everything_at_once():
     assert answer["readout"] == "9:00"
     assert answer["inHead"] is True
     assert answer["rows"] == 2
+
+
+@needs_chrome
+class TestTheSoundingsAndFlymetCompareToo:
+    """The comparison started as a table and one shared meteogram. The sounding and
+    flymet's picture were still the focused takeoff's alone, which left the two charts a
+    pilot actually argues over — *is there a lid on it, and what does the other model
+    think* — answerable for one hill at a time.
+    """
+
+    def _with_three(self, body: str) -> dict:
+        return _probe_page("""
+        var m = window.__meteo;
+        for (var i = 0; i < 10 && m.chosen().length < 3; i++) {
+          if (m.chosen().indexOf(i) < 0) m.add(i);
+        }
+        %s
+        """ % body)
+
+    def test_one_sounding_per_chosen_takeoff(self):
+        answer = self._with_three("""
+        var conf = JSON.parse(document.querySelector('.met-data').textContent);
+        var cells = document.querySelectorAll('.met-sounding-cell');
+        return { cells: cells.length,
+                 canvases: document.querySelectorAll('.met-sounding-cell canvas').length,
+                 names: Array.prototype.map.call(cells, function (cell) {
+                   return cell.querySelector('.met-sounding-name span').textContent; }),
+                 chosen: m.chosen().map(function (i) { return conf.sites[i].name; }) };
+        """)
+        assert answer["cells"] == 3
+        assert answer["canvases"] == 3
+        assert answer["names"] == answer["chosen"], (
+            "the soundings are in a different order from the chips beside them")
+
+    def test_the_focused_one_keeps_the_id_the_page_has_always_used(self):
+        """Small multiples must not cost the pointer readout its anchor: one known
+        element, not "whichever sounding happens to be first"."""
+        answer = self._with_three("""
+        var focused = document.getElementById('met-sounding');
+        var cell = focused && focused.closest('.met-sounding-cell');
+        var conf = JSON.parse(document.querySelector('.met-data').textContent);
+        return { found: !!focused,
+                 site: cell ? Number(cell.dataset.site) : null,
+                 focus: m.state.site,
+                 marked: document.querySelectorAll('.met-sounding-cell.is-focus').length };
+        """)
+        assert answer["found"] is True
+        assert answer["site"] == answer["focus"]
+        assert answer["marked"] == 1
+
+    def test_pointing_at_one_sounding_reads_all_of_them_at_that_height(self):
+        """The whole reason three soundings are worth having on one page. Point at
+        1 500 m over one hill and the other two answer at 1 500 m, because "what is the
+        air doing at the height I will be at" is the question being asked of all three."""
+        answer = self._with_three("""
+        var canvases = document.querySelectorAll('.met-sounding-cell canvas');
+        var second = canvases[1];
+        var box = second.getBoundingClientRect();
+        // Half way down the plot, which is 2 000 m of a 4 000 m chart.
+        var mid = box.top + 10 + (box.height - 10 - 24) / 2;
+        second.dispatchEvent(new PointerEvent('pointermove', {
+          clientX: box.left + box.width / 2, clientY: mid,
+          bubbles: true, pointerType: 'mouse' }));
+        var probe = m.state.probe;
+        second.dispatchEvent(new PointerEvent('pointerleave', {
+          clientX: box.left, clientY: box.top, bubbles: true, pointerType: 'mouse' }));
+        return { probe: probe, after: m.state.probe, canvases: canvases.length };
+        """)
+        assert answer["canvases"] == 3
+        assert answer["probe"] == pytest.approx(2000, abs=25), (
+            "a sounding that is not the first one reads the wrong height")
+        assert answer["after"] is None
+
+    def test_a_flymet_picture_for_every_chosen_takeoff(self):
+        answer = self._with_three("""
+        var conf = JSON.parse(document.querySelector('.met-data').textContent);
+        var near = conf.flymet.near;
+        var stations = {};
+        m.chosen().forEach(function (i) { if (near[i]) stations[near[i].slug] = 1; });
+        return { figures: document.querySelectorAll('#met-flymet-list figure').length,
+                 images: document.querySelectorAll('#met-flymet-list img').length,
+                 stations: Object.keys(stations).length,
+                 summary: document.getElementById('met-flymet-summary').textContent };
+        """)
+        assert answer["figures"] == answer["stations"], (
+            "one picture per station, and every chosen takeoff's station is a station")
+        assert answer["images"] == answer["figures"]
+
+    def test_two_takeoffs_sharing_an_airfield_get_one_picture_naming_both(self):
+        """In a country this size two hills often share their nearest airfield. The same
+        meteogram printed twice under two headings reads as a bug in the page, and costs
+        flymet a second fetch to say the same thing."""
+        answer = _probe_page("""
+        var m = window.__meteo;
+        var conf = JSON.parse(document.querySelector('.met-data').textContent);
+        var near = conf.flymet.near;
+        // Find two takeoffs the committed data puts at the same station.
+        var bySlug = {}, pair = null;
+        for (var i = 0; i < conf.sites.length && !pair; i++) {
+          if (!near[i]) continue;
+          if (bySlug[near[i].slug] !== undefined) pair = [bySlug[near[i].slug], i];
+          else bySlug[near[i].slug] = i;
+        }
+        if (!pair) return { skipped: true };
+        m.chosen().slice().forEach(function (i) { m.drop(i); });
+        m.add(pair[0]);
+        m.add(pair[1]);
+        var figures = document.querySelectorAll('#met-flymet-list figure');
+        return {
+          skipped: false,
+          figures: figures.length,
+          heading: figures.length ? figures[0].querySelector('.for').textContent : '',
+          dots: figures.length ? figures[0].querySelectorAll('.for i').length : 0,
+          names: [conf.sites[pair[0]].name, conf.sites[pair[1]].name]
+        };
+        """)
+        if answer.get("skipped"):
+            pytest.skip("no two takeoffs in the committed list share an airfield")
+        assert answer["figures"] == 1, "the same picture was printed twice"
+        for name in answer["names"]:
+            assert name in answer["heading"], (
+                f"{name} shares the picture but is not named on it")
+        assert answer["dots"] == 2, "each takeoff's colour belongs on the heading"

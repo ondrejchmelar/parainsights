@@ -164,7 +164,28 @@ STYLE = """
 .met-figures .k { font-size:10.5px; text-transform:uppercase; letter-spacing:.07em;
   color:var(--ink-3); }
 .met-figures .v { font-variant-numeric:tabular-nums; font-size:15px; }
+/* Small multiples. One sounding per chosen takeoff, capped at 320 px each so a single
+   takeoff does not get a sounding stretched across the whole panel — a sounding is a
+   shape to read, and widening it past its own aspect ratio makes the lapse rate look
+   gentler than it is, which is the one thing this chart must not do. */
+.met-soundings { display:grid; gap:14px; margin:16px 0 0;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 320px)); }
+.met-sounding-cell { min-width:0; }
+.met-sounding-name { display:flex; align-items:center; gap:7px; font-size:12.5px;
+  font-weight:600; margin:0 0 4px; }
+.met-sounding-name i { width:10px; height:10px; border-radius:50%; flex:none; }
+.met-sounding-name .ground { font-weight:400; color:var(--ink-3);
+  font-variant-numeric:tabular-nums; }
+.met-sounding-cell.is-focus .met-sounding-name { text-decoration:underline;
+  text-underline-offset:3px; }
+
 .met-flymet { margin:16px 0 0; }
+.met-flymet figure { margin:0 0 18px; }
+.met-flymet figure:last-child { margin-bottom:0; }
+.met-flymet figcaption { font-size:11.5px; color:var(--ink-3); margin:5px 0 0; }
+.met-flymet .for { display:flex; align-items:center; gap:7px; font-size:12.5px;
+  font-weight:600; color:var(--ink-2); margin:0 0 2px; }
+.met-flymet .for i { width:10px; height:10px; border-radius:50%; flex:none; }
 .met-flymet > summary { font-size:12.5px; color:var(--ink-2); cursor:pointer;
   padding:4px 0; }
 /* Its own width, not the panel's: the meteogram is 1024 px of small type and axis
@@ -234,10 +255,10 @@ def body(uid: str = "meteo") -> str:
   <h1>Will it fly?</h1>
   <p class="lede">The day's forecast against {len(site_data.SITES)} Czech takeoffs, ranked
   by how the wind sits on each one. Add up to {MAX_CHOSEN} takeoffs and the page compares
-  them side by side — the same hour, the same model, one row each — then gives the one you
-  are looking at its sounding, its hour-by-hour meteogram, and flymet's meteogram for the
-  airfield nearest it. The numbers are fetched when you open this page, so they are as
-  current as the model is, and there are none at all without a network.</p>
+  them at the same hour from the same model: a row each in the table, a boundary layer
+  each on one meteogram, a sounding each beside it, and flymet's own meteogram for the
+  airfield nearest each one. The numbers are fetched when you open this page, so they are
+  as current as the model is, and there are none at all without a network.</p>
   <div class="met-head">
     <div class="met-days" id="met-days" role="group" aria-label="Which day"></div>
     <div class="met-hour">
@@ -255,8 +276,10 @@ def body(uid: str = "meteo") -> str:
 
   <table class="met-compare" id="met-compare" hidden>
     <caption class="met-legend" style="text-align:left; margin:0 0 6px">The chosen
-      takeoffs at the chosen hour. The same numbers the charts below draw — a table
-      because three soundings on one chart is not a comparison, it is a mess.</caption>
+      takeoffs at the chosen hour, best thermal top and best cloudbase marked. The same
+      numbers the charts below draw: the boundary layers share one meteogram because
+      that comparison is about <em>when</em>, and the soundings sit side by side because
+      that one is about the shape of each column.</caption>
     <thead><tr>
       <th scope="col">takeoff</th><th scope="col">verdict</th><th scope="col">wind</th>
       <th scope="col">thermal top</th><th scope="col">cloudbase</th>
@@ -279,26 +302,27 @@ def body(uid: str = "meteo") -> str:
           cloudbase.</p>
         <p class="met-keys" id="met-keys"></p>
       </div>
-      <div>
-        <canvas class="met-canvas" id="met-sounding" width="380" height="300"></canvas>
-        <p class="met-legend">Sounding at the chosen hour, for the takeoff named above:
-          temperature solid, dew point dashed, the dry adiabat from the surface faint.
-          The dotted blue line is the estimated cloudbase; a shaded band is a layer the
-          thermals stop at (<em>zadržná vrstva</em> — under {CAP_LAPSE:.0f} °C/km, red
-          where the air warms with height), read between the model's pressure levels and
-          so no finer than they are. Point at it — or drag a finger up it — for the
-          numbers at that height.</p>
-      </div>
+      <div class="met-figures" id="met-figures"></div>
     </div>
-    <div class="met-figures" id="met-figures"></div>
+
+    <div class="met-soundings" id="met-soundings"></div>
+    <p class="met-legend">One sounding per chosen takeoff, at the chosen hour: temperature
+      solid, dew point dashed, the dry adiabat from the surface faint. The dotted blue line
+      is the estimated cloudbase; a shaded band is a layer the thermals stop at
+      (<em>zadržná vrstva</em> — under {CAP_LAPSE:.0f} °C/km, red where the air warms with
+      height), read between the model's pressure levels and so no finer than they are.
+      Side by side rather than on top of each other: three temperature traces and three
+      dew points on one frame is six lines and no comparison. Point at one — or drag a
+      finger up it — and <strong>all of them read at that height</strong>, which is the
+      question you are asking when you have three of these open.</p>
     <!-- Foldable, and open by default. It is a second opinion worth having in front of
          the reader — but it is 700 px of someone else's chart under 300 px of ours, and
          a page whose own answer scrolls off the top to make room for it has its
-         priorities the wrong way round. -->
+         priorities the wrong way round. One per chosen takeoff, stacked, which is why
+         folding it matters more now than it did with one. -->
     <details class="met-flymet" id="met-flymet" open hidden>
-      <summary id="met-flymet-summary">flymet's own meteogram</summary>
-      <img id="met-flymet-img" alt="flymet meteogram" loading="lazy">
-      <p id="met-flymet-cap"></p>
+      <summary id="met-flymet-summary">flymet's own meteograms</summary>
+      <div id="met-flymet-list"></div>
     </details>
     <p class="met-links" id="met-links"></p>
   </div>
@@ -1018,14 +1042,63 @@ SCRIPT = r"""
     }
   }
 
-  function drawSounding() {
-    var canvas = document.getElementById('met-sounding');
+  // ---- the soundings, one per chosen takeoff ------------------------------------------
+  //
+  // Small multiples rather than one frame with everything on it. Three temperature traces
+  // and three dew points is six lines that cross each other, and the comparison table
+  // beside them already carries the numbers — what a reader wants from three soundings is
+  // the *shape* of each day-column, side by side, which is what small multiples are for.
+  //
+  // The probe height is deliberately shared. Point at 1 500 m on one and all three read
+  // 1 500 m, because "what is the air doing at the height I will be at, over each of
+  // these hills" is the question that made this page carry three of them.
+  function drawSoundings() {
+    var box = document.getElementById('met-soundings');
+    var wanted = chosen();
+    // Rebuilt only when the set changes: a canvas recreated on every hour step loses its
+    // backing store and its pointer handlers, and the slider steps a lot.
+    var have = Array.prototype.map.call(box.children, function (cell) {
+      return Number(cell.dataset.site);
+    });
+    if (have.join(',') !== wanted.join(',')) {
+      box.textContent = '';
+      wanted.forEach(function (index) {
+        var slot = slotOf(index);
+        var cell = document.createElement('div');
+        cell.className = 'met-sounding-cell';
+        cell.dataset.site = index;
+        cell.innerHTML = '<p class="met-sounding-name"><i></i><span></span>'
+          + '<span class="ground"></span></p>'
+          + '<canvas class="met-canvas" width="380" height="300"></canvas>';
+        cell.querySelector('i').style.background = seriesColour(slot);
+        cell.querySelector('.met-sounding-name span').textContent = conf.sites[index].name;
+        var canvas = cell.querySelector('canvas');
+        // The focused takeoff's canvas keeps the id the page has always used, so the
+        // pointer readout and everything written against it still address one known
+        // element rather than "whichever sounding happens to be first".
+        bindProbe(canvas);
+        box.appendChild(cell);
+      });
+    }
+    Array.prototype.forEach.call(box.children, function (cell) {
+      var index = Number(cell.dataset.site);
+      var canvas = cell.querySelector('canvas');
+      cell.classList.toggle('is-focus', index === state.site);
+      canvas.id = index === state.site ? 'met-sounding' : '';
+      var profile = state.profiles[index];
+      var ground = cell.querySelector('.ground');
+      ground.textContent = profile ? Math.round(profile.elevation) + ' m' : 'fetching…';
+      drawSounding(canvas, profile);
+    });
+  }
+
+  function drawSounding(canvas, profile) {
     var frame = fit(canvas);
-    if (!frame || !state.profile) return;
+    if (!frame || !profile) return;
     var ctx = frame.ctx, W = frame.w, H = frame.h;
-    var hourly = state.profile.hourly;
+    var hourly = profile.hourly;
     var at = indexFor(hourly.time, state.day, state.hour);
-    var ground = state.profile.elevation;
+    var ground = profile.elevation;
     var left = 34, right = 10, top = SOUND_TOP, bottom = SOUND_BOTTOM;
     var top_m = SOUND_CEILING, minT = -20, maxT = 35;
     function x(celsius) { return left + (celsius - minT) / (maxT - minT) * (W - left - right); }
@@ -1229,19 +1302,41 @@ SCRIPT = r"""
   // tomorrow — so the other two days of the strip show nothing rather than yesterday's
   // picture under today's heading.
   function drawFlymet() {
-    var figure = document.getElementById('met-flymet');
-    var image = document.getElementById('met-flymet-img');
-    var caption = document.getElementById('met-flymet-cap');
-    var near = (conf.flymet.near || [])[state.site];
+    var details = document.getElementById('met-flymet');
+    var list = document.getElementById('met-flymet-list');
     var template = state.day === 0 ? conf.flymet.today
       : (state.day === 1 ? conf.flymet.tomorrow : null);
-    if (!near || !template) {
-      figure.hidden = true;
+
+    // One picture per *station*, not per takeoff. Two hills 15 km apart share the
+    // nearest airfield more often than not in a country this size, and the same
+    // meteogram printed twice under two headings looks like a bug in the page — and
+    // costs flymet a second fetch to say the same thing.
+    var wanted = [];
+    chosen().forEach(function (index) {
+      var near = (conf.flymet.near || [])[index];
+      if (!near || !template) return;
+      var already = wanted.filter(function (entry) {
+        return entry.near.slug === near.slug; })[0];
+      if (already) {
+        already.sites.push(index);
+        return;
+      }
+      wanted.push({ near: near, sites: [index] });
+    });
+
+    if (!wanted.length) {
+      details.hidden = true;
+      list.textContent = '';
       return;
     }
-    figure.hidden = false;
+    details.hidden = false;
     document.getElementById('met-flymet-summary').textContent =
-      'flymet’s own meteogram for ' + near.name + ', ' + near.km + ' km away';
+      wanted.length === 1
+        ? 'flymet’s own meteogram for ' + wanted[0].near.name + ', '
+          + wanted[0].near.km + ' km away'
+        : 'flymet’s own meteograms for the ' + wanted.length + ' airfields nearest these '
+          + 'takeoffs';
+
     // Stamped with the hour. flymet sends no cache lifetime, so a browser is free to
     // guess one from the file's age — and today's meteogram is regenerated through the
     // day, which makes a guessed cache an old picture under a current heading. The stamp
@@ -1249,28 +1344,63 @@ SCRIPT = r"""
     var stamp = new Date();
     var hour = stamp.getFullYear() + ('0' + (stamp.getMonth() + 1)).slice(-2)
       + ('0' + stamp.getDate()).slice(-2) + ('0' + stamp.getHours()).slice(-2);
-    var url = template.replace('{slug}', encodeURIComponent(near.slug)) + '?h=' + hour;
-    image.hidden = false;
-    // Only when it actually changed: the hour slider redraws this panel on every step,
-    // and reassigning the same src makes the picture blink on each one.
-    if (image.getAttribute('src') !== url) {
-      image.src = url;
-      image.alt = 'flymet meteogram for ' + near.name;
-    }
-    image.onerror = function () {
-      image.hidden = true;
-      caption.textContent = 'flymet has no meteogram for ' + near.name + ' just now.';
-    };
-    caption.innerHTML = '';
-    var link = document.createElement('a');
-    link.href = conf.flymet.index;
-    link.rel = 'noreferrer';
-    link.textContent = 'flymet';
-    caption.appendChild(link);
-    caption.appendChild(document.createTextNode(
-      ' — ' + near.name + ', ' + near.km + ' km from this takeoff, for '
-      + (state.day === 0 ? 'today' : 'tomorrow')
-      + '. Cloud, rain, stability with the convective cloud height, and wind by height.'));
+
+    // Rebuilt only when the set of stations changes, for the same reason the soundings
+    // are: the hour slider redraws this panel on every step, and reassigning `src` makes
+    // every picture blink on each one.
+    // The day belongs in the key. Without it, switching from today to tomorrow keeps
+    // the pictures the page already had — today's meteogram under a tomorrow heading,
+    // which is the one thing this panel must never do, and it looks exactly like it
+    // worked.
+    var key = wanted.map(function (entry) {
+      return entry.near.slug + ':' + entry.sites.join('+'); }).join(',')
+      + '|' + state.day + '|' + hour;
+    if (list.dataset.key === key) return;
+    list.dataset.key = key;
+    list.textContent = '';
+
+    wanted.forEach(function (entry) {
+      var figure = document.createElement('figure');
+      var heading = document.createElement('p');
+      heading.className = 'for';
+      entry.sites.forEach(function (index) {
+        var dot = document.createElement('i');
+        dot.style.background = seriesColour(slotOf(index));
+        heading.appendChild(dot);
+      });
+      heading.appendChild(document.createTextNode(
+        entry.sites.map(function (index) { return conf.sites[index].name; }).join(' and ')
+      ));
+      figure.appendChild(heading);
+
+      var image = document.createElement('img');
+      image.loading = 'lazy';
+      image.alt = 'flymet meteogram for ' + entry.near.name;
+      image.src = template.replace('{slug}', encodeURIComponent(entry.near.slug))
+        + '?h=' + hour;
+      figure.appendChild(image);
+
+      var caption = document.createElement('figcaption');
+      var link = document.createElement('a');
+      link.href = conf.flymet.index;
+      link.rel = 'noreferrer';
+      link.textContent = 'flymet';
+      caption.appendChild(link);
+      caption.appendChild(document.createTextNode(
+        ' — ' + entry.near.name + ', ' + entry.near.km + ' km from '
+        + (entry.sites.length > 1 ? 'these takeoffs' : 'this takeoff') + ', for '
+        + (state.day === 0 ? 'today' : 'tomorrow')
+        + '. Cloud, rain, stability with the convective cloud height, and wind by height.'
+      ));
+      figure.appendChild(caption);
+
+      image.onerror = function () {
+        image.hidden = true;
+        caption.textContent = 'flymet has no meteogram for ' + entry.near.name
+          + ' just now.';
+      };
+      list.appendChild(figure);
+    });
   }
 
   function drawSite() {
@@ -1299,7 +1429,7 @@ SCRIPT = r"""
     a.textContent = 'This takeoff on ParaglidingEarth';
     links.appendChild(a);
     drawMeteogram();
-    drawSounding();
+    drawSoundings();
     drawFigures();
     drawFlymet();
     drawKeys();
@@ -1335,18 +1465,21 @@ SCRIPT = r"""
   // Hover on a mouse, drag-to-read on a touchscreen. The same split the airspace map
   // makes, and for the same reason: a touchscreen's pointerout means the finger lifted,
   // not that the reader stopped wanting the number.
-  (function () {
-    var canvas = document.getElementById('met-sounding');
+  //
+  // Bound per sounding, and every one of them writes the *same* `state.probe`, so
+  // pointing at 1 500 m on one hill reads 1 500 m on all of them. `probeX` stays
+  // per-pointer, because the readout box follows the pointer sideways on the chart it is
+  // over and would otherwise be drawn off the edge of its neighbours.
+  function bindProbe(canvas) {
     function read(event) {
-      if (!state.profile) return;
       var box = canvas.getBoundingClientRect();
       var y = event.clientY - box.top;
       var plot = box.height - SOUND_TOP - SOUND_BOTTOM;
       state.probe = (1 - (y - SOUND_TOP) / plot) * SOUND_CEILING;
       state.probeX = event.clientX - box.left;
-      drawSounding();
+      drawSoundings();
     }
-    function clear() { state.probe = null; drawSounding(); }
+    function clear() { state.probe = null; drawSoundings(); }
     canvas.addEventListener('pointermove', function (event) {
       if (event.pointerType === 'touch' && !event.buttons) return;
       read(event);
@@ -1363,7 +1496,7 @@ SCRIPT = r"""
     canvas.addEventListener('pointerleave', function (event) {
       if (event.pointerType !== 'touch') clear();
     });
-  })();
+  }
 
   // ---- the picker's controls -----------------------------------------------------------
   //

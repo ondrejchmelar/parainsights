@@ -166,8 +166,14 @@ Both say so on screen when the fetch fails rather than drawing an empty frame.
 The full list of 159 sits in a `<dialog>` — on the page it was 571 px of layout and
 **166 tab stops** before a keyboard user reached the forecast, which `docs/meteo-ux.md`
 measures before and after. What stays on the page is a chip per chosen takeoff, a
-comparison table at the chosen hour, and one meteogram carrying every chosen takeoff's
-boundary layer, which is the chart the one-site-at-a-time page could not draw. The cap is
+comparison table at the chosen hour, one meteogram carrying every chosen takeoff's
+boundary layer, a sounding each beside it, and flymet's picture for each — the charts a
+pilot actually argues over, which the one-site-at-a-time page could only answer one hill
+at a time. The soundings are **small multiples with a shared probe height**: three
+temperature traces and three dew points on one frame is six crossing lines, but pointing
+at 1 500 m over one hill and reading 1 500 m over all three is the question itself.
+flymet's is one picture per *station*, not per takeoff, because two hills often share
+their nearest airfield. The cap is
 three because slots 1–3 of the categorical palette pass `validate_palette.js` all-pairs in
 both themes and the documented fourth slot (yellow) fails the normal-vision floor against
 this orange — so the page says *three at a time* rather than drawing a line nobody can
