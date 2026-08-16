@@ -888,9 +888,13 @@ Still wanted:
   site that is not in the nav: the airspace page names its OpenAir file, the name carries
   the AIRAC date, and a half-finished rebuild leaves a button that 404s.
   **`--require-terrain` is what stops a rebuild being a downgrade**, and it exists
-  because the first green deploy was one: the runner could not reach the elevation
-  model, `airspaces.cli` did what it is supposed to do for a person — fell back to the
-  flat SVG map — and the job wrote that over the 3D page and reported success. The flag
+  because the first green deploy was one: the job could not build a DEM, `airspaces.cli`
+  did what it is supposed to do for a person — fell back to the flat SVG map — and the
+  job wrote that over the 3D page and reported success. The cause was worth the two
+  deploys it took to find, and it was **not** the unreachable tile host everyone assumed:
+  the tiles downloaded fine and `Pillow` was not installed, so not one of them could be
+  decoded. `uv sync --extra terrain` in the `pages` job, and `terrain.fetch(report=...)`
+  so the next one says so out loud instead of shrugging. The flag
   turns the fallback into a refusal, and the refusal happens *before* anything is
   written, so the committed page and its sidecar both survive. Passing it is the
   pipeline's job; a person building offline still gets the flat map.

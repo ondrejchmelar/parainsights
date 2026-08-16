@@ -116,7 +116,13 @@ pages:
     # and then Python said `CERTIFICATE_VERIFY_FAILED`.
     - apt-get update -qq && apt-get install -y -qq --no-install-recommends git ca-certificates
   script:
-    - uv sync --locked
+    # `--extra terrain` is Pillow, and the terrain is why. A bare `uv sync` builds an
+    # environment that fetches DEM tiles perfectly and cannot decode a single one, which
+    # is not a shape of failure anyone guesses at: two deploys published without their 3D
+    # view while the diagnosis was "the tile host must be blocking the runner". The
+    # comment above `[project.optional-dependencies]` already records the same mistake
+    # one extra along.
+    - uv sync --locked --extra terrain
     # Fail loudly rather than deploying an empty site: without this the job goes green
     # and publishes nothing, which looks like Pages being broken.
     - test -f public/index.html || (echo "no public/index.html to publish — build one locally, see the header of this file" && exit 1)
