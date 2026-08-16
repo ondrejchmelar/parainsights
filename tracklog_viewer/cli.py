@@ -298,7 +298,7 @@ def _one(source: str, args, index: int = 0) -> dict:
         # every facet of the heightfield visible as a quadrilateral. The drape mesh is
         # capped separately in the renderer, so a finer grid costs bytes, not frames.
         budget = 26000 if len(args.flight) == 1 else 17000
-        ground = terrain_module.for_flight(analysis, max_points=budget)
+        ground = terrain_module.for_flight(analysis, max_points=budget, report=print)
         if ground is None:
             print(f"warning: no terrain data for {label}", file=sys.stderr)
         elif not args.no_basemap and args.embed:

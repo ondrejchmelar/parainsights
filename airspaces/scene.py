@@ -193,7 +193,7 @@ def fetch(airspaces, *, online: bool, report=print):
 
     west, east, south, north = bounds(airspaces)
     ground = viewer_terrain.fetch(west, east, south, north,
-                                  cols=COLUMNS, max_points=MAX_NODES)
+                                  cols=COLUMNS, max_points=MAX_NODES, report=report)
     if ground is None:
         return None
     # Online, the page stitches its own imagery at view time and nothing is baked in.

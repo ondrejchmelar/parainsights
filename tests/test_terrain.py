@@ -1,9 +1,12 @@
 """Terrain grid arithmetic and the 3D payload. No network: the grid is synthetic."""
 
+import urllib.error
+
 import numpy as np
 import pytest
 
 from tracklog_viewer import terrain as terrain_module
+from tracklog_viewer import terrain
 from tracklog_viewer.terrain import Terrain
 
 
@@ -185,3 +188,84 @@ class TestView3dPayload:
         cursor = view3d.cursor_track(analysis, sample)
         assert len(cursor["lon"]) == len(sample)
         assert len(cursor["alt"]) == len(sample)
+
+
+class TestASilentFailureIsNotAFailureReport:
+    """A missing DEM is never an error here — the airspace map falls back to a flat one,
+    the planner declines to draw, an uploaded track gets a flat plane. What was missing
+    was the *sentence*: `fetch` swallowed the cause, so a deploy could say "terrain
+    unavailable" twice in a row and nobody could tell whether the tile host was blocked,
+    slow, or simply not answering. Two published pages lost their 3D view to that.
+
+    No network: `urlopen` is replaced, and the cache is pointed at nothing.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _no_tiles(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(terrain, "CACHE", tmp_path / "empty")
+
+    def _refuse(self, monkeypatch, error):
+        def blow_up(request, timeout=None):
+            raise error
+        monkeypatch.setattr(terrain.urllib.request, "urlopen", blow_up)
+
+    def test_it_names_the_cause_the_host_and_how_many_tiles(self, monkeypatch):
+        self._refuse(monkeypatch, urllib.error.URLError(
+            "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed"))
+        said = []
+        assert terrain.fetch(14.0, 14.4, 50.0, 50.3, report=said.append) is None
+        assert len(said) == 1
+        line = said[0]
+        assert "0 of" in line and "tiles" in line
+        assert "s3.amazonaws.com" in line, "a reader cannot check a host that is unnamed"
+        assert "CERTIFICATE_VERIFY_FAILED" in line
+        assert "URLError" in line, (
+            "the exception class matters: URLError around an SSL failure and URLError "
+            "around a refused connection are different problems with different fixes")
+
+    def test_two_failures_read_differently(self, monkeypatch):
+        """The whole point. If every cause produced the same line there would be no
+        reason to have added one."""
+        seen = []
+        for error in (urllib.error.URLError("[SSL: CERTIFICATE_VERIFY_FAILED] nope"),
+                      urllib.error.URLError(ConnectionRefusedError(111, "Connection refused"))):
+            self._refuse(monkeypatch, error)
+            said = []
+            terrain.fetch(14.0, 14.4, 50.0, 50.3, report=said.append)
+            seen.append(said[0])
+        assert seen[0] != seen[1]
+
+    def test_one_reason_is_reported_once_however_many_tiles_fail(self, monkeypatch):
+        """Twenty tiles failing the same way is one fact, not twenty lines of log."""
+        self._refuse(monkeypatch, urllib.error.URLError("the same thing every time"))
+        said = []
+        terrain.fetch(12.0, 19.0, 48.5, 51.0, report=said.append)
+        assert len(said) == 1
+        assert said[0].count("the same thing every time") == 1
+
+    def test_without_a_reporter_it_is_as_quiet_as_it_ever_was(self, monkeypatch):
+        """The callback is opt-in: every existing caller that does not pass one keeps
+        the behaviour it was written against, which is a `None` and no output."""
+        self._refuse(monkeypatch, urllib.error.URLError("boom"))
+        assert terrain.fetch(14.0, 14.4, 50.0, 50.3) is None
+
+    def test_a_partly_fetched_mosaic_says_so_and_still_builds(self, monkeypatch):
+        """A missing edge tile does not punch a hole in the mesh — that is deliberate,
+        and it is also worth one line, because a grid built from half its tiles is a
+        grid whose edges are made up."""
+        import numpy as np
+
+        real = [0]
+
+        def one_tile_only(zoom, x, y, *, problems=None):
+            if real[0]:
+                terrain._note(problems, "URLError: gave up on the rest")
+                return None
+            real[0] = 1
+            return np.full((terrain.TILE_SIZE, terrain.TILE_SIZE), 500.0)
+
+        monkeypatch.setattr(terrain, "_fetch_tile", one_tile_only)
+        said = []
+        grid = terrain.fetch(12.0, 19.0, 48.5, 51.0, report=said.append)
+        assert grid is not None, "one good tile is still a mesh"
+        assert len(said) == 1 and said[0].startswith("terrain: 1 of ")

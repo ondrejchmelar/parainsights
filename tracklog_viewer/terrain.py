@@ -14,6 +14,7 @@ import hashlib
 import io
 import math
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -103,8 +104,15 @@ def _choose_zoom(west: float, east: float, south: float, north: float) -> int:
     return 6
 
 
-def _fetch_tile(zoom: int, x: int, y: int) -> np.ndarray | None:
-    """One decoded tile as an elevation array, or None if unavailable."""
+def _fetch_tile(zoom: int, x: int, y: int, *, problems: list | None = None
+                ) -> np.ndarray | None:
+    """One decoded tile as an elevation array, or None if unavailable.
+
+    Every failure appends *why* to `problems`. A tile that does not arrive is not an
+    error here — a mosaic survives a missing edge tile — but when none of them arrive
+    the caller has to be able to say what went wrong, and "terrain unavailable" is not
+    something anyone can act on. A deploy spent two runs saying exactly that.
+    """
     CACHE.mkdir(parents=True, exist_ok=True)
     cached = CACHE / f"{zoom}-{x}-{y}.png"
     if cached.exists():
@@ -115,25 +123,49 @@ def _fetch_tile(zoom: int, x: int, y: int) -> np.ndarray | None:
         try:
             with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
                 data = response.read()
-        except (urllib.error.URLError, OSError, TimeoutError):
+        except (urllib.error.URLError, OSError, TimeoutError) as error:
+            # The class as well as the message: `URLError` wrapping an SSL failure and
+            # `URLError` wrapping a refused connection read very differently, and the
+            # message alone sometimes carries neither.
+            _note(problems, f"{type(error).__name__}: {error}")
             return None
         cached.write_bytes(data)
 
     try:
         from PIL import Image
     except ImportError:
+        _note(problems, "Pillow is not installed, so a PNG tile cannot be decoded")
         return None
     try:
         with Image.open(io.BytesIO(data)) as image:
             pixels = np.asarray(image.convert("RGB"), dtype=np.float64)
-    except Exception:
+    except Exception as error:                                          # noqa: BLE001
+        _note(problems, f"a tile did not decode ({type(error).__name__}: {error})")
         return None
     return pixels[:, :, 0] * 256 + pixels[:, :, 1] + pixels[:, :, 2] / 256 - 32768
 
 
+def _note(problems: list | None, reason: str) -> None:
+    """Record a reason once. Twenty tiles failing the same way is one fact."""
+    if problems is not None and reason not in problems:
+        problems.append(reason)
+
+
 def fetch(west: float, east: float, south: float, north: float, *,
-          cols: int = 320, max_points: int = 26000) -> Terrain | None:
-    """Build an elevation grid covering the box. Returns None if tiles are unreachable."""
+          cols: int = 320, max_points: int = 26000, report=None) -> Terrain | None:
+    """Build an elevation grid covering the box. Returns None if tiles are unreachable.
+
+    `report` is called with one line when tiles are missing, and it is the whole reason
+    this parameter exists: the failure used to be swallowed whole, so a publishing
+    pipeline could say *that* the terrain was unavailable and never *why*. Two green
+    deploys published a page without its 3D view before anyone could tell whether the
+    tile host was blocked, slow or simply not answering.
+
+    It stays a callback rather than a raise: a missing DEM is not an error anywhere in
+    this repository — the airspace map falls back to a flat one, the planner declines to
+    draw, an uploaded track gets a flat plane — and turning it into an exception would
+    change all three. What was missing was the sentence, not the failure.
+    """
     zoom = _choose_zoom(west, east, south, north)
     x0, y0 = _tile_indices(north, west, zoom)
     x1, y1 = _tile_indices(south, east, zoom)
@@ -145,15 +177,21 @@ def fetch(west: float, east: float, south: float, north: float, *,
         np.nan,
     )
     fetched = 0
+    wanted = (tile_y1 - tile_y0 + 1) * (tile_x1 - tile_x0 + 1)
+    problems: list[str] = []
     for ty in range(tile_y0, tile_y1 + 1):
         for tx in range(tile_x0, tile_x1 + 1):
-            tile = _fetch_tile(zoom, tx, ty)
+            tile = _fetch_tile(zoom, tx, ty, problems=problems)
             if tile is None:
                 continue
             fetched += 1
             row = (ty - tile_y0) * TILE_SIZE
             col = (tx - tile_x0) * TILE_SIZE
             mosaic[row:row + TILE_SIZE, col:col + TILE_SIZE] = tile
+    if report is not None and fetched < wanted:
+        why = "; ".join(problems[:2]) if problems else "no reason recorded"
+        report(f"terrain: {fetched} of {wanted} tiles at zoom {zoom} from "
+               f"{urllib.parse.urlsplit(TILE_URL).netloc} — {why}")
     if not fetched or np.isnan(mosaic).all():
         return None
     # A missing tile at the edge should not punch a hole in the mesh.
@@ -185,7 +223,7 @@ def fetch(west: float, east: float, south: float, north: float, *,
 
 
 def for_flight(analysis, *, margin: float = 0.35, cols: int = 320,
-               max_points: int = 26000) -> Terrain | None:
+               max_points: int = 26000, report=None) -> Terrain | None:
     """Terrain covering the flight's bounding box, with a margin for context."""
     flight = analysis.flight
     west, east = float(flight.lon.min()), float(flight.lon.max())
@@ -196,7 +234,7 @@ def for_flight(analysis, *, margin: float = 0.35, cols: int = 320,
     pad_y = max((north - south) * margin, 0.06)
     return fetch(
         west - pad_x, east + pad_x, south - pad_y, north + pad_y,
-        cols=cols, max_points=max_points,
+        cols=cols, max_points=max_points, report=report,
     )
 
 
