@@ -92,6 +92,12 @@ def main(argv=None) -> int:
                              "A=82 ICAO aerodromes, B=74 SLZ fields, C=222 heliports, "
                              "D=195 landing sites. Default A,B — C and D are mostly "
                              "hospital pads and add 417 small circles.")
+    parser.add_argument("--require-terrain", action="store_true",
+                        help="fail instead of falling back to the flat map when the "
+                             "elevation model cannot be fetched. For a publishing "
+                             "pipeline: silently replacing the 3D view with the flat "
+                             "one is a downgrade, and a downgrade that reports success "
+                             "is how a worse page gets published behind a green run")
     parser.add_argument("--refresh", action="store_true",
                         help="re-fetch every source instead of using the cache")
     parser.add_argument("--report", action="store_true",
@@ -125,11 +131,10 @@ def main(argv=None) -> int:
 
     if args.html:
         base = openair.read(base_text)
-        # The page links to the OpenAir file rather than carrying it, so the file has
-        # to be written beside the page — publishing the HTML alone gives a dead button.
-        args.html.parent.mkdir(parents=True, exist_ok=True)
-        beside = args.html.parent / name
-        beside.write_text(text, encoding="utf-8", newline="")
+        # The terrain first, and *before* anything is written. A refused build has to
+        # leave the committed page and its sidecar exactly as they were — the whole
+        # point of refusing is that what is already published is better than what this
+        # run can produce.
         payload = None
         if not args.flat:
             from . import scene as airspace_scene
@@ -137,7 +142,22 @@ def main(argv=None) -> int:
             payload = airspace_scene.fetch(list(base) + list(overlay.airspaces),
                                            online=not args.embed)
             if payload is None:
+                # The flat map is a real fallback and stays the default: a build with no
+                # network still produces a usable page, which is "degrade, do not blank".
+                # What it must not be is *silent* where the output is going to be
+                # published — the deploy that taught this rebuilt the page without
+                # terrain, overwrote a good 3D one, and reported success.
+                if args.require_terrain:
+                    parser.exit(1, "terrain unavailable, and --require-terrain says not "
+                                   "to publish the flat map in its place. The 3D view "
+                                   "needs the elevation model; nothing was written.\n")
                 print("terrain unavailable, falling back to the flat map")
+
+        # The page links to the OpenAir file rather than carrying it, so the file has
+        # to be written beside the page — publishing the HTML alone gives a dead button.
+        args.html.parent.mkdir(parents=True, exist_ok=True)
+        beside = args.html.parent / name
+        beside.write_text(text, encoding="utf-8", newline="")
         article = render_html.body(
             overlay, base, base_version, openair_name=name, openair_size=len(text),
             scene=payload,

@@ -1090,6 +1090,56 @@ def test_the_page_falls_back_to_the_flat_map_without_terrain(zones):
     assert "asp-map" in article and "view3d" not in article
 
 
+def test_require_terrain_refuses_the_fallback_instead_of_publishing_it(tmp_path,
+                                                                       monkeypatch):
+    """The fallback is right for a person and wrong for a pipeline.
+
+    A deploy rebuilt this page without terrain, wrote the flat SVG map over the 3D one
+    and reported success — a downgrade published behind a green run. `--require-terrain`
+    is what the pipeline passes so that a rebuild is either a rebuild or nothing at all,
+    and "nothing at all" has to mean *nothing*: the committed page and the OpenAir file
+    beside it both survive, because what is already published is better than what this
+    run can produce.
+
+    Every source is stubbed. This suite touches no network, and the warm airspace cache
+    on a developer's machine is exactly what would hide it if this one did.
+
+    The *other* direction — no flag, flat map written, page still usable — is
+    `test_the_page_falls_back_to_the_flat_map_without_terrain` above. The refusal is
+    opt-in, because "degrade, do not blank" is right for a person and wrong for a deploy.
+    """
+    from airspaces import cli, scene as airspace_scene
+
+    monkeypatch.setattr(cli.build, "build", lambda **kwargs: _NoZones())
+    monkeypatch.setattr(cli.build, "to_openair", lambda *a, **k: "* openair\n")
+    monkeypatch.setattr(cli.sources, "base_airspace", lambda **k: ("", "26-04-01"))
+    monkeypatch.setattr(cli.openair, "read", lambda text: [])
+    monkeypatch.setattr(airspace_scene, "fetch", lambda *a, **k: None)
+
+    page = tmp_path / "airspace.html"
+    page.write_text("the committed page", encoding="utf-8")
+    sidecar = tmp_path / _NoZones.filename
+    sidecar.write_text("the committed overlay", encoding="utf-8")
+
+    with pytest.raises(SystemExit) as refused:
+        cli.main(["--html", str(page), "--require-terrain"])
+
+    assert refused.value.code == 1
+    assert page.read_text(encoding="utf-8") == "the committed page", (
+        "a half-built page overwrote the one it could not improve on")
+    assert sidecar.read_text(encoding="utf-8") == "the committed overlay", (
+        "the sidecar was rewritten by a build that then refused to finish")
+
+
+class _NoZones:
+    """The smallest thing `cli.main` will accept as an overlay."""
+
+    filename = "CZ_airfield_zones_20260806.txt"
+    atz_count = 0
+    circuit_count = 0
+    airspaces: list = []
+
+
 def test_a_zero_floor_is_the_ground_however_it_is_written():
     """`0 AGL` is what the base file mostly says, and it means the same as `GND`. Read as
     an altitude it puts the ring at sea level — 200 to 1 600 m under the terrain it

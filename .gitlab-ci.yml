@@ -129,7 +129,10 @@ pages:
     # when they are the committed page is published instead of nothing: it is a few days
     # old at worst, and refusing to publish a rebuilt *report* because someone else's CSV
     # is unreachable is the wrong trade. Loud, and not fatal.
-    - 'uv run python -m airspaces.cli --html public/airspace/index.html || echo "WARNING: the airspace page could not be rebuilt, publishing the committed copy - check airspaces/sources.py"'
+    # `--require-terrain` is what stops a rebuild being a downgrade. Without it a run
+    # that cannot reach the elevation model writes the flat SVG map over the 3D one and
+    # reports success — which is exactly what the first green deploy did.
+    - 'uv run python -m airspaces.cli --html public/airspace/index.html --require-terrain || echo "WARNING: the airspace page could not be rebuilt, publishing the committed copy - check airspaces/sources.py"'
     - 'uv run python -m planner.cli --html public/planner/index.html || echo "WARNING: the planner page could not be rebuilt, publishing the committed copy"'
     # The airspace page links its OpenAir file by name and the name carries the AIRAC
     # date, so a half-finished rebuild can leave the page pointing at a file that is not
