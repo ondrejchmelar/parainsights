@@ -875,10 +875,19 @@ Still wanted:
   rather than dates, because two commits in the same second compare equal. It cannot
   rebuild the page; it can refuse to publish one that does not match the code beside it.
   Run `sh ci/stale.sh` before committing a renderer change.
-  **The other three pages are built in CI now**, every deploy: `meteo` needs nothing but
-  its own committed data, and `airspace` and `planner` fetch from public sources. Three
-  quarters of the site can no longer be stale, and a source being down fails the job
-  rather than republishing yesterday.
+  **The other three pages are built in CI now**, every deploy. `meteo` needs nothing but
+  its own committed data, so a failure there is a bug and fails the job. `airspace` and
+  `planner` fetch from four public sources, and those are allowed to be down: the build
+  is attempted, a failure prints a warning, and the committed page is published instead
+  of nothing — refusing to publish a rebuilt *report* because someone else's CSV is
+  unreachable is the wrong trade. `ci/download-link.sh` then checks the one link on the
+  site that is not in the nav: the airspace page names its OpenAir file, the name carries
+  the AIRAC date, and a half-finished rebuild leaves a button that 404s.
+  Two things the first deploy taught, both in the job image: it has **no CA trust store**
+  (`uv` bundles its own roots and Debian's mirror list is plain http, so everything works
+  until the first `urllib` call, which then says `CERTIFICATE_VERIFY_FAILED`), and
+  `--no-install-recommends` will not pull one in behind `git`. Install `ca-certificates`
+  explicitly.
   The rebuild for the report is
   ```bash
   uv run python -m tracklog_viewer.cli \
