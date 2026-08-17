@@ -180,44 +180,52 @@ class TestThePage:
 
 NO_ROSE = {"name": "Unknown", "lat": 50.0, "lon": 15.0, "alt": 500, "winds": [], "id": 1}
 
+# Wind is in **metres per second** here, which is what a pilot on a hill says out loud.
+# Open-Meteo is asked for `wind_speed_unit=ms`, so nothing in the page converts anything.
+# The two gates are the old km/h ones converted exactly — 28 km/h is 7.78 and 20 km/h is
+# 5.56 — so no takeoff changed verdict when the unit did.
+VERDICTS = [
+    # A good octant and a workable strength is the only unqualified yes.
+    ([0, 0, 0, 0, 0, 0, 2, 0], 3.9, 270, "flyable"),
+    # Same hill, same direction, twice the wind.
+    ([0, 0, 0, 0, 0, 0, 2, 0], 9.4, 270, "too strong"),
+    # Between the two gates: flyable, and worth saying it will be lively.
+    ([0, 0, 0, 0, 0, 0, 2, 0], 6.5, 270, "brisk"),
+    # Right strength, wrong side of the hill.
+    ([0, 0, 0, 0, 0, 0, 2, 0], 3.9, 90, "wrong way"),
+    # The site's own "marginal" survives as marginal rather than being rounded up.
+    ([0, 0, 0, 0, 0, 0, 1, 0], 3.9, 270, "marginal"),
+    # Nothing recorded: the page refuses rather than guesses.
+    ([], 3.9, 270, "no rose"),
+]
 
-@pytest.mark.parametrize(
-    "winds, speed, direction, expected",
-    [
-        # A good octant and a workable strength is the only unqualified yes.
-        ([0, 0, 0, 0, 0, 0, 2, 0], 14, 270, "flyable"),
-        # Same hill, same direction, twice the wind.
-        ([0, 0, 0, 0, 0, 0, 2, 0], 34, 270, "too strong"),
-        # Right strength, wrong side of the hill.
-        ([0, 0, 0, 0, 0, 0, 2, 0], 14, 90, "wrong way"),
-        # The site's own "marginal" survives as marginal rather than being rounded up.
-        ([0, 0, 0, 0, 0, 0, 1, 0], 14, 270, "marginal"),
-        # Nothing recorded: the page refuses rather than guesses.
-        ([], 14, 270, "no rose"),
-    ],
-)
-def test_the_verdict_is_the_sites_own_rose(winds, speed, direction, expected):
-    """A second copy of the rule, and it is a copy on purpose until this runs in a
-    browser: what it buys is a written-down statement of what each answer means, and the
-    two threshold assertions catch the drift that matters most — someone retuning 28 and
-    20 in the page and not here. **Wanted next**: drive the real function with `fetch`
-    stubbed, the way `tests/test_view3d_gestures.py` drives the real gestures. Until then
-    this test cannot fail on a change to the *shape* of the rule, only to its numbers."""
+
+def test_the_thresholds_are_in_metres_per_second():
+    """Cheap, and it runs without a browser. The gates are named in the source in the
+    unit the page prints, so a reader of either can check the other."""
     source = render_html.SCRIPT
-    assert "STRONG = 28" in source and "BRISK = 20" in source
-    def verdict(winds, speed, direction):
-        if not winds:
-            return "no rose"
-        fit = winds[round((direction % 360) / 45) % 8]
-        if speed > 28:
-            return "too strong"
-        if not fit:
-            return "wrong way"
-        if fit == 1:
-            return "marginal"
-        return "brisk" if speed > 20 else "flyable"
+    assert "STRONG = 7.8" in source and "BRISK = 5.6" in source
+    assert "wind_speed_unit=ms" in source, (
+        "the page asks Open-Meteo for a unit it then does not convert; if that changes "
+        "back to kmh the gates above are silently wrong by 3.6×")
 
-    assert verdict(winds, speed, direction) == expected
+
+@needs_chrome
+def test_the_verdict_is_the_sites_own_rose():
+    """The real function, driven in the page, over every case at once.
+
+    This used to be a second copy of the rule written in Python beside it — it could
+    fail on the *numbers* changing and never on the *shape*, which is the drift
+    `quicklook.py` is the standing warning about. `window.__meteo.verdict` is the real
+    one, and one probe runs the whole table rather than paying for six browsers.
+    """
+    answer = _probe_page("""
+    var cases = %s;
+    return cases.map(function (row) {
+      return window.__meteo.verdict({ winds: row[0] }, row[1], row[2]).text;
+    });
+    """ % json.dumps([[winds, speed, direction] for winds, speed, direction, _ in VERDICTS]))
+    assert answer == [expected for *_, expected in VERDICTS]
 
 
 class TestTheSiteStrip:
@@ -590,7 +598,11 @@ class TestChoosingTakeoffs:
         assert after[1] == before[1] and after[2] == before[2], (
             f"the survivors were repainted: {before} became {after}")
 
-    def test_the_focused_takeoff_is_the_one_the_panel_describes(self):
+    def test_focus_is_marked_on_the_takeoff_and_not_on_the_panel(self):
+        """The panel used to carry the focused takeoff's name, elevation and wind rose
+        in a heading above charts belonging to three of them — one hill's octants over
+        three hills' numbers. Those facts live in each column now, and focus is a mark on
+        the takeoff: its chip, its row, its column."""
         answer = _probe_page("""
         var m = window.__meteo;
         var free = null;
@@ -598,14 +610,20 @@ class TestChoosingTakeoffs:
         m.add(free);
         m.focus(free);
         var conf = JSON.parse(document.querySelector('.met-data').textContent);
-        return { name: document.getElementById('met-name').textContent,
-                 wanted: conf.sites[free].name,
+        var column = document.querySelector('.met-col.is-focus');
+        return { wanted: conf.sites[free].name,
+                 column: column ? column.querySelector('.name').textContent : null,
+                 heading: document.getElementById('met-name').textContent,
                  focusedRows: document.querySelectorAll('.met-compare tr.is-focus').length,
-                 focusedChips: document.querySelectorAll('.met-chip.is-focus').length };
+                 focusedChips: document.querySelectorAll('.met-chip.is-focus').length,
+                 focusedCols: document.querySelectorAll('.met-col.is-focus').length };
         """)
-        assert answer["name"] == answer["wanted"]
+        assert answer["column"] == answer["wanted"]
         assert answer["focusedRows"] == 1
         assert answer["focusedChips"] == 1
+        assert answer["focusedCols"] == 1
+        assert answer["wanted"] not in answer["heading"], (
+            "the panel heading names one takeoff again, over charts belonging to several")
 
     def test_every_line_on_the_meteogram_is_named_somewhere_that_is_not_colour(self):
         """Two of the three light-mode series sit under 3:1 against the panel, which the
@@ -672,11 +690,11 @@ class TestTheSoundingsAndFlymetCompareToo:
     def test_one_sounding_per_chosen_takeoff(self):
         answer = self._with_three("""
         var conf = JSON.parse(document.querySelector('.met-data').textContent);
-        var cells = document.querySelectorAll('.met-sounding-cell');
+        var cells = document.querySelectorAll('.met-col');
         return { cells: cells.length,
-                 canvases: document.querySelectorAll('.met-sounding-cell canvas').length,
+                 canvases: document.querySelectorAll('.met-col-sounding').length,
                  names: Array.prototype.map.call(cells, function (cell) {
-                   return cell.querySelector('.met-sounding-name span').textContent; }),
+                   return cell.querySelector('.met-col-head .name').textContent; }),
                  chosen: m.chosen().map(function (i) { return conf.sites[i].name; }) };
         """)
         assert answer["cells"] == 3
@@ -689,12 +707,12 @@ class TestTheSoundingsAndFlymetCompareToo:
         element, not "whichever sounding happens to be first"."""
         answer = self._with_three("""
         var focused = document.getElementById('met-sounding');
-        var cell = focused && focused.closest('.met-sounding-cell');
+        var cell = focused && focused.closest('.met-col');
         var conf = JSON.parse(document.querySelector('.met-data').textContent);
         return { found: !!focused,
                  site: cell ? Number(cell.dataset.site) : null,
                  focus: m.state.site,
-                 marked: document.querySelectorAll('.met-sounding-cell.is-focus').length };
+                 marked: document.querySelectorAll('.met-col.is-focus').length };
         """)
         assert answer["found"] is True
         assert answer["site"] == answer["focus"]
@@ -705,7 +723,7 @@ class TestTheSoundingsAndFlymetCompareToo:
         1 500 m over one hill and the other two answer at 1 500 m, because "what is the
         air doing at the height I will be at" is the question being asked of all three."""
         answer = self._with_three("""
-        var canvases = document.querySelectorAll('.met-sounding-cell canvas');
+        var canvases = document.querySelectorAll('.met-col-sounding');
         var second = canvases[1];
         var box = second.getBoundingClientRect();
         // Half way down the plot, which is 2 000 m of a 4 000 m chart.
@@ -773,3 +791,98 @@ class TestTheSoundingsAndFlymetCompareToo:
             assert name in answer["heading"], (
                 f"{name} shares the picture but is not named on it")
         assert answer["dots"] == 2, "each takeoff's colour belongs on the heading"
+
+
+@needs_chrome
+class TestEachChartMeansOneThing:
+    """The combined meteogram carried every chosen takeoff's boundary layer *and* one
+    takeoff's cloud, ground and cloudbase, with nothing on the frame saying which was
+    which — so the cloud a reader was looking at belonged to a hill they might not have
+    been thinking about. Split in two: a strip that is only the comparison, and a column
+    per takeoff that is only that takeoff.
+    """
+
+    def _with_three(self, body: str) -> dict:
+        return _probe_page("""
+        var m = window.__meteo;
+        for (var i = 0; i < 10 && m.chosen().length < 3; i++) {
+          if (m.chosen().indexOf(i) < 0) m.add(i);
+        }
+        %s
+        """ % body)
+
+    def test_every_takeoff_gets_its_own_meteogram_and_sounding(self):
+        answer = self._with_three("""
+        return { columns: document.querySelectorAll('.met-col').length,
+                 grams: document.querySelectorAll('.met-col-gram').length,
+                 soundings: document.querySelectorAll('.met-col-sounding').length };
+        """)
+        assert answer["columns"] == 3
+        assert answer["grams"] == 3, "cloud and cloudbase for one takeoff out of three"
+        assert answer["soundings"] == 3
+
+    def test_the_comparison_strip_holds_nothing_that_belongs_to_one_takeoff(self):
+        """It draws boundary layers and axes. If cloud shading or a ground fill comes
+        back to this frame, it is one hill's fact on a chart labelled with three."""
+        source = render_html.SCRIPT
+        strip = source[source.index("function drawStrip()"):source.index("function boundaryLayer")]
+        assert "boundaryLayer" in strip
+        for one_site_only in ("cloud_cover", "levelSeries", "cloudbase("):
+            assert one_site_only not in strip, (
+                f"{one_site_only} is back on the comparison strip")
+
+    def test_the_strip_appears_only_with_something_to_compare(self):
+        answer = _probe_page("""
+        var m = window.__meteo;
+        var strip = document.getElementById('met-strip');
+        var alone = strip.hidden;
+        var free = null;
+        for (var i = 0; i < 6; i++) if (m.chosen().indexOf(i) < 0) { free = i; break; }
+        m.add(free);
+        return { alone: alone, withTwo: strip.hidden };
+        """)
+        assert answer["alone"] is True, "a comparison of one is the chart below it"
+        assert answer["withTwo"] is False
+
+    def test_each_column_carries_its_own_takeoff_s_rose_and_link(self):
+        answer = self._with_three("""
+        var conf = JSON.parse(document.querySelector('.met-data').textContent);
+        return Array.prototype.map.call(document.querySelectorAll('.met-col'),
+          function (cell) {
+            var i = Number(cell.dataset.site);
+            return { name: cell.querySelector('.name').textContent,
+                     wanted: conf.sites[i].name,
+                     rose: cell.querySelector('.met-col-rose span').textContent,
+                     href: cell.querySelector('.met-col-rose a').getAttribute('href'),
+                     id: String(conf.sites[i].id) };
+          });
+        """)
+        for column in answer:
+            assert column["name"] == column["wanted"]
+            assert column["rose"], "no wind rose, not even the refusal to judge"
+            assert column["id"] in column["href"], (
+                "a column links to another takeoff's page on ParaglidingEarth")
+
+
+@needs_chrome
+def test_wind_is_metres_per_second_everywhere_it_is_printed():
+    """One unit on the page, and it is the one a pilot says out loud. A page that mixes
+    km/h in the table with m/s in the readout is worse than either."""
+    answer = _probe_page("""
+    var m = window.__meteo;
+    var free = null;
+    for (var i = 0; i < 8; i++) if (m.chosen().indexOf(i) < 0) { free = i; break; }
+    m.add(free);
+    m.open();
+    var canvas = document.getElementById('met-sounding');
+    var box = canvas.getBoundingClientRect();
+    canvas.dispatchEvent(new PointerEvent('pointermove', {
+      clientX: box.left + box.width / 2, clientY: box.top + box.height / 2,
+      bubbles: true, pointerType: 'mouse' }));
+    return { list: document.querySelector('.met-site-note').textContent,
+             table: document.querySelector('.met-compare .wind').textContent,
+             asked: window.__askedUrl || '' };
+    """)
+    assert "m/s" in answer["list"], "the picker still ranks in another unit"
+    assert "m/s" in answer["table"]
+    assert "km/h" not in answer["list"] + answer["table"]

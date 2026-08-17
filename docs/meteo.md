@@ -122,6 +122,32 @@ table and its own boundary-layer line on the shared meteogram. The takeoff being
 at* keeps the sounding, the figures and flymet's picture; the others are there to be
 compared against it.
 
+**Wind is in metres per second**, which is what a pilot on a hill says out loud and what
+every windsock conversation is already in. Open-Meteo is asked for `wind_speed_unit=ms`,
+so nothing in the page divides by 3.6 — a conversion in the browser is one more place to
+be wrong, and the ranking, the table, the readout and the two verdict gates would each
+have needed their own. The gates are the old km/h numbers converted exactly (28 → 7.8,
+20 → 5.6), so no takeoff changed verdict on the day the unit did.
+
+**Each chart means one thing.** The first version of the comparison put every chosen
+takeoff's boundary layer *and* one takeoff's cloud, ground and cloudbase on a single
+meteogram, with nothing on the frame saying which was which — two thirds of it about
+three hills and one third about one. That is not a chart that can be read carefully. It
+is two charts now:
+
+* a **strip**, boundary layers only, one line per chosen takeoff and nothing else on the
+  frame, because that is the only quantity here that compares across hills standing at
+  different heights. It scales to the day rather than to a fixed 4 000 m — on a 1 600 m
+  day a fixed ceiling spends half the frame on empty sky and squashes the difference
+  between three hills into a centimetre, and that difference is the entire chart;
+* a **column per takeoff**: its name, its ground, its wind rose, its meteogram (its own
+  cloud, its own cloudbase, over its own ground) and its sounding. Facts about one hill
+  live under that hill's name.
+
+The surface temperature and dew point moved into the comparison table with everything
+else. They were a tile row under the charts for the *focused* takeoff, which is a
+comparison page showing one of something it has three of.
+
 **Why three.** Slots 1–3 of the design system's categorical order pass every check in the
 dataviz skill's `validate_palette.js` on the all-pairs list in both themes; the documented
 fourth slot is yellow, and yellow against this orange fails the normal-vision floor at
@@ -173,11 +199,11 @@ airfield. The choice is remembered between visits. Published at `public/meteo/`.
 
 Wanted next:
 
-- **The verdict rule still keeps a second copy in Python.** `tests/test_meteo_view.py`
-  pins the two thresholds but cannot fail on a change to the rule's *shape*. The harness
-  that fixes it now exists — the sounding tests drive the real page with `fetch` answering
-  from a built profile — so this is exposing `verdict` on `window.__meteo` and one test,
-  rather than the piece of work it used to be.
+- ~~The verdict rule still keeps a second copy in Python.~~ **Done.** `verdict` is
+  exposed on `window.__meteo` and the parametrised test drives the real function in the
+  page over the whole table in one probe. What is left in Python is a two-line check that
+  the gates are in the source in the unit the page prints — which runs without a browser
+  and cannot go stale, because the browser test would fail first.
 - **A map, instead of a list.** The airspace view is already the widget for it, and a
   takeoff is a point with a colour. The list is behind a dialog now, which takes the
   pressure off this — but a map is still the right way to pick a hill, and it would answer

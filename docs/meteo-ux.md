@@ -53,11 +53,14 @@ old one could only answer it one hill at a time, by memory. Now:
   lid, and the ground each one stands on. The best thermal top and the best cloudbase
   are marked, because three numbers in a column are three numbers until one of them is
   the answer;
-* the **meteogram carries all three boundary layers**, one line each, so the comparison
-  is *when* each hill works and not only how high it goes. That is the chart that could
-  not be built while the page held one site at a time, and it is the reason the rework
-  is worth more than the space it saved;
-* a **sounding each, side by side** — small multiples, not one frame with everything on
+* a **strip carrying all three boundary layers**, one line each, so the comparison is
+  *when* each hill works and not only how high it goes. That is the chart that could not
+  be built while the page held one site at a time, and it is the reason the rework is
+  worth more than the space it saved. It went through one bad version first: the same
+  frame also carried the *focused* takeoff's cloud, ground and cloudbase, so two thirds
+  of it was about three hills and one third about one, unlabelled. Everything that
+  belongs to a single takeoff now lives in that takeoff's column;
+* a **meteogram and a sounding each, side by side** — small multiples, not one frame with everything on
   it. Three temperature traces and three dew points on one set of axes is six crossing
   lines and no comparison; three small columns is the shape of each day, readable at a
   glance. The probe height is *shared*: point at 1 500 m over one hill and all three read

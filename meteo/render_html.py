@@ -147,9 +147,29 @@ STYLE = """
 .met-panel { border:1px solid var(--rule); border-radius:4px; padding:14px 16px; }
 .met-panel h3 { margin:0 0 2px; font-size:17px; }
 .met-sub { margin:0 0 12px; color:var(--ink-3); font-size:12.5px; }
-.met-charts { display:grid; grid-template-columns: minmax(0,1fr) minmax(0,260px);
-  gap:16px; }
-@media (max-width: 700px) { .met-charts { grid-template-columns: 1fr; } }
+.met-strip { margin:16px 0 6px; }
+.met-strip .chart-title { font-size:11px; text-transform:uppercase; letter-spacing:.07em;
+  color:var(--ink-3); margin:0 0 4px; }
+
+/* Small multiples. One column per takeoff, capped at 340 px so a single chosen takeoff
+   does not get a sounding stretched across the whole panel — a sounding is a shape to
+   read, and widening it past its own aspect ratio makes the lapse rate look gentler than
+   it is, which is the one thing that chart must not do. */
+.met-columns { display:grid; gap:16px; margin:14px 0 0;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 340px)); }
+.met-col { min-width:0; }
+.met-col .met-canvas + .met-canvas { margin-top:8px; }
+.met-col-head { display:flex; align-items:center; gap:7px; font-size:12.5px;
+  font-weight:600; margin:0 0 5px; }
+.met-col-head i { width:10px; height:10px; border-radius:50%; flex:none; }
+.met-col-head .name { background:none; border:0; padding:0; font:inherit; color:inherit;
+  cursor:pointer; }
+.met-col-head .ground { font-weight:400; color:var(--ink-3);
+  font-variant-numeric:tabular-nums; }
+.met-col-rose { font-size:11.5px; color:var(--ink-3); margin:0 0 6px; }
+.met-col-rose a { color:inherit; }
+.met-col.is-focus .met-col-head .name { text-decoration:underline;
+  text-underline-offset:3px; }
 .met-canvas { width:100%; display:block; background:var(--panel); border-radius:3px; }
 /* The hour is in the head, above everything, because it applies to everything: the
    ranking, the comparison and both charts all answer "at what time". It used to sit
@@ -158,27 +178,6 @@ STYLE = """
   color:var(--ink-2); flex:1 1 240px; min-width:200px; }
 .met-hour input { flex:1; min-width:120px; }
 .met-hour output { min-width:3.6em; font-variant-numeric:tabular-nums; }
-.met-figures { display:flex; flex-wrap:wrap; gap:6px 22px; margin:12px 0 0;
-  font-size:12.5px; }
-.met-figures div { display:flex; flex-direction:column; }
-.met-figures .k { font-size:10.5px; text-transform:uppercase; letter-spacing:.07em;
-  color:var(--ink-3); }
-.met-figures .v { font-variant-numeric:tabular-nums; font-size:15px; }
-/* Small multiples. One sounding per chosen takeoff, capped at 320 px each so a single
-   takeoff does not get a sounding stretched across the whole panel — a sounding is a
-   shape to read, and widening it past its own aspect ratio makes the lapse rate look
-   gentler than it is, which is the one thing this chart must not do. */
-.met-soundings { display:grid; gap:14px; margin:16px 0 0;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 320px)); }
-.met-sounding-cell { min-width:0; }
-.met-sounding-name { display:flex; align-items:center; gap:7px; font-size:12.5px;
-  font-weight:600; margin:0 0 4px; }
-.met-sounding-name i { width:10px; height:10px; border-radius:50%; flex:none; }
-.met-sounding-name .ground { font-weight:400; color:var(--ink-3);
-  font-variant-numeric:tabular-nums; }
-.met-sounding-cell.is-focus .met-sounding-name { text-decoration:underline;
-  text-underline-offset:3px; }
-
 .met-flymet { margin:16px 0 0; }
 .met-flymet figure { margin:0 0 18px; }
 .met-flymet figure:last-child { margin-bottom:0; }
@@ -283,6 +282,7 @@ def body(uid: str = "meteo") -> str:
     <thead><tr>
       <th scope="col">takeoff</th><th scope="col">verdict</th><th scope="col">wind</th>
       <th scope="col">thermal top</th><th scope="col">cloudbase</th>
+      <th scope="col" class="hide-narrow">temp / dew</th>
       <th scope="col" class="hide-narrow">lid</th>
       <th scope="col" class="hide-narrow">ground</th>
     </tr></thead>
@@ -290,31 +290,31 @@ def body(uid: str = "meteo") -> str:
   </table>
 
   <div class="met-panel" id="met-panel">
-    <h3 id="met-name">No takeoff chosen</h3>
-    <p class="met-sub" id="met-sub">Add one and its sounding and meteogram appear here.</p>
-    <div class="met-charts">
-      <div>
-        <canvas class="met-canvas" id="met-gram" width="720" height="300"></canvas>
-        <p class="met-legend">Meteogram — height against the hour. The shading is cloud
-          cover on the pressure levels for the takeoff named above; the lines are the
-          convective boundary layer for <em>every</em> chosen takeoff, so the comparison
-          is when each one works rather than only how high. Dashes are its estimated
-          cloudbase.</p>
-        <p class="met-keys" id="met-keys"></p>
-      </div>
-      <div class="met-figures" id="met-figures"></div>
+    <h3 id="met-name">The day, takeoff by takeoff</h3>
+    <p class="met-sub" id="met-sub"></p>
+    <div class="met-strip" id="met-strip" hidden>
+      <p class="chart-title">When each one works</p>
+      <canvas class="met-canvas" id="met-band" width="960" height="170"></canvas>
+      <p class="met-legend">The convective boundary layer through the day, one line per
+        chosen takeoff and <em>nothing else on the frame</em> — it is the only quantity
+        here that compares across hills standing at different heights. Everything that
+        belongs to one takeoff is in that takeoff's own column below.</p>
+      <p class="met-keys" id="met-keys"></p>
     </div>
 
-    <div class="met-soundings" id="met-soundings"></div>
-    <p class="met-legend">One sounding per chosen takeoff, at the chosen hour: temperature
-      solid, dew point dashed, the dry adiabat from the surface faint. The dotted blue line
-      is the estimated cloudbase; a shaded band is a layer the thermals stop at
+    <div class="met-columns" id="met-columns"></div>
+    <p class="met-legend">One column per chosen takeoff, and each chart in it is that
+      takeoff alone. <strong>Above:</strong> the meteogram — height against the hour,
+      shading is cloud cover on the pressure levels, the solid line is its boundary layer
+      and the dashes its estimated cloudbase, over its own ground.
+      <strong>Below:</strong> the sounding at the chosen hour — temperature solid, dew
+      point dashed, the dry adiabat from the surface faint. The dotted blue line is the
+      estimated cloudbase; a shaded band is a layer the thermals stop at
       (<em>zadržná vrstva</em> — under {CAP_LAPSE:.0f} °C/km, red where the air warms with
       height), read between the model's pressure levels and so no finer than they are.
-      Side by side rather than on top of each other: three temperature traces and three
-      dew points on one frame is six lines and no comparison. Point at one — or drag a
-      finger up it — and <strong>all of them read at that height</strong>, which is the
-      question you are asking when you have three of these open.</p>
+      Point at a sounding — or drag a finger up it — and <strong>all of them read at that
+      height</strong>, which is the question you are asking when you have three open.</p>
+
     <!-- Foldable, and open by default. It is a second opinion worth having in front of
          the reader — but it is 700 px of someone else's chart under 300 px of ours, and
          a page whose own answer scrolls off the top to make room for it has its
@@ -324,7 +324,6 @@ def body(uid: str = "meteo") -> str:
       <summary id="met-flymet-summary">flymet's own meteograms</summary>
       <div id="met-flymet-list"></div>
     </details>
-    <p class="met-links" id="met-links"></p>
   </div>
 
   <dialog class="met-modal" id="met-modal" aria-labelledby="met-modal-title">
@@ -418,9 +417,16 @@ SCRIPT = r"""
   // The one judgement this page makes, and it is made from the site's own record rather
   // than from a rule about hills: ParaglidingEarth stores which octants each takeoff
   // works in, and a site with no record is left unjudged rather than guessed at. Two
-  // gates, because they fail differently — a good direction blowing 40 km/h is not a
-  // good day, and neither is 8 km/h onto a face that needs 20.
-  var STRONG = 28, BRISK = 20;
+  // gates, because they fail differently — a good direction blowing 11 m/s is not a
+  // good day, and neither is 2 m/s onto a face that needs 5.
+  // In metres per second, which is what a pilot on a hill says out loud and what every
+  // vario and windsock conversation is already in. The two numbers are the same rule as
+  // before, converted exactly rather than re-chosen: 28 km/h is 7.78 m/s and 20 km/h is
+  // 5.56 m/s, so no takeoff changes verdict on the day this shipped. Open-Meteo is asked
+  // for `wind_speed_unit=ms`, so nothing here divides by 3.6 — a conversion in the page
+  // is one more place to be wrong, and the readouts, the table and these gates would
+  // each have needed their own.
+  var STRONG = 7.8, BRISK = 5.6;
   function octant(direction) { return Math.round(((direction % 360) + 360) % 360 / 45) % 8; }
   function verdict(site, speed, direction) {
     if (!site.winds || !site.winds.length) return { key: 'none', text: 'no rose' };
@@ -445,7 +451,7 @@ SCRIPT = r"""
     var lon = conf.sites.map(function (s) { return s.lon; }).join(',');
     return conf.endpoint + '?latitude=' + lat + '&longitude=' + lon
       + '&hourly=wind_speed_10m,wind_direction_10m,temperature_2m,cloud_cover,cape'
-      + '&forecast_days=4&timezone=Europe%2FPrague&wind_speed_unit=kmh';
+      + '&forecast_days=4&timezone=Europe%2FPrague&wind_speed_unit=ms';
   }
   function profileUrl(site) {
     var fields = ['temperature_2m', 'dew_point_2m', 'cloud_cover',
@@ -457,7 +463,7 @@ SCRIPT = r"""
     });
     return conf.endpoint + '?latitude=' + site.lat + '&longitude=' + site.lon
       + '&hourly=' + fields.join(',')
-      + '&forecast_days=4&timezone=Europe%2FPrague&wind_speed_unit=kmh';
+      + '&forecast_days=4&timezone=Europe%2FPrague&wind_speed_unit=ms';
   }
 
   function get(url) {
@@ -576,7 +582,7 @@ SCRIPT = r"""
       button.querySelector('.met-site-name').textContent = row.site.name;
       button.querySelector('.met-verdict').textContent = row.verdict.text;
       button.querySelector('.met-site-note').textContent =
-        Math.round(row.speed) + ' km/h from ' + compass(row.direction)
+        row.speed.toFixed(1) + ' m/s from ' + compass(row.direction)
         + ' · ' + row.site.alt + ' m · ' + Math.round(row.cloud) + '% cloud';
       list.appendChild(button);
     });
@@ -709,8 +715,14 @@ SCRIPT = r"""
         var caps = cappingLayers(profile.hourly, at, ground, SOUND_CEILING);
         lid = caps.length ? caps[0] : null;
       }
+      var temperature = null, dew = null;
+      if (profile && profile.hourly) {
+        var hour = indexFor(profile.hourly.time, state.day, state.hour);
+        temperature = profile.hourly.temperature_2m[hour];
+        dew = profile.hourly.dew_point_2m[hour];
+      }
       return { index: index, surface: surface, top: top, base: base, lid: lid,
-               ground: ground };
+               ground: ground, temperature: temperature, dew: dew };
     });
     // The best figure in each column is marked, which is the comparison doing its job:
     // three numbers in a column are three numbers until one of them is the answer.
@@ -729,19 +741,24 @@ SCRIPT = r"""
         '<th scope="row"><span class="site"><i class="swatch"></i><span></span></span></th>'
         + '<td><span class="met-verdict met-' + verdictKey + '"></span></td>'
         + '<td class="wind"></td><td class="top"></td><td class="base"></td>'
+        + '<td class="surface hide-narrow"></td>'
         + '<td class="lid hide-narrow"></td><td class="ground hide-narrow"></td>';
       row.querySelector('.swatch').style.background = seriesColour(slot);
       row.querySelector('.site span').textContent = conf.sites[m.index].name;
       row.querySelector('.met-verdict').textContent =
         m.surface ? m.surface.verdict.text : '—';
       row.querySelector('.wind').textContent = m.surface
-        ? Math.round(m.surface.speed) + ' km/h ' + compass(m.surface.direction) : '—';
+        ? m.surface.speed.toFixed(1) + ' m/s ' + compass(m.surface.direction) : '—';
       var top = row.querySelector('.top');
       top.textContent = m.top == null ? '…' : Math.round(m.top) + ' m';
       if (m.top != null && m.top === bestTop) top.className = 'top best';
       var base = row.querySelector('.base');
       base.textContent = m.base == null ? '…' : Math.round(m.base) + ' m';
       if (m.base != null && m.base === bestBase) base.className = 'base best';
+      // The surface pair. These were a tile row under the charts for the *focused*
+      // takeoff, which is a comparison page showing one of something it has three of.
+      row.querySelector('.surface').textContent = m.temperature == null ? '…'
+        : Math.round(m.temperature) + ' / ' + Math.round(m.dew) + ' °C';
       row.querySelector('.lid').textContent = m.lid
         ? Math.round(m.lid.base) + ' m' + (m.lid.inversion ? ' inv' : '')
         : (m.top == null ? '…' : 'none');
@@ -883,14 +900,26 @@ SCRIPT = r"""
     return have[have.length - 1];
   }
 
-  function drawMeteogram() {
-    var canvas = document.getElementById('met-gram');
+  // ---- one meteogram per takeoff, and one strip that compares them --------------------
+  //
+  // This used to be a single chart carrying every chosen takeoff's boundary layer *and*
+  // one takeoff's cloud, ground and cloudbase. Two thirds of it was about three hills
+  // and one third about one, with nothing on the frame saying which was which — so the
+  // cloud a reader was looking at belonged to a takeoff they might not have been
+  // thinking about. That is not a chart that can be read carefully; it is one that can
+  // only be trusted or not.
+  //
+  // Split in two, and each half now means exactly one thing. `drawGram` is one takeoff,
+  // complete: its cloud, its ground, its boundary layer, its cloudbase. `drawStrip` is
+  // every chosen takeoff and *nothing else* — boundary layers alone, which is the only
+  // quantity on this page that compares across hills standing at different heights.
+  function drawGram(canvas, profile, slot) {
     var frame = fit(canvas);
-    if (!frame || !state.profile) return;
+    if (!frame || !profile) return;
     var ctx = frame.ctx, W = frame.w, H = frame.h;
-    var hourly = state.profile.hourly;
-    var ground = state.profile.elevation;
-    var left = 42, right = 8, top = 10, bottom = 26;
+    var hourly = profile.hourly;
+    var ground = profile.elevation;
+    var left = 38, right = 8, top = 8, bottom = 22;
     var top_m = 4000;
     function x(hour) { return left + (hour - 5) / 16 * (W - left - right); }
     function y(metres) { return top + (1 - metres / top_m) * (H - top - bottom); }
@@ -910,90 +939,130 @@ SCRIPT = r"""
         var band = (l === 0 ? 300 : Math.abs(heights[l][at] - heights[l - 1][at])) || 300;
         ctx.fillStyle = 'rgba(128,132,140,' + Math.min(cover / 100, 1) * 0.75 + ')';
         ctx.fillRect(x(hour) - (W - left - right) / 34, y(height + band / 2),
-                     (W - left - right) / 17, Math.abs(y(height - band / 2) - y(height + band / 2)));
+                     (W - left - right) / 17,
+                     Math.abs(y(height - band / 2) - y(height + band / 2)));
       }
     }
 
-    // The ground under the focused takeoff. The others are drawn on this same frame and
-    // stand on their own ground, which is why the table carries a "ground" column: two
-    // hills 300 m apart in elevation have boundary layers that are not comparable as
-    // heights above sea level alone.
+    // This takeoff's own ground, under this takeoff's own numbers.
     ctx.fillStyle = ink('--panel-2');
     ctx.fillRect(left, y(ground), W - left - right, H - bottom - y(ground));
 
-    function line(profile, values, dashed, colour, width) {
-      ctx.save();
-      // Clipped to the plot box. A cloudbase of 4 290 m on a chart that stops at 4 000
-      // otherwise draws a dashed line across the caption above it, which reads as a
-      // rendering fault rather than as "higher than this chart goes".
-      ctx.beginPath();
-      ctx.rect(left, top, W - left - right, H - top - bottom);
-      ctx.clip();
-      ctx.beginPath();
-      ctx.setLineDash(dashed ? [5, 4] : []);
-      ctx.strokeStyle = colour;
-      ctx.lineWidth = width;
-      ctx.lineJoin = 'round';
-      var started = false, lastX = null, lastY = null;
+    hourLine(ctx, profile, x, y, boundaryLayer(profile), false, seriesColour(slot), 2.4,
+             { left: left, top: top, W: W, H: H, right: right, bottom: bottom });
+    hourLine(ctx, profile, x, y, function (at) {
+      return cloudbase(hourly.temperature_2m[at], hourly.dew_point_2m[at], ground);
+    }, true, ink('--ink-3'), 1.5,
+             { left: left, top: top, W: W, H: H, right: right, bottom: bottom });
+
+    gramAxes(ctx, x, y, top_m, left, right, bottom, W, H, 4);
+  }
+
+  // The comparison, and only the comparison: one line per chosen takeoff, nothing that
+  // belongs to a single one of them. Hidden below two takeoffs, because a comparison of
+  // one is the chart above it with more steps.
+  function drawStrip() {
+    var holder = document.getElementById('met-strip');
+    var wanted = chosen();
+    holder.hidden = wanted.length < 2;
+    if (holder.hidden) return;
+    var canvas = document.getElementById('met-band');
+    var frame = fit(canvas);
+    if (!frame) return;
+    var ctx = frame.ctx, W = frame.w, H = frame.h;
+    var left = 38, right = 8, top = 8, bottom = 22;
+    // Scaled to the day rather than to a fixed 4 000 m. The per-takeoff meteograms keep
+    // the fixed ceiling — they carry cloud, which goes all the way up — but this one
+    // holds boundary layers alone, and on a 1 600 m day a fixed ceiling spends half the
+    // frame on empty sky and squashes the difference between three hills into a
+    // centimetre. That difference is the entire chart.
+    var highest = 0;
+    state.slots.forEach(function (index) {
+      if (index === null) return;
+      var profile = state.profiles[index];
+      if (!profile || !profile.hourly) return;
+      var blh = profile.hourly.boundary_layer_height;
       for (var h = 5; h <= 21; h++) {
-        var value = values(indexFor(profile.hourly.time, state.day, h));
-        if (value == null) continue;
-        lastX = x(h); lastY = y(value);
-        if (!started) { ctx.moveTo(lastX, lastY); started = true; }
-        else ctx.lineTo(lastX, lastY);
+        var value = blh[indexFor(profile.hourly.time, state.day, h)];
+        if (value != null) highest = Math.max(highest, profile.elevation + value);
       }
-      ctx.stroke();
-      ctx.restore();
-      return started ? [lastX, lastY] : null;
-    }
+    });
+    var top_m = Math.max(Math.ceil((highest * 1.1) / 500) * 500, 1500);
+    var grid = top_m <= 2500 ? 500 : 1000;
+    function x(hour) { return left + (hour - 5) / 16 * (W - left - right); }
+    function y(metres) { return top + (1 - metres / top_m) * (H - top - bottom); }
+    ctx.clearRect(0, 0, W, H);
 
-    function boundaryLayer(profile) {
-      return function (at) {
-        var blh = profile.hourly.boundary_layer_height[at];
-        return blh == null ? null : profile.elevation + blh;
-      };
-    }
-
-    // Every chosen takeoff's boundary layer, in its own slot colour, and the focused
-    // one's cloudbase besides. This is the comparison the page exists for — *when* each
-    // hill works, not only how high it goes — and it is why the meteogram is one chart
-    // with three lines rather than three charts nobody can align by eye.
-    //
-    // Two things carry identity besides the colour, which is the rule for a palette
-    // whose light steps sit under 3:1 on this panel: a label at the end of each line,
-    // and the legend under the chart.
+    var box = { left: left, top: top, W: W, H: H, right: right, bottom: bottom };
     var labels = [];
     state.slots.forEach(function (index, slot) {
       if (index === null) return;
       var profile = state.profiles[index];
       if (!profile || !profile.hourly) return;
-      var focused = index === state.site;
-      var end = line(profile, boundaryLayer(profile), false, seriesColour(slot),
-                     focused ? 2.4 : 2);
+      var end = hourLine(ctx, profile, x, y, boundaryLayer(profile), false,
+                         seriesColour(slot), index === state.site ? 2.6 : 2, box);
       if (end) labels.push({ x: end[0], y: end[1], slot: slot,
                              name: conf.sites[index].name });
     });
-    line(state.profile, function (at) {
-      return cloudbase(hourly.temperature_2m[at], hourly.dew_point_2m[at], ground);
-    }, true, ink('--ink-3'), 1.6);
+    gramAxes(ctx, x, y, top_m, left, right, bottom, W, H, 4, grid);
+    directLabels(ctx, labels, top, H - bottom);
+  }
 
-    // Axes, over the lines and under the labels.
+  function boundaryLayer(profile) {
+    return function (at) {
+      var blh = profile.hourly.boundary_layer_height[at];
+      return blh == null ? null : profile.elevation + blh;
+    };
+  }
+
+  function hourLine(ctx, profile, x, y, values, dashed, colour, width, box) {
+    ctx.save();
+    // Clipped to the plot box. A cloudbase of 4 290 m on a chart that stops at 4 000
+    // otherwise draws a dashed line across the caption above it, which reads as a
+    // rendering fault rather than as "higher than this chart goes".
+    ctx.beginPath();
+    ctx.rect(box.left, box.top, box.W - box.left - box.right,
+             box.H - box.top - box.bottom);
+    ctx.clip();
+    ctx.beginPath();
+    ctx.setLineDash(dashed ? [5, 4] : []);
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = width;
+    ctx.lineJoin = 'round';
+    var started = false, lastX = null, lastY = null;
+    for (var h = 5; h <= 21; h++) {
+      var value = values(indexFor(profile.hourly.time, state.day, h));
+      if (value == null) continue;
+      lastX = x(h); lastY = y(value);
+      if (!started) { ctx.moveTo(lastX, lastY); started = true; }
+      else ctx.lineTo(lastX, lastY);
+    }
+    ctx.stroke();
+    ctx.restore();
+    return started ? [lastX, lastY] : null;
+  }
+
+  function gramAxes(ctx, x, y, top_m, left, right, bottom, W, H, step, grid) {
+    grid = grid || 1000;
     ctx.strokeStyle = ink('--rule');
     ctx.fillStyle = ink('--ink-3');
     ctx.font = '10px ui-sans-serif, sans-serif';
     ctx.lineWidth = 1;
-    for (var m = 0; m <= top_m; m += 1000) {
+    for (var m = 0; m <= top_m; m += grid) {
       ctx.beginPath(); ctx.moveTo(left, y(m)); ctx.lineTo(W - right, y(m)); ctx.stroke();
       ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
-      ctx.fillText(m + ' m', left - 5, y(m));
+      ctx.fillText(m >= 1000 ? (m / 1000) + 'k' : String(m), left - 5, y(m));
     }
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-    for (var t = 6; t <= 20; t += 2) ctx.fillText(t + ':00', x(t), H - bottom + 5);
+    for (var t = 6; t <= 20; t += step) ctx.fillText(t + ':00', x(t), H - bottom + 4);
+  }
 
-    // The direct labels, last so nothing crosses them, and pushed apart where two
-    // takeoffs end the day at the same height — which on a good day they do.
+  // Pushed apart where two takeoffs end the day at the same height — which on a good
+  // day they do — and drawn on a pad, because a label read against a line is a label
+  // read twice.
+  function directLabels(ctx, labels, topEdge, bottomEdge) {
     labels.forEach(function (label) {
-      label.y = Math.min(Math.max(label.y, top + 7), H - bottom - 7);
+      label.y = Math.min(Math.max(label.y, topEdge + 7), bottomEdge - 7);
     });
     labels.sort(function (a, b) { return a.y - b.y; });
     for (var i = 1; i < labels.length; i++) {
@@ -1005,8 +1074,6 @@ SCRIPT = r"""
     labels.forEach(function (label) {
       var text = label.name.length > 14 ? label.name.slice(0, 13) + '…' : label.name;
       var width = ctx.measureText(text).width;
-      // A pad behind the text: these lines cross each other and the cloud shading, and
-      // a label read against a line is a label read twice.
       ctx.globalAlpha = 0.85;
       ctx.fillStyle = ink('--panel');
       ctx.fillRect(label.x - width - 5, label.y - 7, width + 6, 14);
@@ -1026,70 +1093,77 @@ SCRIPT = r"""
       var key = document.createElement('span');
       key.innerHTML = '<i></i><span></span>';
       key.querySelector('i').style.borderTopColor = seriesColour(slot);
-      // A legend entry for a line that is not on the chart yet is a small lie, so it
-      // says which it is rather than waiting for the fetch to make it true.
       key.querySelector('span').textContent = conf.sites[index].name
-        + (state.profiles[index] ? ' — boundary layer' : ' — fetching…');
+        + (state.profiles[index] ? '' : ' — fetching…');
       box.appendChild(key);
     });
-    if (state.site !== null) {
-      var base = document.createElement('span');
-      base.innerHTML = '<i style="border-top-style:dashed"></i><span></span>';
-      base.querySelector('i').style.borderTopColor = ink('--ink-3');
-      base.querySelector('span').textContent =
-        'cloudbase at ' + conf.sites[state.site].name;
-      box.appendChild(base);
-    }
   }
 
-  // ---- the soundings, one per chosen takeoff ------------------------------------------
-  //
-  // Small multiples rather than one frame with everything on it. Three temperature traces
-  // and three dew points is six lines that cross each other, and the comparison table
-  // beside them already carries the numbers — what a reader wants from three soundings is
-  // the *shape* of each day-column, side by side, which is what small multiples are for.
-  //
-  // The probe height is deliberately shared. Point at 1 500 m on one and all three read
-  // 1 500 m, because "what is the air doing at the height I will be at, over each of
-  // these hills" is the question that made this page carry three of them.
-  function drawSoundings() {
-    var box = document.getElementById('met-soundings');
+  // One column per chosen takeoff: its name, its meteogram, its sounding. Small
+  // multiples, and the reason is the same for both charts — three temperature traces and
+  // three dew points on one frame is six crossing lines, and three sets of cloud shading
+  // is a grey smear. What compares across hills is on the strip above; what belongs to
+  // one hill is in that hill's column, under its name.
+  function drawColumns() {
+    var box = document.getElementById('met-columns');
     var wanted = chosen();
-    // Rebuilt only when the set changes: a canvas recreated on every hour step loses its
-    // backing store and its pointer handlers, and the slider steps a lot.
+    // Rebuilt only when the set changes: canvases recreated on every hour step lose
+    // their backing stores and their pointer handlers, and the slider steps a lot.
     var have = Array.prototype.map.call(box.children, function (cell) {
       return Number(cell.dataset.site);
     });
     if (have.join(',') !== wanted.join(',')) {
       box.textContent = '';
       wanted.forEach(function (index) {
-        var slot = slotOf(index);
         var cell = document.createElement('div');
-        cell.className = 'met-sounding-cell';
+        cell.className = 'met-col';
         cell.dataset.site = index;
-        cell.innerHTML = '<p class="met-sounding-name"><i></i><span></span>'
+        cell.innerHTML = '<p class="met-col-head"><i></i><span class="name"></span>'
           + '<span class="ground"></span></p>'
-          + '<canvas class="met-canvas" width="380" height="300"></canvas>';
-        cell.querySelector('i').style.background = seriesColour(slot);
-        cell.querySelector('.met-sounding-name span').textContent = conf.sites[index].name;
-        var canvas = cell.querySelector('canvas');
-        // The focused takeoff's canvas keeps the id the page has always used, so the
-        // pointer readout and everything written against it still address one known
-        // element rather than "whichever sounding happens to be first".
-        bindProbe(canvas);
+          + '<p class="met-col-rose"><span></span> <a rel="noreferrer">on PGE</a></p>'
+          + '<canvas class="met-canvas met-col-gram" width="380" height="230"></canvas>'
+          + '<canvas class="met-canvas met-col-sounding" width="380" height="300"></canvas>';
+        cell.querySelector('i').style.background = seriesColour(slotOf(index));
+        cell.querySelector('.name').textContent = conf.sites[index].name;
+        // Clicking a column focuses that takeoff, the same as its chip or its table row.
+        cell.querySelector('.name').onclick = function () { focus(index); };
+        // The wind rose and the source link are facts about *this* takeoff, and they
+        // used to sit in a header over the whole panel — which, with three takeoffs
+        // under it, said one hill's octants above three hills' charts.
+        var site = conf.sites[index];
+        var good = (site.winds || []).length
+          ? conf.octants.filter(function (point, i) { return site.winds[i] === 2; })
+          : null;
+        cell.querySelector('.met-col-rose span').textContent = good === null
+          ? 'no directions recorded, so this page will not judge it'
+          : (good.length ? 'works in ' + good.join(' ') : 'only marginal directions');
+        cell.querySelector('.met-col-rose a').href =
+          'https://www.paraglidingearth.com/index.php?site=' + site.id;
+        bindProbe(cell.querySelector('.met-col-sounding'));
         box.appendChild(cell);
       });
     }
     Array.prototype.forEach.call(box.children, function (cell) {
       var index = Number(cell.dataset.site);
-      var canvas = cell.querySelector('canvas');
-      cell.classList.toggle('is-focus', index === state.site);
-      canvas.id = index === state.site ? 'met-sounding' : '';
       var profile = state.profiles[index];
-      var ground = cell.querySelector('.ground');
-      ground.textContent = profile ? Math.round(profile.elevation) + ' m' : 'fetching…';
-      drawSounding(canvas, profile);
+      cell.classList.toggle('is-focus', index === state.site);
+      cell.querySelector('.ground').textContent =
+        profile ? Math.round(profile.elevation) + ' m' : 'fetching…';
+      var sounding = cell.querySelector('.met-col-sounding');
+      // The focused takeoff's sounding keeps the id the pointer readout has always
+      // addressed, so nothing has to hunt for "whichever chart happens to be first".
+      sounding.id = index === state.site ? 'met-sounding' : '';
+      drawGram(cell.querySelector('.met-col-gram'), profile, slotOf(index));
+      drawSounding(sounding, profile);
     });
+  }
+
+  function drawSoundings() {
+    Array.prototype.forEach.call(
+      document.querySelectorAll('.met-col'), function (cell) {
+        drawSounding(cell.querySelector('.met-col-sounding'),
+                     state.profiles[Number(cell.dataset.site)]);
+      });
   }
 
   function drawSounding(canvas, profile) {
@@ -1236,7 +1310,7 @@ SCRIPT = r"""
              + (here.t - here.td).toFixed(1)));
     }
     if (here.speed != null && here.dir != null) {
-      lines.push(Math.round(here.speed) + ' km/h from ' + compass(here.dir)
+      lines.push(here.speed.toFixed(1) + ' m/s from ' + compass(here.dir)
                  + ' (' + Math.round(here.dir) + '°)');
     }
     ctx.font = '11px ui-sans-serif, sans-serif';
@@ -1261,33 +1335,6 @@ SCRIPT = r"""
       ctx.fillText(line, boxX + 6, boxY + 5 + i * 13);
     });
     ctx.restore();
-  }
-
-  function drawFigures() {
-    var box = document.getElementById('met-figures');
-    box.innerHTML = '';
-    if (!state.profile) return;
-    var hourly = state.profile.hourly;
-    var at = indexFor(hourly.time, state.day, state.hour);
-    var ground = state.profile.elevation;
-    var base = cloudbase(hourly.temperature_2m[at], hourly.dew_point_2m[at], ground);
-    var blh = hourly.boundary_layer_height[at];
-    var pairs = [
-      ['temperature', Math.round(hourly.temperature_2m[at]) + ' °C'],
-      ['dew point', Math.round(hourly.dew_point_2m[at]) + ' °C'],
-      ['wind', Math.round(hourly.wind_speed_10m[at]) + ' km/h from '
-        + compass(hourly.wind_direction_10m[at])],
-      ['thermal top', blh == null ? '—' : Math.round(ground + blh) + ' m'],
-      ['cloudbase', base == null ? '—' : Math.round(base) + ' m'],
-      ['ground', Math.round(ground) + ' m']
-    ];
-    pairs.forEach(function (pair) {
-      var cell = document.createElement('div');
-      cell.innerHTML = '<span class="k"></span><span class="v"></span>';
-      cell.querySelector('.k').textContent = pair[0];
-      cell.querySelector('.v').textContent = pair[1];
-      box.appendChild(cell);
-    });
   }
 
   // ---- the flymet meteogram ------------------------------------------------------
@@ -1405,32 +1452,17 @@ SCRIPT = r"""
 
   function drawSite() {
     var panel = document.getElementById('met-panel');
-    if (state.site == null) {
-      panel.hidden = true;
+    var picked = chosen();
+    panel.hidden = !picked.length;
+    document.getElementById('met-sub').textContent = picked.length > 1
+      ? picked.length + ' takeoffs, the same hour and the same model'
+      : '';
+    if (!picked.length) {
       drawKeys();
       return;
     }
-    panel.hidden = false;
-    var site = conf.sites[state.site];
-    document.getElementById('met-name').textContent = site.name;
-    var good = (site.winds || []).length
-      ? conf.octants.filter(function (point, i) { return site.winds[i] === 2; })
-      : null;
-    var rose = good === null
-      ? 'no wind directions recorded, so this page will not judge it'
-      : (good.length ? 'works in ' + good.join(' ') : 'only marginal directions recorded');
-    document.getElementById('met-sub').textContent =
-      site.alt + ' m · ' + rose;
-    var links = document.getElementById('met-links');
-    links.innerHTML = '';
-    var a = document.createElement('a');
-    a.href = 'https://www.paraglidingearth.com/index.php?site=' + site.id;
-    a.rel = 'noreferrer';
-    a.textContent = 'This takeoff on ParaglidingEarth';
-    links.appendChild(a);
-    drawMeteogram();
-    drawSoundings();
-    drawFigures();
+    drawStrip();
+    drawColumns();
     drawFlymet();
     drawKeys();
   }
@@ -1564,6 +1596,10 @@ SCRIPT = r"""
   // about.
   window.__meteo = {
     state: state,
+    // The one judgement this page makes. Exposed so a test can drive *it* rather than a
+    // second copy of it written in Python — `docs/meteo.md` has been asking for that
+    // since the harness that makes it possible existed.
+    verdict: verdict,
     cappingLayers: cappingLayers,
     sampleProfile: sampleProfile,
     cloudbase: cloudbase,

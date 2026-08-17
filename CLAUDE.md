@@ -165,9 +165,12 @@ Both say so on screen when the fetch fails rather than drawing an empty frame.
 **The meteo page compares up to three takeoffs, and three is the palette's number.**
 The full list of 159 sits in a `<dialog>` — on the page it was 571 px of layout and
 **166 tab stops** before a keyboard user reached the forecast, which `docs/meteo-ux.md`
-measures before and after. What stays on the page is a chip per chosen takeoff, a
-comparison table at the chosen hour, one meteogram carrying every chosen takeoff's
-boundary layer, a sounding each beside it, and flymet's picture for each — the charts a
+measures before and after. Wind is in **m/s** throughout, asked of Open-Meteo as
+`wind_speed_unit=ms` so nothing converts anything, with the verdict gates converted
+exactly from the old km/h pair. What stays on the page is a chip per chosen takeoff, a
+comparison table at the chosen hour, a strip carrying every chosen takeoff's boundary
+layer *and nothing else*, a column per takeoff holding its own meteogram and sounding,
+and flymet's picture for each — the charts a
 pilot actually argues over, which the one-site-at-a-time page could only answer one hill
 at a time. The soundings are **small multiples with a shared probe height**: three
 temperature traces and three dew points on one frame is six crossing lines, but pointing
