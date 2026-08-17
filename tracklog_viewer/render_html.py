@@ -813,7 +813,7 @@ SCRIPT = """
       altMax = Math.max(altMax, Math.ceil(level.height / frame.altStep) * frame.altStep);
     });
 
-    function sx(kmh) { return frame.left + frame.plotW * kmh / speedMax; }
+    function sx(ms) { return frame.left + frame.plotW * ms / speedMax; }
     function sy(m) {
       return frame.top + frame.plotH * (1 - (m - altMin) / Math.max(altMax - altMin, 1));
     }
@@ -861,12 +861,12 @@ SCRIPT = """
         });
         grid.textContent = '';
         axes.textContent = '';
-        for (var kmh = 0; kmh <= speedMax; kmh += frame.speedStep) {
-          var gx = sx(kmh);
+        for (var ms = 0; ms <= speedMax; ms += frame.speedStep) {
+          var gx = sx(ms);
           grid.appendChild(make('line', { x1: gx.toFixed(1), y1: frame.top,
             x2: gx.toFixed(1), y2: frame.top + frame.plotH }));
           axes.appendChild(make('text', { x: gx.toFixed(1),
-            y: frame.top + frame.plotH + 17, 'class': 'axis-label axis-x' }, String(kmh)));
+            y: frame.top + frame.plotH + 17, 'class': 'axis-label axis-x' }, String(ms)));
         }
         for (var m = altMin; m <= altMax; m += frame.altStep) {
           var gy = sy(m);
@@ -886,8 +886,8 @@ SCRIPT = """
     inside.forEach(function (level) {
       var dot = make('circle', { cx: sx(level.speed).toFixed(1),
         cy: sy(level.height).toFixed(1), r: 2.5, 'class': 'model-dot' });
-      dot.appendChild(make('title', {}, 'model ' + Math.round(level.speed) +
-        ' km/h from ' + Math.round(level.direction) + '° at ' +
+      dot.appendChild(make('title', {}, 'model ' + level.speed.toFixed(1) +
+        ' m/s from ' + Math.round(level.direction) + '° at ' +
         Math.round(level.height) + ' m (' + level.pressure + ' hPa)'));
       group.appendChild(dot);
     });
@@ -967,11 +967,11 @@ SCRIPT = """
           tile('ceiling used', used === null ? '—' : used + '%',
                'you reached ' + Math.round(top) + ' m');
         // No 850 hPa wind in the answer is missing data, and a missing wind is not a calm
-        // day: the tile read "model wind 0 km/h from N", which is a specific and wrong
+        // day: the tile read "model wind 0 m/s from N", which is a specific and wrong
         // forecast rather than an absent one. An omitted tile says "not known"; a zero
         // says "still". They are the opposite claim on a windy day.
         if (m.wind > 0 && isFinite(m.windFrom)) {
-          html += tile('model wind', Math.round(m.wind) + ' km/h',
+          html += tile('model wind', m.wind.toFixed(1) + ' m/s',
                        'from ' + cardinal(m.windFrom) + ' at 850 hPa');
         }
         stats.innerHTML = html;
@@ -1671,7 +1671,7 @@ def _thermal_rows(analysis: Analysis, sample: list[int] | None = None,
         )
         width = 46 * max(segment.average_climb, 0) / max(best_climb, 0.1)
         wind = (
-            f"{segment.wind.kmh:.0f} <span class='dir'>{segment.wind.cardinal}</span>"
+            f"{segment.wind.speed:.1f} <span class='dir'>{segment.wind.cardinal}</span>"
             if segment.wind
             else "<span class='dir'>—</span>"
         )
@@ -1757,8 +1757,8 @@ def _wind_shear_note(analysis: Analysis) -> str:
     sounded.sort(key=lambda item: item[0])
     lower = sounded[: len(sounded) // 2]
     upper = sounded[-(len(sounded) // 2):]
-    low_speed = sum(w.kmh for _, w in lower) / len(lower)
-    high_speed = sum(w.kmh for _, w in upper) / len(upper)
+    low_speed = sum(w.speed for _, w in lower) / len(lower)
+    high_speed = sum(w.speed for _, w in upper) / len(upper)
     change = high_speed - low_speed
     if abs(change) < 3:
         return (
@@ -1968,7 +1968,7 @@ def _meteo_section(analysis: Analysis, meteo, uid: str = "") -> str:
         rows.append(
             f'<tr data-segment="{segment.start}"><td>{index}</td>'
             f"<td>{segment.start_time}</td><td>{height:.0f}</td>"
-            f"<td>{segment.wind.kmh:.0f}</td><td>{segment.wind.direction:.0f}°</td>"
+            f"<td>{segment.wind.speed:.1f}</td><td>{segment.wind.direction:.0f}°</td>"
             f"<td>{model[0]:.0f}</td><td>{model[1]:.0f}°</td>"
             f"<td>{delta:.0f}°</td></tr>"
         )
@@ -2301,7 +2301,7 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
         # apart. Without --meteo there is no ceiling to compare against, so the tile falls
         # back to the bare height rather than disappearing and leaving five tiles.
         _stat(*_ceiling_tile(analysis, meteo, peak_time, offset)),
-        _stat("wind", f"{analysis.wind.kmh:.0f}" if analysis.wind else "—", " km/h",
+        _stat("wind", f"{analysis.wind.speed:.1f}" if analysis.wind else "—", " m/s",
               f"from {analysis.wind.cardinal} · averaged over "
               f"{len([s for s in thermals if s.wind])} climbs" if analysis.wind else ""),
     ]
@@ -2762,6 +2762,13 @@ VIEW_STYLE = """
    or the browser's link colour — they sit in the same row as the view buttons and any
    difference reads as a mistake rather than as a distinction. */
 a.view-tab { text-decoration: none; display: inline-block; }
+/* Pushed to the far end of whichever strip it is in. Same shape as the one the other
+   three pages get from `common.STYLE`; the report does not include that sheet, because
+   its own tokens are richer and it has never used the site strip. */
+.theme-toggle { margin: 0 0 0 auto; align-self: center; border: 1px solid var(--rule);
+  background: var(--panel); color: var(--ink-2); border-radius: 999px; cursor: pointer;
+  width: 30px; height: 30px; padding: 0; line-height: 1; font-size: 14px; }
+.theme-toggle:hover { color: var(--ink); border-color: var(--rule-strong); }
 .view-tab:focus-visible { outline: 2px solid var(--climb); outline-offset: -2px; }
 """
 
@@ -2789,24 +2796,55 @@ def _view_nav(extras: "list[Extra]") -> str:
     report that has extras, which is the same report that is published there.
     """
     if not extras:
-        return ""
-    links = "".join(
-        f'<a class="view-tab" href="{where}">{label}</a>'
-        for key, label, where in common.PAGES
-        if key not in {"flights"} and not any(e.uid == key for e in extras)
-    )
-    buttons = [
-        '<button type="button" class="view-tab is-on" data-view-tab="flights" '
-        'aria-pressed="true">Flights</button>'
-    ]
-    buttons += [
+        # No other views, but the reader still gets the theme switch: it is furniture,
+        # not part of the view chooser, and a report built from one flight with no
+        # airspace is still a page somebody reads at night. It carries neither the id
+        # nor the role of the chooser, because `test_a_report_with_no_extras_has_no_view
+        # _switch` is right that a switch between one thing is noise — and a strip that
+        # merely *looks* like one is the same noise.
+        return ('<nav class="views page-tools" aria-label="Theme">'
+                f'{common.theme_button()}</nav>')
+
+    # **One order across the whole site**, and it is `common.PAGES`: what is the weather,
+    # where shall I go, what will I fly, what did I actually do. This strip used to list
+    # its buttons first and its links after, so the report read *Flights, Airspace,
+    # Meteo, Planner* while every other page read *Meteo, Planner, Airspace, Flights* —
+    # the same four things in two orders, which is the kind of difference a reader feels
+    # without being able to name.
+    #
+    # Whether an entry is a button or a link is an implementation detail of *this*
+    # document — the views it carries are shown and hidden here, the other tools are
+    # separate files — and the docstring above already says the reader should not have to
+    # know which is which. Now the order does not tell them either.
+    by_uid = {e.uid: e for e in extras}
+    items = []
+    for key, label, where in common.PAGES:
+        if key == "flights":
+            items.append(
+                '<button type="button" class="view-tab" data-view-tab="flights" '
+                f'aria-pressed="false">{label}</button>')
+        elif key in by_uid:
+            extra = by_uid.pop(key)
+            items.append(
+                f'<button type="button" class="view-tab" data-view-tab="{extra.uid}" '
+                f'aria-pressed="false">{charts.escape(extra.label)}</button>')
+        else:
+            items.append(f'<a class="view-tab" href="{where}">{label}</a>')
+    # An extra this site has no page for still gets a tab, after the ones it does.
+    items += [
         f'<button type="button" class="view-tab" data-view-tab="{e.uid}" '
         f'aria-pressed="false">{charts.escape(e.label)}</button>'
-        for e in extras
+        for e in by_uid.values()
     ]
+    # The flights view is the one the document opens on, wherever its tab now sits.
+    marked = "".join(items).replace(
+        '<button type="button" class="view-tab" data-view-tab="flights" '
+        'aria-pressed="false">',
+        '<button type="button" class="view-tab is-on" data-view-tab="flights" '
+        'aria-pressed="true">', 1)
     return (
         '<nav class="views" id="views" role="group" aria-label="Choose a view">'
-        f'{"".join(buttons)}{links}</nav>'
+        f'{marked}{common.theme_button()}</nav>'
     )
 
 
@@ -2826,6 +2864,7 @@ def _page(title: str, bodies: list[str], tabs: str = "", extras: "list[Extra]" =
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{charts.escape(title)}</title>
+<script>{common.THEME_BOOT}</script>
 <style>{_font_face()}{STYLE}{view3d.STYLE}{view3d_gl.STYLE}{quicklook.STYLE}{charts_client.STYLE}
 {VIEW_STYLE if extras else ""}{"".join(e.style for e in extras)}</style>
 <div class="wrap">
@@ -2839,6 +2878,7 @@ def _page(title: str, bodies: list[str], tabs: str = "", extras: "list[Extra]" =
 {charts_client.SCRIPT}
 {SCRIPT}</script>
 <script>{quicklook.SCRIPT}</script>
+<script>{common.THEME_SCRIPT}</script>
 {"".join(f"<script>{e.script}</script>" for e in extras)}
 {f"<script>{VIEW_SCRIPT}</script>" if extras else ""}
 """

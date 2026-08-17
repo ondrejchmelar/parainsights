@@ -112,9 +112,14 @@ STYLE = """
 
 /* The picker, in a dialog: Escape closes it, the backdrop closes it, and focus stays
    inside it — all of which a hand-rolled overlay would have to reimplement worse. */
+/* One step off the page rather than the same colour as it. `--paper` *is* the page, so
+   in the dark theme the dialog and the document behind it were the same value and a 1 px
+   rule was the whole of the separation — with a backdrop dim that has almost nothing to
+   dim. A surface and a shadow do the work in both themes. */
 .met-modal { width:min(560px, 94vw); max-height:82vh; padding:0; border:1px solid
-  var(--rule); border-radius:6px; background:var(--paper); color:var(--ink); }
-.met-modal::backdrop { background:rgba(0,0,0,0.45); }
+  var(--rule); border-radius:6px; background:var(--panel); color:var(--ink);
+  box-shadow:0 18px 44px rgba(0,0,0,0.45); }
+.met-modal::backdrop { background:rgba(0,0,0,0.55); }
 .met-modal-head { display:flex; gap:10px; align-items:center; padding:12px 14px;
   border-bottom:1px solid var(--rule); }
 .met-modal-head h2 { margin:0; font-size:16px; flex:none; }
@@ -126,9 +131,10 @@ STYLE = """
 .met-list { max-height:56vh; overflow-y:auto; }
 .met-site { display:grid; grid-template-columns: auto 1fr auto; gap:2px 10px;
   width:100%; text-align:left; border:0; border-bottom:1px solid var(--rule);
-  border-radius:0; padding:8px 11px; background:var(--paper); cursor:pointer; }
+  border-radius:0; padding:8px 11px; background:transparent; cursor:pointer;
+  color:var(--ink); }
 .met-site:last-child { border-bottom:0; }
-.met-site:hover { background:var(--panel); }
+.met-site:hover { background:var(--paper); }
 .met-site.is-on { background:var(--panel-2); }
 .met-site .tick { grid-row:1 / span 2; align-self:center; width:16px; text-align:center;
   color:var(--ink-3); }
@@ -171,6 +177,13 @@ STYLE = """
 .met-col.is-focus .met-col-head .name { text-decoration:underline;
   text-underline-offset:3px; }
 .met-canvas { width:100%; display:block; background:var(--panel); border-radius:3px; }
+/* The sounding reads a *height* from a vertical drag, which is the same gesture the page
+   scrolls with — so the browser scrolled the page and the chart read nothing. This hands
+   the gesture to the chart, and it is the same `touch-action: none` the 3D view and the
+   airspace map already use for theirs. The cost is real and bounded: a swipe that starts
+   on a sounding no longer scrolls. The meteogram directly above each one is untouched,
+   so every column keeps a full-width strip to scroll from. */
+.met-col-sounding { touch-action: none; }
 /* The hour is in the head, above everything, because it applies to everything: the
    ranking, the comparison and both charts all answer "at what time". It used to sit
    under the sounding, where it read as a control for that one chart. */
@@ -312,8 +325,12 @@ def body(uid: str = "meteo") -> str:
       estimated cloudbase; a shaded band is a layer the thermals stop at
       (<em>zadržná vrstva</em> — under {CAP_LAPSE:.0f} °C/km, red where the air warms with
       height), read between the model's pressure levels and so no finer than they are.
-      Point at a sounding — or drag a finger up it — and <strong>all of them read at that
-      height</strong>, which is the question you are asking when you have three open.</p>
+      A day with nothing stable under 4 km says <em>no lid below 4 km</em> rather than
+      drawing nothing, because a blank chart and a chart that checked look identical.
+      Point at a sounding — or
+      drag a finger up it, which reads the chart rather than scrolling the page — and
+      <strong>all of them read at that height</strong>, which is the question you are
+      asking when you have three open.</p>
 
     <!-- Foldable, and open by default. It is a second opinion worth having in front of
          the reader — but it is 700 px of someone else's chart under 300 px of ours, and
@@ -759,8 +776,15 @@ SCRIPT = r"""
       // takeoff, which is a comparison page showing one of something it has three of.
       row.querySelector('.surface').textContent = m.temperature == null ? '…'
         : Math.round(m.temperature) + ' / ' + Math.round(m.dew) + ' °C';
+      // A lid whose base *is* the ground is not a height, it is a state: the column is
+      // stable from the surface up, and printing "402 m" beside a ground of 402 m reads
+      // as a coincidence rather than as the thing it is. `cappingLayers` clamps the base
+      // to the ground, so this is the common morning case and it was the one number on
+      // the table a reader had to do arithmetic to understand.
       row.querySelector('.lid').textContent = m.lid
-        ? Math.round(m.lid.base) + ' m' + (m.lid.inversion ? ' inv' : '')
+        ? ((m.ground != null && m.lid.base <= m.ground + 1)
+             ? 'from the ground' : Math.round(m.lid.base) + ' m')
+          + (m.lid.inversion ? ' inv' : '')
         : (m.top == null ? '…' : 'none');
       row.querySelector('.ground').textContent =
         m.ground == null ? conf.sites[m.index].alt + ' m' : Math.round(m.ground) + ' m';
@@ -1166,6 +1190,21 @@ SCRIPT = r"""
       });
   }
 
+  // A label on a pad. The thermal top and the cloudbase land within a few metres of
+  // each other on a lot of days, and each was then read against the other's line.
+  function padded(ctx, text, x, y, colour, align) {
+    ctx.font = '10px ui-sans-serif, sans-serif';
+    ctx.textAlign = align;
+    ctx.textBaseline = 'bottom';
+    var width = ctx.measureText(text).width;
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = ink('--panel');
+    ctx.fillRect(align === 'right' ? x - width - 3 : x - 3, y - 10, width + 6, 12);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = colour;
+    ctx.fillText(text, x, y);
+  }
+
   function drawSounding(canvas, profile) {
     var frame = fit(canvas);
     if (!frame || !profile) return;
@@ -1225,21 +1264,58 @@ SCRIPT = r"""
       ctx.restore();
     });
 
+    // **An absent lid is a statement, not a silence.** A day with nothing stable under
+    // 4 km draws no band at all, which looks exactly like a chart that did not check —
+    // and "no finding may assert something the run did not check" cuts both ways. So the
+    // chart says which it is.
+    if (!caps.length) {
+      ctx.save();
+      ctx.fillStyle = ink('--ink-3');
+      ctx.font = '10px ui-sans-serif, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText('no lid below ' + (top_m / 1000) + ' km', left + 4, top + 2);
+      ctx.restore();
+    }
+
+    // The thermal top: the model's own answer for where the day stops, which is the
+    // number a pilot came to this chart for. It was on the meteogram and in the table
+    // and not here — so on a day with no capping layer to shade, the one chart about
+    // the shape of the column said nothing about the top of it.
+    var blh = hourly.boundary_layer_height[at];
+    if (blh != null && ground + blh > ground && ground + blh < top_m) {
+      var thermalTop = ground + blh;
+      // **Neutral, not a third hue.** Two colours on this chart are *measurements* —
+      // red temperature, blue dew point — and everything else on it is a construction:
+      // the adiabat, the cloudbase, this. Drawing the thermal top in #eb6834 put it
+      // ΔE 11.8 from the temperature trace on the skill's validator, under the 15 floor
+      // for normal vision in both themes: two orange-red lines nobody can separate. The
+      // constructions are told apart by their dash pattern and their label, which is
+      // what the meteogram's cloudbase already does.
+      ctx.save();
+      ctx.strokeStyle = ink('--ink-2');
+      ctx.setLineDash([6, 3]);
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(left, y(thermalTop)); ctx.lineTo(W - right, y(thermalTop));
+      ctx.stroke();
+      ctx.setLineDash([]);
+      padded(ctx, 'thermal top', left + 4, y(thermalTop) - 2, ink('--ink-2'), 'left');
+      ctx.restore();
+    }
+
     // The cloudbase, drawn where the figures below already print it.
     var base = cloudbase(hourly.temperature_2m[at], hourly.dew_point_2m[at], ground);
     if (base != null && base > ground && base < top_m) {
       ctx.save();
-      ctx.strokeStyle = '#2f6fb3';
+      ctx.strokeStyle = ink('--ink-3');
       ctx.setLineDash([2, 3]);
       ctx.lineWidth = 1.4;
       ctx.beginPath();
       ctx.moveTo(left, y(base)); ctx.lineTo(W - right, y(base));
       ctx.stroke();
       ctx.setLineDash([]);
-      ctx.fillStyle = '#2f6fb3';
-      ctx.textAlign = 'right';
-      ctx.textBaseline = 'bottom';
-      ctx.fillText('cloudbase', W - right - 3, y(base) - 2);
+      padded(ctx, 'cloudbase', W - right - 3, y(base) - 2, ink('--ink-3'), 'right');
       ctx.restore();
     }
 
@@ -1276,6 +1352,17 @@ SCRIPT = r"""
     }
     trace(levelSeries(hourly, 'temperature'), false, '#c2410c');
     trace(levelSeries(hourly, 'dew_point'), true, '#2f6fb3');
+
+    // What this chart ended up saying, for a test to assert on rather than a screenshot
+    // failing to. `view3d.rose()` is the same idea and exists for the same reason: a
+    // wrong arrow is still an arrow, and a missing lid looks exactly like a chart that
+    // did not look for one.
+    canvas.__drawn = {
+      caps: caps.length,
+      thermalTop: blh == null ? null : Math.round(ground + blh),
+      cloudbase: base == null ? null : Math.round(base),
+      ground: Math.round(ground)
+    };
 
     // ---- what it says at one height --------------------------------------------------
     //
@@ -1519,9 +1606,23 @@ SCRIPT = r"""
     canvas.addEventListener('pointerdown', function (event) {
       if (event.pointerType !== 'touch') return;
       // Held rather than tapped: a finger dragged up the chart reads it off, and lifting
-      // it puts the readout away.
-      canvas.setPointerCapture(event.pointerId);
+      // it puts the readout away. `preventDefault` stops the long-press menu and the
+      // text-selection gesture; the page not scrolling underneath is `touch-action:
+      // none` in the stylesheet, which is the only thing that actually stops it — a
+      // `preventDefault` on a move the browser has already begun scrolling with is too
+      // late by then.
+      event.preventDefault();
+      // **Read first, capture second, and never let the capture stop the read.**
+      // `setPointerCapture` throws on a pointer the browser does not have live — which
+      // is any synthetic one, and also a real one that has already been released — and
+      // it used to run first, so the throw took the reading with it. Capture is what
+      // keeps the *rest of the drag* coming to this canvas; the first touch does not
+      // need it, and a chart that shows nothing when a finger lands on it is a chart
+      // that looks broken.
       read(event);
+      try {
+        canvas.setPointerCapture(event.pointerId);
+      } catch (error) { /* the drag still reads; it just is not captured */ }
     });
     canvas.addEventListener('pointerup', clear);
     canvas.addEventListener('pointercancel', clear);

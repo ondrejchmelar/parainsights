@@ -160,7 +160,7 @@ def data(analysis: Analysis, terrain, *, tolerance: float | None = None,
         # *from*, the way every pilot and every forecast states it; the arrow has to
         # point the other way, and that inversion is done once, in the drawing code.
         "wind": ({
-            "kmh": round(analysis.wind.kmh, 1),
+            "ms": round(analysis.wind.speed, 1),
             "from": round(analysis.wind.direction, 1),
             "cardinal": analysis.wind.cardinal,
         } if analysis.wind else None),
@@ -2134,7 +2134,7 @@ function initView3d(root, cursorTrack) {
       north: bearingToScreen(0),
       sun: sunNow ? { az: sunNow.az, el: sunNow.el, screen: bearingToScreen(sunNow.az),
                       minute: sunMinute } : null,
-      wind: wind ? { from: wind.from, kmh: wind.kmh,
+      wind: wind ? { from: wind.from, ms: wind.ms,
                      screen: bearingToScreen(wind.from + 180) } : null
     };
   }
@@ -2156,7 +2156,7 @@ function initView3d(root, cursorTrack) {
                  (sunNow.el > 0 ? Math.round(sunNow.el) + '\\u00b0 ' + compass(sunNow.az)
                                 : 'below the horizon'));
     }
-    if (wind) lines.push('Wind ' + wind.kmh.toFixed(0) + ' km/h from ' + wind.cardinal);
+    if (wind) lines.push('Wind ' + wind.ms.toFixed(1) + ' m/s from ' + wind.cardinal);
     // The labels go under the rose, so the *block* has to fit — placing the circle first
     // and the text afterwards clipped the second line off the bottom of a 21:9 panel.
     var lineHeight = 13 * scale;
@@ -2217,7 +2217,7 @@ function initView3d(root, cursorTrack) {
     // limestone face or a snowfield.
     // Right-aligned to the canvas edge, not left-aligned from the circle. With the rose
     // in the top *left* the labels could run rightwards into open canvas; against the
-    // right edge the same code ran them off it, and "Wind 6 km/h from WSW" lost its last
+    // right edge the same code ran them off it, and "Wind 1.7 m/s from WSW" lost its last
     // two words. The anchor has to follow the corner the rose moved to.
     ctx.textAlign = 'right';
     ctx.lineJoin = 'round';
@@ -2526,9 +2526,22 @@ function initView3d(root, cursorTrack) {
     draw();
   }, { passive: false });
 
+  // Where a zoom with no pointer behind it should anchor: the point the scene is fitted
+  // around, **not** the middle of the canvas.
+  //
+  // `refit` centres the scene on (W/2, 0.58H) — the sky above a flight is bigger than the
+  // ground below it — and the buttons zoomed about (W/2, H/2) instead. Everything except
+  // that one pixel row then slid on every press: measured at 13 px down per zoom-in on a
+  // 549 px canvas, in the same direction every time, so five presses walked what you were
+  // looking at 60 px down the panel. That is "the zoom drifts", and it accumulates, which
+  // is why it reads as a fault rather than as a choice. Anchoring on the fit makes a
+  // button press a pure magnification: nothing translates.
   function box() {
     var r = canvas.getBoundingClientRect();
-    return { cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
+    return {
+      cx: r.left + anchorX() / W * r.width,
+      cy: r.top + anchorY() / H * r.height
+    };
   }
 
   // ---- the sun ---------------------------------------------------------------------

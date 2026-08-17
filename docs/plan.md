@@ -350,6 +350,19 @@ a straight climb drifts with the glider, not with the air, so leaving it in misl
 both. On `20260728XCTOCH10.igc` this moves the flight wind from 11.6 km/h SE-contaminated
 to 14.0 km/h from W, agreeing with all 11 circled climbs.
 
+## Units: m/s for wind, km/h for speed
+
+Wind is metres per second in every place it is displayed or stored, which is what a pilot
+says out loud; ground speed and cross-country speed stay km/h, which is also what a pilot
+says out loud. The measurements recorded elsewhere in this document predate the change
+and are left in the unit they were taken in — they are notes on what was measured, not
+labels on a screen.
+
+`Wind.speed` was always m/s; the conversions were at the edges, and one of them was
+missing: `airmass.field` mixed `meteo.wind_at()` in km/h into a field built in m/s, so a
+flight with no circled climb got a modelled wind 3.6× too strong. `meteo.py` now asks
+Open-Meteo for `wind_speed_unit=ms` and there is no conversion left anywhere to forget.
+
 ## The profile view: distance, not projection
 
 The hero chart plots altitude against **distance flown**, with a toggle to **distance

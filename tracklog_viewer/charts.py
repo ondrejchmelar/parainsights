@@ -32,7 +32,7 @@ CLIMB_RAMP = [
 # `data-wind-frame` and applied again in the browser when the page finishes the chart
 # with a profile fetched at view time — two copies of `250` in two languages is exactly
 # the drift `quicklook.constants()` exists to prevent.
-WIND_SPEED_STEP = 5      # km/h between gridlines, and what the speed axis rounds up to
+WIND_SPEED_STEP = 1      # m/s between gridlines, and what the speed axis rounds up to
 WIND_ALT_STEP = 250      # m between gridlines, and what the height axis rounds to
 WIND_MODEL_BAND = 400    # m above and below the climbs
 
@@ -587,7 +587,9 @@ def wind_profile(analysis: Analysis, *, width: int = 620, height: int = 350, met
     plot_w = width - left - right
     plot_h = height - top - bottom
 
-    speeds = [s.wind.kmh for s in thermals]
+    # Metres per second, which is what a pilot says out loud and what `Wind.speed`
+    # already holds — `.kmh` was a display conversion and the last one on this page.
+    speeds = [s.wind.speed for s in thermals]
     altitudes = [(s.start_altitude + s.finish_altitude) / 2 for s in thermals]
     model_levels = []
     if meteo is not None:
@@ -600,7 +602,7 @@ def wind_profile(analysis: Analysis, *, width: int = 620, height: int = 350, met
     speed_max = max(
         math.ceil(max(speeds + [level.wind_speed for level in model_levels])
                   / WIND_SPEED_STEP) * WIND_SPEED_STEP,
-        2 * WIND_SPEED_STEP,
+        4 * WIND_SPEED_STEP,
     )
     heights = altitudes + [level.height for level in model_levels]
     alt_min = math.floor(min(heights) / WIND_ALT_STEP) * WIND_ALT_STEP
@@ -636,7 +638,7 @@ def wind_profile(analysis: Analysis, *, width: int = 620, height: int = 350, met
         path = " ".join(f"{sx(l.wind_speed):.1f},{sy(l.height):.1f}" for l in model_levels)
         dots = "".join(
             f'<circle cx="{sx(l.wind_speed):.1f}" cy="{sy(l.height):.1f}" r="2.5" '
-            f'class="model-dot"><title>model {l.wind_speed:.0f} km/h from '
+            f'class="model-dot"><title>model {l.wind_speed:.1f} m/s from '
             f'{l.wind_direction:.0f}° at {l.height:.0f} m ({l.pressure} hPa)</title></circle>'
             for l in model_levels
         )
@@ -680,7 +682,7 @@ def wind_profile(analysis: Analysis, *, width: int = 620, height: int = 350, met
             f'{numbers.get(segment.start, "")}</text>'
             f"{time_label}"
             f'<title>climb {numbers.get(segment.start, "")} at '
-            f'{escape(segment.start_time)} — {speed:.0f} km/h from '
+            f'{escape(segment.start_time)} — {speed:.1f} m/s from '
             f'{escape(segment.wind.cardinal)} at {altitude:.0f} m</title>'
             f"</g>"
         )
@@ -704,7 +706,7 @@ def wind_profile(analysis: Analysis, *, width: int = 620, height: int = 350, met
   <g class="grid">{"".join(grid)}</g>
   {model}
   <g class="axes">{"".join(labels)}
-    <text x="{left + plot_w / 2:.1f}" y="{height - 5}" class="axis-title">wind km/h</text>
+    <text x="{left + plot_w / 2:.1f}" y="{height - 5}" class="axis-title">wind m/s</text>
     <text x="{12}" y="{top + plot_h / 2:.1f}" class="axis-title"
           transform="rotate(-90 12 {top + plot_h / 2:.1f})">altitude m</text>
   </g>

@@ -29,6 +29,11 @@ def entry(date, **fields):
     return payload
 
 
+# Deliberately the *old* key above: every archive on a pilot's disk was written before
+# the wind became m/s, and `load` converting them on the way in is the whole reason
+# `FORMAT` was not bumped — a bump means "this file cannot be understood", and it can.
+
+
 def archive(tmp_path, flights):
     directory = tmp_path / "arch"
     directory.mkdir()
@@ -112,7 +117,7 @@ class TestStorage:
             climbs=5, mean_climb=1.1, best_climb=2.2, total_gain=1200,
             max_altitude=2400, track_km=40.0, scored_km=30.0, glide_ld=8.0,
             weak_climb_share=0.3, centring_ratio=0.9, day_slope=-0.05,
-            detour_ratio=1.3, ceiling_used=0.75, wind_kmh=9.0, sample_interval=1.0,
+            detour_ratio=1.3, ceiling_used=0.75, wind_ms=2.5, sample_interval=1.0,
         )
         baseline.save(entry_, directory)
         held = baseline.load(directory)
@@ -128,7 +133,7 @@ class TestStorage:
             climbs=5, mean_climb=1.1, best_climb=2.2, total_gain=1200,
             max_altitude=2400, track_km=40.0, scored_km=30.0, glide_ld=8.0,
             weak_climb_share=0.3, centring_ratio=0.9, day_slope=-0.05,
-            detour_ratio=1.3, ceiling_used=0.75, wind_kmh=9.0, sample_interval=1.0,
+            detour_ratio=1.3, ceiling_used=0.75, wind_ms=2.5, sample_interval=1.0,
         )
         baseline.save(entry_, directory)
         baseline.save(entry_, directory)
@@ -179,10 +184,42 @@ class TestStorage:
                     total_gain=1200, max_altitude=2400, track_km=40.0, scored_km=30.0,
                     glide_ld=8.0, weak_climb_share=0.3, centring_ratio=0.9,
                     day_slope=-0.05, detour_ratio=1.3, ceiling_used=0.75,
-                    wind_kmh=9.0, sample_interval=1.0,
+                    wind_ms=2.5, sample_interval=1.0,
                 ),
                 directory,
             )
         held = baseline.load(directory)
         assert len(held) == 2, "the second flight of the day overwrote the first"
         assert {f["mean_climb"] for f in held} == {1.0, 1.8}
+
+
+class TestAnArchiveWrittenInTheOldUnit:
+    """`wind_kmh` became `wind_ms` when every wind on the site did. The files on a
+    pilot's disk did not, and there is no reason they should: the key held the same
+    measurement in another unit, so `load` converts it and `FORMAT` stays put. A format
+    bump says "a reader cannot understand this file", which would have been false — and
+    would have thrown away the history the archive exists to accumulate.
+    """
+
+    def test_an_old_file_is_read_in_the_new_unit(self, tmp_path):
+        folder = archive(tmp_path, [entry("2026-07-0%d" % day) for day in range(1, 7)])
+        flights = baseline.load(folder)
+        assert flights, "the fixture wrote nothing"
+        for flight in flights:
+            assert "wind_kmh" not in flight
+            # 10 km/h is 2.8 m/s.
+            assert flight["wind_ms"] == pytest.approx(2.8, abs=0.05)
+
+    def test_a_new_file_is_left_alone(self):
+        assert baseline._in_metres_per_second({"wind_ms": 4.0}) == {"wind_ms": 4.0}
+
+    def test_no_wind_stays_no_wind(self):
+        """A flight with no circled climb has no wind estimate, and `None / 3.6` is a
+        `TypeError` rather than a number."""
+        assert baseline._in_metres_per_second({"wind_kmh": None})["wind_ms"] is None
+
+    def test_a_baseline_can_still_be_built_from_old_files(self, tmp_path):
+        folder = archive(tmp_path, [entry("2026-07-0%d" % day) for day in range(1, 7)])
+        held = baseline.build(folder)
+        assert held.usable
+        assert held.median("wind_ms") == pytest.approx(2.8, abs=0.05)

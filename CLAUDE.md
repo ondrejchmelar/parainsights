@@ -294,6 +294,21 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   warning next to its numbers.
 - **Wind comes from circle drift** and is only trusted from climbs actually circled in
   one direction for ≥2 turns. A tow drifts with the glider, not the air.
+- **Wind is metres per second, everywhere it is shown, and everywhere it is stored.**
+  `Wind.speed` always was m/s and `.kmh` was a display conversion applied in a dozen
+  places; the report, the KMZ, the 3D overlay, the console, the wind chart's axis and the
+  in-page analysis all print m/s now, and `meteo.py` asks Open-Meteo for
+  `wind_speed_unit=ms` so the model arrives in it too. **Ground speed stays km/h** — a
+  pilot says "35 km/h" of a glide and "5 m/s" of the wind, and the glide table's speed
+  column is unchanged.
+  This closed a real bug rather than only changing a label. `airmass.field` built its
+  vectors from `Wind.speed` (m/s) and then mixed in `meteo.wind_at()` (km/h) as the
+  fallback for a flight with no circled climb — a modelled wind **3.6× too strong**, and
+  a corrected glide ratio to match, on exactly the flights that had nothing better. One
+  unit at rest is what makes that unforgettable: there is no conversion left to forget.
+  The archive migrates on read (`baseline._in_metres_per_second`) rather than bumping
+  `FORMAT`: the old key held the same measurement in another unit, and a format bump
+  means "this file cannot be understood", which is not true of it.
 - **A thermal is the circling, not the run-in to it — and "circling" means *sustained*
   turning.** Wind is a straight-line fit to the drift, so any straight flight inside the
   phase is measured as if it were moving air. Two faults, one cause, both from the old
@@ -624,6 +639,20 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   `dyaw` and never its sign. Dragging, by contrast, walks the camera (Google Earth's
   model, which pilots know), so the ground swings the other way — that is not a bug.
   Both senses are pinned by tests that dispatch real `PointerEvent`s.
+- **A zoom with no pointer behind it anchors on the fit, not on the middle of the
+  canvas.** The wheel anchors on the pointer and always did; the buttons and the `+`/`-`
+  keys have no pointer, and they zoomed about `(W/2, H/2)` while `refit` centres the
+  scene on `(W/2, 0.58H)` — the sky above a flight needs more room than the ground below
+  it. Every point except that one pixel row therefore translated on each press, always
+  the same way: **13 px per zoom-in on a 549 px canvas**, so five presses walked what the
+  reader was looking at 60 px down the panel. It accumulates, which is why it reads as a
+  fault rather than as a choice. `box()` returns the anchor's client position now, and
+  `tests/test_view3d_gestures.py` holds a button zoom to a *pure magnification*: every
+  point lands on `anchor + (before − anchor) × ratio`, measured at 1, 5 and 10 presses
+  and at three world points, worst error 0 px. Predicting it that way needs no inverse
+  projection, so the test measures the zoom rather than the probe — the first attempt
+  measured `groundUnder`'s own 7 px of sampling error being magnified and looked like a
+  drift that was not there.
 - **Zoom anchoring is measured from the fit's anchor, not the canvas corner.** A point's
   screen position is `anchor + world·scale·zoom + pan`, and `refit()` puts the anchor at
   `(W/2, 0.58H)`. Dropping that term biases every zoom by `anchor·(ratio−1)`, which reads
@@ -730,6 +759,27 @@ The numbers are checkable, so check them:
   costs were measured over the DevTools protocol instead and written into `docs/plan.md`.
 - **Don't pipe a command whose exit code you care about** — `cmd | tail` reports tail's
   status, which once hid a `NameError` for two runs.
+
+**One order across the site, and one theme switch.** `parainsights_common.PAGES` is the
+order — meteo, planner, airspace, flights, which is the order a day happens in — and the
+report's own view strip follows it too; it used to list its in-document views first and
+its links after, so the report read *Flights, Airspace, Meteo, Planner* while every other
+page read the other way round. Whether an entry is a button or a link is an
+implementation detail of one document, and the reader should not be able to tell from the
+order either.
+The **theme toggle** lives in that strip on every page. `common.TOKENS` holds the colours
+(three pages carried identical copies), `common.THEME_BOOT` applies the stored choice in
+the `<head>` — after the first paint it is a white flash on a dark page, every time —
+and `common.THEME_SCRIPT` flips `data-theme`, remembers it, and asks the canvases to
+redraw, because a canvas holds the tokens it was painted with. **`window.__view3dAll` is
+an object keyed by canvas id, not an array** — `render_html` registers and deletes
+handles by id so a removed flight takes its DEM and its stitched image with it — and an
+`Array.forEach` on it throws. That throw taught something worth keeping: *a listener's
+exception never reaches the `click()` that dispatched it*, so the button looked like it
+worked, the theme changed, and only the 3D views quietly kept the old sky. A probe that
+does not install a `window.onerror` collector cannot see it, and a report built with
+`fetch_tiles=False` has no handles registered to fail on. Two states, not three:
+"follow the system" is a preference a reader has already expressed in their system.
 
 ## Design system
 

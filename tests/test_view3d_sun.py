@@ -33,7 +33,7 @@ SUN = {
     "rise": 180,
     "set": 1200,
 }
-WIND = {"kmh": 18.0, "from": 180.0, "cardinal": "S"}
+WIND = {"ms": 5.0, "from": 180.0, "cardinal": "S"}
 
 # A cursor track over the fixture's terrain, carrying the minute of each sample — which
 # is the whole mechanism: the hover names a moment, and the moment lights the ground.

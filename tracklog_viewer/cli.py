@@ -365,7 +365,7 @@ def _one(source: str, args, index: int = 0) -> dict:
         )
     )
     if analysis.wind:
-        print(f"  wind {analysis.wind.kmh:.0f} km/h from {analysis.wind.cardinal}")
+        print(f"  wind {analysis.wind.speed:.1f} m/s from {analysis.wind.cardinal}")
     if weather:
         print(
             f"  weather {weather.valid_at}: {weather.surface_temperature:.0f}°C, "

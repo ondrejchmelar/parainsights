@@ -886,3 +886,90 @@ def test_wind_is_metres_per_second_everywhere_it_is_printed():
     assert "m/s" in answer["list"], "the picker still ranks in another unit"
     assert "m/s" in answer["table"]
     assert "km/h" not in answer["list"] + answer["table"]
+
+
+def test_the_sounding_owns_the_vertical_gesture():
+    """A drag up the sounding reads a height; a drag up the page scrolls it. They are the
+    same gesture, so the browser scrolled and the chart read nothing — the one bug a
+    caption saying "drag a finger up it" cannot survive.
+
+    `touch-action: none` is what actually stops it: a `preventDefault` on a move the
+    browser has already begun scrolling with is too late. Same declaration the 3D view
+    and the airspace map use for their gestures. Deliberately *not* on the meteogram
+    above it, so every column keeps a full-width strip to scroll the page from.
+    """
+    style = render_html.STYLE
+    assert ".met-col-sounding { touch-action: none; }" in style
+    assert ".met-col-gram { touch-action" not in style
+
+
+@needs_chrome
+def test_a_touch_on_the_sounding_is_taken_by_the_chart():
+    answer = _probe_page("""
+    var m = window.__meteo;
+    var free = null;
+    for (var i = 0; i < 8; i++) if (m.chosen().indexOf(i) < 0) { free = i; break; }
+    m.add(free);
+    var canvas = document.getElementById('met-sounding');
+    var box = canvas.getBoundingClientRect();
+    var down = new PointerEvent('pointerdown', {
+      clientX: box.left + box.width / 2, clientY: box.top + box.height / 2,
+      bubbles: true, cancelable: true, pointerType: 'touch', pointerId: 7, buttons: 1 });
+    canvas.dispatchEvent(down);
+    return { prevented: down.defaultPrevented, probe: m.state.probe,
+             action: getComputedStyle(canvas).touchAction };
+    """)
+    assert answer["prevented"] is True, "the browser keeps its own gesture"
+    assert answer["action"] == "none"
+    assert answer["probe"] is not None, "the touch read no height"
+
+
+@needs_chrome
+class TestTheSoundingSaysWhereTheDayStops:
+    """"The *zadržná vrstva* is not visible" — and on a day with nothing stable under
+    4 km it was not, because there was nothing to shade and the chart said so by drawing
+    nothing at all. A blank chart and a chart that checked look identical, which is the
+    rule this repository already applies to findings.
+    """
+
+    def test_a_capping_layer_is_shaded_and_counted(self):
+        answer = _probe_page("""
+        var canvas = document.getElementById('met-sounding');
+        return canvas.__drawn;
+        """)
+        # The fixture puts an inversion between 990 m and 1 460 m and nothing else.
+        assert answer["caps"] == 1
+
+    def test_a_day_with_no_lid_still_says_something(self):
+        answer = _probe_page("""
+        var m = window.__meteo;
+        var hourly = m.state.profile.hourly;
+        // The fixture's inversion straightened out: one 7 °C/km line from the surface,
+        // so there is nothing anywhere for the rule to find.
+        %s.forEach(function (level) {
+          var z = hourly['geopotential_height_' + level + 'hPa'];
+          hourly['temperature_' + level + 'hPa'] = z.map(function (height) {
+            return 26 - 7 * (height - 400) / 1000;
+          });
+        });
+        m.draw();
+        var canvas = document.getElementById('met-sounding');
+        return canvas.__drawn;
+        """ % json.dumps(list(render_html.LEVELS)))
+        assert answer["caps"] == 0, "the fixture still has a lid in it"
+        assert answer["thermalTop"] is not None, (
+            "no lid and no thermal top: the chart about the shape of the column now says "
+            "nothing at all about where the day stops")
+        assert answer["thermalTop"] > answer["ground"]
+
+    def test_the_thermal_top_is_the_models_own_number(self):
+        answer = _probe_page("""
+        var m = window.__meteo;
+        var canvas = document.getElementById('met-sounding');
+        var hourly = m.state.profile.hourly;
+        var at = m.at();
+        return { drawn: canvas.__drawn.thermalTop,
+                 wanted: Math.round(m.state.profile.elevation
+                                    + hourly.boundary_layer_height[at]) };
+        """)
+        assert answer["drawn"] == answer["wanted"]

@@ -53,7 +53,7 @@ class Level:
     height: float  # metres above sea level
     temperature: float  # °C
     dew_point: float  # °C
-    wind_speed: float  # km/h
+    wind_speed: float  # m/s
     wind_direction: float  # degrees, the direction it blows FROM
 
 
@@ -112,7 +112,7 @@ class Meteo:
         return None
 
     def wind_at(self, height: float) -> tuple[float, float] | None:
-        """Interpolate the model wind to an altitude: (km/h, degrees from)."""
+        """Interpolate the model wind to an altitude: (m/s, degrees from)."""
         levels = [level for level in self.levels if level.height is not None]
         if not levels:
             return None
@@ -162,7 +162,13 @@ def fetch(lat: float, lon: float, when: dt.datetime, *, use_cache: bool = True) 
         f"{field}_{level}hPa" for level in PRESSURE_LEVELS for field in LEVEL_FIELDS
     ]
     days_ago = (dt.date.today() - when.date()).days
+    # **Metres per second, and this is load-bearing.** `Wind.speed` is m/s, `airmass`
+    # builds its vectors from it, and `wind_at` fed the same field as a fallback — in
+    # km/h, which made the modelled wind 3.6× too strong on any flight with no circled
+    # climb to sound the air with. One unit at rest is the fix; the conversion that was
+    # missing cannot be forgotten if there is nothing to convert.
     params = {
+        "wind_speed_unit": "ms",
         "latitude": round(lat, 3),
         "longitude": round(lon, 3),
         "hourly": ",".join(hourly),

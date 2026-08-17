@@ -33,13 +33,9 @@ def _page(article: str, title: str, *, three_d: bool = False) -> str:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
+<script>{common.THEME_BOOT}</script>
 <style>
-:root {{ --paper:#fff; --panel:#f7f7f5; --panel-2:#eeeeea; --rule:#dcdcd6;
-  --ink:#1b1b19; --ink-2:#4a4a45; --ink-3:#82827a; }}
-@media (prefers-color-scheme: dark) {{
-  :root {{ --paper:#151513; --panel:#1e1e1b; --panel-2:#262622; --rule:#3a3a34;
-    --ink:#eeeee8; --ink-2:#c0c0b8; --ink-3:#8a8a80; }}
-}}
+{common.TOKENS}
 body {{ margin:0; background:var(--paper); color:var(--ink); font:15px/1.55
   system-ui,-apple-system,"Segoe UI",sans-serif; }}
 .wrap {{ max-width:1100px; margin:0 auto; padding:26px 18px 60px; }}
@@ -56,6 +52,7 @@ button {{ font:inherit; padding:3px 10px; background:var(--panel);
 {article}
 </div>
 <script>{render_html.SCRIPT}</script>
+<script>{common.THEME_SCRIPT}</script>
 {view_script}
 """
 

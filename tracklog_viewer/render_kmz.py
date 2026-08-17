@@ -243,7 +243,7 @@ def _summary_text(analysis: Analysis, route=None) -> str:
     parts.append(f"{summary.min_altitude:.0f}–{summary.max_altitude:.0f} m")
     parts.append(f"{len(analysis.thermals)} climbs")
     if analysis.wind:
-        parts.append(f"wind {analysis.wind.kmh:.0f} km/h from {analysis.wind.cardinal}")
+        parts.append(f"wind {analysis.wind.speed:.1f} m/s from {analysis.wind.cardinal}")
     return " · ".join(parts)
 
 
@@ -287,7 +287,7 @@ def _summary_table(analysis: Analysis, route=None, meteo=None) -> str:
     if analysis.tow:
         rows.append(("Off tow at", f"{analysis.tow.finish_altitude:.0f} m"))
     if analysis.wind:
-        rows.append(("Wind", f"{analysis.wind.kmh:.0f} km/h from {analysis.wind.cardinal}"))
+        rows.append(("Wind", f"{analysis.wind.speed:.1f} m/s from {analysis.wind.cardinal}"))
     if meteo:
         rows.append(("Cloudbase (model)", f"{meteo.cloudbase:.0f} m"))
         if meteo.thermal_top:
@@ -391,7 +391,7 @@ def _segment_placemark(analysis: Analysis, segment, number: int) -> str:
             "circle_seconds": f"{segment.circle_seconds:.0f} s" if segment.circle_seconds else "—",
             "circle_radius": f"{segment.circle_radius:.0f} m" if segment.circle_radius else "—",
             "wind": (
-                f"{segment.wind.kmh:.0f} km/h from {segment.wind.cardinal}"
+                f"{segment.wind.speed:.1f} m/s from {segment.wind.cardinal}"
                 if segment.wind else "—"
             ),
         }

@@ -570,9 +570,9 @@ SCRIPT = r"""
       var vx = (n * sumTX - sumT * sumX) / denominator;
       var vy = (n * sumTY - sumT * sumY) / denominator;
       var speedMs = Math.hypot(vx, vy);
-      if (speedMs < 0.1) { climb.wind = { kmh: 0, from: 0 }; return; }
+      if (speedMs < 0.1) { climb.wind = { ms: 0, from: 0 }; return; }
       var towards = (Math.atan2(vx, vy) * 180 / Math.PI + 360) % 360;
-      climb.wind = { kmh: speedMs * 3.6, from: (towards + 180) % 360 };
+      climb.wind = { ms: speedMs, from: (towards + 180) % 360 };
     });
 
     // Glides, with the same thresholds as the full analysis.
@@ -612,11 +612,11 @@ SCRIPT = r"""
     if (winds.length) {
       var ex = 0, ey = 0;
       winds.forEach(function (c) {
-        ex += c.wind.kmh * Math.sin(c.wind.from * Math.PI / 180);
-        ey += c.wind.kmh * Math.cos(c.wind.from * Math.PI / 180);
+        ex += c.wind.ms * Math.sin(c.wind.from * Math.PI / 180);
+        ey += c.wind.ms * Math.cos(c.wind.from * Math.PI / 180);
       });
       ex /= winds.length; ey /= winds.length;
-      overall = { kmh: Math.hypot(ex, ey),
+      overall = { ms: Math.hypot(ex, ey),
                   from: (Math.atan2(ex, ey) * 180 / Math.PI + 360) % 360 };
     }
 
@@ -1440,7 +1440,7 @@ SCRIPT = r"""
       tile('height gained', Math.round(a.gained) + ' m', '') +
       tile('climbs', String(a.climbs.length),
            (a.median > RULES.turnResolutionLimit ? 'turns not resolvable' : Math.round(turnTotal) + ' turns')) +
-      tile('wind', a.wind ? Math.round(a.wind.kmh) + ' km/h' : '—',
+      tile('wind', a.wind ? a.wind.ms.toFixed(1) + ' m/s' : '—',
            a.wind ? 'from ' + cardinal(a.wind.from) + ' · from circle drift' : '') +
       tile('time', Math.round(100 * a.budget.thermal / Math.max(a.duration, 1)) + '% up',
            Math.round(100 * a.budget.glide / Math.max(a.duration, 1)) + '% gliding');
@@ -1457,7 +1457,7 @@ SCRIPT = r"""
         '</td><td>' + climb.average.toFixed(2) +
         '</td><td>' + climb.best.toFixed(1) +
         '</td><td>' + turns + '</td><td>' + perTurn + '</td><td>' +
-        (climb.wind ? Math.round(climb.wind.kmh) + ' ' + cardinal(climb.wind.from) : '—') +
+        (climb.wind ? climb.wind.ms.toFixed(1) + ' ' + cardinal(climb.wind.from) : '—') +
         '</td></tr>';
     }).join('');
     root.querySelector('.ql-table tbody').innerHTML = rows ||
@@ -1500,7 +1500,7 @@ SCRIPT = r"""
         tile('cloudbase', Math.round(m.cloudbase) + ' m', 'from the spread') +
         tile('boundary layer', m.blTop ? Math.round(m.blTop) + ' m' : '—', 'model depth') +
         tile('you reached', Math.round(a.altMax) + ' m', 'highest point') +
-        tile('model wind', Math.round(m.wind) + ' km/h',
+        tile('model wind', m.wind.toFixed(1) + ' m/s',
              'from ' + cardinal(m.windFrom) + ' at 850 hPa');
     }).catch(function (error) {
       meteoStats.innerHTML = '<div class="stat"><span class="key">weather</span>' +
@@ -1528,6 +1528,9 @@ SCRIPT = r"""
     var ageDays = (Date.now() / 1000 - a.epoch) / 86400;
     var fields = 'temperature_2m,dew_point_2m,boundary_layer_height,' +
       'wind_speed_850hPa,wind_direction_850hPa';
+    // m/s from the source. `meteo.py` asks for the same, so a wind is the same number
+    // whether the report baked it in or the page fetched it.
+    var units = '&wind_speed_unit=ms';
     if (want.profile) {
       RULES.pressureLevels.forEach(function (hpa) {
         fields += ',wind_speed_' + hpa + 'hPa,wind_direction_' + hpa + 'hPa' +
@@ -1538,12 +1541,12 @@ SCRIPT = r"""
     if (ageDays > 60) {
       url = 'https://archive-api.open-meteo.com/v1/archive?latitude=' + midLat.toFixed(3) +
         '&longitude=' + midLon.toFixed(3) + '&hourly=' + fields +
-        '&start_date=' + day + '&end_date=' + day + '&timezone=UTC';
+        '&start_date=' + day + '&end_date=' + day + '&timezone=UTC' + units;
     } else {
       url = 'https://api.open-meteo.com/v1/forecast?latitude=' + midLat.toFixed(3) +
         '&longitude=' + midLon.toFixed(3) + '&hourly=' + fields +
         '&past_days=' + Math.min(Math.ceil(ageDays) + 1, 92) +
-        '&forecast_days=1&timezone=UTC';
+        '&forecast_days=1&timezone=UTC' + units;
     }
     return fetch(url).then(function (response) {
       if (!response.ok) throw new Error('weather service returned ' + response.status);

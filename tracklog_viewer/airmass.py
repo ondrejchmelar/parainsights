@@ -124,6 +124,11 @@ def field(analysis: Analysis, *, weather=None) -> WindField:
             )
         )
 
+    # The model, as a fallback for a flight that sounded nothing itself. Both this and
+    # `_vector` above are **m/s**, which they were not: `wind_at` used to answer in km/h
+    # and this mixed it straight into a field built from `Wind.speed`, so a flight with
+    # no circled climb got a modelled wind 3.6 times too strong and a corrected glide
+    # ratio to match. `meteo.py` asks Open-Meteo for m/s now.
     fallback = None
     if weather is not None and hasattr(weather, "wind_at"):
         middle = float(np.median(analysis.series.alt))

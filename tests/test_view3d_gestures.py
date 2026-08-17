@@ -436,3 +436,57 @@ def test_the_view_zooms_closer_than_it_used_to():
     answer = _probe(_scene(basemap=False), _ZOOM_RANGE)
     assert answer["closest"] == pytest.approx(40, rel=1e-6)
     assert answer["farthest"] == pytest.approx(0.2, rel=1e-6)
+
+
+_BUTTON_ZOOM = """
+var h = window.__handle;
+var panel = document.querySelector('.view3d-panel');
+var canvas = panel.querySelector('canvas.view3d');
+
+// A zoom with no pointer behind it — a button, or the `+` key — should be a *pure
+// magnification about the fit's anchor*: every point lands on
+// anchor + (before - anchor) * ratio, and nothing translates. Predicting it that way
+// needs no inverse projection, so this measures the zoom rather than the probe.
+function worstDrift(act, times) {
+  h.view.zoom = 1; h.view.panX = 0; h.view.panY = 0; h.redraw();
+  var anchor = [canvas.width / 2, canvas.height * 0.58];
+  var points = [[0, 0, 1000], [4000, -3000, 1500], [-6000, 5000, 800]];
+  var before = points.map(function (p) { return h.worldProject(p[0], p[1], p[2]); });
+  var was = h.view.zoom;
+  for (var i = 0; i < times; i++) {
+    panel.querySelector('[data-view3d-act="' + act + '"]').click();
+  }
+  h.redraw();
+  var ratio = h.view.zoom / was;
+  var worst = 0;
+  points.forEach(function (p, i) {
+    var after = h.worldProject(p[0], p[1], p[2]);
+    worst = Math.max(worst,
+      Math.abs(after[0] - (anchor[0] + (before[i][0] - anchor[0]) * ratio)),
+      Math.abs(after[1] - (anchor[1] + (before[i][1] - anchor[1]) * ratio)));
+  });
+  return worst;
+}
+
+return { one: worstDrift('zoom-in', 1), five: worstDrift('zoom-in', 5),
+         ten: worstDrift('zoom-in', 10), out: worstDrift('zoom-out', 5) };
+"""
+
+
+@needs_chrome
+def test_a_button_zoom_moves_nothing_but_the_scale():
+    """The buttons zoomed about the middle of the canvas while `refit` centres the scene
+    on `0.58H` — the sky above a flight needs more room than the ground below it. Every
+    point except that one pixel row therefore slid on each press, always the same way:
+    13 px per zoom-in on a 549 px canvas, so five presses walked what the reader was
+    looking at 60 px down the panel. It accumulates, which is why it reads as a fault
+    rather than as a choice, and it is what "the zoom drifts" means.
+
+    The wheel was never wrong — it anchors on the pointer, and
+    `test_zoom_holds_the_point_under_the_cursor` covers it. This is the path with no
+    pointer to anchor on, which is also the keyboard's, since `+` maps to the same act.
+    """
+    answer = _probe(_scene(basemap=False), _BUTTON_ZOOM)
+    for presses, drift in answer.items():
+        assert drift < 0.5, (
+            f"a {presses}-press button zoom translated the scene by {drift:.1f} px")

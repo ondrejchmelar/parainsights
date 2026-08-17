@@ -2,13 +2,25 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plan a task</title>
+<script>
+try {
+  var t = localStorage.getItem('parainsights.theme');
+  if (t) document.documentElement.dataset.theme = t;
+} catch (e) {}
+</script>
 <style>
+
 :root { --paper:#fff; --panel:#f7f7f5; --panel-2:#eeeeea; --rule:#dcdcd6;
-  --ink:#1b1b19; --ink-2:#4a4a45; --ink-3:#82827a; }
+  --ink:#1b1b19; --ink-2:#4a4a45; --ink-3:#82827a; color-scheme: light; }
 @media (prefers-color-scheme: dark) {
-  :root { --paper:#151513; --panel:#1e1e1b; --panel-2:#262622; --rule:#3a3a34;
+  :root:where(:not([data-theme="light"])) { color-scheme: dark;
+    --paper:#151513; --panel:#1e1e1b; --panel-2:#262622; --rule:#3a3a34;
     --ink:#eeeee8; --ink-2:#c0c0b8; --ink-3:#8a8a80; }
 }
+:root[data-theme="dark"] { color-scheme: dark;
+  --paper:#151513; --panel:#1e1e1b; --panel-2:#262622; --rule:#3a3a34;
+  --ink:#eeeee8; --ink-2:#c0c0b8; --ink-3:#8a8a80; }
+
 body { margin:0; background:var(--paper); color:var(--ink); font:15px/1.55
   system-ui,-apple-system,"Segoe UI",sans-serif; }
 .wrap { max-width:1100px; margin:0 auto; padding:26px 18px 60px; }
@@ -376,11 +388,15 @@ canvas.view3d.is-dragging { cursor: grabbing; }
   border-bottom:2px solid transparent; }
 .site-nav a:hover { color:var(--ink-2); }
 .site-nav .is-on { color:var(--ink); border-bottom-color:#eb6834; }
+.theme-toggle { margin:0 0 0 auto; align-self:center; border:1px solid var(--rule);
+  background:var(--panel); color:var(--ink-2); border-radius:999px; cursor:pointer;
+  width:30px; height:30px; padding:0; line-height:1; font-size:14px; }
+.theme-toggle:hover { color:var(--ink); border-color:var(--ink-3); }
 
 
 </style>
 <div class="wrap">
-<nav class="site-nav" aria-label="The tools here"><a href="../meteo/">Meteo</a><span class="is-on">Planner</span><a href="../airspace/">Airspace</a><a href="../index.html">Flights</a></nav>
+<nav class="site-nav" aria-label="The tools here"><a href="../meteo/">Meteo</a><span class="is-on">Planner</span><a href="../airspace/">Airspace</a><a href="../index.html">Flights</a><button type="button" class="theme-toggle" aria-pressed="false" aria-label="Switch between the light and dark theme"><span class="theme-glyph" aria-hidden="true">☽</span></button></nav>
 <article class="flight planner-article" id="planner-article">
   <h1>Plan a task</h1>
   <p class="lede">Drop turnpoints on the ground you are going to fly over, and see what
@@ -1972,7 +1988,7 @@ function initView3d(root, cursorTrack) {
       north: bearingToScreen(0),
       sun: sunNow ? { az: sunNow.az, el: sunNow.el, screen: bearingToScreen(sunNow.az),
                       minute: sunMinute } : null,
-      wind: wind ? { from: wind.from, kmh: wind.kmh,
+      wind: wind ? { from: wind.from, ms: wind.ms,
                      screen: bearingToScreen(wind.from + 180) } : null
     };
   }
@@ -1994,7 +2010,7 @@ function initView3d(root, cursorTrack) {
                  (sunNow.el > 0 ? Math.round(sunNow.el) + '\u00b0 ' + compass(sunNow.az)
                                 : 'below the horizon'));
     }
-    if (wind) lines.push('Wind ' + wind.kmh.toFixed(0) + ' km/h from ' + wind.cardinal);
+    if (wind) lines.push('Wind ' + wind.ms.toFixed(1) + ' m/s from ' + wind.cardinal);
     // The labels go under the rose, so the *block* has to fit — placing the circle first
     // and the text afterwards clipped the second line off the bottom of a 21:9 panel.
     var lineHeight = 13 * scale;
@@ -2055,7 +2071,7 @@ function initView3d(root, cursorTrack) {
     // limestone face or a snowfield.
     // Right-aligned to the canvas edge, not left-aligned from the circle. With the rose
     // in the top *left* the labels could run rightwards into open canvas; against the
-    // right edge the same code ran them off it, and "Wind 6 km/h from WSW" lost its last
+    // right edge the same code ran them off it, and "Wind 1.7 m/s from WSW" lost its last
     // two words. The anchor has to follow the corner the rose moved to.
     ctx.textAlign = 'right';
     ctx.lineJoin = 'round';
@@ -2364,9 +2380,22 @@ function initView3d(root, cursorTrack) {
     draw();
   }, { passive: false });
 
+  // Where a zoom with no pointer behind it should anchor: the point the scene is fitted
+  // around, **not** the middle of the canvas.
+  //
+  // `refit` centres the scene on (W/2, 0.58H) — the sky above a flight is bigger than the
+  // ground below it — and the buttons zoomed about (W/2, H/2) instead. Everything except
+  // that one pixel row then slid on every press: measured at 13 px down per zoom-in on a
+  // 549 px canvas, in the same direction every time, so five presses walked what you were
+  // looking at 60 px down the panel. That is "the zoom drifts", and it accumulates, which
+  // is why it reads as a fault rather than as a choice. Anchoring on the fit makes a
+  // button press a pure magnification: nothing translates.
   function box() {
     var r = canvas.getBoundingClientRect();
-    return { cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
+    return {
+      cx: r.left + anchorX() / W * r.width,
+      cy: r.top + anchorY() / H * r.height
+    };
   }
 
   // ---- the sun ---------------------------------------------------------------------
@@ -4021,6 +4050,48 @@ window.__view3dBackend = function (host) {
   if (whenInput) whenInput.addEventListener('input', retime);
 
   redraw();
+})();
+</script>
+<script>
+(function () {
+  var root = document.documentElement;
+  function dark() {
+    return root.dataset.theme
+      ? root.dataset.theme === 'dark'
+      : window.matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+  function label(button) {
+    var isDark = dark();
+    button.setAttribute('aria-pressed', isDark ? 'true' : 'false');
+    button.title = isDark ? 'Switch to the light theme' : 'Switch to the dark theme';
+    button.querySelector('.theme-glyph').textContent = isDark ? '☀' : '☽';
+  }
+  var buttons = document.querySelectorAll('.theme-toggle');
+  buttons.forEach(function (button) {
+    label(button);
+    button.addEventListener('click', function () {
+      root.dataset.theme = dark() ? 'light' : 'dark';
+      try {
+        localStorage.setItem('parainsights.theme', root.dataset.theme);
+      } catch (e) { /* private mode: the page still switches, it just forgets */ }
+      buttons.forEach(label);
+      // The canvases are painted with the tokens read at draw time, so they hold the
+      // old theme until something asks them to redraw. Each tool exposes its own.
+      if (window.__meteo && window.__meteo.draw) window.__meteo.draw();
+      if (window.__view3dAll) {
+        window.__view3dAll.forEach(function (handle) {
+          if (handle && handle.redraw) handle.redraw();
+        });
+      }
+      if (window.__drawCharts) {
+        document.querySelectorAll('[data-flight-report]').forEach(window.__drawCharts);
+      }
+    });
+  });
+  // The system changing under a reader who has expressed no preference.
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
+    if (!root.dataset.theme) buttons.forEach(label);
+  });
 })();
 </script>
 

@@ -62,7 +62,7 @@ class Summary:
     day_slope: float | None
     detour_ratio: float | None
     ceiling_used: float | None
-    wind_kmh: float | None
+    wind_ms: float | None
     sample_interval: float
     format: int = FORMAT
 
@@ -108,7 +108,7 @@ def summarise(analysis: Analysis, *, route=None, weather=None) -> Summary:
         day_slope=envelope.slope if envelope else None,
         detour_ratio=ratio.ratio if ratio else None,
         ceiling_used=ceiling.fraction if ceiling else None,
-        wind_kmh=round(analysis.wind.kmh, 1) if analysis.wind else None,
+        wind_ms=round(analysis.wind.speed, 1) if analysis.wind else None,
         sample_interval=summary.sample_interval,
     )
 
@@ -151,8 +151,23 @@ def load(directory: str | Path) -> list[dict]:
         except (OSError, ValueError):
             continue
         if isinstance(payload, dict) and payload.get("format") == FORMAT:
-            found.append(payload)
+            found.append(_in_metres_per_second(payload))
     return found
+
+
+def _in_metres_per_second(flight: dict) -> dict:
+    """An archive written before the wind became m/s, read as if it had not been.
+
+    The format version is deliberately *not* bumped for this. A bump means "a reader
+    cannot understand this file", and a reader can: the old key carried the same
+    measurement in another unit, and converting it on the way in is cheaper for
+    everyone than telling a pilot half their archive is unreadable. `FORMAT` is for a
+    field whose *meaning* changed, and a unit is not a meaning."""
+    if "wind_ms" in flight or "wind_kmh" not in flight:
+        return flight
+    was = flight.pop("wind_kmh")
+    flight["wind_ms"] = round(was / 3.6, 1) if was is not None else None
+    return flight
 
 
 @dataclass
