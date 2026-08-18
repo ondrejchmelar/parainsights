@@ -161,12 +161,16 @@ function orbit(fx, fy, dx, dy) {
   h.view.panX = 0; h.view.panY = 0;
   h.redraw();
   var hold = h.groundUnder(fx, fy);
-  var before = h.worldProject(hold[0], hold[1], dem.min);
+  // At the height that came back with it. `groundUnder` used to answer on the flat datum
+  // plane and now answers on the terrain surface, so projecting at `dem.min` here would
+  // be measuring the drift of a point nobody grabbed.
+  var holdZ = hold.length > 2 ? hold[2] : dem.min;
+  var before = h.worldProject(hold[0], hold[1], holdZ);
   mouse('pointerdown', fx, fy);
   for (var i = 1; i <= 10; i++) mouse('pointermove', fx + dx * i / 10, fy + dy * i / 10);
   mouse('pointerup', fx + dx, fy + dy, 0);
   h.redraw();
-  var after = h.worldProject(hold[0], hold[1], dem.min);
+  var after = h.worldProject(hold[0], hold[1], holdZ);
   return { driftX: after[0] - before[0], driftY: after[1] - before[1],
            yaw: h.view.yaw, pitch: h.view.pitch, ratio: h.metrics().ratio };
 }
@@ -490,3 +494,77 @@ def test_a_button_zoom_moves_nothing_but_the_scale():
     for presses, drift in answer.items():
         assert drift < 0.5, (
             f"a {presses}-press button zoom translated the scene by {drift:.1f} px")
+
+
+_ROTATE_HOLDS_THE_GROUND = """
+var h = window.__handle;
+var canvas = document.querySelector('canvas.view3d');
+var box = canvas.getBoundingClientRect();
+// Well down the canvas, where the ridged fixture stands highest above its datum.
+var gx = box.left + box.width * 0.5, gy = box.top + box.height * 0.72;
+
+// The point on the terrain *surface* under the cursor, worked out here rather than
+// asked of the page, so the test states its own definition of what the reader grabbed.
+function surfaceUnder(x, y) {
+  var p = h.ground(x, y);
+  if (!p) return null;
+  var lonLat = h.groundLonLat(x, y);
+  for (var pass = 0; pass < 6; pass++) {
+    var height = h.groundAt(lonLat[0], lonLat[1]);
+    var here = h.worldProject(p[0], p[1], height);
+    var dy = here[1] - ((y - box.top) / box.height * canvas.height);
+    if (Math.abs(dy) < 0.05) break;
+    var stepped = h.ground(x, y - dy);
+    if (!stepped) break;
+    p = [stepped[0], stepped[1]];
+    lonLat = h.groundLonLat(x, y - dy);
+  }
+  return { p: p, z: h.groundAt(lonLat[0], lonLat[1]) };
+}
+
+function slip(dragPx) {
+  h.view.yaw = 0; h.view.pitch = 0.7; h.view.zoom = 3;
+  h.view.panX = 0; h.view.panY = 0; h.redraw();
+  var target = surfaceUnder(gx, gy);
+  var was = h.worldProject(target.p[0], target.p[1], target.z);
+  canvas.dispatchEvent(new PointerEvent('pointerdown', { clientX: gx, clientY: gy,
+    button: 2, buttons: 2, bubbles: true, pointerId: 1, pointerType: 'mouse' }));
+  for (var step = 1; step <= 6; step++) {
+    canvas.dispatchEvent(new PointerEvent('pointermove', {
+      clientX: gx + dragPx * step / 6, clientY: gy,
+      buttons: 2, bubbles: true, pointerId: 1, pointerType: 'mouse' }));
+  }
+  canvas.dispatchEvent(new PointerEvent('pointerup', { clientX: gx + dragPx, clientY: gy,
+    buttons: 0, bubbles: true, pointerId: 1, pointerType: 'mouse' }));
+  h.redraw();
+  var now = h.worldProject(target.p[0], target.p[1], target.z);
+  return Math.max(Math.abs(now[0] - was[0]), Math.abs(now[1] - was[1]));
+}
+
+return { relief: Math.round(surfaceUnder(gx, gy).z - h.scene().terrain.min),
+         short: slip(90), long: slip(180) };
+"""
+
+
+@needs_chrome
+def test_an_orbit_turns_about_the_terrain_that_was_grabbed():
+    """Not about the flat datum plane under it, which is what it used to hold.
+
+    `world()` measures height from `dem.min`, so inverting the projection with `wz = 0`
+    solves the *datum*, and the mountainside the reader put their cursor on sits well
+    above it — the two are the same screen pixel but kilometres apart on the ground.
+    Turning about the wrong one swings the view. Measured on this fixture's 618 m of
+    relief: the grabbed terrain slid **7.1 px on a 90 px drag and 12.7 px on 180 px**,
+    growing with the drag. An alpine flight carries five times the relief, which is why
+    the report's map felt wrong to rotate while the airspace map — 1.4 km of relief
+    across 500 km of country — felt fine.
+
+    `groundUnder` iterates onto the surface now and the height travels with the point.
+    """
+    answer = _probe(_scene(), _ROTATE_HOLDS_THE_GROUND)
+    assert answer["relief"] > 300, (
+        "the fixture stopped being ridged, so this test cannot fail on the bug it is for")
+    assert answer["short"] < 1.0, (
+        f"the grabbed terrain slid {answer['short']:.1f} px on a 90 px rotate")
+    assert answer["long"] < 1.0, (
+        f"the grabbed terrain slid {answer['long']:.1f} px on a 180 px rotate")

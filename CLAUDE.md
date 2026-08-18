@@ -412,6 +412,16 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   When stitching from tiles, give each source layer **its own canvas** and composite in
   order at the end: the label layer is requested second and frequently answers first, so
   painting into a shared mosaic as tiles arrive makes z-order a race.
+- **One tile level of improvement is worth a fetch; two is a 4x zoom of nothing.**
+  Halving the visible box buys exactly one tile level inside a fixed tile budget, so
+  `DETAIL_STEP = 2` meant the imagery stood still across a fourfold zoom. Measured on the
+  fixture: a fetch at tile zoom 15 around view zoom 8, then nothing at 12, 16, 20 or 28 —
+  the reader gets three and a half times closer and the ground only gets blurrier — and
+  the next fetch at 40, the ceiling. That is what "the tiles stopped updating with zoom"
+  was, and it was a threshold rather than a fault. At one level the ladder is 12, 13, 15,
+  16, 17 and the worst plateau is 2.5x. The two things that keep this from being a
+  fetching machine are untouched: `DETAIL_DELAY` of stillness, and a padded box so small
+  pans ask for nothing.
 - **The tile budget is what sets image quality, not the JPEG settings.** `MAX_TILES = 24`
   held every stitch to zoom 10 — about 80 m per pixel, which is why the draped imagery
   looked like a smear, and no `max_width` above the native 1280 px could help. 80 tiles
@@ -639,6 +649,20 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   `dyaw` and never its sign. Dragging, by contrast, walks the camera (Google Earth's
   model, which pilots know), so the ground swings the other way — that is not a bug.
   Both senses are pinned by tests that dispatch real `PointerEvent`s.
+- **A gesture anchors on the terrain it grabbed, not on the flat datum under it.**
+  `world()` measures height from `dem.min`, so inverting the projection with `wz = 0`
+  solves the *datum plane* — and the mountainside a reader puts the cursor on stands well
+  above it, so the two are the same screen pixel and kilometres apart on the ground.
+  Turning about the wrong one swings the view. Measured on the ridged fixture's 618 m of
+  relief: the grabbed terrain slid **7.1 px on a 90 px orbit drag and 12.7 px on 180 px**,
+  growing with the drag; an alpine flight carries several times that relief, which is why
+  the report's map felt wrong to rotate while the airspace map — 1.4 km of relief across
+  500 km of country — felt fine. `groundUnder` iterates onto the surface (three passes:
+  datum guess, terrain height there, corrected northing; each pass corrects by the slope
+  times the previous error) and returns the height *with* the point, so `holdGround`
+  re-projects it where it is. The measurement to be careful with is the tautological one:
+  asking whether the point the code chose to hold stayed put answers zero either way, so
+  the test computes the surface point itself and measures *that*.
 - **A zoom with no pointer behind it anchors on the fit, not on the middle of the
   canvas.** The wheel anchors on the pointer and always did; the buttons and the `+`/`-`
   keys have no pointer, and they zoomed about `(W/2, H/2)` while `refit` centres the

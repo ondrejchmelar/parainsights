@@ -919,3 +919,54 @@ def test_a_map_whose_subject_is_the_airspace_keeps_no_switch():
     assert not answer["hasButton"], "the airspace map grew a redundant switch"
     assert answer["found"], "pressing 'a' turned the airspace map's own layer off"
     assert answer["label"] is None, "the widget's label fought the page's own tooltip"
+
+
+_DETAIL_LADDER = """
+var h = window.__view3dAll[Object.keys(window.__view3dAll)[0]];
+var canvas = document.querySelector('canvas.view3d');
+h.view.pitch = 0.9; h.view.yaw = 0; h.view.panX = 0; h.view.panY = 0;
+var ladder = [];
+[1, 2, 4, 8, 12, 16, 20, 28, 40].forEach(function (zoom) {
+  h.view.zoom = zoom; h.redraw();
+  var plan = h.detailPlan();
+  // Apply what was planned, the way a completed fetch would, so the next step is judged
+  // against what the reader can actually see.
+  if (plan) h.setDetail(canvas, plan.box, plan.zoom);
+  h.redraw();
+  var state = h.detailState();
+  ladder.push({ view: zoom, have: state && state.zoom ? state.zoom : 0 });
+});
+return ladder;
+"""
+
+
+@needs_chrome
+def test_zooming_in_keeps_buying_sharpness():
+    """It stopped buying any, over the range a reader actually works in.
+
+    Halving the visible box buys exactly one tile level inside a fixed tile budget, so a
+    `DETAIL_STEP` of two levels meant a **4x zoom of no improvement**. Measured on this
+    fixture: a fetch at tile zoom 15 around view zoom 8, then nothing through 12, 16, 20
+    and 28 — three and a half times closer, and the ground only getting blurrier — and
+    the next fetch at 40, the ceiling. That is what "the tiles stopped updating with
+    zoom" is, and it was a threshold rather than a fault.
+
+    What this holds is the shape rather than the constants: sharpness never goes
+    backwards, it improves several times across the range, and no plateau swallows a
+    3x zoom.
+    """
+    ladder = _probe(_scene(tiles=True), _DETAIL_LADDER)
+    have = [step["have"] for step in ladder]
+    assert have == sorted(have), f"the detail got coarser as the view got closer: {have}"
+    assert len(set(have)) >= 4, (
+        f"only {len(set(have))} sharpness levels across a 40x zoom range: {ladder}")
+
+    # The widest stretch of view zoom that bought nothing.
+    worst, run_start = 1.0, ladder[0]
+    for step in ladder[1:]:
+        if step["have"] == run_start["have"]:
+            worst = max(worst, step["view"] / run_start["view"])
+        else:
+            run_start = step
+    assert worst <= 3.0, (
+        f"the reader zooms {worst:.1f}x with no improvement at all: {ladder}")

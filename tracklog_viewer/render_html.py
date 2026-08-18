@@ -2765,9 +2765,14 @@ a.view-tab { text-decoration: none; display: inline-block; }
 /* Pushed to the far end of whichever strip it is in. Same shape as the one the other
    three pages get from `common.STYLE`; the report does not include that sheet, because
    its own tokens are richer and it has never used the site strip. */
-.theme-toggle { margin: 0 0 0 auto; align-self: center; border: 1px solid var(--rule);
-  background: var(--panel); color: var(--ink-2); border-radius: 999px; cursor: pointer;
-  width: 30px; height: 30px; padding: 0; line-height: 1; font-size: 14px; }
+.theme-toggle { margin:0 0 0 auto; align-self:center; border:1px solid var(--rule);
+  background:var(--panel); color:var(--ink-2); border-radius:999px; cursor:pointer;
+  width:30px; height:30px; padding:0; font-size:14px;
+  /* Grid rather than `line-height`: the glyph is a character whose ink sits high in its
+     em box (☽ higher than ☀), so a line box centres the *box* and leaves the mark
+     visibly above centre. A grid cell centres the thing that was actually drawn. */
+  display:grid; place-items:center; line-height:1; }
+.theme-toggle .theme-glyph { display:block; }
 .theme-toggle:hover { color: var(--ink); border-color: var(--rule-strong); }
 .view-tab:focus-visible { outline: 2px solid var(--climb); outline-offset: -2px; }
 """

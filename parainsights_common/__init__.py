@@ -132,14 +132,22 @@ def theme_button() -> str:
 STYLE = """
 .site-nav { display:flex; gap:4px; flex-wrap:wrap; margin:0 0 18px;
   border-bottom:1px solid var(--rule); }
-.site-nav a, .site-nav span { font-size:15px; font-weight:600; letter-spacing:0.01em;
+/* Direct children only. `.site-nav span` caught the glyph *inside* the theme button and
+   gave it 15 px of side padding in a 30 px circle, which pushed the moon hard against
+   the right edge — the strip styles its own items, not whatever they happen to contain. */
+.site-nav > a, .site-nav > span { font-size:15px; font-weight:600; letter-spacing:0.01em;
   color:var(--ink-3); text-decoration:none; padding:9px 15px 8px; margin-bottom:-1px;
   border-bottom:2px solid transparent; }
-.site-nav a:hover { color:var(--ink-2); }
-.site-nav .is-on { color:var(--ink); border-bottom-color:#eb6834; }
+.site-nav > a:hover { color:var(--ink-2); }
+.site-nav > .is-on { color:var(--ink); border-bottom-color:#eb6834; }
 .theme-toggle { margin:0 0 0 auto; align-self:center; border:1px solid var(--rule);
   background:var(--panel); color:var(--ink-2); border-radius:999px; cursor:pointer;
-  width:30px; height:30px; padding:0; line-height:1; font-size:14px; }
+  width:30px; height:30px; padding:0; font-size:14px;
+  /* Grid rather than `line-height`: the glyph is a character whose ink sits high in its
+     em box (☽ higher than ☀), so a line box centres the *box* and leaves the mark
+     visibly above centre. A grid cell centres the thing that was actually drawn. */
+  display:grid; place-items:center; line-height:1; }
+.theme-toggle .theme-glyph { display:block; }
 .theme-toggle:hover { color:var(--ink); border-color:var(--ink-3); }
 """
 

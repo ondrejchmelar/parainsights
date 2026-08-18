@@ -59,7 +59,7 @@
 * =====================================================================
 * CHECK THIS IS STILL CURRENT, AND CHECK IT AGAINST THE AIP.
 *
-* This is a snapshot, generated 2026-08-17. The ATZ come from the AIRAC cycle
+* This is a snapshot, generated 2026-08-18. The ATZ come from the AIRAC cycle
 * effective 2026-08-06 and the base airspace from 26-04-01. Airspace changes
 * every 28-day AIRAC cycle, and a NOTAM changes it the same day. This file will
 * go out of date and has no way to tell you that it has.

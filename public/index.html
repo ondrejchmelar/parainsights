@@ -1006,9 +1006,14 @@ a.view-tab { text-decoration: none; display: inline-block; }
 /* Pushed to the far end of whichever strip it is in. Same shape as the one the other
    three pages get from `common.STYLE`; the report does not include that sheet, because
    its own tokens are richer and it has never used the site strip. */
-.theme-toggle { margin: 0 0 0 auto; align-self: center; border: 1px solid var(--rule);
-  background: var(--panel); color: var(--ink-2); border-radius: 999px; cursor: pointer;
-  width: 30px; height: 30px; padding: 0; line-height: 1; font-size: 14px; }
+.theme-toggle { margin:0 0 0 auto; align-self:center; border:1px solid var(--rule);
+  background:var(--panel); color:var(--ink-2); border-radius:999px; cursor:pointer;
+  width:30px; height:30px; padding:0; font-size:14px;
+  /* Grid rather than `line-height`: the glyph is a character whose ink sits high in its
+     em box (☽ higher than ☀), so a line box centres the *box* and leaves the mark
+     visibly above centre. A grid cell centres the thing that was actually drawn. */
+  display:grid; place-items:center; line-height:1; }
+.theme-toggle .theme-glyph { display:block; }
 .theme-toggle:hover { color: var(--ink); border-color: var(--rule-strong); }
 .view-tab:focus-visible { outline: 2px solid var(--climb); outline-offset: -2px; }
 
@@ -2575,12 +2580,22 @@ function initView3d(root, cursorTrack) {
   //  - it only ever fires when the camera has been still for `DETAIL_DELAY`;
   //  - it wants at least `DETAIL_STEP` zoom levels of improvement, so nudging the view
   //    does not re-fetch the same ground at the same sharpness;
+  //
+  // `DETAIL_STEP` was 2, and two levels is a **4x zoom** of no improvement, because
+  // halving the visible box buys exactly one tile level within a fixed tile budget.
+  // Measured on the fixture: a fetch at tile zoom 15 around view zoom 8, then nothing at
+  // all through view 12, 16, 20 and 28 — the reader zooms three and a half times closer
+  // and the ground only gets blurrier — and the next fetch at view 40, the ceiling. That
+  // is "the tiles stopped updating with zoom", and it was a threshold rather than a
+  // fault. One level is still a doubling of resolution, which is worth a fetch; the
+  // stillness delay and the padded box are what stop it becoming a fetching machine, and
+  // they are untouched.
   //  - the box it asks for is padded, so small pans stay inside what has already been
   //    fetched and ask for nothing.
   var detail = null;          // { image, box, shaded, style, zoom }
   var detailPending = null;   // the box currently being stitched, so it is asked once
   var DETAIL_TILES = 48;      // a fetch is one screenful; politeness matters more here
-  var DETAIL_STEP = 2;        // zoom levels of improvement worth a fetch
+  var DETAIL_STEP = 1;        // zoom levels of improvement worth a fetch
   var DETAIL_PAD = 0.35;      // of the visible box, on each side
   var DETAIL_DELAY = 420;     // ms of stillness before asking
 
@@ -4031,16 +4046,46 @@ function initView3d(root, cursorTrack) {
   // the wrong position" and "the centre shifts at higher angles" both are. Anchoring needs
   // a fixed world point, and the ground plane gives an exact one: at z = dem.min the
   // height term drops out of the projection and it inverts in closed form.
+  // The point on the **terrain** under a screen position — not the point on the flat
+  // datum plane beneath it, which is what this used to answer.
+  //
+  // `world()` measures height from `dem.min`, so inverting with `wz = 0` solves the
+  // datum plane. Over a country that is close enough: the airspace map's relief is
+  // 1.4 km across 500 km of extent, a couple of pixels. Over a flight it is not. On an
+  // alpine day the ground under the cursor stands 2–3 km above `dem.min`, and the datum
+  // point at the same screen position lies kilometres further north — so a rotation
+  // that "holds the point you grabbed" was holding somewhere off the side of the
+  // mountain, and the view swung. That is "rotate is off in flights", and why the
+  // airspace map felt fine.
+  //
+  // Solved by iteration, because the height depends on the position and the position on
+  // the height. Three passes: the datum guess, then the terrain height there, then the
+  // corrected position. It converges on anything that is not a cliff face — each pass
+  // moves the answer by the *slope* times the previous error — and on a cliff the
+  // remaining error is smaller than the one it started with, which is the point.
   function groundUnder(clientX, clientY) {
     var box = canvas.getBoundingClientRect();
     var sp = Math.sin(view.pitch);
     if (Math.abs(sp) < 1e-4 || !fit.scale) return null;
     var sx = (clientX - box.left) / box.width * W;
     var sy = (clientY - box.top) / box.height * H;
-    var wx = (sx - fit.dx - view.panX) / fit.scale;
-    var wy = -(sy - fit.dy - view.panY) / (fit.scale * sp);
+    var cp = Math.cos(view.pitch);
     var cy = Math.cos(view.yaw), sn = Math.sin(view.yaw);
-    return [wx * cy + wy * sn, -wx * sn + wy * cy];
+    var lift = 0;                       // (z - dem.min) * vertical, in world units
+    var point = null;
+    for (var pass = 0; pass < 3; pass++) {
+      var wx = (sx - fit.dx - view.panX) / fit.scale;
+      // screen y = -wy*sin(pitch) - lift*cos(pitch), so a known lift moves the northing.
+      var wy = -((sy - fit.dy - view.panY) / fit.scale + lift * cp) / sp;
+      point = [wx * cy + wy * sn, -wx * sn + wy * cy];
+      var height = groundAt(lon0 + point[0] / mPerDegLon, lat0 + point[1] / mPerDegLat);
+      if (height === null || height === undefined) break;
+      lift = (height - dem.min) * view.vertical;
+    }
+    // The height travels with the point, so whatever holds it can re-project it where
+    // it actually is rather than back on the datum.
+    point.push(dem.min + lift / (view.vertical || 1));
+    return point;
   }
 
   // Move the pan so that `point` (a ground-plane position from groundAt) projects back to
@@ -4049,7 +4094,12 @@ function initView3d(root, cursorTrack) {
     if (!point) return;
     var box = canvas.getBoundingClientRect();
     refit();
-    var now = project(point[0], point[1], dem.min);
+    // At its own height. `groundUnder` returns one now, and re-projecting on the datum
+    // instead is the same error the inversion used to make, applied in the other
+    // direction: the anchor would sit below the ground it was taken from and the view
+    // would climb as it turned.
+    var now = project(point[0], point[1],
+                      point.length > 2 ? point[2] : dem.min);
     var sx = (clientX - box.left) / box.width * W;
     var sy = (clientY - box.top) / box.height * H;
     view.panX += sx - now[0];
