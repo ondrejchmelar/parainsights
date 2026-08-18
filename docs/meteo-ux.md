@@ -114,6 +114,17 @@ open by default, so the default is unchanged and one click puts it away.
 * **Adding a takeoff redraws immediately** rather than when its sounding lands. A control
   that does nothing for a second is a control the reader presses again.
 * **The status line no longer reserves space when it is empty** (`:empty { display:none }`).
+* **Picking a day left the comparison table on the previous one.** The day and the hour
+  are one setting with two controls, and each control carried its own hand-written list
+  of redraws. They drifted: the hour called `drawList`, `drawCompare` and `drawSite`, the
+  day called every one of those except `drawCompare` — so choosing *tomorrow* moved every
+  chart and left the numbers under them describing today's wind, verdict, thermal top and
+  cloudbase. Reported as "meteo is not updated on day select, only hours". One `drawTime()`
+  now, called by both.
+  The day *was* tested, which is the part worth keeping: the flymet test sets
+  `state.day` and calls `draw()`, so it reaches past the handler and passed throughout.
+  The new test clicks the button. A test that drives the state instead of the control
+  cannot see a control that forgot to do something.
 
 ## What was deliberately left alone
 

@@ -510,9 +510,21 @@ SCRIPT = r"""
       if (!button) return;
       state.day = Number(button.dataset.day);
       drawDays();
-      drawList();
-      drawSite();
+      drawTime();
     };
+  }
+
+  // The day and the hour are one setting with two controls, and everything that reads
+  // them has to be repainted together. They were two lists of redraws written out by
+  // hand, and they drifted: the hour repainted the comparison table and the day did not,
+  // so switching to tomorrow moved every chart and left the numbers under them still
+  // describing today — the wind, the verdict, the thermal top and the cloudbase, which
+  // is the half of this page a reader actually reads. One list now, and both controls
+  // call it.
+  function drawTime() {
+    drawList();
+    drawCompare();
+    drawSite();
   }
 
   // The index into an hourly array for a given day and hour. Open-Meteo returns one flat
@@ -1678,9 +1690,7 @@ SCRIPT = r"""
   hourInput.addEventListener('input', function () {
     state.hour = Number(hourInput.value);
     document.getElementById('met-hour-readout').textContent = state.hour + ':00';
-    drawList();
-    drawCompare();
-    drawSite();
+    drawTime();
   });
   // Debounced, because a canvas redraw per resize event is what makes a window drag
   // stutter — and three profiles' worth of lines is three times the redraw it was.

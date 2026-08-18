@@ -648,6 +648,60 @@ class TestChoosingTakeoffs:
 
 
 @needs_chrome
+def test_the_day_applies_to_everything_the_hour_does():
+    """The day and the hour are one setting with two controls, and the two controls each
+    carried their own hand-written list of redraws. They drifted: the hour repainted the
+    comparison table and the day did not, so picking tomorrow moved every chart and left
+    the numbers under them describing today.
+
+    This drives the *button*, which is the part that was broken. The existing day test
+    sets `state.day` and calls `draw()` — it reaches past the handler, so it passed
+    throughout. The tomorrow-shaped hole in the data is put there by this test rather
+    than by the fixture, because the fixture is deliberately flat: every hour of every
+    day holds the same numbers, and a page that ignored the day entirely would agree
+    with one that honoured it.
+    """
+    answer = _probe_page("""
+    var m = window.__meteo;
+    var free = null;
+    for (var i = 0; i < 8; i++) if (m.chosen().indexOf(i) < 0) { free = i; break; }
+    m.add(free);
+
+    // Mark tomorrow, in the series the comparison's wind column reads.
+    var chosen = m.chosen();
+    var times = m.state.surface[chosen[0]].hourly.time;
+    var start = new Date(times[0].replace(' ', 'T'));
+    var wanted = new Date(start);
+    wanted.setHours(0, 0, 0, 0); wanted.setDate(wanted.getDate() + 1);
+    wanted.setHours(m.state.hour);
+    var mark = 0;
+    for (var t = 0; t < times.length; t++) {
+      if (new Date(times[t].replace(' ', 'T')).getTime() >= wanted.getTime()) { mark = t; break; }
+    }
+    chosen.forEach(function (index) {
+      m.state.surface[index].hourly.wind_speed_10m[mark] = 33.0;
+    });
+
+    var before = document.querySelector('.met-compare tbody').textContent;
+    var buttons = document.querySelectorAll('#met-days button');
+    buttons[1].click();
+    // Re-queried, because `drawDays` rebuilds the strip inside the handler: the element
+    // clicked is detached by the time the click returns, and still wears its old class.
+    var now = document.querySelectorAll('#met-days button');
+    return { before: before,
+             after: document.querySelector('.met-compare tbody').textContent,
+             day: m.state.day,
+             pressed: now[1].className, was: now[0].className };
+    """)
+    assert answer["day"] == 1, "clicking tomorrow did not select it"
+    assert "is-on" in answer["pressed"], "the pressed day is not marked"
+    assert "is-on" not in answer["was"], "today is still marked as well as tomorrow"
+    assert "33.0 m/s" not in answer["before"], "the fixture already read 33.0 today"
+    assert "33.0 m/s" in answer["after"], (
+        "the comparison table still describes today after picking tomorrow")
+
+
+@needs_chrome
 def test_the_hour_applies_to_everything_at_once():
     """The slider used to sit under the sounding, where it read as a control for that one
     chart. It ranks the list, fills the comparison and picks the sounding's hour."""
