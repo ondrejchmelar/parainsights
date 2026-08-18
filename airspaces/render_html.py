@@ -905,8 +905,13 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
 
         capped = sum(1 for ring in scene.get("airspaces", []) if ring.get("t"))
         boxes = (
-            " Each zone is the box it really is — floor to ceiling, at true height, so "
-            "drag with the right button to tilt and see what sits over what."
+            " Each zone is the box it really is — floor to ceiling — so drag with the "
+            "right button to tilt and see what sits over what. <strong>The vertical is "
+            "exaggerated five times</strong>, which the \u00d7 buttons under the map set: "
+            "at true scale, across 500 km of country, a 300 m traffic circuit is a third "
+            "of a pixel tall and every box here is two rings on top of each other. "
+            "\u00d71 is one press away, and the limits in each label are the real ones "
+            "whichever setting you are on."
             + (f" The {capped} that run above {DRAWN_TOP / 1000:.0f} km are cut off at a "
                "dashed lid, which is a cap and not their ceiling; the label says how high "
                "they go." if capped else "")
@@ -963,4 +968,9 @@ def _map(airspaces, project, scene: dict | None, uid: str) -> str:
         return map_svg(airspaces, project)
     from tracklog_viewer import view3d
 
-    return view3d.panel(scene, uid)
+    # The exaggeration this map offers, and it starts at x5. At true scale over 500 km
+    # of country a 300 m traffic circuit is **0.3 px** tall and an ATZ 0.7 px, so every
+    # box is two coincident rings — the flat map with extra steps. x1 is still one press
+    # away and the segmented control says which is on, so nothing here is hidden; what is
+    # hidden at true scale is the entire point of the view.
+    return view3d.panel(scene, uid, verticals=(1, 5, 15), vertical=5)

@@ -250,8 +250,20 @@ EXPAND_ICON = (
 
 
 def panel(payload: dict, uid: str, *, kmz_uri: str | None = None,
-          kmz_name: str = "flight.kmz") -> str:
-    """The canvas, its controls, and the embedded data."""
+          kmz_name: str = "flight.kmz",
+          verticals: tuple = (1, 2, 4), vertical: float | None = None) -> str:
+    """The canvas, its controls, and the embedded data.
+
+    `verticals` is the exaggeration the segmented control offers and `vertical` is where
+    the view starts, which are two questions: the buttons read best in increasing order
+    whichever one is pressed. It is the page's choice because the right answer depends on what the
+    scene *is*. A flight is a few kilometres of air over tens of kilometres of ground and
+    reads honestly at true scale — that is the setting you can measure height above ground
+    from, and the default. A map of a whole country is not: at national scale a 300 m
+    traffic circuit projects to **0.3 px**, and 2.8 px even zoomed a long way in, so every
+    box on it is two coincident rings and the 3D view shows nothing the flat map did not.
+    See `airspaces/cli.py`, which asks for more.
+    """
     earth = ""
     if kmz_uri:
         # A download link rather than a button: the KMZ travels inside the report, so
@@ -287,12 +299,13 @@ def panel(payload: dict, uid: str, *, kmz_uri: str | None = None,
         '<button type="button" data-view3d-act="basemap-set" data-style="off" '
         'aria-pressed="false">relief</button>'
     )
+    start = verticals[0] if vertical is None else vertical
     exaggeration = "".join(
         f'<button type="button" data-view3d-act="exaggerate-set" data-vertical="{level}" '
-        f'aria-pressed="{"true" if level == 1 else "false"}"'
-        f'{" class=is-on" if level == 1 else ""} '
+        f'aria-pressed="{"true" if level == start else "false"}"'
+        f'{" class=is-on" if level == start else ""} '
         f'aria-label="Vertical exaggeration &#215;{level}">&#215;{level}</button>'
-        for level in (1, 2, 4)
+        for level in verticals
     )
     # The phase switches only exist where there are phases. A scene with no flight in it
     # — the airspace map is one — would otherwise carry two buttons that label nothing,
@@ -718,7 +731,14 @@ function initView3d(root, cursorTrack) {
   // True scale by default: the whole point of putting the flight over a DEM is that
   // heights can be compared with the ground, and an exaggerated vertical breaks that.
   // The ×2 button is there for when the relief needs help.
-  var baseVertical = 1;
+  // The exaggeration the page's own control starts on, read from the button that is
+  // pressed rather than assumed to be 1: a scene whose control opens on x5 and whose
+  // view opens at true scale disagrees with itself, and the reader sees the wrong one.
+  var baseVertical = (function () {
+    var pressed = root.querySelector('[data-view3d-act="exaggerate-set"].is-on');
+    var level = pressed ? parseFloat(pressed.dataset.vertical) : 1;
+    return level > 0 ? level : 1;
+  })();
   // panX/panY are screen-space offsets applied after the fit, which is what lets the
   // view be dragged off centre — the fit alone always recentres, so without these the
   // camera was welded to the middle of the flight.
@@ -2367,6 +2387,35 @@ function initView3d(root, cursorTrack) {
 
   // Move the pan so that `point` (a ground-plane position from groundAt) projects back to
   // the same place on screen. Called after yaw or pitch has changed.
+  // The point a turn pivots on, with the lever arm bounded.
+  //
+  // Orbiting about the grabbed point is direct manipulation and right in the middle of
+  // the canvas. Near an edge it is violent: the turn swings everything else by the lever
+  // arm times the angle, so an 8 degree drag grabbed 8 km off centre sweeps the middle of
+  // the picture clean off the screen. Measured as what the reader is actually watching —
+  // how far the ground in the *middle* of the picture slides during a 30 px rotate:
+  // 2 px grabbed centrally, and **45 to 88 px grabbed near an edge**, so the subject
+  // moves three times as far as the finger and leaves the screen. That is the map
+  // "jumping away", which is what it was reported as.
+  //
+  // So the *screen position* of the pivot is clamped into the middle of the canvas
+  // before the ground under it is taken. It is continuous — a grab inside the box is
+  // untouched, and one outside pivots about the nearest point on its edge — so there is
+  // no threshold to feel, and a central grab still behaves exactly as it did. At 0.25
+  // those same measurements are 2 px central and 21 to 50 px at the edges, with the
+  // central *half* of the canvas untouched. What is left is inherent: a turn about a
+  // point the reader chose out there has a lever arm, and honouring the grab is the
+  // whole reason for orbiting about it rather than about the middle.
+  var ANCHOR_INSET = 0.25;   // of the canvas, kept clear on each side
+  function pickAnchor(clientX, clientY) {
+    var r = canvas.getBoundingClientRect();
+    var x = Math.min(Math.max(clientX, r.left + r.width * ANCHOR_INSET),
+                     r.left + r.width * (1 - ANCHOR_INSET));
+    var y = Math.min(Math.max(clientY, r.top + r.height * ANCHOR_INSET),
+                     r.top + r.height * (1 - ANCHOR_INSET));
+    return { x: x, y: y, point: groundUnder(x, y) };
+  }
+
   function holdGround(point, clientX, clientY) {
     if (!point) return;
     var box = canvas.getBoundingClientRect();
@@ -2424,8 +2473,7 @@ function initView3d(root, cursorTrack) {
       // The point the drag grabbed, captured once. See the orbit branch below for why
       // it cannot be re-picked as the cursor travels.
       orbitAnchor = gesture === 'orbit'
-        ? { x: event.clientX, y: event.clientY,
-            point: groundUnder(event.clientX, event.clientY) }
+        ? pickAnchor(event.clientX, event.clientY)
         : null;
     }
     canvas.classList.add('is-dragging');
@@ -2537,10 +2585,7 @@ function initView3d(root, cursorTrack) {
       // 1 and 92 px at 2 — which reads as the view swinging about somewhere off to the
       // side, and reads worst full screen, where the canvas is large enough to drag a
       // long way. This is the same reason the two-finger tilt captures `tiltAnchor` once.
-      if (!orbitAnchor) {
-        orbitAnchor = { x: event.clientX, y: event.clientY,
-                        point: groundUnder(event.clientX, event.clientY) };
-      }
+      if (!orbitAnchor) orbitAnchor = pickAnchor(event.clientX, event.clientY);
       view.yaw += cssX * 0.005;
       view.pitch = Math.max(0.18, Math.min(1.45, view.pitch - cssY * 0.004));
       holdGround(orbitAnchor.point, orbitAnchor.x, orbitAnchor.y);

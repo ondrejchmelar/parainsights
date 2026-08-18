@@ -120,9 +120,17 @@ published ATZ geometry is 117 m out and gets corrected. The okruh is **not** an 
 obstacle and cannot be — obstacles are a curated per-country download with no Czech
 coverage and no import path.
 
-The map draws each airspace as the **box** it is, floor to ceiling and at true vertical
-scale, which is the whole reason it is a 3D view: three zones with the same outline and
-different limits are one red line on a flat map. Two things there are decisions and not
+The map draws each airspace as the **box** it is, floor to ceiling, which is the whole
+reason it is a 3D view: three zones with the same outline and
+different limits are one red line on a flat map. **The airspace and planner maps open at
+×5 vertical**, and that is not a decoration: at true scale over 500 km of country a 300 m
+traffic circuit projects to **0.3 px**, and 2.8 px even zoomed a long way in, so every box
+is two coincident rings and the 3D view shows exactly what the flat one did. The
+segmented control offers ×1, ×5 and ×15, the caption says which is on, and every label
+carries the real limits. The *report* still opens at true scale, where it belongs: a
+flight is kilometres of air over tens of kilometres of ground, and true scale is the
+setting you can read height above ground from. `view3d.panel(verticals=…, vertical=…)`
+is how a page says which it wants. Two things there are decisions and not
 details — a limit carries its *datum* as well as its number, so anything AGL stays a
 height and is resolved against the terrain in the renderer; and the 21 airspaces that run
 to FL165 or higher are **capped at 4 000 m**, drawn with a dashed open lid and their real
@@ -663,6 +671,18 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   re-projects it where it is. The measurement to be careful with is the tautological one:
   asking whether the point the code chose to hold stayed put answers zero either way, so
   the test computes the surface point itself and measures *that*.
+- **An orbit anchored at the edge of the canvas throws the view away, and the fix is
+  where the pivot is allowed to be.** Turning about a point holds *that* point still and
+  swings everything else around it by an amount proportional to its distance from the
+  pivot — so grabbing near a corner puts the whole scene on a long lever. Measured on a
+  30 px rotate: the middle of the view slides **2 px** anchored centrally and **45–88 px**
+  anchored at the edges, which reads as the map jumping somewhere else. It is not a
+  regression and never was one; it is what orbiting about a corner does. `pickAnchor`
+  clamps the pivot into the middle half of the canvas (`ANCHOR_INSET`), which takes those
+  same drags to 2 px and 21–50 px, and it is applied at **both** places an orbit can pick
+  one — the `pointerdown` that normally wins, and the `pointermove` fallback for a gesture
+  that arrived without one. The drag still follows the finger; only the point it turns
+  about is kept off the lever's end.
 - **A zoom with no pointer behind it anchors on the fit, not on the middle of the
   canvas.** The wheel anchors on the pointer and always did; the buttons and the `+`/`-`
   keys have no pointer, and they zoomed about `(W/2, H/2)` while `refit` centres the

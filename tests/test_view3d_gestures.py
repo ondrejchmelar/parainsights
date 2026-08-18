@@ -568,3 +568,54 @@ def test_an_orbit_turns_about_the_terrain_that_was_grabbed():
         f"the grabbed terrain slid {answer['short']:.1f} px on a 90 px rotate")
     assert answer["long"] < 1.0, (
         f"the grabbed terrain slid {answer['long']:.1f} px on a 180 px rotate")
+
+
+_EDGE_ROTATE = """
+var h = window.__handle;
+var canvas = document.querySelector('canvas.view3d');
+var box = canvas.getBoundingClientRect();
+
+// What the reader watches: the ground in the middle of the picture. How far does it
+// slide across the screen during a rotate? A pivot under the finger is right; a pivot so
+// far off centre that the subject leaves the screen is what "the map jumps away" means.
+function centreSlide(fx, fy) {
+  h.view.yaw = 0; h.view.pitch = 0.7; h.view.zoom = 2;
+  h.view.panX = 0; h.view.panY = 0; h.redraw();
+  var mid = h.ground(box.left + box.width / 2, box.top + box.height * 0.58);
+  var was = h.worldProject(mid[0], mid[1], mid.length > 2 ? mid[2] : 0);
+  var gx = box.left + box.width * fx, gy = box.top + box.height * fy;
+  canvas.dispatchEvent(new PointerEvent('pointerdown', { clientX: gx, clientY: gy,
+    button: 2, buttons: 2, bubbles: true, pointerId: 1, pointerType: 'mouse' }));
+  for (var i = 1; i <= 3; i++) {
+    canvas.dispatchEvent(new PointerEvent('pointermove', { clientX: gx + 10 * i,
+      clientY: gy, buttons: 2, bubbles: true, pointerId: 1, pointerType: 'mouse' }));
+  }
+  canvas.dispatchEvent(new PointerEvent('pointerup', { clientX: gx + 30, clientY: gy,
+    buttons: 0, bubbles: true, pointerId: 1, pointerType: 'mouse' }));
+  h.redraw();
+  var now = h.worldProject(mid[0], mid[1], mid.length > 2 ? mid[2] : 0);
+  return Math.hypot(now[0] - was[0], now[1] - was[1]);
+}
+return { middle: centreSlide(0.5, 0.6), corner: centreSlide(0.03, 0.08),
+         side: centreSlide(0.03, 0.6), low: centreSlide(0.5, 0.95) };
+"""
+
+
+@needs_chrome
+def test_rotating_from_the_edge_does_not_throw_the_view_away():
+    """An orbit swings everything by the lever arm times the angle, so a grab near an
+    edge sweeps the middle of the picture off the screen. Measured on a 30 px rotate as
+    the slide of the ground the reader is looking at: 2 px grabbed centrally, and 45 to
+    88 px grabbed near an edge — the subject moving three times as far as the finger.
+
+    The pivot's *screen position* is clamped into the middle of the canvas now, which is
+    continuous and leaves the central half exactly as it was. The remainder is inherent:
+    a turn about a point out there has a lever arm, and honouring the grab is the reason
+    for orbiting about it at all.
+    """
+    answer = _probe(_scene(), _EDGE_ROTATE)
+    assert answer["middle"] < 5, (
+        f"a central grab moved the subject {answer['middle']:.0f} px; that one was fine")
+    for where in ("corner", "side", "low"):
+        assert answer[where] < 55, (
+            f"a grab at the {where} threw the view {answer[where]:.0f} px")

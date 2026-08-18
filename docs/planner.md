@@ -45,6 +45,19 @@ written in rather than the projection's own metric frame — and `groundAt`.
   same three sides — with the closing gap tested against 20% of the perimeter, the way
   XContest tests it — rather than adding a fourth leg to the total.
 
+- **Closing a course is the reader's to declare, and the route has one definition.**
+  Three parts of this page walk the route — the line drawn on the map, the airspace it is
+  checked against, and the number under it — and they disagreed. The first two honoured
+  the *closed course* box; `score()` closed a three-point route regardless, added the
+  third side, reported the gap it had just invented as `0.0 km`, and applied the flat
+  triangle's ×1.2. Measured on the real page: a course drawn as 164.1 + 86.3 km printed
+  **397.41 km** and 476.90 points. There is now one `course()` returning the walked
+  points, all three read it, and a test measures the printed distance against the
+  vertices of the line the map actually drew rather than recomputing the route it thinks
+  should be there — the target has to come from somewhere other than the code under test,
+  or it only re-asserts the bug. The old test did exactly that: it tapped three times and
+  asserted a triangle.
+
 - **The geodesy is the FAI sphere**, matching `tracklog_viewer/geo.py`, because that is
   what a scored distance is measured on. The airspace half of the same page is WGS84.
   The two are not interchangeable and the script says so where it defines its radius:
@@ -279,7 +292,7 @@ Imagery is fetched at view time by default, and gets sharper as the reader zooms
 Works end to end: drop turnpoints, undo, clear, close the course, and read the distance,
 the shape, the multiplier, the score, the side lengths and every airspace the route
 crosses — with the aerodromes among them marked open or shut at the hour you are planning
-for. Twelve tests, eleven of them driving a real browser.
+for. Thirteen tests, twelve of them driving a real browser.
 
 Wanted next:
 

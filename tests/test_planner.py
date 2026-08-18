@@ -152,8 +152,12 @@ def test_a_tap_drops_a_turnpoint_and_a_drag_does_not():
 
 @needs_chrome
 def test_three_points_are_scored_as_a_triangle():
-    """And scored with XContest's multipliers, so a shape that is worth more says so."""
+    """And scored with XContest's multipliers, so a shape that is worth more says so.
+
+    The course has to be declared closed. Three points on their own are two legs — see
+    `test_three_points_left_open_are_two_legs_and_not_a_triangle`."""
     answer = _run(_HARNESS + """
+    document.getElementById('plan-close').checked = true;
     tap(0.35, 0.40); tap(0.60, 0.40); tap(0.48, 0.62);
     return {
       points: turnpoints(),
@@ -175,6 +179,57 @@ def test_three_points_are_scored_as_a_triangle():
         "the score is not the distance times the multiplier it printed")
     assert factor in (xc.MULTIPLIER["flat"], xc.MULTIPLIER["fai"])
     assert answer["sides"].count("side") == 3, "a triangle printed legs, not sides"
+
+
+@needs_chrome
+def test_three_points_left_open_are_two_legs_and_not_a_triangle():
+    """The route is what the reader drew, and the score is not allowed to draw a leg of
+    its own. Three taps with the box unticked draw two legs on the map and are checked
+    against airspace as two legs; the score closed them into a triangle anyway, adding a
+    third side, calling the gap it had invented zero, and multiplying the result by 1.2.
+    On the real page that reported a 250 km course as 397 km.
+
+    The target is measured off the line the map drew, not recomputed here — the question
+    is whether the number under the map describes the course above it."""
+    answer = _run(_HARNESS + """
+    tap(0.35, 0.40); tap(0.60, 0.40); tap(0.48, 0.62);
+    var track = handle.scene().track;
+    var open = { shape: document.querySelector('.plan-shape').textContent,
+                 multiplier: figure('multiplier'),
+                 distance: figure('distance'),
+                 legs: document.getElementById('plan-legs').textContent,
+                 drawn: track.lon.map(function (lon, i) { return [lon, track.lat[i]]; }) };
+    document.getElementById('plan-close').checked = true;
+    document.getElementById('plan-close').dispatchEvent(new Event('change'));
+    var shut = handle.scene().track;
+    open.closedDistance = figure('distance');
+    open.closedShape = document.querySelector('.plan-shape').textContent;
+    open.closedDrawn = shut.lon.length;
+    return open;
+    """)
+    assert answer["shape"] == "open distance"
+    assert float(answer["multiplier"].replace("×", "")) == xc.MULTIPLIER["open"]
+    assert answer["legs"].count("leg") == 2, "an open route printed sides, not legs"
+
+    drawn = answer["drawn"]
+    assert len(drawn) == 3, "the map drew a leg the reader had not asked for"
+    walked = sum(_haversine(drawn[i - 1], drawn[i]) for i in range(1, len(drawn)))
+    assert float(answer["distance"].split(" ")[0]) == pytest.approx(walked / 1000, abs=0.02), (
+        "the printed distance is not the course the map drew")
+
+    # And ticking the box is what closes it: the same three points, a third leg on the
+    # map, and a triangle under it.
+    assert answer["closedDrawn"] == 4
+    assert "triangle" in answer["closedShape"]
+    assert float(answer["closedDistance"].split(" ")[0]) > walked / 1000
+
+
+def _haversine(a, b):
+    """The FAI sphere, as `planner/render_html.py` and `tracklog_viewer/geo.py` both use."""
+    lat1, lat2 = math.radians(a[1]), math.radians(b[1])
+    h = (math.sin((lat2 - lat1) / 2) ** 2
+         + math.cos(lat1) * math.cos(lat2) * math.sin(math.radians(b[0] - a[0]) / 2) ** 2)
+    return 2 * 6371000 * math.asin(min(1, math.sqrt(h)))
 
 
 @needs_chrome

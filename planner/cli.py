@@ -89,7 +89,9 @@ def main(argv=None) -> int:
     if payload is None:
         print("terrain could not be fetched; the planner needs a map to draw on")
         return 1
-    panel = view3d.panel(payload, "planner")
+    # Same map, same reason as `airspaces/render_html.py`: at national scale a
+    # traffic circuit is a third of a pixel tall.
+    panel = view3d.panel(payload, "planner", verticals=(1, 5, 15), vertical=5)
 
     args.html.parent.mkdir(parents=True, exist_ok=True)
     args.html.write_text(

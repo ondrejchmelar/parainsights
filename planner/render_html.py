@@ -149,6 +149,24 @@ SCRIPT = """
     return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
   }
 
+  // ---- the route -----------------------------------------------------------------------
+  //
+  // What the reader drew, walked in order, and it is defined once because three parts of
+  // this page consume it: the line on the map, the airspace it crosses, and the number
+  // under it. They disagreed. A three-point route drew as two legs and was checked
+  // against airspace as two legs, while the score closed it into a triangle nobody had
+  // asked for and added a third side — 250 km of drawn course reported as 397 km, and
+  // scored a flat triangle at x1.2 with a "closing gap" of zero that was an assumption
+  // rather than a measurement. Closing a course is the reader's to declare, so the box
+  // says it and everything here reads the box.
+  function course() {
+    var walk = points.slice(0);
+    if (points.length > 2 && document.getElementById('plan-close').checked) {
+      walk.push(points[0]);
+    }
+    return walk;
+  }
+
   // ---- what the line crosses -----------------------------------------------------------
   //
   // The reason this planner draws on the airspace map at all. A line that looks like a
@@ -221,11 +239,8 @@ SCRIPT = """
   function crossings() {
     var rings = handle.scene().airspaces || [];
     if (!rings.length || points.length < 2) return [];
-    var legs = [];
-    for (var i = 1; i < points.length; i++) legs.push([points[i - 1], points[i]]);
-    if (document.getElementById('plan-close').checked && points.length > 2) {
-      legs.push([points[points.length - 1], points[0]]);
-    }
+    var walk = course(), legs = [];
+    for (var i = 1; i < walk.length; i++) legs.push([walk[i - 1], walk[i]]);
 
     var found = {};
     legs.forEach(function (leg) {
@@ -321,9 +336,9 @@ SCRIPT = """
 
   // ---- scoring -----------------------------------------------------------------------
   function score() {
-    var legs = [];
-    for (var i = 1; i < points.length; i++) legs.push(distance(points[i - 1], points[i]));
     var closed = document.getElementById('plan-close').checked;
+    var walk = course(), legs = [];
+    for (var i = 1; i < walk.length; i++) legs.push(distance(walk[i - 1], walk[i]));
     var out = { legs: legs, total: legs.reduce(function (a, b) { return a + b; }, 0),
                 shape: 'open', closing: null };
     if (!points.length) return out;
@@ -331,7 +346,7 @@ SCRIPT = """
     // A triangle is three corners, and the perimeter is the closed figure — not the
     // path walked. Four points with the closing box ticked is the same three corners
     // with the flight coming home, which is how a task is actually flown.
-    var corners = points.length === 3 ? points.slice(0)
+    var corners = points.length === 3 && closed ? points.slice(0)
       : (points.length === 4 && closed ? points.slice(0, 3) : null);
     if (corners) {
       var sides = [distance(corners[0], corners[1]), distance(corners[1], corners[2]),
@@ -358,9 +373,7 @@ SCRIPT = """
   function redraw() {
     var scene = handle.scene();
     var line = { lon: [], lat: [], alt: [], c: [] };
-    var closed = document.getElementById('plan-close').checked;
-    var walk = points.slice(0);
-    if (closed && points.length > 2) walk.push(points[0]);
+    var walk = course();
     walk.forEach(function (point) {
       line.lon.push(point[0]);
       line.lat.push(point[1]);

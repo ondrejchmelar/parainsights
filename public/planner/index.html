@@ -461,7 +461,7 @@ canvas.view3d.is-dragging { cursor: grabbing; }
       <div class="view3d-controls">
         <div class="view3d-seg" role="group" aria-label="What the ground is"><button type="button" data-view3d-act="basemap-set" data-style="satellite" aria-pressed="true" class=is-on>Satellite</button><button type="button" data-view3d-act="basemap-set" data-style="map" aria-pressed="false">Map</button><button type="button" data-view3d-act="basemap-set" data-style="off" aria-pressed="false">relief</button></div>
         <div class="view3d-seg view3d-vert" role="group"
-             aria-label="Vertical exaggeration"><button type="button" data-view3d-act="exaggerate-set" data-vertical="1" aria-pressed="true" class=is-on aria-label="Vertical exaggeration &#215;1">&#215;1</button><button type="button" data-view3d-act="exaggerate-set" data-vertical="2" aria-pressed="false" aria-label="Vertical exaggeration &#215;2">&#215;2</button><button type="button" data-view3d-act="exaggerate-set" data-vertical="4" aria-pressed="false" aria-label="Vertical exaggeration &#215;4">&#215;4</button></div>
+             aria-label="Vertical exaggeration"><button type="button" data-view3d-act="exaggerate-set" data-vertical="1" aria-pressed="false" aria-label="Vertical exaggeration &#215;1">&#215;1</button><button type="button" data-view3d-act="exaggerate-set" data-vertical="5" aria-pressed="true" class=is-on aria-label="Vertical exaggeration &#215;5">&#215;5</button><button type="button" data-view3d-act="exaggerate-set" data-vertical="15" aria-pressed="false" aria-label="Vertical exaggeration &#215;15">&#215;15</button></div>
         <!-- Two independent switches, not a segmented control: the reader can want both,
              either, or — the default — neither. Both on at once over a long flight is
              more label than terrain, which is why neither starts on. -->
@@ -580,7 +580,14 @@ function initView3d(root, cursorTrack) {
   // True scale by default: the whole point of putting the flight over a DEM is that
   // heights can be compared with the ground, and an exaggerated vertical breaks that.
   // The ×2 button is there for when the relief needs help.
-  var baseVertical = 1;
+  // The exaggeration the page's own control starts on, read from the button that is
+  // pressed rather than assumed to be 1: a scene whose control opens on x5 and whose
+  // view opens at true scale disagrees with itself, and the reader sees the wrong one.
+  var baseVertical = (function () {
+    var pressed = root.querySelector('[data-view3d-act="exaggerate-set"].is-on');
+    var level = pressed ? parseFloat(pressed.dataset.vertical) : 1;
+    return level > 0 ? level : 1;
+  })();
   // panX/panY are screen-space offsets applied after the fit, which is what lets the
   // view be dragged off centre — the fit alone always recentres, so without these the
   // camera was welded to the middle of the flight.
@@ -2229,6 +2236,35 @@ function initView3d(root, cursorTrack) {
 
   // Move the pan so that `point` (a ground-plane position from groundAt) projects back to
   // the same place on screen. Called after yaw or pitch has changed.
+  // The point a turn pivots on, with the lever arm bounded.
+  //
+  // Orbiting about the grabbed point is direct manipulation and right in the middle of
+  // the canvas. Near an edge it is violent: the turn swings everything else by the lever
+  // arm times the angle, so an 8 degree drag grabbed 8 km off centre sweeps the middle of
+  // the picture clean off the screen. Measured as what the reader is actually watching —
+  // how far the ground in the *middle* of the picture slides during a 30 px rotate:
+  // 2 px grabbed centrally, and **45 to 88 px grabbed near an edge**, so the subject
+  // moves three times as far as the finger and leaves the screen. That is the map
+  // "jumping away", which is what it was reported as.
+  //
+  // So the *screen position* of the pivot is clamped into the middle of the canvas
+  // before the ground under it is taken. It is continuous — a grab inside the box is
+  // untouched, and one outside pivots about the nearest point on its edge — so there is
+  // no threshold to feel, and a central grab still behaves exactly as it did. At 0.25
+  // those same measurements are 2 px central and 21 to 50 px at the edges, with the
+  // central *half* of the canvas untouched. What is left is inherent: a turn about a
+  // point the reader chose out there has a lever arm, and honouring the grab is the
+  // whole reason for orbiting about it rather than about the middle.
+  var ANCHOR_INSET = 0.25;   // of the canvas, kept clear on each side
+  function pickAnchor(clientX, clientY) {
+    var r = canvas.getBoundingClientRect();
+    var x = Math.min(Math.max(clientX, r.left + r.width * ANCHOR_INSET),
+                     r.left + r.width * (1 - ANCHOR_INSET));
+    var y = Math.min(Math.max(clientY, r.top + r.height * ANCHOR_INSET),
+                     r.top + r.height * (1 - ANCHOR_INSET));
+    return { x: x, y: y, point: groundUnder(x, y) };
+  }
+
   function holdGround(point, clientX, clientY) {
     if (!point) return;
     var box = canvas.getBoundingClientRect();
@@ -2286,8 +2322,7 @@ function initView3d(root, cursorTrack) {
       // The point the drag grabbed, captured once. See the orbit branch below for why
       // it cannot be re-picked as the cursor travels.
       orbitAnchor = gesture === 'orbit'
-        ? { x: event.clientX, y: event.clientY,
-            point: groundUnder(event.clientX, event.clientY) }
+        ? pickAnchor(event.clientX, event.clientY)
         : null;
     }
     canvas.classList.add('is-dragging');
@@ -2399,10 +2434,7 @@ function initView3d(root, cursorTrack) {
       // 1 and 92 px at 2 — which reads as the view swinging about somewhere off to the
       // side, and reads worst full screen, where the canvas is large enough to drag a
       // long way. This is the same reason the two-finger tilt captures `tiltAnchor` once.
-      if (!orbitAnchor) {
-        orbitAnchor = { x: event.clientX, y: event.clientY,
-                        point: groundUnder(event.clientX, event.clientY) };
-      }
+      if (!orbitAnchor) orbitAnchor = pickAnchor(event.clientX, event.clientY);
       view.yaw += cssX * 0.005;
       view.pitch = Math.max(0.18, Math.min(1.45, view.pitch - cssY * 0.004));
       holdGround(orbitAnchor.point, orbitAnchor.x, orbitAnchor.y);
@@ -3779,6 +3811,24 @@ window.__view3dBackend = function (host) {
     return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
   }
 
+  // ---- the route -----------------------------------------------------------------------
+  //
+  // What the reader drew, walked in order, and it is defined once because three parts of
+  // this page consume it: the line on the map, the airspace it crosses, and the number
+  // under it. They disagreed. A three-point route drew as two legs and was checked
+  // against airspace as two legs, while the score closed it into a triangle nobody had
+  // asked for and added a third side — 250 km of drawn course reported as 397 km, and
+  // scored a flat triangle at x1.2 with a "closing gap" of zero that was an assumption
+  // rather than a measurement. Closing a course is the reader's to declare, so the box
+  // says it and everything here reads the box.
+  function course() {
+    var walk = points.slice(0);
+    if (points.length > 2 && document.getElementById('plan-close').checked) {
+      walk.push(points[0]);
+    }
+    return walk;
+  }
+
   // ---- what the line crosses -----------------------------------------------------------
   //
   // The reason this planner draws on the airspace map at all. A line that looks like a
@@ -3851,11 +3901,8 @@ window.__view3dBackend = function (host) {
   function crossings() {
     var rings = handle.scene().airspaces || [];
     if (!rings.length || points.length < 2) return [];
-    var legs = [];
-    for (var i = 1; i < points.length; i++) legs.push([points[i - 1], points[i]]);
-    if (document.getElementById('plan-close').checked && points.length > 2) {
-      legs.push([points[points.length - 1], points[0]]);
-    }
+    var walk = course(), legs = [];
+    for (var i = 1; i < walk.length; i++) legs.push([walk[i - 1], walk[i]]);
 
     var found = {};
     legs.forEach(function (leg) {
@@ -3951,9 +3998,9 @@ window.__view3dBackend = function (host) {
 
   // ---- scoring -----------------------------------------------------------------------
   function score() {
-    var legs = [];
-    for (var i = 1; i < points.length; i++) legs.push(distance(points[i - 1], points[i]));
     var closed = document.getElementById('plan-close').checked;
+    var walk = course(), legs = [];
+    for (var i = 1; i < walk.length; i++) legs.push(distance(walk[i - 1], walk[i]));
     var out = { legs: legs, total: legs.reduce(function (a, b) { return a + b; }, 0),
                 shape: 'open', closing: null };
     if (!points.length) return out;
@@ -3961,7 +4008,7 @@ window.__view3dBackend = function (host) {
     // A triangle is three corners, and the perimeter is the closed figure — not the
     // path walked. Four points with the closing box ticked is the same three corners
     // with the flight coming home, which is how a task is actually flown.
-    var corners = points.length === 3 ? points.slice(0)
+    var corners = points.length === 3 && closed ? points.slice(0)
       : (points.length === 4 && closed ? points.slice(0, 3) : null);
     if (corners) {
       var sides = [distance(corners[0], corners[1]), distance(corners[1], corners[2]),
@@ -3988,9 +4035,7 @@ window.__view3dBackend = function (host) {
   function redraw() {
     var scene = handle.scene();
     var line = { lon: [], lat: [], alt: [], c: [] };
-    var closed = document.getElementById('plan-close').checked;
-    var walk = points.slice(0);
-    if (closed && points.length > 2) walk.push(points[0]);
+    var walk = course();
     walk.forEach(function (point) {
       line.lon.push(point[0]);
       line.lat.push(point[1]);
