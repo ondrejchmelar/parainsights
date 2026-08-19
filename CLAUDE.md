@@ -184,7 +184,19 @@ at a time. The soundings are **small multiples with a shared probe height**: thr
 temperature traces and three dew points on one frame is six crossing lines, but pointing
 at 1 500 m over one hill and reading 1 500 m over all three is the question itself.
 flymet's is one picture per *station*, not per takeoff, because two hills often share
-their nearest airfield. The cap is
+their nearest airfield. **The thermal top is drawn twice, on purpose.** The dashed line is
+the model's convective boundary layer height — handed over, not read off the chart — and
+beside it the sounding now draws the construction a pilot would do by hand: the dry adiabat
+from the surface, stopping where it meets the temperature trace, with a ring on the
+crossing. The model knows the day's heating, the wind's mixing and the entrainment at the
+top, none of which one profile and a straight edge can see, so where the two disagree the
+reader sees the disagreement rather than being handed a number. `parcelTop` returns nothing
+where there is no crossing rather than a ring at an arbitrary height — including on a
+profile that is stable to dry convection from the ground up, which is what a lapse rate
+under 9.8 °C/km means and what the test fixture happens to be.
+The columns fill the row at any count, and a single takeoff puts its two charts side by
+side rather than stretching one into an 839 px sounding; both then carry the same 0–4 km
+axis at the same height, so the reader can read across. The cap is
 three because slots 1–3 of the categorical palette pass `validate_palette.js` all-pairs in
 both themes and the documented fourth slot (yellow) fails the normal-vision floor against
 this orange — so the page says *three at a time* rather than drawing a line nobody can

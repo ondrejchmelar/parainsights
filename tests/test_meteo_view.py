@@ -647,6 +647,146 @@ class TestChoosingTakeoffs:
             assert name in answer["table"], f"{name} is on the chart but not in the table"
 
 
+def _mixed_layer(lapse: float = 10.5, inversion: float = 2.0) -> tuple[dict, float]:
+    """A profile with a real mixed layer, and where the dry adiabat leaves it.
+
+    The page's fixture is a flat 7 °C/km, which is *stable to dry convection* — under the
+    adiabat's 9.8, a parcel is colder than the air from the ground up and there is no top
+    to find. That is the right answer there and it draws nothing, so it cannot exercise
+    the construction. This builds the ordinary summer shape instead: a mixed layer a
+    little steeper than the adiabat, capped by an inversion at 1 460 m.
+
+    The crossing is worked out here, from the two levels that bracket it, so the target
+    the test measures against is computed independently of the page that draws it.
+    """
+    ground, surface = 400.0, 26.0
+    kink = _LEVEL_HEIGHT[850]
+
+    def air(height: float) -> float:
+        if height <= kink:
+            return surface - lapse * (height - ground) / 1000
+        return surface - lapse * (kink - ground) / 1000 + inversion * (height - kink) / 1000
+
+    def parcel(height: float) -> float:
+        return surface - render_html.DRY_LAPSE * (height - ground) / 1000
+
+    temperatures = {level: round(air(float(height)), 4)
+                    for level, height in _LEVEL_HEIGHT.items() if height > ground}
+    # The first level where the parcel is no longer the warmer of the two, and the last
+    # where it still is: the crossing is between them, linear in height because both
+    # lines are straight over that interval.
+    above = sorted(h for h in _LEVEL_HEIGHT.values() if h > ground)
+    under, over = None, None
+    for height in above:
+        gap = parcel(height) - air(height)
+        if gap > 0:
+            under = height
+        elif under is not None:
+            over = height
+            break
+    assert under is not None and over is not None, "the fixture has no crossing in it"
+    low, high = parcel(under) - air(under), air(over) - parcel(over)
+    return temperatures, under + low / (low + high) * (over - under)
+
+
+@needs_chrome
+def test_the_sounding_shows_where_the_parcel_stops():
+    """"How is the thermal top deduced" is a fair question to ask of a dashed line with a
+    number beside it, and the honest answer is that the line is the *model's* boundary
+    layer height — handed over, not read off this chart. So the chart now draws the
+    construction as well: the dry adiabat from the surface, stopping where it meets the
+    temperature trace, with a ring on the crossing.
+
+    Two cases, and the second matters as much as the first. On an ordinary mixed-layer
+    day the crossing is found and matches an arithmetic done outside the page. On the flat
+    7 °C/km fixture — stable to dry convection, so no parcel ever leaves the ground — it
+    returns nothing and marks nothing, rather than putting a ring at an arbitrary height.
+    """
+    temperatures, expected = _mixed_layer()
+    answer = _probe_page("""
+    var m = window.__meteo;
+    var index = m.chosen()[0];
+    var profile = m.state.profiles[index];
+    var before = document.querySelector('.met-col-sounding').__drawn.parcelTop;
+    var wanted = %s;
+    Object.keys(wanted).forEach(function (level) {
+      var series = profile.hourly['temperature_' + level + 'hPa'];
+      for (var i = 0; i < series.length; i++) series[i] = wanted[level];
+    });
+    m.draw();
+    var drawn = document.querySelector('.met-col-sounding').__drawn;
+    return { stable: before, mixed: drawn.parcelTop, top: drawn.thermalTop,
+             ground: drawn.ground };
+    """ % json.dumps({str(k): v for k, v in temperatures.items()}))
+
+    assert answer["stable"] is None, (
+        "a 7 °C/km profile is stable to dry convection and has no parcel top to mark")
+    assert answer["mixed"] == pytest.approx(expected, abs=2), (
+        f"the parcel stops at {answer['mixed']} m, not the {expected:.0f} m the two "
+        "bracketing levels put it at")
+    assert answer["ground"] < answer["mixed"], "the parcel stopped at or under the ground"
+
+
+def test_the_dry_adiabat_is_one_number_on_both_sides():
+    """The caption quotes it and the script constructs the parcel with it, the same shape
+    as `CAP_LAPSE` — two copies that must not drift."""
+    assert f"var DRY_LAPSE = {render_html.DRY_LAPSE};" in render_html.SCRIPT
+    assert f"{render_html.DRY_LAPSE:.1f} °C/km" in render_html.body()
+
+
+@needs_chrome
+def test_the_charts_fill_the_row_however_many_takeoffs_are_chosen():
+    """The columns were capped at 340 px, which is what three of them come to — so three
+    filled the panel and one used a third of it, with two thirds of the row empty beside
+    the chart the reader had asked to look at.
+
+    Three things are asserted, and the third is the one that bites. The row is filled at
+    every count; the sounding keeps its 380:300 shape, because a sounding widened against
+    a fixed height flattens the lapse rate it exists to show; and the canvas *backing
+    store* matches the box, which is what says the chart was drawn at the size it ended
+    up — `fit()` measures the box, so a layout change applied after the draw leaves every
+    chart drawn for the width it used to have and quietly upscaled.
+    """
+    answer = _probe_page("""
+    var m = window.__meteo;
+    function shape() {
+      var row = document.getElementById('met-columns').getBoundingClientRect();
+      var cells = document.querySelectorAll('.met-col');
+      var canvases = document.querySelectorAll('.met-col .met-canvas');
+      var left = Infinity, right = -Infinity, drawn = true, ratio = null;
+      Array.prototype.forEach.call(canvases, function (canvas) {
+        var box = canvas.getBoundingClientRect();
+        left = Math.min(left, box.left); right = Math.max(right, box.right);
+        // devicePixelRatio is 1 headless, so the backing store is the box in CSS px.
+        if (Math.abs(canvas.width - box.width) > 2) drawn = false;
+      });
+      var sounding = document.querySelector('.met-col-sounding').getBoundingClientRect();
+      ratio = Math.round(sounding.width / sounding.height * 100) / 100;
+      return { columns: cells.length, filled: Math.round((right - left) / row.width * 100),
+               drawn: drawn, ratio: ratio, width: Math.round(sounding.width) };
+    }
+    var seen = [shape()];
+    var free = [];
+    for (var i = 0; i < 12 && free.length < 2; i++) if (m.chosen().indexOf(i) < 0) free.push(i);
+    m.add(free[0]); seen.push(shape());
+    m.add(free[1]); seen.push(shape());
+    return { seen: seen };
+    """)
+    one, two, three = answer["seen"]
+    assert (one["columns"], two["columns"], three["columns"]) == (1, 2, 3)
+    for count, at in (("one", one), ("two", two), ("three", three)):
+        assert at["filled"] >= 95, (
+            f"with {count} chosen the charts cover {at['filled']}% of the row")
+        assert at["ratio"] == pytest.approx(380 / 300, abs=0.02), (
+            f"with {count} chosen the sounding is {at['ratio']}, not its own 1.27")
+        assert at["drawn"], (
+            f"with {count} chosen a chart was drawn for a different width than it got")
+    # A lone takeoff puts its two charts side by side, so they come out the size a pair's
+    # do rather than one 839 px sounding under a 645 px meteogram.
+    assert one["width"] == two["width"], (
+        f"one takeoff drew a {one['width']} px sounding against a pair's {two['width']}")
+
+
 @needs_chrome
 def test_the_day_applies_to_everything_the_hour_does():
     """The day and the hour are one setting with two controls, and the two controls each

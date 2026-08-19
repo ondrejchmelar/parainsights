@@ -41,6 +41,11 @@ ENDPOINT = "https://api.open-meteo.com/v1/forecast"
 # the script, and a test holds the two to the same number.
 CAP_LAPSE = 2.0
 
+# The dry adiabatic lapse rate, which is physics rather than a threshold — but the caption
+# quotes it and the script constructs the parcel with it, so it is written once here and
+# once in the script, and `tests/test_meteo_view.py` holds the two to the same number.
+DRY_LAPSE = 9.8
+
 # How many takeoffs can be compared at once, and it is a number the *palette* chose.
 # Slots 1–3 of the design system's categorical order validate all-pairs in both themes;
 # the fourth slot is yellow, and yellow against this orange fails the normal-vision floor
@@ -108,6 +113,10 @@ STYLE = """
 .met-compare .best { font-weight:700; }
 @media (max-width: 620px) {
   .met-compare .hide-narrow { display:none; }
+  /* Side by side on a phone is two 290 px charts, which is smaller than either was
+     before. A single takeoff stacks again below this width. */
+  .met-columns.is-single .met-col { display:block; }
+  .met-columns.is-single .met-canvas + .met-canvas { margin-top:8px; }
 }
 
 /* The picker, in a dialog: Escape closes it, the backdrop closes it, and focus stays
@@ -157,14 +166,37 @@ STYLE = """
 .met-strip .chart-title { font-size:11px; text-transform:uppercase; letter-spacing:.07em;
   color:var(--ink-3); margin:0 0 4px; }
 
-/* Small multiples. One column per takeoff, capped at 340 px so a single chosen takeoff
-   does not get a sounding stretched across the whole panel — a sounding is a shape to
-   read, and widening it past its own aspect ratio makes the lapse rate look gentler than
-   it is, which is the one thing that chart must not do. */
+/* Small multiples, one column per takeoff, filling the row whatever the count. The
+   columns used to be capped at 340 px, which is what three of them come to — so three
+   filled the panel and one used a third of it, leaving two thirds of the row empty
+   beside a chart the reader had asked to look at.
+
+   The cap was there to stop a sounding being "stretched past its own aspect ratio",
+   which would flatten the lapse rate it exists to show. Measured, that is not what
+   stretching a column does: these canvases carry `width`/`height` attributes and no CSS
+   height, so the box keeps its intrinsic 380:300 and a wider column makes the chart
+   bigger rather than wider — 340x268 at three takeoffs, 525x413 at two, the same 1.27
+   either way. What the cap was really protecting against is the *single* takeoff, where
+   filling the row proportionally means an 839 px sounding under a 645 px meteogram, and
+   the reader scrolls past one chart to reach the other.
+
+   So one takeoff puts its two charts side by side instead. Both stay in shape, both grow,
+   the row is full, and a lone takeoff's charts come out the same size as a pair's. */
 .met-columns { display:grid; gap:16px; margin:14px 0 0;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 340px)); }
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
 .met-col { min-width:0; }
 .met-col .met-canvas + .met-canvas { margin-top:8px; }
+.met-columns.is-single .met-col { display:grid; gap:0 16px; align-items:start;
+  grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.met-columns.is-single .met-col-head,
+.met-columns.is-single .met-col-rose { grid-column:1 / -1; }
+.met-columns.is-single .met-canvas + .met-canvas { margin-top:0; }
+/* Side by side, the meteogram takes the sounding's shape rather than its own shorter one.
+   Both charts run 0–4 km up the y axis, so equal heights put the two height scales beside
+   each other and the reader can read across — boundary layer on the left at the height
+   the trace bends on the right. Stacked, they keep their own proportions, because there
+   is nothing to read across to. */
+.met-columns.is-single .met-col-gram { aspect-ratio: 380 / 300; }
 .met-col-head { display:flex; align-items:center; gap:7px; font-size:12.5px;
   font-weight:600; margin:0 0 5px; }
 .met-col-head i { width:10px; height:10px; border-radius:50%; flex:none; }
@@ -317,16 +349,23 @@ def body(uid: str = "meteo") -> str:
 
     <div class="met-columns" id="met-columns"></div>
     <p class="met-legend">One column per chosen takeoff, and each chart in it is that
-      takeoff alone. <strong>Above:</strong> the meteogram — height against the hour,
+      takeoff alone. <strong>The meteogram:</strong> height against the hour,
       shading is cloud cover on the pressure levels, the solid line is its boundary layer
       and the dashes its estimated cloudbase, over its own ground.
-      <strong>Below:</strong> the sounding at the chosen hour — temperature solid, dew
-      point dashed, the dry adiabat from the surface faint. The dotted blue line is the
+      <strong>The sounding:</strong> the chosen hour — temperature solid, dew
+      point dashed. The dotted blue line is the
       estimated cloudbase; a shaded band is a layer the thermals stop at
       (<em>zadržná vrstva</em> — under {CAP_LAPSE:.0f} °C/km, red where the air warms with
       height), read between the model's pressure levels and so no finer than they are.
       A day with nothing stable under 4 km says <em>no lid below 4 km</em> rather than
       drawing nothing, because a blank chart and a chart that checked look identical.
+      <strong>Where the thermal top comes from:</strong> the faint orange line is a parcel
+      leaving the ground at the surface temperature and cooling {DRY_LAPSE:.1f} °C/km — it
+      keeps rising while it is warmer than the air around it, and the ring is where the
+      two meet and it stops. The dashed <em>thermal top</em> is a second answer to the same
+      question, the model's own boundary layer height, which also knows the day's heating
+      and how the wind mixes it; the two usually land within a hundred metres and it is
+      worth seeing when they do not.
       Point at a sounding — or
       drag a finger up it, which reads the chart rather than scrolling the page — and
       <strong>all of them read at that height</strong>, which is the question you are
@@ -855,6 +894,7 @@ SCRIPT = r"""
   // morning inversion 100 m thick sits inside one of those gaps and cannot be seen here at
   // all, which is why the caption says what the shading is read from.
   var CAP_LAPSE = 2.0;    // °C per km
+  var DRY_LAPSE = 9.8;    // °C per km, the dry adiabat a parcel climbs
 
   // The sounding's frame, shared by the chart and by the pointer that reads heights off
   // it. Two copies of these three numbers is a readout that quietly points at the wrong
@@ -1143,6 +1183,9 @@ SCRIPT = r"""
   function drawColumns() {
     var box = document.getElementById('met-columns');
     var wanted = chosen();
+    // Set before anything is drawn: `fit()` measures the canvas box, so a layout change
+    // applied after the draw leaves every chart drawn for the width it used to have.
+    box.classList.toggle('is-single', wanted.length === 1);
     // Rebuilt only when the set changes: canvases recreated on every hour step lose
     // their backing stores and their pointer handlers, and the slider steps a lot.
     var have = Array.prototype.map.call(box.children, function (cell) {
@@ -1200,6 +1243,39 @@ SCRIPT = r"""
         drawSounding(cell.querySelector('.met-col-sounding'),
                      state.profiles[Number(cell.dataset.site)]);
       });
+  }
+
+  // Where a parcel leaving the ground stops climbing: the dry adiabat from the surface
+  // temperature against the model's own temperature profile. It rises while it is warmer
+  // than the air around it and stops where the two meet, so this walks the pressure
+  // levels for the first one where the parcel is no longer warmer and interpolates the
+  // crossing between that level and the one below — linear in height, because both lines
+  // are straight between two levels.
+  //
+  // Returns null in the two cases that are not a crossing, rather than a number that
+  // would draw a marker somewhere arbitrary: a profile that never gets stable inside the
+  // chart (the parcel is still warmer at the ceiling), and one already stable off the
+  // deck, where there is no parcel climbing to find a top for. A 7 °C/km day is the
+  // second of those — under the dry adiabat's 9.8, the air is stable to dry convection
+  // from the ground up, and the honest drawing is no marker at all.
+  function parcelTop(hourly, at, ground, ceiling) {
+    var surface = hourly.temperature_2m[at];
+    if (surface == null) return null;
+    var heights = levelSeries(hourly, 'geopotential_height');
+    var temps = levelSeries(hourly, 'temperature');
+    var prevHeight = null, prevGap = null;
+    for (var l = 0; l < conf.levels.length; l++) {
+      var height = heights[l] ? heights[l][at] : null;
+      var air = temps[l] ? temps[l][at] : null;
+      if (height == null || air == null || height <= ground) continue;
+      if (height > ceiling) break;
+      var gap = (surface - DRY_LAPSE * (height - ground) / 1000) - air;
+      if (prevGap !== null && prevGap > 0 && gap <= 0) {
+        return prevHeight + prevGap / (prevGap - gap) * (height - prevHeight);
+      }
+      prevHeight = height; prevGap = gap;
+    }
+    return null;
   }
 
   // A label on a pad. The thermal top and the cloudbase land within a few metres of
@@ -1331,18 +1407,44 @@ SCRIPT = r"""
       ctx.restore();
     }
 
-    // The dry adiabat from the surface temperature: where it meets the profile is the
-    // trigger, and how far the two run apart is the day's strength. Drawn faint because
-    // it is a construction, not a measurement.
+    // The dry adiabat from the surface temperature, and the whole visual answer to "where
+    // does the thermal top come from". A parcel leaving the ground at the surface
+    // temperature cools at 9.8 °C/km whatever the air around it does; it keeps rising for
+    // as long as it stays warmer than that air, and stops where the two meet. So the
+    // adiabat is drawn from the surface up to that crossing and marked there, and the gap
+    // between the two lines on the way up is the day's strength.
+    //
+    // **The dashed `thermal top` is not this crossing, and must not be drawn as if it
+    // were.** That line is the model's own convective boundary layer height — it knows
+    // the day's heating, the wind's mixing and the entrainment at the top, none of which
+    // a hand construction off one profile can see. Drawing them both is the honest
+    // version: usually they land within a hundred metres of each other, and where they do
+    // not, the reader can see the disagreement rather than being handed one number.
     var surface = hourly.temperature_2m[at];
+    var parcel = parcelTop(hourly, at, ground, top_m);
     if (surface != null) {
+      var end = parcel == null ? top_m : parcel;
       ctx.save();
       ctx.strokeStyle = '#eb6834'; ctx.globalAlpha = 0.45; ctx.setLineDash([4, 4]);
       ctx.beginPath();
       ctx.moveTo(x(surface), y(ground));
-      ctx.lineTo(x(surface - 9.8 * (top_m - ground) / 1000), y(top_m));
+      ctx.lineTo(x(surface - DRY_LAPSE * (end - ground) / 1000), y(end));
       ctx.stroke();
       ctx.restore();
+      if (parcel != null) {
+        // The crossing itself. A ring rather than a fourth full-width rule: the chart
+        // already carries three of those, and what this marks is one *point* — the height
+        // where the two lines meet — not a level across the whole frame.
+        ctx.save();
+        ctx.strokeStyle = '#eb6834'; ctx.globalAlpha = 0.9; ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(x(surface - DRY_LAPSE * (parcel - ground) / 1000), y(parcel), 4, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+        padded(ctx, 'parcel stops here',
+               x(surface - DRY_LAPSE * (parcel - ground) / 1000) - 7, y(parcel) - 5,
+               ink('--ink-2'), 'right');
+      }
     }
 
     var heights = levelSeries(hourly, 'geopotential_height');
@@ -1372,6 +1474,7 @@ SCRIPT = r"""
     canvas.__drawn = {
       caps: caps.length,
       thermalTop: blh == null ? null : Math.round(ground + blh),
+      parcelTop: parcel == null ? null : Math.round(parcel),
       cloudbase: base == null ? null : Math.round(base),
       ground: Math.round(ground)
     };

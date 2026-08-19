@@ -26,7 +26,11 @@ def page(article: str, title: str) -> str:
 {common.TOKENS}
 body {{ margin:0; background:var(--paper); color:var(--ink); font:15px/1.55
   system-ui,-apple-system,"Segoe UI",sans-serif; }}
-.wrap {{ max-width:1100px; margin:0 auto; padding:26px 18px 60px; }}
+/* Wider than a reading column, because the charts are the page. At 1 100 px three
+   soundings came to 340 px each, which is a temperature axis 30 °C wide in 300 px and a
+   trace whose bends a reader has to lean in for. The prose does not stretch with it —
+   `.lede` keeps its 70ch — so this buys width for the only things that want it. */
+.wrap {{ max-width:1440px; margin:0 auto; padding:26px 18px 60px; }}
 h1 {{ font-size:26px; margin:0 0 6px; }}
 .lede {{ color:var(--ink-2); margin:0 0 14px; max-width:70ch; }}
 a {{ color: inherit; }}

@@ -114,6 +114,44 @@ open by default, so the default is unchanged and one click puts it away.
 * **Adding a takeoff redraws immediately** rather than when its sounding lands. A control
   that does nothing for a second is a control the reader presses again.
 * **The status line no longer reserves space when it is empty** (`:empty { display:none }`).
+* **The charts fill the row at every count, and the page is wider.** The columns were
+  capped at 340 px, which is what three of them come to — so three filled the panel and
+  one used a third of it, with two thirds of the row empty beside the chart the reader had
+  asked to look at. The cap's stated reason was that a stretched sounding flattens the
+  lapse rate, and measured, that is not what stretching a column does: these canvases carry
+  `width`/`height` attributes and no CSS height, so the box keeps its intrinsic 380:300 and
+  a wider column makes the chart *bigger*, not wider — 1.27 at every count. What the cap
+  was really protecting against is the single takeoff, where filling the row proportionally
+  gives an 839 px sounding under a 645 px meteogram and the reader scrolls past one chart
+  to reach the other. So one takeoff puts its two charts **side by side** instead, and they
+  come out the size a pair's do. The wrap went 1 100 → 1 440 px on top of that, because the
+  charts are the page and the prose keeps its own 70ch either way. Measured at 1 280 px:
+  340 → 388 px per sounding at three takeoffs, 340 → 590 at one or two.
+  Side by side, the meteogram takes the sounding's shape rather than its own shorter one.
+  Both run 0–4 km up the y axis, so equal heights put the two height scales beside each
+  other and the reader can read across — boundary layer on the left at the height the
+  trace bends on the right. It also fixed the ragged bottom the side-by-side introduced.
+  The caption said **Above:** and **Below:** of the two charts, which is wrong the moment
+  they sit side by side; it names them instead.
+* **The thermal top now shows its working.** "How is the thermal top deduced" is a fair
+  question to ask of a dashed line with a number beside it, and the honest answer was not
+  on the chart: that line is the *model's* convective boundary layer height, handed over,
+  not read off the sounding. The chart draws the construction as well — the dry adiabat
+  from the surface temperature, stopping where it meets the temperature trace, with a ring
+  on the crossing and *parcel stops here* beside it. The two are deliberately both drawn
+  and both labelled: the model knows the day's heating, the wind's mixing and the
+  entrainment at the top, none of which a hand construction off one profile can see, so
+  where they disagree the reader should see the disagreement rather than be handed one
+  number. `DRY_LAPSE` is written once in Python for the caption and once in the script for
+  the construction, with a test holding the two to the same value, the same shape as
+  `CAP_LAPSE`.
+  `parcelTop` returns nothing in the two cases that are not a crossing, rather than a
+  number that would put a ring at an arbitrary height: a profile still unstable at the
+  chart's ceiling, and one already stable off the deck. The page's own test fixture is the
+  second of those — a flat 7 °C/km is *stable to dry convection*, under the adiabat's 9.8,
+  so no parcel ever leaves the ground and the honest drawing is no marker at all. That is
+  why the test builds a mixed-layer profile of its own and computes the crossing from the
+  two levels that bracket it, outside the page that draws it.
 * **Picking a day left the comparison table on the previous one.** The day and the hour
   are one setting with two controls, and each control carried its own hand-written list
   of redraws. They drifted: the hour called `drawList`, `drawCompare` and `drawSite`, the
