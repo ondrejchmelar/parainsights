@@ -118,6 +118,28 @@ needs no network. The flymet station list is the same shape — `--refresh-flyme
 because neither list moves and the distances are arithmetic no reader's browser should be
 asked to repeat.
 
+## The model is named, not left to "best match"
+
+The page asks Open-Meteo for `icon_seamless`, and for `ecmwf_ifs` only for the boundary
+layer height, which ICON does not publish. That is exactly what `best_match` was
+serving — measured hour by hour on 2026-09-23 over all four days at Raná and Col
+Rodella, identical in every value the page reads — but a blend nobody names cannot be
+shown to the reader, and it can change under the page without a word.
+
+So the page says which it is, beside the hour slider: **ICON-D2 · 2 km** until the
+current D2 run ends (+48 h), **ICON-D2 → ICON-EU** for the three hours Open-Meteo blends
+them, **ICON-EU · 7 km** after, with the run's hour, and *boundary layer ECMWF IFS*
+throughout. Where the D2 run ends is read from Open-Meteo's own
+`/data/dwd_icon_d2/static/meta.json` (CORS-open), not assumed.
+
+The charts' ceiling is 4 km or three above the takeoff's ground, whichever is higher:
+Col Rodella stands at 2 400 m, and under a fixed 4 km its sounding was one pressure level.
+
+The prose that explained the charts is gone. The lines carry their own labels, and what
+only the prose said — the capping layer's {CAP_LAPSE} °C/km threshold, the dry adiabat,
+and that pointing at one sounding reads every one at that height — is the sounding's
+tooltip.
+
 ## Two requests, and why not one or a hundred and sixty
 
 Every site's *surface* forecast comes in one multi-coordinate call — Open-Meteo accepts

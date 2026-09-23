@@ -183,12 +183,10 @@ class TestThePage:
     def test_the_page_says_it_needs_a_network(self):
         """It is the one artifact here that is not self-contained. Saying so is the
         difference between a page that is honest and a page that looks broken."""
-        html = render_html.body()
-        assert "without a network" in html
         assert "needs a network" in render_html.SCRIPT
 
     def test_the_page_credits_both_sources_and_refuses_to_decide(self):
-        html = cli.page(render_html.body(), "Will it fly?")
+        html = cli.page(render_html.body(), "Meteo")
         assert "Open-Meteo" in html
         assert "ParaglidingEarth" in html
         assert "A forecast is not a decision" in html
@@ -337,10 +335,37 @@ def _fake_profile(hours: int = 96) -> dict:
     return {"elevation": ground, "hourly": hourly}
 
 
+# ICON-D2's run ends at 18:00 on the fixture's second day — the page's "tomorrow" — so
+# today and tomorrow afternoon are D2, tomorrow evening is the blend, and later is ICON-EU.
+# The stub answers both models' metadata with it; `utc_offset_seconds` is absent from the
+# fixture, so local and UTC are the same clock here.
+_FAKE_META = {
+    "data_end_time": int(dt.datetime(2026, 8, 12, 18, tzinfo=dt.timezone.utc).timestamp()),
+    "last_run_initialisation_time": int(
+        dt.datetime(2026, 8, 10, 15, tzinfo=dt.timezone.utc).timestamp()),
+}
+
+
+def _as_two_models(profile: dict) -> dict:
+    """The profile as Open-Meteo sends it when asked for two models at once: every key
+    carrying its model's name, ICON's with no boundary layer and IFS's with one. The page
+    has to take each field from the right one, and a stub that answered in the old shape
+    would pass whether it did or not."""
+    hourly = {"time": profile["hourly"]["time"]}
+    for key, values in profile["hourly"].items():
+        if key == "time":
+            continue
+        hourly[f"{key}_ecmwf_ifs"] = [None if v is None else v - 500 for v in values] \
+            if key != "boundary_layer_height" else values
+        hourly[f"{key}_icon_seamless"] = values if key != "boundary_layer_height" \
+            else [None] * len(values)
+    return {**profile, "hourly": hourly}
+
+
 def _probe_page(body: str, *, site_count: int = 3) -> dict:
     """Run the real meteo page against a stubbed Open-Meteo and return what `body` says."""
     chrome = CHROME
-    profile = json.dumps(_fake_profile())
+    profile = json.dumps(_as_two_models(_fake_profile()))
     surface = json.dumps([{
         "hourly": {
             "time": _fake_profile()["hourly"]["time"],
@@ -358,16 +383,18 @@ def _probe_page(body: str, *, site_count: int = 3) -> dict:
     // Every request this page makes, answered from the two objects above. The URL tells
     // them apart the same way the page builds them: only the profile call asks for
     // geopotential height.
+    window.__meta = %s;
     window.fetch = function (url) {
-      var body = String(url).indexOf('geopotential_height') >= 0
+      var body = String(url).indexOf('meta.json') >= 0 ? window.__meta
+        : String(url).indexOf('geopotential_height') >= 0
         ? window.__profile : window.__surface;
       return Promise.resolve({ ok: true, json: function () {
         return Promise.resolve(JSON.parse(JSON.stringify(body)));
       } });
     };
     </script>
-    """ % (profile, surface)
-    page = cli.page(render_html.body(), "Will it fly?")
+    """ % (profile, surface, json.dumps(_FAKE_META))
+    page = cli.page(render_html.body(), "Meteo")
     probe = """
     <pre id="probe-out"></pre>
     <script>
@@ -1193,3 +1220,44 @@ class TestTheSoundingSaysWhereTheDayStops:
                                     + hourly.boundary_layer_height[at]) };
         """)
         assert answer["drawn"] == answer["wanted"]
+
+
+@needs_chrome
+class TestTheModelIsNamed:
+    def test_the_label_follows_the_hour_from_icon_d2_to_icon_eu(self):
+        """The forecast is ICON-D2 to its horizon and ICON-EU after, and a reader looking
+        at Saturday should not be told it is the 2 km model."""
+        answer = _probe_page("""
+        var label = function () { return document.getElementById('met-model').textContent; };
+        var pick = function (day) {
+          document.querySelector('#met-days button[data-day="' + day + '"]').click();
+          return label();
+        };
+        var today = label();
+        var hour = document.getElementById('met-hour-input');
+        hour.value = 17; hour.dispatchEvent(new Event('input', { bubbles: true }));
+        var blend = pick(1);
+        var later = pick(3);
+        return { today: today, blend: blend, later: later };
+        """)
+        assert "ICON-D2 · 2 km" in answer["today"]
+        assert "15 UTC run" in answer["today"]
+        assert "ECMWF IFS" in answer["today"], "the boundary layer's own model is unnamed"
+        assert "ICON-D2 → ICON-EU" in answer["blend"]
+        assert "ICON-EU · 7 km" in answer["later"]
+
+    def test_each_field_comes_from_its_own_model(self):
+        """ICON for everything it has, IFS for the boundary layer only. The stub's IFS
+        numbers are 500 lower on every other field, so taking one from the wrong model
+        shows."""
+        answer = _probe_page("""
+        var m = window.__meteo;
+        var p = m.state.profiles[m.chosen()[0]].hourly;
+        return { blh: p.boundary_layer_height[14], t: p.temperature_2m[14],
+                 t850: p.temperature_850hPa[14], leftovers: Object.keys(p).filter(
+                   function (k) { return /_(icon_seamless|ecmwf_ifs)$/.test(k); }).length };
+        """)
+        assert answer["blh"] == 1200.0
+        assert answer["t"] == 26.0
+        assert answer["t850"] > 0
+        assert answer["leftovers"] == 0

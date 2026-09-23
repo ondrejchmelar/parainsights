@@ -238,6 +238,8 @@ STYLE = """
   background:var(--panel); margin-top:6px; }
 .met-flymet p { font-size:11.5px; color:var(--ink-3); margin:5px 0 0; }
 .met-flymet a { color:inherit; }
+.met-model { color:var(--ink-3); font-size:12.5px; margin:0; }
+.met-model b { color:var(--ink-2); font-weight:600; }
 .met-status { color:var(--ink-3); font-size:13px; margin:0; flex-basis:100%; }
 .met-status:empty { display:none; }
 .met-links { margin:14px 0 0; font-size:12.5px; color:var(--ink-3); }
@@ -296,14 +298,7 @@ def body(uid: str = "meteo") -> str:
         },
     }, separators=(",", ":"))
     return f"""<article class="flight meteo-article" id="{uid}-article">
-  <h1>Will it fly?</h1>
-  <p class="lede">The day's forecast against {len(site_data.SITES)} takeoffs — the essentials
-  from <a href="https://gfs.pgweb.cz/">gfs.pgweb.cz</a> and the usual trips south — ranked
-  by how the wind sits on each one. Add up to {MAX_CHOSEN} takeoffs and the page compares
-  them at the same hour from the same model: a row each in the table, a boundary layer
-  each on one meteogram, a sounding each beside it, and — north of the Alps, where it
-  has stations — flymet's own meteogram for the airfield nearest each one. The numbers are fetched when you open this page, so they are
-  as current as the model is, and there are none at all without a network.</p>
+  <h1>Meteo</h1>
   <div class="met-head">
     <div class="met-days" id="met-days" role="group" aria-label="Which day"></div>
     <div class="met-hour">
@@ -312,6 +307,7 @@ def body(uid: str = "meteo") -> str:
              aria-describedby="met-hour-readout">
       <output id="met-hour-readout" for="met-hour-input">14:00</output>
     </div>
+    <p class="met-model" id="met-model"></p>
     <p class="met-status" id="met-status" role="status">Fetching the forecast…</p>
   </div>
 
@@ -319,12 +315,8 @@ def body(uid: str = "meteo") -> str:
     <button type="button" class="met-add" id="met-add">+ add a takeoff</button>
   </div>
 
-  <table class="met-compare" id="met-compare" hidden>
-    <caption class="met-legend" style="text-align:left; margin:0 0 6px">The chosen
-      takeoffs at the chosen hour, best thermal top and best cloudbase marked. The same
-      numbers the charts below draw: the boundary layers share one meteogram because
-      that comparison is about <em>when</em>, and the soundings sit side by side because
-      that one is about the shape of each column.</caption>
+  <table class="met-compare" id="met-compare" hidden
+         aria-label="The chosen takeoffs at the chosen hour">
     <thead><tr>
       <th scope="col">takeoff</th><th scope="col">verdict</th><th scope="col">wind</th>
       <th scope="col">thermal top</th><th scope="col">cloudbase</th>
@@ -339,38 +331,19 @@ def body(uid: str = "meteo") -> str:
     <h3 id="met-name">The day, takeoff by takeoff</h3>
     <p class="met-sub" id="met-sub"></p>
     <div class="met-strip" id="met-strip" hidden>
-      <p class="chart-title">When each one works</p>
+      <p class="chart-title">Boundary layer height</p>
       <canvas class="met-canvas" id="met-band" width="960" height="170"></canvas>
-      <p class="met-legend">The convective boundary layer through the day, one line per
-        chosen takeoff and <em>nothing else on the frame</em> — it is the only quantity
-        here that compares across hills standing at different heights. Everything that
-        belongs to one takeoff is in that takeoff's own column below.</p>
       <p class="met-keys" id="met-keys"></p>
     </div>
 
-    <div class="met-columns" id="met-columns"></div>
-    <p class="met-legend">One column per chosen takeoff, and each chart in it is that
-      takeoff alone. <strong>The meteogram:</strong> height against the hour,
-      shading is cloud cover on the pressure levels, the solid line is its boundary layer
-      and the dashes its estimated cloudbase, over its own ground.
-      <strong>The sounding:</strong> the chosen hour — temperature solid, dew
-      point dashed. The dotted blue line is the
-      estimated cloudbase; a shaded band is a layer the thermals stop at
-      (<em>zadržná vrstva</em> — under {CAP_LAPSE:.0f} °C/km, red where the air warms with
-      height), read between the model's pressure levels and so no finer than they are.
-      A day with nothing stable under 4 km says <em>no lid below 4 km</em> rather than
-      drawing nothing, because a blank chart and a chart that checked look identical.
-      <strong>Where the thermal top comes from:</strong> the faint orange line is a parcel
-      leaving the ground at the surface temperature and cooling {DRY_LAPSE:.1f} °C/km — it
-      keeps rising while it is warmer than the air around it, and the ring is where the
-      two meet and it stops. The dashed <em>thermal top</em> is a second answer to the same
-      question, the model's own boundary layer height, which also knows the day's heating
-      and how the wind mixes it; the two usually land within a hundred metres and it is
-      worth seeing when they do not.
-      Point at a sounding — or
-      drag a finger up it, which reads the chart rather than scrolling the page — and
-      <strong>all of them read at that height</strong>, which is the question you are
-      asking when you have three open.</p>
+    <!-- What the prose under the charts used to say, kept where a reader who wants it
+         finds it: on the sounding itself, as its tooltip. The labels on the charts carry
+         the rest. -->
+    <div class="met-columns" id="met-columns" data-sounding-hint="Shaded: a layer the
+      thermals stop at — lapse under {CAP_LAPSE:.0f} °C/km, red where the air warms with
+      height. Orange: the dry adiabat, {DRY_LAPSE:.1f} °C/km from the surface temperature;
+      the ring is where a parcel stops. Point or drag to read every sounding at that
+      height."></div>
 
     <!-- Foldable, and open by default. It is a second opinion worth having in front of
          the reader — but it is 700 px of someone else's chart under 300 px of ours, and
@@ -397,7 +370,10 @@ def body(uid: str = "meteo") -> str:
     </div>
   </dialog>
   <p class="met-links">Forecast from <a href="https://open-meteo.com/"
-    rel="noreferrer">Open-Meteo</a> (GFS/ICON), fetched in this page.
+    rel="noreferrer">Open-Meteo</a>, fetched in this page: DWD ICON-D2 (2 km) for as far
+    as it reaches, ICON-EU (7 km) after, and the boundary layer height from ECMWF IFS,
+    which ICON does not publish. Takeoffs chosen after
+    <a href="https://gfs.pgweb.cz/" rel="noreferrer">gfs.pgweb.cz</a>'s essentials.
     {site_data.ATTRIBUTION}, list taken {site_data.FETCHED}.
     {flymet_data.ATTRIBUTION}, loaded from <a
     href="{flymet_data.SOURCE}" rel="noreferrer">flymet</a> when you open a takeoff —
@@ -508,7 +484,8 @@ SCRIPT = r"""
     var lon = conf.sites.map(function (s) { return s.lon; }).join(',');
     return conf.endpoint + '?latitude=' + lat + '&longitude=' + lon
       + '&hourly=wind_speed_10m,wind_direction_10m,temperature_2m,cloud_cover,cape'
-      + '&forecast_days=4&timezone=Europe%2FPrague&wind_speed_unit=ms';
+      + '&forecast_days=4&timezone=Europe%2FPrague&wind_speed_unit=ms'
+      + '&models=' + MODEL;
   }
   function profileUrl(site) {
     var fields = ['temperature_2m', 'dew_point_2m', 'cloud_cover',
@@ -520,7 +497,65 @@ SCRIPT = r"""
     });
     return conf.endpoint + '?latitude=' + site.lat + '&longitude=' + site.lon
       + '&hourly=' + fields.join(',')
-      + '&forecast_days=4&timezone=Europe%2FPrague&wind_speed_unit=ms';
+      + '&forecast_days=4&timezone=Europe%2FPrague&wind_speed_unit=ms'
+      + '&models=' + MODEL + ',' + BLH_MODEL;
+  }
+
+  // Asked for by name, not left to Open-Meteo's `best_match`. Best match *was* exactly
+  // this — ICON-D2 to its horizon, ICON-EU after, the boundary layer height from ECMWF
+  // IFS because ICON publishes none; measured hour by hour on 2026-09-23, identical in
+  // every value — but a blend nobody names cannot be shown to the reader, and it can
+  // change under the page without a word. Two models in one request come back with
+  // their names on every key, so the profile is put back into the one shape the charts
+  // read: everything from ICON, the boundary layer from IFS.
+  function unpack(answer) {
+    var hourly = answer.hourly || {};
+    var mine = '_' + MODEL, blh = '_' + BLH_MODEL;
+    var out = {};
+    Object.keys(hourly).forEach(function (key) {
+      if (key.slice(-mine.length) === mine) out[key.slice(0, -mine.length)] = hourly[key];
+      else if (key.slice(-blh.length) !== blh && !(key in out)) out[key] = hourly[key];
+    });
+    if (hourly['boundary_layer_height' + blh]) {
+      out.boundary_layer_height = hourly['boundary_layer_height' + blh];
+    }
+    answer.hourly = out;
+    return answer;
+  }
+
+  // Which ICON the chosen hour comes from. ICON-D2 runs every three hours out to +48 h
+  // and Open-Meteo blends the last three hours of it into ICON-EU; its own metadata says
+  // where the current run ends, so the label is read, not assumed.
+  function loadRuns() {
+    var runs = {};
+    return Promise.all(['dwd_icon_d2', 'dwd_icon_eu'].map(function (name) {
+      return get(META.replace('{model}', name)).then(function (meta) { runs[name] = meta; })
+        .catch(function () { /* the label falls back to naming ICON without the run */ });
+    })).then(function () { state.runs = runs; drawModel(); });
+  }
+
+  function drawModel() {
+    var box = document.getElementById('met-model');
+    var surface = state.surface && state.surface[0];
+    var d2 = state.runs && state.runs.dwd_icon_d2;
+    var eu = state.runs && state.runs.dwd_icon_eu;
+    var name = 'ICON', run = null;
+    if (surface && surface.hourly && d2 && d2.data_end_time) {
+      var at = indexFor(surface.hourly.time, state.day, state.hour);
+      var local = surface.hourly.time[at];
+      var when = Date.parse(local + ':00Z') / 1000 - (surface.utc_offset_seconds || 0);
+      if (when < d2.data_end_time - 3 * 3600) { name = 'ICON-D2 · 2 km'; run = d2; }
+      else if (when < d2.data_end_time) { name = 'ICON-D2 → ICON-EU'; run = d2; }
+      else { name = 'ICON-EU · 7 km'; run = eu; }
+    }
+    var init = run && run.last_run_initialisation_time
+      ? ('0' + new Date(run.last_run_initialisation_time * 1000).getUTCHours()).slice(-2)
+        + ' UTC run'
+      : null;
+    box.innerHTML = 'Model <b></b>' + (init ? ' · <span class="run"></span>' : '')
+      + ' · boundary layer <b>ECMWF IFS</b>';
+    box.querySelector('b').textContent = name;
+    if (init) box.querySelector('.run').textContent = init;
   }
 
   function get(url) {
@@ -562,6 +597,7 @@ SCRIPT = r"""
   // is the half of this page a reader actually reads. One list now, and both controls
   // call it.
   function drawTime() {
+    drawModel();
     drawList();
     drawCompare();
     drawSite();
@@ -787,7 +823,7 @@ SCRIPT = r"""
         top = blh == null ? null : ground + blh;
         base = cloudbase(profile.hourly.temperature_2m[at],
                          profile.hourly.dew_point_2m[at], ground);
-        var caps = cappingLayers(profile.hourly, at, ground, SOUND_CEILING);
+        var caps = cappingLayers(profile.hourly, at, ground, ceilingFor(ground));
         lid = caps.length ? caps[0] : null;
       }
       var temperature = null, dew = null;
@@ -901,12 +937,22 @@ SCRIPT = r"""
   // morning inversion 100 m thick sits inside one of those gaps and cannot be seen here at
   // all, which is why the caption says what the shading is read from.
   var CAP_LAPSE = 2.0;    // °C per km
+  var MODEL = 'icon_seamless';     // ICON-D2, then ICON-EU, then ICON global
+  var BLH_MODEL = 'ecmwf_ifs';     // the boundary layer height, which ICON does not publish
+  var META = 'https://api.open-meteo.com/data/{model}/static/meta.json';
   var DRY_LAPSE = 9.8;    // °C per km, the dry adiabat a parcel climbs
 
   // The sounding's frame, shared by the chart and by the pointer that reads heights off
   // it. Two copies of these three numbers is a readout that quietly points at the wrong
   // height the first time the chart is retuned.
   var SOUND_TOP = 10, SOUND_BOTTOM = 24, SOUND_CEILING = 4000;
+
+  // The top of a takeoff's charts: 4 km, or three above its ground where that is higher.
+  // A fixed 4 km was drawn for Czech hills; Col Rodella stands at 2 400 m, and under a
+  // 4 km lid its sounding was one pressure level — a dot, not a column.
+  function ceilingFor(ground) {
+    return Math.max(SOUND_CEILING, Math.ceil(((ground || 0) + 3000) / 1000) * 1000);
+  }
 
   function cappingLayers(hourly, at, ground, ceiling) {
     var heights = levelSeries(hourly, 'geopotential_height');
@@ -1003,7 +1049,7 @@ SCRIPT = r"""
     var hourly = profile.hourly;
     var ground = profile.elevation;
     var left = 38, right = 8, top = 8, bottom = 22;
-    var top_m = 4000;
+    var top_m = ceilingFor(ground);
     function x(hour) { return left + (hour - 5) / 16 * (W - left - right); }
     function y(metres) { return top + (1 - metres / top_m) * (H - top - bottom); }
 
@@ -1031,14 +1077,28 @@ SCRIPT = r"""
     ctx.fillStyle = ink('--panel-2');
     ctx.fillRect(left, y(ground), W - left - right, H - bottom - y(ground));
 
-    hourLine(ctx, profile, x, y, boundaryLayer(profile), false, seriesColour(slot), 2.4,
-             { left: left, top: top, W: W, H: H, right: right, bottom: bottom });
-    hourLine(ctx, profile, x, y, function (at) {
+    var box = { left: left, top: top, W: W, H: H, right: right, bottom: bottom };
+    var layer = hourLine(ctx, profile, x, y, boundaryLayer(profile), false,
+                         seriesColour(slot), 2.4, box);
+    var based = hourLine(ctx, profile, x, y, function (at) {
       return cloudbase(hourly.temperature_2m[at], hourly.dew_point_2m[at], ground);
-    }, true, ink('--ink-3'), 1.5,
-             { left: left, top: top, W: W, H: H, right: right, bottom: bottom });
+    }, true, ink('--ink-3'), 1.5, box);
 
     gramAxes(ctx, x, y, top_m, left, right, bottom, W, H, 4);
+
+    // Each line named at its evening end, where it has stopped moving — the one place on
+    // the chart a label will not sit on the part of the curve being read. Pushed apart
+    // when the two end close together, which on a blue day they do.
+    var labels = [];
+    if (layer && layer[1] > top) labels.push({ y: layer[1], text: 'boundary layer', colour: seriesColour(slot) });
+    if (based && based[1] > top) labels.push({ y: based[1], text: 'cloudbase', colour: ink('--ink-3') });
+    labels.sort(function (a, b) { return a.y - b.y; });
+    labels.forEach(function (label, i) {
+      label.y = Math.min(Math.max(label.y - 3, top + 12), H - bottom - 2);
+      if (i && label.y - labels[i - 1].y < 12) label.y = labels[i - 1].y + 12;
+      padded(ctx, label.text, W - right - 3, label.y, label.colour, 'right');
+    });
+    padded(ctx, 'shading: cloud', left + 4, top + 12, ink('--ink-3'), 'left');
   }
 
   // The comparison, and only the comparison: one line per chosen takeoff, nothing that
@@ -1225,6 +1285,8 @@ SCRIPT = r"""
           : (good.length ? 'works in ' + good.join(' ') : 'only marginal directions');
         cell.querySelector('.met-col-rose a').href =
           'https://www.paraglidingearth.com/index.php?site=' + site.id;
+        cell.querySelector('.met-col-sounding').title =
+          box.dataset.soundingHint.replace(/\s+/g, ' ');
         bindProbe(cell.querySelector('.met-col-sounding'));
         box.appendChild(cell);
       });
@@ -1308,7 +1370,8 @@ SCRIPT = r"""
     var at = indexFor(hourly.time, state.day, state.hour);
     var ground = profile.elevation;
     var left = 34, right = 10, top = SOUND_TOP, bottom = SOUND_BOTTOM;
-    var top_m = SOUND_CEILING, minT = -20, maxT = 35;
+    var top_m = ceilingFor(ground), minT = -20, maxT = 35;
+    canvas.__ceiling = top_m;
     function x(celsius) { return left + (celsius - minT) / (maxT - minT) * (W - left - right); }
     function y(metres) { return top + (1 - metres / top_m) * (H - top - bottom); }
 
@@ -1455,24 +1518,31 @@ SCRIPT = r"""
     }
 
     var heights = levelSeries(hourly, 'geopotential_height');
+    // Returns where the trace ends at the top, for its label.
     function trace(values, dashed, colour) {
       ctx.save();
       ctx.beginPath();
       ctx.setLineDash(dashed ? [4, 3] : []);
       ctx.strokeStyle = colour; ctx.lineWidth = 2;
-      var started = false;
+      var started = false, end = null;
       for (var l = 0; l < conf.levels.length; l++) {
         var height = heights[l] ? heights[l][at] : null;
         var value = values[l] ? values[l][at] : null;
         if (height == null || value == null || height < ground || height > top_m) continue;
         if (!started) { ctx.moveTo(x(value), y(height)); started = true; }
         else ctx.lineTo(x(value), y(height));
+        end = [x(value), y(height)];
       }
       ctx.stroke();
       ctx.restore();
+      return end;
     }
-    trace(levelSeries(hourly, 'temperature'), false, '#c2410c');
-    trace(levelSeries(hourly, 'dew_point'), true, '#2f6fb3');
+    var tEnd = trace(levelSeries(hourly, 'temperature'), false, '#c2410c');
+    var dEnd = trace(levelSeries(hourly, 'dew_point'), true, '#2f6fb3');
+    // Named where they end, which is where the two lines are furthest apart on any day
+    // worth flying — the dew point is the one on the left.
+    if (tEnd) padded(ctx, 'temp', tEnd[0] + 4, tEnd[1] + 12, '#c2410c', 'left');
+    if (dEnd) padded(ctx, 'dew point', dEnd[0] - 4, dEnd[1] + 12, '#2f6fb3', 'right');
 
     // What this chart ended up saying, for a test to assert on rather than a screenshot
     // failing to. `view3d.rose()` is the same idea and exists for the same reason: a
@@ -1687,7 +1757,7 @@ SCRIPT = r"""
     say('Fetching the sounding for ' + names.join(', ') + '…');
     var failed = [];
     Promise.all(wanted.map(function (index) {
-      return get(profileUrl(conf.sites[index])).then(function (answer) {
+      return get(profileUrl(conf.sites[index])).then(unpack).then(function (answer) {
         // Still chosen? A reader who drops a takeoff while its sounding is in the air
         // should not have it reappear when the answer lands.
         if (slotOf(index) < 0) return;
@@ -1716,7 +1786,7 @@ SCRIPT = r"""
       var box = canvas.getBoundingClientRect();
       var y = event.clientY - box.top;
       var plot = box.height - SOUND_TOP - SOUND_BOTTOM;
-      state.probe = (1 - (y - SOUND_TOP) / plot) * SOUND_CEILING;
+      state.probe = (1 - (y - SOUND_TOP) / plot) * (canvas.__ceiling || SOUND_CEILING);
       state.probeX = event.clientX - box.left;
       drawSoundings();
     }
@@ -1839,9 +1909,11 @@ SCRIPT = r"""
   recall();
   drawChosen();
   drawSite();
+  loadRuns();
   get(surfaceUrl()).then(function (answer) {
     state.surface = Array.isArray(answer) ? answer : [answer];
     say('');
+    drawModel();
     drawList();
     // Open the best takeoff of the day rather than an empty page: this page's answer to
     // "is it worth going anywhere" is a sounding, and making the reader pick a hill

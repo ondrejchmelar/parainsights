@@ -91,7 +91,7 @@ def main(argv=None) -> int:
 
     if args.html:
         args.html.parent.mkdir(parents=True, exist_ok=True)
-        args.html.write_text(page(render_html.body(), "Will it fly?"), encoding="utf-8")
+        args.html.write_text(page(render_html.body(), "Meteo"), encoding="utf-8")
         print(f"{args.html}: {len(sites.SITES)} takeoffs, forecast fetched at view time")
     return 0
 
