@@ -101,9 +101,12 @@ was. "Nothing crossed" is only ever said about ground the map has airspace for.
 The terrain is **not in the page**: it ships as `terrain.remote()` — the box, the grid
 and the tile zoom — and the browser fetches the terrarium tiles and samples them onto
 the same 120 000 nodes `terrain.fetch` would have built (`loadTerrain` in `view3d`).
-Carried, that grid was half of a 1.3 MB page. The relief is about 2.5 km a node against
-1.6 on the airspace map; scoring is on coordinates, and the imagery sharpens at view
-time as before.
+Carried, that grid was half of a 1.3 MB page. The base relief is about 2.5 km a node;
+zoom in and hold still and `view3d` fetches a finer patch for what is on screen (about
+160 nodes across it, down to 25 m), draws it in place of the base mesh there, and reads
+heights from it — so picks and turnpoint altitudes follow the finer ground too. The same
+applies on the airspace map and in the report, whose embedded grids carry the tile
+source for it. WebGL only; the 2D fallback keeps the base grid.
 
 ## Whether anybody is there
 

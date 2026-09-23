@@ -120,3 +120,101 @@ def test_the_remote_descriptor_is_the_grid_fetch_would_build():
     assert (remote["rows"], remote["cols"]) == terrain._grid(5.5, 20.5, 45.0, 51.3,
                                                              560, 120000)
     assert remote["remote"]["zoom"] == terrain._choose_zoom(5.5, 20.5, 45.0, 51.3)
+
+
+# ---- finer ground on zoom ---------------------------------------------------------------
+#
+# The whole path, with a real fetch: a tile server that answers any tile from a known
+# function, a scene whose base grid is *not* that function, a wheel zoom, and the view
+# left still. Afterwards the ground under the zoomed view has to be the function's.
+
+def _known(lat, lon):
+    return 900 + 400 * np.sin(lat * 311.0) * np.cos(lon * 207.0)
+
+
+def _tile_on_the_fly(zoom, x, y):
+    from PIL import Image
+
+    n = 2 ** zoom
+    rows = (y + (np.arange(256) + 0.5) / 256) / n
+    cols = (x + (np.arange(256) + 0.5) / 256) / n
+    lat = np.degrees(np.arctan(np.sinh(np.pi * (1 - 2 * rows))))[:, None]
+    lon = (cols * 360 - 180)[None, :]
+    value = _known(lat, lon) + 32768
+    whole = np.floor(value).astype(np.int64)
+    rgb = np.stack([whole // 256, whole % 256,
+                    np.round((value - whole) * 256).astype(np.int64) % 256], axis=-1)
+    out = io.BytesIO()
+    Image.fromarray(rgb.astype(np.uint8), "RGB").save(out, "PNG")
+    return out.getvalue()
+
+
+@pytest.fixture
+def any_tile():
+    served = []
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            z, x, y = (int(part) for part in self.path.strip("/").removesuffix(".png")
+                       .split("/")[-3:])
+            served.append((z, x, y))
+            body = _tile_on_the_fly(z, x, y)
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}/{{z}}/{{x}}/{{y}}.png", served
+    finally:
+        server.shutdown()
+
+
+_ZOOM_AND_WAIT = """
+var h = window.__view3dAll[Object.keys(window.__view3dAll)[0]];
+var canvas = document.querySelector('canvas.view3d');
+h.view.pitch = 0.9; h.view.yaw = 0; h.view.panX = 0; h.view.panY = 0; h.view.zoom = 1;
+h.redraw();
+var box = canvas.getBoundingClientRect();
+for (var i = 0; i < 30; i++) canvas.dispatchEvent(new WheelEvent('wheel', {
+  deltaY: -100, clientX: box.left + box.width / 2, clientY: box.top + box.height * 0.55,
+  bubbles: true, cancelable: true }));
+return new Promise(function (resolve) {
+  setTimeout(function () {
+    var state = h.terrainState();
+    var samples = [];
+    if (state) {
+      for (var i = 1; i < 6; i++) for (var j = 1; j < 6; j++) {
+        var lon = state.west + (state.east - state.west) * i / 6;
+        var lat = state.south + (state.north - state.south) * j / 6;
+        samples.push([lat, lon, h.groundAt(lon, lat)]);
+      }
+    }
+    resolve({ state: state, samples: samples, gl: h.gl() });
+  }, 4000);
+});
+"""
+
+
+@needs_chrome
+def test_zooming_in_fetches_finer_ground_and_stands_on_it(any_tile):
+    from tests.test_view3d_gl import _probe, _scene, _terrain
+
+    url, served = any_tile
+    dem = {**_terrain(), "remote": {"url": url}}
+    answer = _probe(_scene(terrain=dem, basemap=False), _ZOOM_AND_WAIT)
+    assert served, "zooming in fetched no terrain at all"
+    assert answer["state"], "tiles were served but no patch was put down"
+    assert answer["gl"]["patchCells"] > 0
+    worst = max(abs(ground - _known(lat, lon)) for lat, lon, ground in answer["samples"])
+    # Nearest-pixel sampling and bilinear reading between nodes: a few metres on a
+    # function this smooth. The base grid underneath is a different function entirely,
+    # so reading it instead would miss by hundreds.
+    assert worst < 15, f"the ground under the zoomed view is {worst:.0f} m off the tiles'"

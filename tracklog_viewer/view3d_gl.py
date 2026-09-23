@@ -116,10 +116,17 @@ var FRAGMENT = [
   'uniform vec4 uDetailBox;',
   'uniform float uUseMap;',
   'uniform float uUseDetail;',
+  'uniform vec4 uHole;',
+  'uniform float uUseHole;',
   'varying vec2 vGeo;',
   'varying vec3 vColour;',
   'const float EDGE = 0.03;',
   'void main() {',
+  // Where the detail terrain is drawn the base mesh is not: two surfaces a few metres
+  // apart would fight in the depth buffer. `uHole` is (west, north, east, south) in the
+  // same 0..1 DEM box as `vGeo`.
+  '  if (uUseHole > 0.5 && vGeo.x > uHole.x && vGeo.x < uHole.z',
+  '      && vGeo.y > uHole.y && vGeo.y < uHole.w) discard;',
   '  vec3 colour = vColour;',
   '  if (uUseMap > 0.5) {',
   '    colour = texture2D(uMap, vGeo * uBox.xy + uBox.zw).rgb;',
@@ -204,6 +211,8 @@ function backend(host) {
   var uDetailBox = gl.getUniformLocation(program, 'uDetailBox');
   var uUseMap = gl.getUniformLocation(program, 'uUseMap');
   var uUseDetail = gl.getUniformLocation(program, 'uUseDetail');
+  var uHole = gl.getUniformLocation(program, 'uHole');
+  var uUseHole = gl.getUniformLocation(program, 'uUseHole');
   var aPos = gl.getAttribLocation(program, 'aPos');
   var aGeo = gl.getAttribLocation(program, 'aGeo');
   var aColour = gl.getAttribLocation(program, 'aColour');
@@ -427,6 +436,93 @@ function backend(host) {
     return boxUniform(patch.box);
   }
 
+  // ---- detail terrain -----------------------------------------------------------
+  //
+  // A finer grid over the part of the terrain the reader has zoomed in on, fetched by
+  // the host (`terrainPlan` in view3d.py). Its own buffers, the same program: the vertex
+  // `aGeo` is its place in the *base* DEM's box, so both imagery textures land on it
+  // exactly as they land on the base mesh, and the base mesh is cut away under it.
+  var patch = null;               // the host's patch object currently in the buffers
+  var patchCells = 0, patchColour = null, patchHole = null;
+  var patchPosition = gl.createBuffer(), patchColourBuffer = gl.createBuffer();
+  var patchGeo = gl.createBuffer(), patchIndex = gl.createBuffer();
+
+  function shadePatch() {
+    if (!patch) return;
+    var lit = host.lit();
+    var pc = patch.cols, pr = patch.rows, z = patch.z;
+    var a = host.toMetres(patch.west, patch.north);
+    var b = host.toMetres(patch.east, patch.south);
+    var cellX = (b[0] - a[0]) / (pc - 1), cellY = (a[1] - b[1]) / (pr - 1);
+    for (var r = 0; r < pr; r++) {
+      for (var c = 0; c < pc; c++) {
+        var i = r * pc + c;
+        var right = z[i + (c + 1 < pc ? 1 : 0)], below = z[i + (r + 1 < pr ? pc : 0)];
+        var shade = 0.96;
+        if (lit.spread > 0) {
+          var t = (host.slopeShade((right - z[i]) / cellX, (below - z[i]) / cellY)
+                   - lit.mid) / lit.spread;
+          shade = 0.86 + Math.max(-1, Math.min(1, t)) * 0.30;
+        }
+        // Tinted against the *base* terrain's range, so the patch is the same colour as
+        // the ground around it.
+        var height = Math.min(1, Math.max(0, (z[i] - dem.min) / relief));
+        patchColour[i * 3] = (120 + height * 95) * shade / 255;
+        patchColour[i * 3 + 1] = (135 + height * 80) * shade / 255;
+        patchColour[i * 3 + 2] = (105 + height * 95) * shade / 255;
+      }
+    }
+  }
+
+  function setTerrainDetail(next) {
+    patch = next && next.z && next.cols > 1 && next.rows > 1 ? next : null;
+    depthBox = null;
+    if (!patch) { patchCells = 0; return; }
+    var pc = patch.cols, pr = patch.rows, count = pc * pr;
+    var lonSpan = dem.east - dem.west, latSpan = dem.north - dem.south;
+    var positions = new Float32Array(count * 3), geo = new Float32Array(count * 2);
+    for (var r = 0; r < pr; r++) {
+      var lat = patch.north - (patch.north - patch.south) * r / (pr - 1);
+      for (var c = 0; c < pc; c++) {
+        var lon = patch.west + (patch.east - patch.west) * c / (pc - 1);
+        var i = r * pc + c, m = host.toMetres(lon, lat);
+        positions[i * 3] = m[0]; positions[i * 3 + 1] = m[1]; positions[i * 3 + 2] = patch.z[i];
+        geo[i * 2] = (lon - dem.west) / lonSpan;
+        geo[i * 2 + 1] = (dem.north - lat) / latSpan;
+      }
+    }
+    patchColour = new Float32Array(count * 3);
+    shadePatch();
+    var wideIndex = count > 65536;
+    patchCells = (pc - 1) * (pr - 1);
+    var index = wideIndex ? new Uint32Array(patchCells * 6) : new Uint16Array(patchCells * 6);
+    var k = 0;
+    for (var rr = 0; rr < pr - 1; rr++) {
+      for (var cc = 0; cc < pc - 1; cc++) {
+        var i00 = rr * pc + cc, i01 = i00 + 1, i10 = i00 + pc, i11 = i10 + 1;
+        index[k++] = i00; index[k++] = i01; index[k++] = i11;
+        index[k++] = i00; index[k++] = i11; index[k++] = i10;
+      }
+    }
+    patch.indexType = wideIndex ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT;
+    gl.bindBuffer(gl.ARRAY_BUFFER, patchPosition);
+    gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, patchColourBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, patchColour, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, patchGeo);
+    gl.bufferData(gl.ARRAY_BUFFER, geo, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, patchIndex);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, index, gl.STATIC_DRAW);
+    // The hole is the patch less one base cell on every side, so the two meshes overlap
+    // by a cell rather than meeting at an edge: where a finer grid and a coarser one
+    // disagree about a height, an edge would open a slit of sky between them.
+    var insetX = 1 / (cols - 1), insetY = 1 / (rows - 1);
+    patchHole = [(patch.west - dem.west) / lonSpan + insetX,
+                 (dem.north - patch.north) / latSpan + insetY,
+                 (patch.east - dem.west) / lonSpan - insetX,
+                 (dem.north - patch.south) / latSpan - insetY];
+  }
+
   // ---- camera -------------------------------------------------------------------
   //
   // The canvas renderer's projection, written as a matrix. Reading it against
@@ -448,7 +544,11 @@ function backend(host) {
 
   function depthRange(dx, dy, dz, dc) {
     if (!depthBox) {
-      depthBox = [[minX, maxX], [minY, maxY], [dem.min, dem.max]];
+      // The patch can reach a little past the base grid's heights: a finer DEM finds the
+      // summit a coarse one averaged away, and the bottom of the valley too.
+      depthBox = [[minX, maxX], [minY, maxY],
+                  [Math.min(dem.min, patch ? patch.min : dem.min),
+                   Math.max(dem.max, patch ? patch.max : dem.max)]];
     }
     var worst = 0;
     for (var a = 0; a < 2; a++) {
@@ -556,8 +656,26 @@ function backend(host) {
       gl.vertexAttrib2f(aGeo, 0, 0);
     }
 
+    var holed = patch && patchCells && patchHole[2] > patchHole[0]
+                && patchHole[3] > patchHole[1];
+    if (holed) {
+      // The hole is tested in the fragment shader against vGeo, which an untextured
+      // draw leaves constant — so the base mesh needs its real geometry for this.
+      bind(geoBuffer, aGeo, 2);
+      gl.uniform4f(uHole, patchHole[0], patchHole[1], patchHole[2], patchHole[3]);
+    }
+    gl.uniform1f(uUseHole, holed ? 1 : 0);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
     gl.drawElements(gl.TRIANGLES, cells * 6, indexType, 0);
+
+    if (patch && patchCells) {
+      gl.uniform1f(uUseHole, 0);
+      bind(patchPosition, aPos, 3);
+      bind(patchColourBuffer, aColour, 3);
+      bind(patchGeo, aGeo, 2);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, patchIndex);
+      gl.drawElements(gl.TRIANGLES, patchCells * 6, patch.indexType, 0);
+    }
   }
 
   // ---- mounting and coming back off ---------------------------------------------
@@ -599,6 +717,10 @@ function backend(host) {
       gl.deleteBuffer(colourBuffer);
       gl.deleteBuffer(geoBuffer);
       gl.deleteBuffer(indexBuffer);
+      gl.deleteBuffer(patchPosition);
+      gl.deleteBuffer(patchColourBuffer);
+      gl.deleteBuffer(patchGeo);
+      gl.deleteBuffer(patchIndex);
       if (texture) gl.deleteTexture(texture);
       if (detailTexture) gl.deleteTexture(detailTexture);
       gl.deleteProgram(program);
@@ -615,7 +737,13 @@ function backend(host) {
       shadeVertices();
       gl.bindBuffer(gl.ARRAY_BUFFER, colourBuffer);
       gl.bufferSubData(gl.ARRAY_BUFFER, 0, colour);
+      if (patch) {
+        shadePatch();
+        gl.bindBuffer(gl.ARRAY_BUFFER, patchColourBuffer);
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, patchColour);
+      }
     },
+    setTerrainDetail: setTerrainDetail,
     stats: function () { return { cells: cells, folded: 0 }; },
     info: function () {
       return {
@@ -624,6 +752,7 @@ function backend(host) {
         cells: cells,
         vertices: vertices,
         indexBits: wide ? 32 : 16,
+        patchCells: patchCells,
         textured: !!uploaded,
         anisotropy: anisoMax,
         // Read back from the texture rather than reported from a literal, so it is a

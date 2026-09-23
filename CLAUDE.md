@@ -157,7 +157,8 @@ afford 45, the detail layer makes it sharper again as you zoom in, and the file 
 the size. So **imagery is fetched at view time** in all three page-writing tools, and
 `--embed`, which baked it in, is gone: nothing used it. The planner fetches its
 **terrain** at view time too (`terrain.remote`, loaded by `view3d`'s
-`initView3dWhenReady`). `--online` is still accepted and does nothing, so an old command
+`initView3dWhenReady`), and every 3D map fetches a finer terrain patch for what is on
+screen once the reader zooms in and holds still (`terrainPlan`, WebGL only). `--online` is still accepted and does nothing, so an old command
 line still runs.
 
 What is *not* retired, because it is still true and still worth keeping:

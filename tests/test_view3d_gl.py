@@ -1012,3 +1012,90 @@ def test_zooming_in_keeps_buying_sharpness():
             run_start = step
     assert worst <= 3.0, (
         f"the reader zooms {worst:.1f}x with no improvement at all: {ladder}")
+
+
+# ---- the detail terrain ----------------------------------------------------------------
+#
+# The same idea as the detail imagery, for the ground: zoomed in and still, the view asks
+# for a finer grid over what is on screen and draws it as a patch. Planning and drawing
+# are checked here without a network; `test_terrain_remote.py` fetches a real one.
+
+def _remote(dem):
+    return {**dem, "remote": {"url": "http://127.0.0.1:9/{z}/{x}/{y}.png"}}
+
+
+_TERRAIN_PLAN = """
+var h = window.__view3dAll[Object.keys(window.__view3dAll)[0]];
+function plan(zoom) {
+  h.view.zoom = zoom; h.view.pitch = 0.9; h.view.yaw = 0;
+  h.view.panX = 0; h.view.panY = 0;
+  h.redraw();
+  var p = h.terrainPlan();
+  return p ? { spacing: p.spacing, tiles: p.tiles, zoom: p.remote.zoom,
+               rows: p.rows, cols: p.cols } : null;
+}
+return { rest: plan(1), near: plan(8), nearer: plan(24) };
+"""
+
+
+@needs_chrome
+def test_zooming_in_plans_finer_ground_and_resting_does_not():
+    dem = _terrain()
+    base_m = (dem["east"] - dem["west"]) * 111320 * math.cos(math.radians(49.125)) \
+        / (dem["cols"] - 1)
+    answer = _probe(_scene(terrain=_remote(dem), basemap=False), _TERRAIN_PLAN)
+    assert answer["rest"] is None, "the resting view asked for ground it already has"
+    for key in ("near", "nearer"):
+        plan = answer[key]
+        assert plan, f"zoomed in ({key}) and asked for no finer ground"
+        assert plan["spacing"] <= base_m * 0.4, plan
+        assert plan["tiles"] <= 16, "a terrain patch blew the tile budget"
+        assert plan["rows"] * plan["cols"] <= 170 * 170
+    assert answer["nearer"]["spacing"] < answer["near"]["spacing"]
+    assert answer["nearer"]["zoom"] >= answer["near"]["zoom"]
+
+    without = _probe(_scene(terrain=dem, basemap=False), _TERRAIN_PLAN)
+    assert without["near"] is None, "a terrain with no tile source planned a fetch"
+
+
+_TERRAIN_PATCH = """
+var h = window.__view3dAll[Object.keys(window.__view3dAll)[0]];
+var canvas = document.querySelector('canvas.view3d');
+h.view.zoom = 6; h.view.pitch = 0.7; h.view.yaw = 0.3; h.view.vertical = 2;
+h.view.panX = 0; h.view.panY = 0;
+h.redraw();
+var before = h.groundAt(14.125, 49.125);
+// A patch whose ground is unmistakably not the base grid's: a flat 2 500 m table.
+var rows = 41, cols = 41, z = [];
+for (var i = 0; i < rows * cols; i++) z.push(2500);
+h.setTerrainDetail({ west: 14.1, east: 14.15, south: 49.1, north: 49.15,
+                     rows: rows, cols: cols, z: z, min: 2500, max: 2500, spacing: 90 });
+var box = canvas.getBoundingClientRect();
+var m = h.toMetres(14.125, 49.125);
+var p = h.worldProject(m[0], m[1], h.groundAt(14.125, 49.125));
+var sx = box.left + p[0] / canvas.width * box.width;
+var sy = box.top + p[1] / canvas.height * box.height;
+var picked = h.groundLonLat(sx, sy);
+return { before: before, inside: h.groundAt(14.125, 49.125),
+         outside: h.groundAt(14.2, 49.2),
+         pickErr: Math.hypot((picked[0] - 14.125) * 73000, (picked[1] - 49.125) * 111000),
+         state: h.terrainState(), gl: h.gl() };
+"""
+
+
+@needs_chrome
+def test_a_terrain_patch_is_the_ground_where_it_lies():
+    """Inside the patch, the ground is the patch's: `groundAt`, and so every pick and
+    every turnpoint height, reads it — and the renderer has it in its buffers. Outside,
+    nothing changed."""
+    dem = _terrain()
+    answer = _probe(_scene(terrain=_remote(dem), basemap=False), _TERRAIN_PATCH)
+    assert answer["inside"] == pytest.approx(2500)
+    assert answer["before"] != pytest.approx(2500)
+    # The base fixture's own height at 14.2, 49.2, bilinear on its grid.
+    assert 200 <= answer["outside"] <= 1400
+    assert answer["state"]["rows"] == 41
+    assert answer["pickErr"] < 5, (
+        f"a pick on the patch landed {answer['pickErr']:.0f} m from the point it was aimed at")
+    assert answer["gl"], "no WebGL backend, so there is nothing to draw a patch with"
+    assert answer["gl"]["patchCells"] == 40 * 40, answer["gl"]

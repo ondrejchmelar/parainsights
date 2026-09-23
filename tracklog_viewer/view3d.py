@@ -1076,7 +1076,11 @@ function initView3d(root, cursorTrack, preset) {
       if (height === null || height === undefined) return null;
       return lift - (height - dem.min) * vertical;
     }
-    var top = Math.max(dem.max - dem.min, 0) * vertical;
+    // From the highest ground there is — the detail terrain's included, which can find a
+    // summit the base grid averaged away. Starting under it, the first step is already
+    // below the surface and the pick is wherever the walk began.
+    var highest = terrainDetail ? Math.max(dem.max, terrainDetail.max) : dem.max;
+    var top = Math.max(highest - dem.min, 0) * vertical;
     var above = null, below = null;
     var previousLift = null, previousGap = null;
     for (var step = 0; step <= PICK_STEPS; step++) {
@@ -1153,7 +1157,87 @@ function initView3d(root, cursorTrack, preset) {
       detailTimer = null;
       var plan = detailPlan();
       if (plan) loadTiles(plan.style, plan);
+      var ground = terrainPlan();
+      if (ground) loadTerrainDetail(ground);
     }, DETAIL_DELAY);
+  }
+
+  // ---- detail terrain ----------------------------------------------------------------
+  //
+  // The imagery sharpens as the reader zooms in, and until this the ground under it did
+  // not: one grid for the whole box, 1.6 km a node over a country and 2.5 km over the
+  // planner's Alps, so a zoomed-in hill was a handful of flat facets with a sharp
+  // photograph on them. Once the camera settles over a small enough part of the terrain,
+  // a finer grid is fetched for just that part — the same terrarium tiles `loadTerrain`
+  // reads — and the renderer draws it as a patch, cutting a hole in the base mesh under
+  // it. `groundAt` reads the patch where there is one, so a pick, a turnpoint's height and
+  // a track's shadow sit on the ground that is drawn.
+  //
+  // WebGL only. The 2D renderer draws the base grid cell by cell and has no way to put a
+  // patch in it, and a `groundAt` that answered from ground the picture does not show
+  // would be worse than the coarse answer — so without a backend there is no patch.
+  var terrainDetail = null;     // { west, east, south, north, rows, cols, z, min, max, spacing }
+  var terrainPending = null;
+  var TERRAIN_NODES = 160;      // across the longer side of a patch
+  var TERRAIN_TILES = 16;       // DEM tiles a patch may cost
+  var TERRAIN_FINEST_M = 25;    // the DEM behind the tiles is about 30 m; no finer than that
+  var TERRAIN_MAX_ZOOM = 15;    // the deepest terrarium tiles there are
+
+  function terrainSource() {
+    return dem.remote && dem.remote.url ? dem.remote.url : null;
+  }
+
+  // Whether a patch is worth fetching, and for what. Pure, like `detailPlan`, and exposed
+  // on the handle for the same reason.
+  function terrainPlan() {
+    var url = terrainSource();
+    if (!url || !renderer || !renderer.setTerrainDetail) return null;
+    var seen = visibleBox();
+    if (!seen) return null;
+    var want = padded(seen);
+    var midLat = (want.north + want.south) / 2;
+    var widthM = (want.east - want.west) * mPerDegLon;
+    var heightM = (want.north - want.south) * mPerDegLat;
+    var spacing = Math.max(Math.max(widthM, heightM) / TERRAIN_NODES, TERRAIN_FINEST_M);
+    // Two and a half times finer at least: a patch that is only a little finer is a fetch
+    // and a seam for nothing anyone would see. (Half was the first guess, and a single
+    // flight's box sat right on it at rest, asking for its own resolution again.)
+    if (spacing > (spanX / (cols - 1)) * 0.4) return null;
+    if (terrainDetail && covers(terrainDetail, seen)
+        && terrainDetail.spacing <= spacing * 1.5) return null;
+    if (terrainPending && covers(terrainPending, seen)) return null;
+    // The coarsest tile zoom whose pixel is no bigger than a node, then back off until
+    // the fetch fits the budget.
+    var pixelAtZero = 156543.034 * Math.cos(midLat * Math.PI / 180);
+    var zoom = Math.min(TERRAIN_MAX_ZOOM,
+                        Math.max(0, Math.ceil(Math.log(pixelAtZero / spacing) / Math.LN2)));
+    while (zoom > 1 && tileCount(want, zoom) > TERRAIN_TILES) zoom--;
+    return {
+      west: want.west, east: want.east, south: want.south, north: want.north,
+      cols: Math.max(2, Math.round(widthM / spacing) + 1),
+      rows: Math.max(2, Math.round(heightM / spacing) + 1),
+      spacing: spacing,
+      tiles: tileCount(want, zoom),
+      remote: { url: url, zoom: zoom }
+    };
+  }
+
+  function loadTerrainDetail(plan) {
+    terrainPending = plan;
+    loadTerrain(plan).then(function (patch) {
+      if (terrainPending === plan) terrainPending = null;
+      if (!renderer) return;
+      setTerrainDetail(patch);
+    }, function () {
+      // A patch that does not arrive changes nothing: the base grid is still there.
+      if (terrainPending === plan) terrainPending = null;
+    });
+  }
+
+  function setTerrainDetail(patch) {
+    terrainDetail = patch;
+    if (renderer && renderer.setTerrainDetail) renderer.setTerrainDetail(patch);
+    draw();
   }
 
   // Images ready to drape, keyed by style: the embedded ones from the start, a stitched
@@ -1560,6 +1644,8 @@ function initView3d(root, cursorTrack, preset) {
     fit: fit,            // ditto, recomputed by refit() before every frame
     size: function () { return [W, H]; },
     shadeFactor: shadeFactor,
+    slopeShade: slopeShade,
+    toMetres: function (lon, lat) { return toMetres(lon, lat); },
     lit: function () { return { mid: litMid, spread: litSpread }; },
     // The already-shaded basemap and the geographic box it covers. Both change when the
     // reader cycles the style or a tile mosaic finishes stitching, and the backend
@@ -1572,7 +1658,10 @@ function initView3d(root, cursorTrack, preset) {
     detail: function () { return detail; },
     // Hand the heightfield back to the 2D path. Context loss on a phone is real, and a
     // blank panel is a worse outcome than a slower one.
-    fallback: function () { renderer = null; sampleCellColours(); draw(); }
+    fallback: function () {
+      renderer = null; terrainDetail = null; terrainPending = null;
+      sampleCellColours(); draw();
+    }
   }) : null;
 
   // Where the light comes from, in the frame the gradients below are computed in: x
@@ -1600,7 +1689,12 @@ function initView3d(root, cursorTrack, preset) {
     var right = dem.z[i + (c + 1 < cols ? 1 : 0)];
     var below = dem.z[i + (r + 1 < rows ? cols : 0)];
     var cellX = spanX / (cols - 1), cellY = spanY / (rows - 1);
-    var dzdx = (right - here) / cellX, dzdy = (below - here) / cellY;
+    return slopeShade((right - here) / cellX, (below - here) / cellY);
+  }
+
+  // The light on a slope, from its two gradients — x east, y south. Shared with the
+  // detail terrain, which has its own grid and the same sun.
+  function slopeShade(dzdx, dzdy) {
     var nx = -dzdx, ny = -dzdy, nz = 1;
     var len = Math.sqrt(nx * nx + ny * ny + nz * nz);
     var light = (nx * lightX + ny * lightY + nz * lightZ) / len;
@@ -1639,6 +1733,11 @@ function initView3d(root, cursorTrack, preset) {
   // drawing it on a flat plane at the minimum elevation makes it slide against the
   // terrain as the view rotates, because it is simply not where the ground is.
   function groundAt(lon, lat) {
+    var patch = terrainDetail;
+    if (patch && lon >= patch.west && lon <= patch.east
+        && lat >= patch.south && lat <= patch.north) {
+      return bilinear(patch, lon, lat);
+    }
     var gx = (lon - dem.west) / (dem.east - dem.west) * (cols - 1);
     var gy = (dem.north - lat) / (dem.north - dem.south) * (rows - 1);
     gx = Math.max(0, Math.min(cols - 1, gx));
@@ -1648,6 +1747,19 @@ function initView3d(root, cursorTrack, preset) {
     var fx = gx - x0, fy = gy - y0;
     var top = dem.z[y0 * cols + x0] * (1 - fx) + dem.z[y0 * cols + x1] * fx;
     var bottom = dem.z[y1 * cols + x0] * (1 - fx) + dem.z[y1 * cols + x1] * fx;
+    return top * (1 - fy) + bottom * fy;
+  }
+
+  function bilinear(grid, lon, lat) {
+    var gx = (lon - grid.west) / (grid.east - grid.west) * (grid.cols - 1);
+    var gy = (grid.north - lat) / (grid.north - grid.south) * (grid.rows - 1);
+    gx = Math.max(0, Math.min(grid.cols - 1, gx));
+    gy = Math.max(0, Math.min(grid.rows - 1, gy));
+    var x0 = Math.floor(gx), y0 = Math.floor(gy);
+    var x1 = Math.min(x0 + 1, grid.cols - 1), y1 = Math.min(y0 + 1, grid.rows - 1);
+    var fx = gx - x0, fy = gy - y0, n = grid.cols;
+    var top = grid.z[y0 * n + x0] * (1 - fx) + grid.z[y0 * n + x1] * fx;
+    var bottom = grid.z[y1 * n + x0] * (1 - fx) + grid.z[y1 * n + x1] * fx;
     return top * (1 - fy) + bottom * fy;
   }
 
@@ -3304,6 +3416,16 @@ function initView3d(root, cursorTrack, preset) {
     detailState: function () {
       return detail ? { zoom: detail.zoom, style: detail.style, box: detail.box } : null;
     },
+    // Exposed for tests: the detail terrain's plan, what is loaded, and a way to hand it
+    // a patch without a tile server — the shape `loadTerrain` produces.
+    terrainPlan: function () { return terrainPlan(); },
+    terrainState: function () {
+      return terrainDetail ? { west: terrainDetail.west, east: terrainDetail.east,
+                               south: terrainDetail.south, north: terrainDetail.north,
+                               rows: terrainDetail.rows, cols: terrainDetail.cols,
+                               spacing: terrainDetail.spacing } : null;
+    },
+    setTerrainDetail: function (patch) { setTerrainDetail(patch); },
     // Exposed for tests: stand in for a stitch that cannot happen offline. Takes the
     // same shape the stitcher produces, so the renderer cannot tell the difference.
     setDetail: function (image, box, zoom) {

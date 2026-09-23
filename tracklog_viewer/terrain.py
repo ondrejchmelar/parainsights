@@ -77,6 +77,9 @@ class Terrain:
             # Flat list of ints: a nested array of floats triples the size for
             # precision nobody can see on a hillshade.
             "z": np.round(self.elevations, decimals).astype(int).ravel().tolist(),
+            # Where to fetch finer ground when the reader zooms in (`terrainPlan` in
+            # view3d). The heights above are the whole grid; this is only the source.
+            "remote": {"url": TILE_URL},
         }
 
 
