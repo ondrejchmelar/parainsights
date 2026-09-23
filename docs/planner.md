@@ -89,6 +89,19 @@ of what the route enters, **lowest floor first**, with how far through each one 
   is a page that has not run. It also repeats what the check does *not* cover, because a
   green result is exactly when a reader stops thinking about NOTAMs.
 
+## Outside Czechia
+
+The ground reaches past the airspace: `PLAN_BOX` is 5.5–20.5 E, 45.0–51.3 N, the Western
+Alps to the Low Tatras, so a task out of Bassano or Kobala can be drawn and scored like
+one out of Raná. The airspace is still Czech only. A route that leaves the border is
+measured against it (the border ring ships in the page as `plan-coverage`), and the list
+says how many kilometres were not checked — or, for a route wholly outside, that nothing
+was. "Nothing crossed" is only ever said about ground the map has airspace for.
+
+The cost is relief and bytes: the node budget is 120 000 over the wider box, about
+2.5 km a node against 1.6 on the airspace map, and the page grew from 0.8 to 1.3 MB.
+Scoring is on coordinates, and the imagery sharpens at view time as before.
+
 ## Whether anybody is there
 
 A crossing list is a plan view in a second sense too: it says the route enters that

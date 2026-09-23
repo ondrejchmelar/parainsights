@@ -58,10 +58,10 @@ def _band(name, west, east, south, north, floor="GND", ceiling="FL 95", klass="C
     return space
 
 
-def _page(spaces=()) -> str:
+def _page(spaces=(), terrain=None) -> str:
     from airspaces import scene as airspace_scene
 
-    payload = airspace_scene.build(list(spaces), terrain=_terrain(),
+    payload = airspace_scene.build(list(spaces), terrain=terrain or _terrain(),
                                    basemaps={}, tiles=False)
     panel = view3d.panel(payload, "planner")
     return planner_cli.page(planner_html.body(scene_panel=panel), "Plan a task")
@@ -82,10 +82,10 @@ window.addEventListener('load', function () {
 """
 
 
-def _run(body: str, spaces=()) -> dict:
+def _run(body: str, spaces=(), terrain=None) -> dict:
     with tempfile.TemporaryDirectory() as folder:
         page = Path(folder) / "planner.html"
-        page.write_text(_page(spaces) + PROBE % body, encoding="utf-8")
+        page.write_text(_page(spaces, terrain) + PROBE % body, encoding="utf-8")
         out = subprocess.run(
             [CHROME, *CHROME_FLAGS, page.as_uri()],
             capture_output=True, text=True, timeout=180,
@@ -477,3 +477,44 @@ def test_a_zone_with_no_published_hours_is_never_marked():
     """, spaces=[band])
     assert [row["mark"] for row in answer["rows"]] == [None]
     assert answer["under"] is not None, "a ring with no hours was hidden by the clock"
+
+
+# ------------------------------------------- outside the airspace's country
+#
+# The planner's ground reaches the Alps and its airspace is Czech only. A route there
+# crosses "nothing" only in the sense that nothing was looked for, and the list has to
+# say which of the two it means.
+
+
+def _terrain_at(west, east, south, north):
+    base = _terrain()
+    return terrain_module.Terrain(west=west, east=east, south=south, north=north,
+                                  elevations=base.elevations)
+
+
+@needs_chrome
+def test_a_route_outside_czechia_is_not_called_clear():
+    answer = _run(_DROP + """
+    at(13.7, 47.3); at(14.3, 47.7);
+    return { points: handle.scene().climbs.length,
+             text: document.getElementById('plan-airspace').textContent };
+    """, terrain=_terrain_at(13.5, 14.5, 47.0, 48.0))
+    assert answer["points"] == 2, "a turnpoint in Austria was refused"
+    assert "outside Czechia" in answer["text"]
+    assert "nothing on it has been checked" in answer["text"]
+    assert "Nothing on this map is crossed" not in answer["text"], (
+        "a route the map has no airspace for was reported as clear")
+
+
+@needs_chrome
+def test_a_route_over_the_border_says_how_much_was_not_checked():
+    """South from 48.4 N to 49.2 N along 14.5 E: the border is at about 48.6, so a
+    quarter of the leg is in Austria and the rest is checked and clear."""
+    answer = _run(_DROP + """
+    at(14.5, 48.4); at(14.5, 49.2);
+    return document.getElementById('plan-airspace').textContent;
+    """, terrain=_terrain_at(14.0, 15.0, 48.3, 49.3))
+    found = re.search(r"([\d.]+) km of this route is outside Czechia", answer)
+    assert found, answer
+    assert 10 < float(found.group(1)) < 35, answer
+    assert "Nothing on this map is crossed" in answer, "the checked part lost its answer"

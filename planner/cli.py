@@ -85,7 +85,20 @@ def main(argv=None) -> int:
         base_text, _ = airspace_sources.base_airspace()
         spaces = list(airspace_openair.read(base_text)) + list(overlay.airspaces)
 
-    payload = airspace_scene.fetch(spaces, online=not args.embed)
+    # `airspace_scene.fetch`, but over `PLAN_BOX` rather than the airspace's own extent:
+    # the planner's ground reaches past the country its airspace covers.
+    from tracklog_viewer import basemap as viewer_basemap
+    from tracklog_viewer import terrain as viewer_terrain
+
+    ground = viewer_terrain.fetch(*render_html.PLAN_BOX, cols=render_html.PLAN_COLUMNS,
+                                  max_points=render_html.PLAN_NODES, report=print)
+    payload = None
+    if ground is not None:
+        images = ({} if not args.embed
+                  else viewer_basemap.for_view(ground, max_tiles=90, quality=52))
+        print(f"terrain {ground.cols}x{ground.rows} nodes")
+        payload = airspace_scene.build(spaces, terrain=ground, basemaps=images,
+                                       tiles=not args.embed)
     if payload is None:
         print("terrain could not be fetched; the planner needs a map to draw on")
         return 1

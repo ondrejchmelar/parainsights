@@ -25,7 +25,19 @@ measures the flight would be worse than no planner.
 
 from __future__ import annotations
 
+import json
+
 from tracklog_viewer import xc
+
+# The ground the planner can be drawn on: Czechia and the Alps, from the Western Alps to
+# the Low Tatras. Wider than the airspace, which is Czech only — a route can be planned
+# anywhere in here, and the list under the map says how much of it the airspace check
+# could not see. The node budget is spent on the wider box, so the relief is about 2.5 km
+# a node here against 1.6 on the airspace map; scoring is on coordinates and does not
+# care, and the imagery sharpens at view time either way.
+PLAN_BOX = (5.5, 20.5, 45.0, 51.3)     # west, east, south, north
+PLAN_COLUMNS = 560
+PLAN_NODES = 120000
 
 STYLE = """
 .plan-bar { display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center;
@@ -62,6 +74,7 @@ STYLE = """
   padding:2px 6px; border-radius:3px; white-space:nowrap; flex:none; }
 .plan-when.is-open { background:#15803d; color:#fff; }
 .plan-when.is-shut { background:var(--panel-2); color:var(--ink-3); }
+.planner-article .asp-hint:empty { display:none; }
 """
 
 
@@ -82,12 +95,7 @@ def controls() -> str:
         # drawn on would be worse than not answering. Here it also decides what the
         # crossing list says about each aerodrome layer, which is the point of having a
         # time on a page whose whole job is planning a particular day.
-        + airspace_html.when_control(
-            "Czech local time. It marks the aerodrome layers in the list below and hides "
-            "the ones that are shut. Hours are published for 68 of the 82 aerodromes and "
-            "for <strong>no</strong> ultralight strip; the controlled and restricted "
-            "airspace here carries no hours at all, and its activation is in the NOTAMs."
-        )
+        + airspace_html.when_control()
     )
 
 
@@ -96,9 +104,7 @@ def body(uid: str = "planner", *, scene_panel: str = "") -> str:
     return f"""<article class="flight planner-article" id="{uid}-article">
   <h1>Plan a task</h1>
   <p class="lede">Drop turnpoints on the ground you are going to fly over, and see what
-  the route is worth. Scored the way XContest scores it — a shorter FAI triangle beats a
-  longer flat one — and drawn over the airspace, because a line that crosses a TMA is not
-  a plan.</p>
+  the route is worth.</p>
   {controls()}
   <div class="asp-holder">
     {scene_panel}
@@ -111,8 +117,22 @@ def body(uid: str = "planner", *, scene_panel: str = "") -> str:
   every side at least {xc.FAI_MIN_SIDE:.0%} of the perimeter for FAI, a closing gap under
   {xc.MAX_CLOSING:.0%} of it for a closed course, multipliers
   {xc.MULTIPLIER['open']:g}&thinsp;/&thinsp;{xc.MULTIPLIER['flat']:g}&thinsp;/&thinsp;{xc.MULTIPLIER['fai']:g}.
+  Airspace is drawn for Czechia only.
   <strong>This is a plan, not a clearance.</strong> Check the airspace and the NOTAMs.</p>
+  <script type="application/json" id="plan-coverage">{_coverage()}</script>
 </article>"""
+
+
+def _coverage() -> str:
+    """Where the airspace on this map is complete: the Czech border, as a ring the page
+    can test a leg against. Outside it the map has no airspace, and a route there crosses
+    "nothing" only in the sense that nothing was looked for."""
+    from airspaces import basemap as border
+
+    return json.dumps({"name": "Czechia",
+                       "lon": [lon for _, lon in border.BORDER],
+                       "lat": [lat for lat, _ in border.BORDER]},
+                      separators=(",", ":"))
 
 
 # The constants are interpolated from `xc.py` rather than typed, so the planner cannot
@@ -271,14 +291,45 @@ SCRIPT = """
   // The whole list is always shown, even when the map has hidden a field for being
   // shut. The map is decluttering; the list is the answer, and an answer that quietly
   // drops a zone because a VFR manual page said "SAT, SUN, HOL" is not one.
+  // How much of the route runs where the map has no airspace to check it against.
+  var coverage = JSON.parse(
+    (document.getElementById('plan-coverage') || {}).textContent || 'null');
+  function uncheckedMetres() {
+    if (!coverage) return 0;
+    var walk = course(), metres = 0;
+    for (var i = 1; i < walk.length; i++) {
+      metres += (1 - fractionInside(walk[i - 1], walk[i], coverage))
+        * distance(walk[i - 1], walk[i]);
+    }
+    return metres;
+  }
+
   function reportAirspace() {
     var box = document.getElementById('plan-airspace');
     var crossed = crossings();
     box.innerHTML = '';
     if (points.length < 2) return;
+    var outside = uncheckedMetres();
+    var total = 0, walk = course();
+    for (var w = 1; w < walk.length; w++) total += distance(walk[w - 1], walk[w]);
+    if (outside > 50) {
+      var gap = document.createElement('p');
+      gap.className = 'plan-clear plan-unchecked';
+      var wholly = outside >= total - 50;
+      gap.textContent = wholly
+        ? 'This route is outside ' + coverage.name + ', and this map has no airspace '
+          + 'there — nothing on it has been checked.'
+        : (outside / 1000).toFixed(1) + ' km of this route is outside ' + coverage.name
+          + ', where this map has no airspace — that part has not been checked.';
+      box.appendChild(gap);
+      if (wholly) return;
+    }
     if (!crossed.length) {
-      box.innerHTML = '<p class="plan-clear">Nothing on this map is crossed by the '
-        + 'route. That is the drawn airspace only — check the NOTAMs.</p>';
+      var clear = document.createElement('p');
+      clear.className = 'plan-clear';
+      clear.textContent = 'Nothing on this map is crossed by the route. That is the '
+        + 'drawn airspace only — check the NOTAMs.';
+      box.appendChild(clear);
       return;
     }
     var colours = handle.scene().airspaceColours || {};
