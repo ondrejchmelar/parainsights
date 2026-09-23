@@ -2750,33 +2750,76 @@ function initView3d(root, cursorTrack, preset) {
   }
 
   // The ground under a canvas pixel — the *surface*, not the datum plane at `dem.min`.
-  // `groundUnder` is this in client pixels. It used to be the datum here, and the
-  // difference is the lift, (z − dem.min) × vertical, times cot(pitch): on the planner's
-  // ×5 relief over Prague, a few hundred metres of ground on a view 1.5 km tall, so the
-  // box the detail imagery was fetched for slid off the bottom of the screen and the
-  // lower third of a fully zoomed view stayed the blurred base image. Three passes onto
-  // the surface, the same iteration the orbit anchor has used since it had the same bug.
+  // `groundUnder` is this in client pixels, and every turn, twist and tilt pivots on it.
+  //
+  // A pixel is a line through the world: at lift L = (z − dem.min) × vertical it lands at
+  // one ground position, and the ground there has its own lift. The pick is where the two
+  // agree. It was three fixed-point passes (pick at the datum, read the height there,
+  // re-pick at that height), which converge only while the slope times vertical times
+  // cot(pitch) stays under one — on a steep camera, not on the flight report's opening
+  // pitch of 0.46 over alpine relief, where the answer came back 4–7 px from the pixel on
+  // a real flight and 88 px on the ridged test fixture. Turning the map then slid the
+  // ground out from under the finger, because the point being held was not the point
+  // under it.
+  //
+  // So: walk the line down from the highest the terrain can reach to the first place it
+  // meets the surface — the first, because the ground nearest the camera is the ground
+  // that is seen, and a ridge can hide the valley behind it — then bisect that step.
+  var PICK_STEPS = 48, PICK_BISECT = 24;
   function groundAtCanvas(sx, sy) {
     var sp = Math.sin(view.pitch);
     if (Math.abs(sp) < 1e-4 || !fit.scale) return null;
     var cp = Math.cos(view.pitch);
     var cy = Math.cos(view.yaw), sn = Math.sin(view.yaw);
-    var lift = 0;                       // (z - dem.min) * vertical, in world units
-    var point = null;
-    for (var pass = 0; pass < 3; pass++) {
-      var wx = (sx - fit.dx - view.panX) / fit.scale;
+    var wx = (sx - fit.dx - view.panX) / fit.scale;
+    var screenY = (sy - fit.dy - view.panY) / fit.scale;
+    var vertical = view.vertical || 1;
+    function at(lift) {
       // screen y = -wy*sin(pitch) - lift*cos(pitch), so a known lift moves the northing.
-      var wy = -((sy - fit.dy - view.panY) / fit.scale + lift * cp) / sp;
-      point = [wx * cy + wy * sn, -wx * sn + wy * cy];
-      var height = groundAt(lon0 + point[0] / mPerDegLon, lat0 + point[1] / mPerDegLat);
-      if (height === null || height === undefined) break;
-      lift = (height - dem.min) * view.vertical;
+      var wy = -(screenY + lift * cp) / sp;
+      return [wx * cy + wy * sn, -wx * sn + wy * cy];
     }
+    // Above the surface is positive: the line is still in the air at this lift.
+    function gap(lift) {
+      var point = at(lift);
+      var height = groundAt(lon0 + point[0] / mPerDegLon, lat0 + point[1] / mPerDegLat);
+      if (height === null || height === undefined) return null;
+      return lift - (height - dem.min) * vertical;
+    }
+    var top = Math.max(dem.max - dem.min, 0) * vertical;
+    var above = null, below = null;
+    var previousLift = null, previousGap = null;
+    for (var step = 0; step <= PICK_STEPS; step++) {
+      var lift = top * (1 - step / PICK_STEPS);
+      var g = gap(lift);
+      if (g === null) { previousLift = null; previousGap = null; continue; }
+      if (g <= 0) {
+        if (previousGap === null) { above = lift; below = lift; }
+        else { above = previousLift; below = lift; }
+        break;
+      }
+      previousLift = lift; previousGap = g;
+    }
+    var point, liftFound;
+    if (above === null) {
+      // Off the terrain, or over ground this line never meets: the datum, as before, so a
+      // pan past the edge of the map still has a plane to drag.
+      liftFound = 0;
+    } else {
+      for (var k = 0; k < PICK_BISECT && above - below > 1e-6; k++) {
+        var mid = (above + below) / 2;
+        var gm = gap(mid);
+        if (gm !== null && gm > 0) above = mid; else below = mid;
+      }
+      liftFound = (above + below) / 2;
+    }
+    point = at(liftFound);
     // The height travels with the point, so whatever holds it can re-project it where
     // it actually is rather than back on the datum.
-    point.push(dem.min + lift / (view.vertical || 1));
+    point.push(dem.min + liftFound / vertical);
     return point;
   }
+
 
   function padded(box) {
     var padX = (box.east - box.west) * DETAIL_PAD;

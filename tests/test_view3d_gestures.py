@@ -639,3 +639,96 @@ def test_rotating_from_the_edge_does_not_throw_the_view_away():
     for where in ("corner", "side", "low"):
         assert answer[where] < 55, (
             f"a grab at the {where} threw the view {answer[where]:.0f} px")
+
+
+# ---- the ground under a pixel, at an oblique camera ------------------------------------
+#
+# Every rotation and twist pivots on the ground under the pointer, and the tests above
+# measured it with the height `groundUnder` returned — which is the height it *believed*,
+# so a pick that missed the surface still held perfectly still. The flight report opens
+# at pitch 0.46 over alpine relief, and there three fixed-point passes did not converge:
+# the "ground under the cursor" was 4-7 px from the cursor, and turning the map slid the
+# ground out from under the finger. These measure against the terrain's own height.
+
+_PICK_ON_SURFACE = """
+var h = window.__handle;
+var canvas = document.querySelector('canvas.view3d');
+h.view.yaw = 0.7; h.view.pitch = 0.46; h.view.zoom = 2; h.view.vertical = 2;
+h.view.panX = 0; h.view.panY = 0;
+h.redraw();
+var box = canvas.getBoundingClientRect();
+var worst = 0, picked = 0;
+for (var i = 1; i <= 5; i++) for (var j = 2; j <= 5; j++) {
+  var x = box.left + box.width * i / 6, y = box.top + box.height * j / 7;
+  var at = h.groundLonLat(x, y);
+  if (!at) continue;
+  var height = h.groundAt(at[0], at[1]);
+  if (height === null || height === undefined) continue;
+  picked++;
+  var m = h.toMetres(at[0], at[1]);
+  var p = h.worldProject(m[0], m[1], height);
+  var sx = box.left + p[0] / canvas.width * box.width;
+  var sy = box.top + p[1] / canvas.height * box.height;
+  worst = Math.max(worst, Math.hypot(sx - x, sy - y));
+}
+return { worst: worst, picked: picked };
+"""
+
+
+@needs_chrome
+def test_the_ground_under_the_pointer_is_on_the_surface_at_an_oblique_camera():
+    answer = _probe(_scene(basemap=False), _PICK_ON_SURFACE)
+    assert answer["picked"] >= 12, "too few pixels landed on the terrain to test"
+    assert answer["worst"] < 0.5, (
+        f"the picked ground projects {answer['worst']:.1f} px from the pixel it was "
+        "picked at")
+
+
+_ORBIT_TRUE_GROUND = """
+var h = window.__handle;
+var canvas = document.querySelector('canvas.view3d');
+function mouse(type, x, y, buttons) {
+  canvas.dispatchEvent(new PointerEvent(type, {
+    pointerId: 7, clientX: x, clientY: y, bubbles: true, cancelable: true,
+    pointerType: 'mouse', isPrimary: true, button: 0,
+    buttons: buttons === undefined ? 1 : buttons, ctrlKey: true
+  }));
+}
+function screenOf(at) {
+  var box = canvas.getBoundingClientRect();
+  var m = h.toMetres(at[0], at[1]);
+  var p = h.worldProject(m[0], m[1], h.groundAt(at[0], at[1]));
+  return [box.left + p[0] / canvas.width * box.width,
+          box.top + p[1] / canvas.height * box.height];
+}
+h.view.yaw = 0; h.view.pitch = 0.46; h.view.zoom = 2; h.view.vertical = 2;
+h.view.panX = 0; h.view.panY = 0;
+h.redraw();
+var box = canvas.getBoundingClientRect();
+// Off the middle column, where the old pick was 82 px out on this fixture, and inside
+// the box a turn pivots on the pointer itself rather than on a clamped point.
+var x = box.left + box.width * 0.4, y = box.top + box.height * 0.5;
+var at = h.groundLonLat(x, y);
+// Where that ground really is on screen before the turn and after it. Measured against
+// each other and not against the pointer: on the old pick the ground started 82 px from
+// the pointer and ended under it, which is a jump of 82 px that an end-state check
+// reads as perfect.
+var before = screenOf(at);
+mouse('pointerdown', x, y);
+for (var i = 1; i <= 10; i++) mouse('pointermove', x + 9 * i, y - 3 * i);
+mouse('pointerup', x + 90, y - 30, 0);
+h.redraw();
+var after = screenOf(at);
+return { drift: Math.hypot(after[0] - before[0], after[1] - before[1]),
+         picked: Math.hypot(before[0] - x, before[1] - y), yaw: h.view.yaw };
+"""
+
+
+@needs_chrome
+def test_turning_the_map_keeps_the_real_ground_under_the_pointer():
+    answer = _probe(_scene(basemap=False), _ORBIT_TRUE_GROUND)
+    assert abs(answer["yaw"]) > 0.2, "the drag did not turn the map"
+    assert answer["picked"] < 0.5, (
+        f"the ground picked under the pointer is {answer['picked']:.1f} px away from it")
+    assert answer["drift"] < 1.5, (
+        f"the ground grabbed at the pointer moved {answer['drift']:.1f} px as the map turned")
