@@ -680,11 +680,127 @@ window.addEventListener('resize', function () {
 });
 
 
-function initView3d(root, cursorTrack) {
+// ---- terrain fetched by the page ---------------------------------------------------
+//
+// A scene may carry its terrain as `terrain.remote` — the box, the grid and the tile
+// source, no heights — rather than as the heights themselves (`terrain.remote()` in
+// Python). The page then fetches the same terrarium tiles at the same zoom and samples
+// them onto the same nodes `terrain.fetch` would have: nearest pixel, a missing tile
+// filled with the lowest height found, heights rounded to the metre. It is one grid built
+// in two places, and everything downstream of `dem` cannot tell which — so the arithmetic
+// is Python's, operation for operation: `math.radians` is lat × (π/180), numpy's
+// linspace is start + i × step, `np.round` rounds a half to even, and the bounds are the
+// unrounded heights'. A test builds both from the same tiles and compares every node.
+function loadTerrain(dem) {
+  var zoom = dem.remote.zoom, n = Math.pow(2, zoom), size = 256;
+  function tileX(lon) { return (lon + 180) / 360 * n; }
+  function tileY(lat) {
+    var rad = lat * (Math.PI / 180);
+    return (1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2 * n;
+  }
+  var x0 = Math.floor(tileX(dem.west)), x1 = Math.floor(tileX(dem.east));
+  var y0 = Math.floor(tileY(dem.north)), y1 = Math.floor(tileY(dem.south));
+  var width = (x1 - x0 + 1) * size, height = (y1 - y0 + 1) * size;
+  var mosaic = new Float64Array(width * height).fill(NaN);
+  var scratch = document.createElement('canvas');
+  scratch.width = scratch.height = size;
+  var sctx = scratch.getContext('2d', { willReadFrequently: true });
+
+  function tile(x, y) {
+    return new Promise(function (resolve) {
+      var image = new Image();
+      image.crossOrigin = 'anonymous';
+      image.onload = function () {
+        sctx.clearRect(0, 0, size, size);
+        sctx.drawImage(image, 0, 0);
+        var px = sctx.getImageData(0, 0, size, size).data;
+        var ox = (x - x0) * size, oy = (y - y0) * size;
+        for (var r = 0; r < size; r++) {
+          for (var c = 0; c < size; c++) {
+            var k = (r * size + c) * 4;
+            mosaic[(oy + r) * width + ox + c] =
+              px[k] * 256 + px[k + 1] + px[k + 2] / 256 - 32768;
+          }
+        }
+        resolve(true);
+      };
+      // A missing tile is a hole to fill, not a failure: the Python side does the same.
+      image.onerror = function () { resolve(false); };
+      image.src = dem.remote.url.replace('{z}', zoom).replace('{x}', x).replace('{y}', y);
+    });
+  }
+
+  var wanted = [];
+  for (var ty = y0; ty <= y1; ty++) for (var tx = x0; tx <= x1; tx++) wanted.push(tile(tx, ty));
+  return Promise.all(wanted).then(function (got) {
+    if (got.indexOf(true) < 0) throw new Error('no elevation tile could be fetched');
+    var low = Infinity;
+    for (var i = 0; i < mosaic.length; i++) if (mosaic[i] < low) low = mosaic[i];
+    function linspace(start, stop, count, i) {
+      if (count < 2) return start;
+      return i === count - 1 ? stop : i * ((stop - start) / (count - 1)) + start;
+    }
+    function roundHalfEven(value) {
+      var down = Math.floor(value), rest = value - down;
+      if (rest !== 0.5) return Math.round(value);
+      return down % 2 === 0 ? down : down + 1;
+    }
+    var z = new Array(dem.rows * dem.cols), min = Infinity, max = -Infinity;
+    for (var r = 0; r < dem.rows; r++) {
+      // np.linspace(north, south, rows) and (west, east, cols), then truncated to a pixel
+      // and clipped — `terrain.fetch`, step for step.
+      var lat = linspace(dem.north, dem.south, dem.rows, r);
+      var py = Math.min(Math.max(Math.floor((tileY(lat) - y0) * size), 0), height - 1);
+      for (var c = 0; c < dem.cols; c++) {
+        var lon = linspace(dem.west, dem.east, dem.cols, c);
+        var px = Math.min(Math.max(Math.floor((tileX(lon) - x0) * size), 0), width - 1);
+        var value = mosaic[py * width + px];
+        if (value !== value) value = low;
+        if (value < min) min = value;
+        if (value > max) max = value;
+        z[r * dem.cols + c] = roundHalfEven(value);
+      }
+    }
+    dem.z = z;
+    dem.min = Math.floor(min);
+    dem.max = Math.ceil(max);
+    return dem;
+  });
+}
+
+// `initView3d` for a scene that may still have to fetch its terrain. Resolves with the
+// handle, or with null where `initView3d` would have returned null; rejects only when the
+// terrain could not be fetched at all, which the caller has to say something about.
+function initView3dWhenReady(root, cursorTrack) {
+  var payload = root.querySelector('.view3d-data');
+  if (!payload) return Promise.resolve(null);
+  var scene = JSON.parse(payload.textContent);
+  var dem = scene.terrain;
+  if (!dem || !dem.remote || dem.z) return Promise.resolve(initView3d(root, cursorTrack, scene));
+  var box = root.querySelector('.view3d-loading');
+  if (box) {
+    box.querySelector('.view3d-loading-text').textContent = 'Loading terrain…';
+    box.hidden = false;
+  }
+  return loadTerrain(dem).then(function () {
+    if (box) box.hidden = true;
+    return initView3d(root, cursorTrack, scene);
+  }, function (error) {
+    if (box) {
+      box.querySelector('.view3d-spin').hidden = true;
+      box.querySelector('.view3d-loading-text').textContent =
+        'The terrain could not be fetched (' + error.message + ').';
+    }
+    throw error;
+  });
+}
+
+function initView3d(root, cursorTrack, preset) {
   var canvas = root.querySelector('canvas.view3d');
   var payload = root.querySelector('.view3d-data');
   if (!canvas || !payload) return null;
-  var scene = JSON.parse(payload.textContent);
+  // `preset` is the scene `initView3dWhenReady` has already parsed and completed.
+  var scene = preset || JSON.parse(payload.textContent);
   // A scene need not carry a flight. The airspace map is the same widget over the same
   // terrain with no track in it, so the flight-shaped members are defaulted here once
   // rather than guarded at each of the dozen places that read them.

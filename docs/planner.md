@@ -98,9 +98,12 @@ measured against it (the border ring ships in the page as `plan-coverage`), and 
 says how many kilometres were not checked — or, for a route wholly outside, that nothing
 was. "Nothing crossed" is only ever said about ground the map has airspace for.
 
-The cost is relief and bytes: the node budget is 120 000 over the wider box, about
-2.5 km a node against 1.6 on the airspace map, and the page grew from 0.8 to 1.3 MB.
-Scoring is on coordinates, and the imagery sharpens at view time as before.
+The terrain is **not in the page**: it ships as `terrain.remote()` — the box, the grid
+and the tile zoom — and the browser fetches the terrarium tiles and samples them onto
+the same 120 000 nodes `terrain.fetch` would have built (`loadTerrain` in `view3d`).
+Carried, that grid was half of a 1.3 MB page. The relief is about 2.5 km a node against
+1.6 on the airspace map; scoring is on coordinates, and the imagery sharpens at view
+time as before.
 
 ## Whether anybody is there
 
@@ -294,9 +297,10 @@ sentence each:
 
 ```bash
 uv run python -m planner.cli --html public/planner/index.html
-uv run python -m planner.cli --html plan.html --no-airspace   # terrain only, faster
-uv run python -m planner.cli --html plan.html --embed         # bake the imagery in
+uv run python -m planner.cli --html plan.html --no-airspace   # no airspace, faster
 ```
+
+There is no `--embed`: the page fetches its own terrain, so it needs a network anyway.
 
 Imagery is fetched at view time by default, and gets sharper as the reader zooms in.
 

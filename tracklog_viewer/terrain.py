@@ -197,6 +197,24 @@ def fetch(west: float, east: float, south: float, north: float, *,
     # A missing tile at the edge should not punch a hole in the mesh.
     mosaic = np.nan_to_num(mosaic, nan=float(np.nanmin(mosaic)))
 
+    rows, cols = _grid(west, east, south, north, cols, max_points)
+
+    lons = np.linspace(west, east, cols)
+    lats = np.linspace(north, south, rows)
+    # Pixel coordinates within the mosaic for every grid node.
+    px = np.array([(_tile_indices(lats[0], lon, zoom)[0] - tile_x0) * TILE_SIZE for lon in lons])
+    py = np.array([(_tile_indices(lat, lons[0], zoom)[1] - tile_y0) * TILE_SIZE for lat in lats])
+    px = np.clip(px, 0, mosaic.shape[1] - 1).astype(int)
+    py = np.clip(py, 0, mosaic.shape[0] - 1).astype(int)
+
+    elevations = mosaic[np.ix_(py, px)]
+    return Terrain(west=west, east=east, south=south, north=north, elevations=elevations)
+
+
+def _grid(west: float, east: float, south: float, north: float,
+          cols: int, max_points: int) -> tuple[int, int]:
+    """Rows and columns for a box. Shared by `fetch` and `remote`, because the page that
+    builds the grid itself has to build exactly the one the report would have carried."""
     # Aspect-aware grid: keep cells roughly square on the ground.
     width_m = (east - west) * 111320 * math.cos(math.radians((north + south) / 2))
     height_m = (north - south) * 110540
@@ -209,17 +227,24 @@ def fetch(west: float, east: float, south: float, north: float, *,
         shrink = math.sqrt(max_points / (rows * cols))
         cols = max(int(cols * shrink), 24)
         rows = max(int(rows * shrink), 8)
+    return rows, cols
 
-    lons = np.linspace(west, east, cols)
-    lats = np.linspace(north, south, rows)
-    # Pixel coordinates within the mosaic for every grid node.
-    px = np.array([(_tile_indices(lats[0], lon, zoom)[0] - tile_x0) * TILE_SIZE for lon in lons])
-    py = np.array([(_tile_indices(lat, lons[0], zoom)[1] - tile_y0) * TILE_SIZE for lat in lats])
-    px = np.clip(px, 0, mosaic.shape[1] - 1).astype(int)
-    py = np.clip(py, 0, mosaic.shape[0] - 1).astype(int)
 
-    elevations = mosaic[np.ix_(py, px)]
-    return Terrain(west=west, east=east, south=south, north=north, elevations=elevations)
+def remote(west: float, east: float, south: float, north: float, *,
+           cols: int = 320, max_points: int = 26000) -> dict:
+    """The terrain as a page fetches it for itself: the box, the grid and the tiles, and
+    no heights. `view3d`'s `loadTerrain` fetches the same tiles at the same zoom and
+    samples them onto the same nodes as `fetch`, so the two are one grid built in two
+    places — and a page that carries this instead of `Terrain.to_dict()` weighs a few
+    hundred bytes rather than half a megabyte.
+    """
+    rows, cols = _grid(west, east, south, north, cols, max_points)
+    return {
+        "west": round(west, 6), "east": round(east, 6),
+        "south": round(south, 6), "north": round(north, 6),
+        "rows": rows, "cols": cols,
+        "remote": {"url": TILE_URL, "zoom": _choose_zoom(west, east, south, north)},
+    }
 
 
 def for_flight(analysis, *, margin: float = 0.35, cols: int = 320,

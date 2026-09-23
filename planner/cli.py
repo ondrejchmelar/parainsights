@@ -64,14 +64,18 @@ def main(argv=None) -> int:
     parser.add_argument("--html", metavar="FILE", type=Path, required=True,
                         help="write the planner page")
     parser.add_argument("--embed", action="store_true",
-                        help="bake a stitched image into the page rather than fetching "
-                             "imagery at view time")
+                        help=argparse.SUPPRESS)   # refused below: see the note there
     parser.add_argument("--online", action="store_true",
                         help=argparse.SUPPRESS)   # now the default
     parser.add_argument("--no-airspace", action="store_true",
                         help="terrain only. Faster to build, and the map then shows "
                              "nothing about what the line crosses")
     args = parser.parse_args(argv)
+    if args.embed:
+        # An offline planner no longer exists: the page fetches its own terrain, so
+        # baking the imagery in would make a page that still cannot draw without a network.
+        parser.error("--embed is gone: the planner fetches its terrain in the page, "
+                     "so it needs a network either way")
 
     from airspaces import build as airspace_build
     from airspaces import openair as airspace_openair
@@ -85,23 +89,14 @@ def main(argv=None) -> int:
         base_text, _ = airspace_sources.base_airspace()
         spaces = list(airspace_openair.read(base_text)) + list(overlay.airspaces)
 
-    # `airspace_scene.fetch`, but over `PLAN_BOX` rather than the airspace's own extent:
-    # the planner's ground reaches past the country its airspace covers.
-    from tracklog_viewer import basemap as viewer_basemap
+    # The terrain is not carried: the page fetches it (`terrain.remote`). Over the Alps
+    # it was 120 000 heights and half the page.
     from tracklog_viewer import terrain as viewer_terrain
 
-    ground = viewer_terrain.fetch(*render_html.PLAN_BOX, cols=render_html.PLAN_COLUMNS,
-                                  max_points=render_html.PLAN_NODES, report=print)
-    payload = None
-    if ground is not None:
-        images = ({} if not args.embed
-                  else viewer_basemap.for_view(ground, max_tiles=90, quality=52))
-        print(f"terrain {ground.cols}x{ground.rows} nodes")
-        payload = airspace_scene.build(spaces, terrain=ground, basemaps=images,
-                                       tiles=not args.embed)
-    if payload is None:
-        print("terrain could not be fetched; the planner needs a map to draw on")
-        return 1
+    payload = airspace_scene.build(spaces, terrain=None, basemaps={}, tiles=True)
+    payload["terrain"] = viewer_terrain.remote(*render_html.PLAN_BOX,
+                                               cols=render_html.PLAN_COLUMNS,
+                                               max_points=render_html.PLAN_NODES)
     # Same map, same reason as `airspaces/render_html.py`: at national scale a
     # traffic circuit is a third of a pixel tall.
     panel = view3d.panel(payload, "planner", verticals=(1, 5, 15), vertical=5)

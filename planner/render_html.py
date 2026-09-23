@@ -34,7 +34,8 @@ from tracklog_viewer import xc
 # anywhere in here, and the list under the map says how much of it the airspace check
 # could not see. The node budget is spent on the wider box, so the relief is about 2.5 km
 # a node here against 1.6 on the airspace map; scoring is on coordinates and does not
-# care, and the imagery sharpens at view time either way.
+# care, and the imagery sharpens at view time either way. The page fetches the terrain
+# itself (`terrain.remote`), so the budget costs the reader tiles, not page weight.
 PLAN_BOX = (5.5, 20.5, 45.0, 51.3)     # west, east, south, north
 PLAN_COLUMNS = 560
 PLAN_NODES = 120000
@@ -144,10 +145,16 @@ SCRIPT = """
   if (!holder) return;
   var panel = holder.querySelector('.view3d-panel');
   if (!panel || typeof initView3d !== 'function') return;
-  var handle = window.__view3dAll && window.__view3dAll[
+  var existing = window.__view3dAll && window.__view3dAll[
     (panel.querySelector('canvas.view3d') || {}).id];
-  if (!handle) handle = initView3d(panel, null);
-  if (!handle) return;
+  // The terrain is fetched by the page (`PLAN_BOX` is too much ground to carry), so the
+  // map exists only once it has arrived, and everything below waits for it. The body
+  // of `plan` keeps the indentation it had before it became a function.
+  (existing ? Promise.resolve(existing) : initView3dWhenReady(panel, null))
+    .then(function (handle) { if (handle) plan(handle); },
+          function () { /* the panel says why */ });
+
+  function plan(handle) {
   var canvas = panel.querySelector('canvas.view3d');
 
   var FAI_MIN_SIDE = %(fai)s, MAX_CLOSING = %(closing)s;
@@ -537,6 +544,7 @@ SCRIPT = """
   if (whenInput) whenInput.addEventListener('input', retime);
 
   redraw();
+  }
 })();
 """ % {
     "fai": xc.FAI_MIN_SIDE,
