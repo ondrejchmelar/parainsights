@@ -735,6 +735,48 @@ return out;
 """
 
 
+_VISIBLE = """
+var h = window.__view3dAll[Object.keys(window.__view3dAll)[0]];
+var canvas = document.querySelector('canvas.view3d');
+h.view.vertical = 5; h.view.pitch = 1.32; h.view.yaw = 0.4;
+h.view.zoom = 16; h.view.panX = 0; h.view.panY = 0;
+h.redraw();
+var seen = h.visibleBox();
+var dem = %s;
+var outside = [], inside = 0;
+for (var r = 0; r < dem.rows; r++) for (var c = 0; c < dem.cols; c++) {
+  var lon = dem.west + (dem.east - dem.west) * c / (dem.cols - 1);
+  var lat = dem.north + (dem.south - dem.north) * r / (dem.rows - 1);
+  var m = h.toMetres(lon, lat);
+  var p = h.worldProject(m[0], m[1], dem.z[r * dem.cols + c]);
+  if (p[0] < 0 || p[0] > canvas.width || p[1] < 0 || p[1] > canvas.height) continue;
+  inside++;
+  // One grid cell: the box is taken from four corners, and ground between them can
+  // stand a little higher than the ground under them.
+  var slack = (dem.east - dem.west) / (dem.cols - 1);
+  if (lon < seen.west - slack || lon > seen.east + slack
+      || lat < seen.south - slack || lat > seen.north + slack) outside.push([lon, lat]);
+}
+return { onScreen: inside, missed: outside.length, first: outside[0] || null };
+"""
+
+
+@needs_chrome
+def test_the_visible_box_is_the_ground_on_screen_not_the_datum():
+    """The detail imagery is fetched for `visibleBox`, and it took the canvas corners on
+    the flat plane at `dem.min`. On raised, exaggerated ground the real surface stands
+    above that plane and projects higher up the screen, so the box slid away from what
+    was on screen — on the planner, the lower third of a fully zoomed view stayed
+    blurred. Checked from the other end: every terrain node the camera actually draws on
+    the canvas has to be inside the box."""
+    dem = _terrain()
+    answer = _probe(_scene(terrain=dem, tiles=True), _VISIBLE % json.dumps(dem))
+    assert answer["onScreen"] > 10, "the camera shows too little ground to test anything"
+    assert answer["missed"] == 0, (
+        f"{answer['missed']} of {answer['onScreen']} on-screen nodes are outside the "
+        f"visible box, first at {answer['first']}")
+
+
 @needs_chrome
 def test_zooming_in_asks_for_a_sharper_mosaic_and_only_once():
     """Three claims. The finer the zoom, the smaller the box on screen and the higher the

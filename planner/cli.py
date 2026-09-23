@@ -63,19 +63,12 @@ def main(argv=None) -> int:
     )
     parser.add_argument("--html", metavar="FILE", type=Path, required=True,
                         help="write the planner page")
-    parser.add_argument("--embed", action="store_true",
-                        help=argparse.SUPPRESS)   # refused below: see the note there
     parser.add_argument("--online", action="store_true",
                         help=argparse.SUPPRESS)   # now the default
     parser.add_argument("--no-airspace", action="store_true",
                         help="terrain only. Faster to build, and the map then shows "
                              "nothing about what the line crosses")
     args = parser.parse_args(argv)
-    if args.embed:
-        # An offline planner no longer exists: the page fetches its own terrain, so
-        # baking the imagery in would make a page that still cannot draw without a network.
-        parser.error("--embed is gone: the planner fetches its terrain in the page, "
-                     "so it needs a network either way")
 
     from airspaces import build as airspace_build
     from airspaces import openair as airspace_openair

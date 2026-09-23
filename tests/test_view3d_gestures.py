@@ -12,6 +12,8 @@ duplicated, in the same way `test_terrain` borrows its flight builders from
 `test_analysis`.
 """
 
+import math
+
 import pytest
 
 from tests.test_view3d_gl import _probe, _scene, needs_chrome
@@ -440,6 +442,24 @@ def test_the_view_zooms_closer_than_it_used_to():
     answer = _probe(_scene(basemap=False), _ZOOM_RANGE)
     assert answer["closest"] == pytest.approx(40, rel=1e-6)
     assert answer["farthest"] == pytest.approx(0.2, rel=1e-6)
+
+
+@needs_chrome
+def test_a_wide_map_zooms_until_a_hill_fills_the_view():
+    """The ceiling is ground, not magnification. On a 1 000 km map a fixed 40x stopped at
+    25 km across — the planner's Alps, where the printed place names were still too small
+    to read and a turnpoint could not be put on a particular hill."""
+    from tests.test_view3d_gl import _terrain
+
+    wide = _terrain()
+    wide.update({"west": 5.5, "east": 20.5, "south": 45.0, "north": 51.3})
+    # 200 wheel steps: 1.12^200 is far past any ceiling, so this reads the ceiling.
+    answer = _probe(_scene(terrain=wide, basemap=False),
+                    _ZOOM_RANGE.replace("wheel(-100, 60)", "wheel(-100, 200)"))
+    across_m = (20.5 - 5.5) * 111320 * math.cos(math.radians(48.15))
+    assert answer["closest"] == pytest.approx(across_m / 1500, rel=1e-3), (
+        f"stopped at {answer['closest']:.0f}x, {across_m / answer['closest'] / 1000:.1f} km "
+        "of ground across the full-width view")
 
 
 _BUTTON_ZOOM = """

@@ -189,7 +189,8 @@ STYLE = """
 .met-columns.is-single .met-col { display:grid; gap:0 16px; align-items:start;
   grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .met-columns.is-single .met-col-head,
-.met-columns.is-single .met-col-rose { grid-column:1 / -1; }
+.met-columns.is-single .met-col-rose,
+.met-columns.is-single .met-col-top { grid-column:1 / -1; }
 .met-columns.is-single .met-canvas + .met-canvas { margin-top:0; }
 /* Side by side, the meteogram takes the sounding's shape rather than its own shorter one.
    Both charts run 0–4 km up the y axis, so equal heights put the two height scales beside
@@ -205,6 +206,12 @@ STYLE = """
 .met-col-head .ground { font-weight:400; color:var(--ink-3);
   font-variant-numeric:tabular-nums; }
 .met-col-rose { font-size:11.5px; color:var(--ink-3); margin:0 0 6px; }
+/* Two answers to one question, and the reason there are two — folded, because the
+   number is what a reader wants and the reason is for the one who asks. */
+.met-col-top { font-size:12px; color:var(--ink-2); margin:4px 0 0; }
+.met-col-top summary { cursor:pointer; }
+.met-col-top summary .why { color:var(--ink-3); text-decoration:underline dotted; }
+.met-col-top p { margin:4px 0 0; color:var(--ink-3); font-size:11.5px; max-width:60ch; }
 .met-col-rose a { color:inherit; }
 .met-col.is-focus .met-col-head .name { text-decoration:underline;
   text-underline-offset:3px; }
@@ -1268,7 +1275,14 @@ SCRIPT = r"""
           + '<span class="ground"></span></p>'
           + '<p class="met-col-rose"><span></span> <a rel="noreferrer">on PGE</a></p>'
           + '<canvas class="met-canvas met-col-gram" width="380" height="230"></canvas>'
-          + '<canvas class="met-canvas met-col-sounding" width="380" height="300"></canvas>';
+          + '<canvas class="met-canvas met-col-sounding" width="380" height="300"></canvas>'
+          + '<details class="met-col-top" hidden><summary></summary><p>Two estimates of '
+          + 'the same height. <b>Model</b> (dashed) is where ECMWF’s own turbulence dies '
+          + 'out, and it counts thermals overshooting into the stable air and the wind '
+          + 'stirring it. <b>Parcel</b> (ring) lifts the 2 m air through this sounding '
+          + '(ICON) at ' + DRY_LAPSE + ' °C/km until it is no warmer than the air around '
+          + 'it, and counts neither — so it usually comes out lower. Read the parcel as '
+          + 'the cautious figure and the model as the generous one.</p></details>';
         cell.querySelector('i').style.background = seriesColour(slotOf(index));
         cell.querySelector('.name').textContent = conf.sites[index].name;
         // Clicking a column focuses that takeoff, the same as its chip or its table row.
@@ -1360,6 +1374,36 @@ SCRIPT = r"""
     ctx.globalAlpha = 1;
     ctx.fillStyle = colour;
     ctx.fillText(text, x, y);
+  }
+
+  // The line under a sounding that says what its two thermal tops are, and — folded —
+  // why there are two. Written only when it changes: the pointer redraws the sounding on
+  // every move, and rewriting an open <details> would fight the reader's own tap.
+  function drawTop(canvas, model, parcel) {
+    var box = canvas.parentNode && canvas.parentNode.querySelector('.met-col-top');
+    if (!box) return;
+    var metres = function (value) { return Math.round(value).toLocaleString('en-GB')
+      .replace(/,/g, '\u2009') + ' m'; };
+    var text;
+    if (model == null && parcel == null) text = null;
+    else if (model == null) text = 'Thermal top ' + metres(parcel) + ' (parcel)';
+    else if (parcel == null) {
+      text = 'Thermal top ' + metres(model) + ' (model) · no dry parcel rises from the ground';
+    } else {
+      var low = Math.min(model, parcel), high = Math.max(model, parcel);
+      text = Math.abs(model - parcel) < 50
+        ? 'Thermal top ' + metres((model + parcel) / 2) + ' (model and parcel agree)'
+        : 'Thermal top ' + metres(low) + '–' + metres(high);
+    }
+    box.hidden = text === null;
+    if (text === null || box.dataset.text === text) return;
+    box.dataset.text = text;
+    var summary = box.querySelector('summary');
+    summary.textContent = text + ' · ';
+    var why = document.createElement('span');
+    why.className = 'why';
+    why.textContent = 'why two numbers?';
+    summary.appendChild(why);
   }
 
   function drawSounding(canvas, profile) {
@@ -1458,7 +1502,7 @@ SCRIPT = r"""
       ctx.moveTo(left, y(thermalTop)); ctx.lineTo(W - right, y(thermalTop));
       ctx.stroke();
       ctx.setLineDash([]);
-      padded(ctx, 'thermal top', left + 4, y(thermalTop) - 2, ink('--ink-2'), 'left');
+      padded(ctx, 'thermal top · model', left + 4, y(thermalTop) - 2, ink('--ink-2'), 'left');
       ctx.restore();
     }
 
@@ -1511,7 +1555,7 @@ SCRIPT = r"""
         ctx.arc(x(surface - DRY_LAPSE * (parcel - ground) / 1000), y(parcel), 4, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
-        padded(ctx, 'parcel stops here',
+        padded(ctx, 'thermal top · parcel',
                x(surface - DRY_LAPSE * (parcel - ground) / 1000) - 7, y(parcel) - 5,
                ink('--ink-2'), 'right');
       }
@@ -1548,6 +1592,8 @@ SCRIPT = r"""
     // failing to. `view3d.rose()` is the same idea and exists for the same reason: a
     // wrong arrow is still an arrow, and a missing lid looks exactly like a chart that
     // did not look for one.
+    drawTop(canvas, blh == null ? null : ground + blh, parcel);
+
     canvas.__drawn = {
       caps: caps.length,
       thermalTop: blh == null ? null : Math.round(ground + blh),

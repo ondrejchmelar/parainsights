@@ -154,11 +154,11 @@ rendered charts, a canvas 3D view instead of a map library, and an inlined font.
 That assumption is retired. The site is GitLab Pages, the reader has a connection, and
 the trade was never close: a fetched mosaic is 10–20 m a pixel where an embedded one can
 afford 45, the detail layer makes it sharper again as you zoom in, and the file is half
-the size. So **fetching at view time is the default** in all three page-writing tools,
-and `--embed` asks for the old behaviour where someone genuinely needs it — except in the
-planner, which fetches its **terrain** at view time too (`terrain.remote`, loaded by
-`view3d`'s `initView3dWhenReady`) and so refuses `--embed`. `--online` is
-still accepted and does nothing, so an old command line still runs.
+the size. So **imagery is fetched at view time** in all three page-writing tools, and
+`--embed`, which baked it in, is gone: nothing used it. The planner fetches its
+**terrain** at view time too (`terrain.remote`, loaded by `view3d`'s
+`initView3dWhenReady`). `--online` is still accepted and does nothing, so an old command
+line still runs.
 
 What is *not* retired, because it is still true and still worth keeping:
 

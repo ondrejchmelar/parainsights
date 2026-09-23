@@ -1261,3 +1261,38 @@ class TestTheModelIsNamed:
         assert answer["t"] == 26.0
         assert answer["t850"] > 0
         assert answer["leftovers"] == 0
+
+
+@needs_chrome
+def test_the_two_thermal_tops_are_named_and_the_difference_explained():
+    """The dashed model top and the parcel's ring are two estimates of one height, and
+    they disagree by hundreds of metres on an ordinary day. The chart names both, and a
+    line under it gives the range with the reason one tap away."""
+    temperatures, _ = _mixed_layer()
+    answer = _probe_page("""
+    var m = window.__meteo;
+    var box = document.querySelector('.met-col-top');
+    var stable = box.querySelector('summary').textContent;
+    var profile = m.state.profiles[m.chosen()[0]];
+    var wanted = %s;
+    Object.keys(wanted).forEach(function (level) {
+      var series = profile.hourly['temperature_' + level + 'hPa'];
+      for (var i = 0; i < series.length; i++) series[i] = wanted[level];
+    });
+    m.draw();
+    var canvas = document.querySelector('.met-col-sounding');
+    return { drawn: canvas.__drawn, hidden: box.hidden, stable: stable,
+             summary: box.querySelector('summary').textContent,
+             why: box.querySelector('p').textContent, open: box.open };
+    """ % json.dumps(temperatures))
+    assert "no dry parcel rises" in answer["stable"], answer["stable"]
+    drawn = answer["drawn"]
+    assert drawn["thermalTop"] and drawn["parcelTop"], drawn
+    assert answer["hidden"] is False
+    low, high = sorted((drawn["thermalTop"], drawn["parcelTop"]))
+    shown = [int(n.replace(" ", "")) for n in
+             re.findall(r"(\d[\d ]*) m", answer["summary"])]
+    assert shown == [low, high], answer["summary"]
+    assert "why two numbers?" in answer["summary"]
+    assert answer["open"] is False, "the reason should be folded until asked for"
+    assert "ECMWF" in answer["why"] and "parcel" in answer["why"]

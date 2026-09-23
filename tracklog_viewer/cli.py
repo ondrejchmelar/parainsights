@@ -8,7 +8,6 @@ from urllib.parse import urlsplit
 
 from . import (
     baseline,
-    basemap as basemap_module,
     kml,
     meteo as meteo_module,
     plan as plan_module,
@@ -60,13 +59,6 @@ def main(argv: list[str] | None = None) -> int:
         "--no-basemap", action="store_true",
         help="with --terrain, leave the map imagery out of the report (saves about "
              "550 KB per flight, and the 3D view then shows hillshade only)",
-    )
-    parser.add_argument(
-        "--embed", action="store_true",
-        help="bake the imagery into the file instead of fetching it at view time. The "
-             "report then needs no network at all, at about 550 KB per flight per style "
-             "and at a resolution a stitch can afford. For a viewer behind a policy that "
-             "blocks every host — otherwise leave it off.",
     )
     parser.add_argument(
         "--online", action="store_true",
@@ -162,9 +154,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.terrain:
             from airspaces import scene as airspace_scene
 
-            payload = airspace_scene.fetch(
-                list(base) + list(overlay.airspaces), online=not args.embed
-            )
+            payload = airspace_scene.fetch(list(base) + list(overlay.airspaces))
         extras.append(render_html.Extra(
             uid="airspace",
             label="Airspace",
@@ -301,22 +291,6 @@ def _one(source: str, args, index: int = 0) -> dict:
         ground = terrain_module.for_flight(analysis, max_points=budget, report=print)
         if ground is None:
             print(f"warning: no terrain data for {label}", file=sys.stderr)
-        elif not args.no_basemap and args.embed:
-            # Place names are what make the 3D view navigable, and both styles are
-            # embedded so the button works in a page that cannot fetch anything. A
-            # shared document pays that twice per flight, so it gets smaller, harder
-            # compressed images.
-            single = len(args.flight) == 1
-            # A single-flight report can afford zoom 12 (about 22 m/px); a document with
-            # one image per flight per style cannot, and takes zoom 11 at 45 m/px.
-            tiles = basemap_module.for_view(
-                ground,
-                max_tiles=80 if single else 30,
-                max_width=2400 if single else 1150,
-                quality=55 if single else 45,
-            )
-            if not tiles:
-                print(f"warning: no basemap tiles for {label}", file=sys.stderr)
 
     # The KMZ is embedded in the report as a download, so the Earth file travels with it.
     earth = None

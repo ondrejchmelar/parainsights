@@ -69,11 +69,6 @@ def main(argv=None) -> int:
     parser.add_argument("--flat", action="store_true",
                         help="the old flat SVG map instead of the 3D view. Needs no "
                              "network at build time and carries no imagery")
-    parser.add_argument("--embed", action="store_true",
-                        help="bake a stitched image into the page instead of fetching "
-                             "imagery at view time. Needs no network to view, and over a "
-                             "whole country it is a 300 m/pixel backdrop rather than a "
-                             "map you can read")
     parser.add_argument("--online", action="store_true",
                         help=argparse.SUPPRESS)   # now the default
     parser.add_argument("--raw", action="store_true",
@@ -136,8 +131,7 @@ def main(argv=None) -> int:
         if not args.flat:
             from . import scene as airspace_scene
 
-            payload = airspace_scene.fetch(list(base) + list(overlay.airspaces),
-                                           online=not args.embed)
+            payload = airspace_scene.fetch(list(base) + list(overlay.airspaces))
             if payload is None:
                 # The flat map is a real fallback and stays the default: a build with no
                 # network still produces a usable page, which is "degrade, do not blank".

@@ -180,15 +180,15 @@ def _area(airspace) -> float:
     return abs(total) / 2
 
 
-def fetch(airspaces, *, online: bool, report=print):
-    """Terrain, imagery and rings for these airspaces — or None if the ground could not
-    be fetched, which is the flat map's cue to take over.
+def fetch(airspaces, *, report=print):
+    """Terrain and rings for these airspaces — or None if the ground could not be
+    fetched, which is the flat map's cue to take over. The imagery is the page's to
+    fetch, at view time.
 
     Both callers want exactly this, so it lives here rather than in either `cli.py`;
     `tracklog_viewer/cli.py` reaching into `airspaces.cli` for a private helper was how
     it started and is not a seam anyone should have to find.
     """
-    from tracklog_viewer import basemap as viewer_basemap
     from tracklog_viewer import terrain as viewer_terrain
 
     west, east, south, north = bounds(airspaces)
@@ -196,15 +196,9 @@ def fetch(airspaces, *, online: bool, report=print):
                                   cols=COLUMNS, max_points=MAX_NODES, report=report)
     if ground is None:
         return None
-    # Online, the page stitches its own imagery at view time and nothing is baked in.
-    # Offline it carries one embedded stitch, which over a whole country is coarse — about
-    # 300 m a pixel — and is a backdrop rather than something to read.
-    images = {} if online else viewer_basemap.for_view(ground, max_tiles=90, quality=52)
     if report:
-        report(f"terrain {ground.cols}x{ground.rows} nodes"
-               + (", imagery fetched at view time" if online
-                  else f", {len(images)} basemap styles embedded"))
-    return build(airspaces, terrain=ground, basemaps=images, tiles=online)
+        report(f"terrain {ground.cols}x{ground.rows} nodes, imagery fetched at view time")
+    return build(airspaces, terrain=ground)
 
 
 def build(airspaces, *, terrain=None, basemaps=None, tiles: bool = True) -> dict:

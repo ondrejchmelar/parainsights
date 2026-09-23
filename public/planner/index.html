@@ -537,18 +537,21 @@ window.addEventListener('resize', function () {
 // Python). The page then fetches the same terrarium tiles at the same zoom and samples
 // them onto the same nodes `terrain.fetch` would have: nearest pixel, a missing tile
 // filled with the lowest height found, heights rounded to the metre. It is one grid built
-// in two places, and everything downstream of `dem` cannot tell which.
+// in two places, and everything downstream of `dem` cannot tell which — so the arithmetic
+// is Python's, operation for operation: `math.radians` is lat × (π/180), numpy's
+// linspace is start + i × step, `np.round` rounds a half to even, and the bounds are the
+// unrounded heights'. A test builds both from the same tiles and compares every node.
 function loadTerrain(dem) {
   var zoom = dem.remote.zoom, n = Math.pow(2, zoom), size = 256;
   function tileX(lon) { return (lon + 180) / 360 * n; }
   function tileY(lat) {
-    var rad = lat * Math.PI / 180;
+    var rad = lat * (Math.PI / 180);
     return (1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2 * n;
   }
   var x0 = Math.floor(tileX(dem.west)), x1 = Math.floor(tileX(dem.east));
   var y0 = Math.floor(tileY(dem.north)), y1 = Math.floor(tileY(dem.south));
   var width = (x1 - x0 + 1) * size, height = (y1 - y0 + 1) * size;
-  var mosaic = new Float32Array(width * height).fill(NaN);
+  var mosaic = new Float64Array(width * height).fill(NaN);
   var scratch = document.createElement('canvas');
   scratch.width = scratch.height = size;
   var sctx = scratch.getContext('2d', { willReadFrequently: true });
@@ -583,23 +586,29 @@ function loadTerrain(dem) {
     if (got.indexOf(true) < 0) throw new Error('no elevation tile could be fetched');
     var low = Infinity;
     for (var i = 0; i < mosaic.length; i++) if (mosaic[i] < low) low = mosaic[i];
+    function linspace(start, stop, count, i) {
+      if (count < 2) return start;
+      return i === count - 1 ? stop : i * ((stop - start) / (count - 1)) + start;
+    }
+    function roundHalfEven(value) {
+      var down = Math.floor(value), rest = value - down;
+      if (rest !== 0.5) return Math.round(value);
+      return down % 2 === 0 ? down : down + 1;
+    }
     var z = new Array(dem.rows * dem.cols), min = Infinity, max = -Infinity;
     for (var r = 0; r < dem.rows; r++) {
       // np.linspace(north, south, rows) and (west, east, cols), then truncated to a pixel
       // and clipped — `terrain.fetch`, step for step.
-      var lat = dem.rows > 1 ? dem.north + (dem.south - dem.north) * r / (dem.rows - 1)
-                             : dem.north;
+      var lat = linspace(dem.north, dem.south, dem.rows, r);
       var py = Math.min(Math.max(Math.floor((tileY(lat) - y0) * size), 0), height - 1);
       for (var c = 0; c < dem.cols; c++) {
-        var lon = dem.cols > 1 ? dem.west + (dem.east - dem.west) * c / (dem.cols - 1)
-                               : dem.west;
+        var lon = linspace(dem.west, dem.east, dem.cols, c);
         var px = Math.min(Math.max(Math.floor((tileX(lon) - x0) * size), 0), width - 1);
         var value = mosaic[py * width + px];
         if (value !== value) value = low;
-        value = Math.round(value);
-        z[r * dem.cols + c] = value;
         if (value < min) min = value;
         if (value > max) max = value;
+        z[r * dem.cols + c] = roundHalfEven(value);
       }
     }
     dem.z = z;
@@ -880,16 +889,33 @@ function initView3d(root, cursorTrack, preset) {
     return box;
   }
 
-  // groundUnder() in canvas coordinates. The gesture handlers work in client pixels and
-  // this works in the backing store's, and converting one into the other twice was how
-  // the two drifted apart the first time.
+  // The ground under a canvas pixel — the *surface*, not the datum plane at `dem.min`.
+  // `groundUnder` is this in client pixels. It used to be the datum here, and the
+  // difference is the lift, (z − dem.min) × vertical, times cot(pitch): on the planner's
+  // ×5 relief over Prague, a few hundred metres of ground on a view 1.5 km tall, so the
+  // box the detail imagery was fetched for slid off the bottom of the screen and the
+  // lower third of a fully zoomed view stayed the blurred base image. Three passes onto
+  // the surface, the same iteration the orbit anchor has used since it had the same bug.
   function groundAtCanvas(sx, sy) {
     var sp = Math.sin(view.pitch);
     if (Math.abs(sp) < 1e-4 || !fit.scale) return null;
-    var wx = (sx - fit.dx - view.panX) / fit.scale;
-    var wy = -(sy - fit.dy - view.panY) / (fit.scale * sp);
+    var cp = Math.cos(view.pitch);
     var cy = Math.cos(view.yaw), sn = Math.sin(view.yaw);
-    return [wx * cy + wy * sn, -wx * sn + wy * cy];
+    var lift = 0;                       // (z - dem.min) * vertical, in world units
+    var point = null;
+    for (var pass = 0; pass < 3; pass++) {
+      var wx = (sx - fit.dx - view.panX) / fit.scale;
+      // screen y = -wy*sin(pitch) - lift*cos(pitch), so a known lift moves the northing.
+      var wy = -((sy - fit.dy - view.panY) / fit.scale + lift * cp) / sp;
+      point = [wx * cy + wy * sn, -wx * sn + wy * cy];
+      var height = groundAt(lon0 + point[0] / mPerDegLon, lat0 + point[1] / mPerDegLat);
+      if (height === null || height === undefined) break;
+      lift = (height - dem.min) * view.vertical;
+    }
+    // The height travels with the point, so whatever holds it can re-project it where
+    // it actually is rather than back on the datum.
+    point.push(dem.min + lift / (view.vertical || 1));
+    return point;
   }
 
   function padded(box) {
@@ -2319,28 +2345,10 @@ function initView3d(root, cursorTrack, preset) {
   // remaining error is smaller than the one it started with, which is the point.
   function groundUnder(clientX, clientY) {
     var box = canvas.getBoundingClientRect();
-    var sp = Math.sin(view.pitch);
-    if (Math.abs(sp) < 1e-4 || !fit.scale) return null;
-    var sx = (clientX - box.left) / box.width * W;
-    var sy = (clientY - box.top) / box.height * H;
-    var cp = Math.cos(view.pitch);
-    var cy = Math.cos(view.yaw), sn = Math.sin(view.yaw);
-    var lift = 0;                       // (z - dem.min) * vertical, in world units
-    var point = null;
-    for (var pass = 0; pass < 3; pass++) {
-      var wx = (sx - fit.dx - view.panX) / fit.scale;
-      // screen y = -wy*sin(pitch) - lift*cos(pitch), so a known lift moves the northing.
-      var wy = -((sy - fit.dy - view.panY) / fit.scale + lift * cp) / sp;
-      point = [wx * cy + wy * sn, -wx * sn + wy * cy];
-      var height = groundAt(lon0 + point[0] / mPerDegLon, lat0 + point[1] / mPerDegLat);
-      if (height === null || height === undefined) break;
-      lift = (height - dem.min) * view.vertical;
-    }
-    // The height travels with the point, so whatever holds it can re-project it where
-    // it actually is rather than back on the datum.
-    point.push(dem.min + lift / (view.vertical || 1));
-    return point;
+    return groundAtCanvas((clientX - box.left) / box.width * W,
+                          (clientY - box.top) / box.height * H);
   }
+
 
   // Move the pan so that `point` (a ground-plane position from groundAt) projects back to
   // the same place on screen. Called after yaw or pitch has changed.
@@ -2389,6 +2397,16 @@ function initView3d(root, cursorTrack, preset) {
     view.panY += sy - now[1];
   }
 
+  // How far in the view may go: until about 1.5 km of ground fills it, and never less
+  // than the 40 it always allowed. A fixed 40 was a limit on *magnification*, which is
+  // the wrong unit — over one flight's box it reached 2.5 km across, and over the
+  // planner's Alps it stopped at 27 km, where the place names printed on the imagery are
+  // still too small to read and a turnpoint cannot be put on a particular hill.
+  var CLOSEST_SPAN_M = 1500;
+  function maxZoom() {
+    return Math.max(40, (dem.east - dem.west) * mPerDegLon / CLOSEST_SPAN_M);
+  }
+
   // Keep the point under the cursor fixed while zooming, the way every map does.
   function zoomAt(factor, clientX, clientY) {
     var box = canvas.getBoundingClientRect();
@@ -2406,7 +2424,7 @@ function initView3d(root, cursorTrack, preset) {
     // sharp one that refuses to. The floor comes down to 0.2 for the same reason in the
     // other direction: tilting no longer re-fits the scale, so a top-down view of a long
     // flight needs room to pull back.
-    view.zoom = Math.max(0.2, Math.min(40, view.zoom * factor));
+    view.zoom = Math.max(0.2, Math.min(maxZoom(), view.zoom * factor));
     var ratio = view.zoom / before;
     view.panX = sx - (sx - view.panX) * ratio;
     view.panY = sy - (sy - view.panY) * ratio;
@@ -3088,6 +3106,8 @@ function initView3d(root, cursorTrack, preset) {
     // for what. The fetch itself needs a network and a tile server; the decision does
     // not, and the decision is where this can be wrong.
     detailPlan: function () { return detailPlan(); },
+    // Exposed for tests: what the detail imagery believes is on screen.
+    visibleBox: function () { return visibleBox(); },
     detailState: function () {
       return detail ? { zoom: detail.zoom, style: detail.style, box: detail.box } : null;
     },
@@ -3122,7 +3142,7 @@ function initView3d(root, cursorTrack, preset) {
     // Exposed for tests: the projection as it currently stands. Zoom anchoring is a
     // claim about these numbers, so the numbers have to be readable.
     projection: function () {
-      return { dx: fit.dx, dy: fit.dy, scale: fit.scale, W: W, H: H,
+      return { dx: fit.dx, dy: fit.dy, scale: fit.scale, W: W, H: H, maxZoom: maxZoom(),
                anchorX: anchorX(), anchorY: anchorY(),
                panX: view.panX, panY: view.panY, zoom: view.zoom };
     },
