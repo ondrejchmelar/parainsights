@@ -1099,3 +1099,90 @@ def test_a_terrain_patch_is_the_ground_where_it_lies():
         f"a pick on the patch landed {answer['pickErr']:.0f} m from the point it was aimed at")
     assert answer["gl"], "no WebGL backend, so there is nothing to draw a patch with"
     assert answer["gl"]["patchCells"] == 40 * 40, answer["gl"]
+
+
+_PATCH_SHADING = """
+var h = window.__view3dAll[Object.keys(window.__view3dAll)[0]];
+return new Promise(function (resolve) {
+  setTimeout(function () {
+    function grab() {
+      var image = h.shadedBasemap();
+      var copy = document.createElement('canvas');
+      copy.width = image.width; copy.height = image.height;
+      var cx = copy.getContext('2d');
+      cx.drawImage(image, 0, 0);
+      return { data: cx.getImageData(0, 0, copy.width, copy.height).data,
+               w: copy.width, h: copy.height };
+    }
+    // The fixture image covers 13.9-14.35 E, 48.9-49.35 N.
+    function pixel(shot, lon, lat) {
+      var x = Math.floor((lon - 13.9) / 0.45 * shot.w);
+      var y = Math.floor((49.35 - lat) / 0.45 * shot.h);
+      var k = (y * shot.w + x) * 4;
+      return [shot.data[k], shot.data[k + 1], shot.data[k + 2]];
+    }
+    var before = grab();
+    // Steep east-west ridges every 300 m, where the base grid is smooth at this scale.
+    var rows = 81, cols = 81, z = [];
+    for (var r = 0; r < rows; r++) for (var c = 0; c < cols; c++) {
+      z.push(800 + 250 * Math.sin(r / 4));
+    }
+    h.setTerrainDetail({ west: 14.1, east: 14.15, south: 49.1, north: 49.15,
+                         rows: rows, cols: cols, z: z, min: 550, max: 1050, spacing: 70 });
+    var after = grab();
+    var inside = 0, outside = 0;
+    for (var i = 0; i < 40; i++) {
+      var a = pixel(before, 14.105 + i * 0.001, 49.105 + i * 0.001);
+      var b = pixel(after, 14.105 + i * 0.001, 49.105 + i * 0.001);
+      inside += Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
+      var c = pixel(before, 14.2, 49.0 + i * 0.002), d = pixel(after, 14.2, 49.0 + i * 0.002);
+      outside += Math.abs(c[0] - d[0]) + Math.abs(c[1] - d[1]) + Math.abs(c[2] - d[2]);
+    }
+    resolve({ inside: inside, outside: outside });
+  }, 800);
+});
+"""
+
+
+@needs_chrome
+def test_finer_ground_reshades_the_imagery_where_it_lies():
+    """The hillshade is baked into the draped image from the base grid. When finer
+    ground lands, the light on the image has to come from it — otherwise the new ridges
+    stand up in the geometry wearing the old ridges' shadows. Outside the patch the
+    image is left exactly as it was."""
+    answer = _probe(_scene(terrain=_remote(_terrain())), _PATCH_SHADING)
+    assert answer["inside"] > 200, "the finer ground left the image's shading unchanged"
+    assert answer["outside"] == 0, "shading changed outside the patch"
+
+
+_SHADED_WITHOUT_SUN = """
+var h = window.__view3dAll[Object.keys(window.__view3dAll)[0]];
+return new Promise(function (resolve) {
+  setTimeout(function () {
+    var data = JSON.parse(document.querySelector('.view3d-data').textContent);
+    var raw = new Image();
+    raw.onload = function () {
+      function pixels(image) {
+        var c = document.createElement('canvas');
+        c.width = 256; c.height = 256;
+        var x = c.getContext('2d');
+        x.drawImage(image, 0, 0, 256, 256);
+        return x.getImageData(0, 0, 256, 256).data;
+      }
+      var a = pixels(raw), b = pixels(h.shadedBasemap()), diff = 0;
+      for (var i = 0; i < a.length; i += 4) diff += Math.abs(a[i] - b[i]);
+      resolve({ diff: diff / (a.length / 4) });
+    };
+    raw.src = data.basemaps.satellite.uri;
+  }, 800);
+});
+"""
+
+
+@needs_chrome
+def test_the_imagery_is_hillshaded_without_a_sun_track():
+    """The lit range was measured before the light was declared, so on a page with no
+    sun track — the airspace map, the planner — every slope was NaN and the draped image
+    went out with no hillshade at all. The report hid it by relighting from its sun."""
+    answer = _probe(_scene(), _SHADED_WITHOUT_SUN)
+    assert answer["diff"] > 2, "the draped image is the raw imagery: nothing was shaded"

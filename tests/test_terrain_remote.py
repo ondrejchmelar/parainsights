@@ -218,3 +218,51 @@ def test_zooming_in_fetches_finer_ground_and_stands_on_it(any_tile):
     # function this smooth. The base grid underneath is a different function entirely,
     # so reading it instead would miss by hundreds.
     assert worst < 15, f"the ground under the zoomed view is {worst:.0f} m off the tiles'"
+
+
+_HOLD_WHERE_ZOOMED = """
+var h = window.__view3dAll[Object.keys(window.__view3dAll)[0]];
+var canvas = document.querySelector('canvas.view3d');
+h.view.pitch = 0.7; h.view.yaw = 0.3; h.view.vertical = 3;
+h.view.panX = 0; h.view.panY = 0; h.view.zoom = 1;
+h.redraw();
+var box = canvas.getBoundingClientRect();
+var x = Math.round(box.left + box.width * 0.4), y = Math.round(box.top + box.height * 0.5);
+for (var i = 0; i < 30; i++) canvas.dispatchEvent(new WheelEvent('wheel', {
+  deltaY: -100, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+h.redraw();
+// The ground under the cursor on the base grid, before any patch has been fetched.
+var at = h.groundLonLat(x, y);
+function screenOf() {
+  var m = h.toMetres(at[0], at[1]);
+  var p = h.worldProject(m[0], m[1], h.groundAt(at[0], at[1]));
+  return [box.left + p[0] / canvas.width * box.width,
+          box.top + p[1] / canvas.height * box.height];
+}
+var before = screenOf();
+return new Promise(function (resolve) {
+  setTimeout(function () {
+    var after = screenOf();
+    resolve({ patch: h.terrainState(), before: Math.hypot(before[0] - x, before[1] - y),
+              after: Math.hypot(after[0] - x, after[1] - y) });
+  }, 4000);
+});
+"""
+
+
+@needs_chrome
+def test_the_ground_zoomed_on_stays_put_when_finer_ground_lands(any_tile):
+    """A patch changes the ground's height and so where it is on screen: over the
+    Dolomites the ground under the cursor sat up to 39 px away from it once the patches
+    had landed, the map jumping a moment after the reader stopped zooming. The fixture's
+    base grid and the tile server's ground are different functions, so the jump here is
+    large unless the view holds the point it was zoomed on."""
+    from tests.test_view3d_gl import _probe, _scene, _terrain
+
+    url, _ = any_tile
+    dem = {**_terrain(), "remote": {"url": url}}
+    answer = _probe(_scene(terrain=dem, basemap=False), _HOLD_WHERE_ZOOMED)
+    assert answer["patch"], "no patch landed, so nothing was tested"
+    assert answer["before"] < 0.5
+    assert answer["after"] < 1.0, (
+        f"the ground zoomed on moved {answer['after']:.1f} px when the finer ground landed")

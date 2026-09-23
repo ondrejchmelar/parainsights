@@ -1285,7 +1285,9 @@ def test_the_two_thermal_tops_are_named_and_the_difference_explained():
              summary: box.querySelector('summary').textContent,
              why: box.querySelector('p').textContent, open: box.open };
     """ % json.dumps(temperatures))
-    assert "no dry parcel rises" in answer["stable"], answer["stable"]
+    assert "(model only)" in answer["stable"], answer["stable"]
+    assert "two numbers" not in answer["stable"], "one number, asked why there are two"
+    assert "why only one?" in answer["stable"]
     drawn = answer["drawn"]
     assert drawn["thermalTop"] and drawn["parcelTop"], drawn
     assert answer["hidden"] is False

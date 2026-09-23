@@ -1276,13 +1276,7 @@ SCRIPT = r"""
           + '<p class="met-col-rose"><span></span> <a rel="noreferrer">on PGE</a></p>'
           + '<canvas class="met-canvas met-col-gram" width="380" height="230"></canvas>'
           + '<canvas class="met-canvas met-col-sounding" width="380" height="300"></canvas>'
-          + '<details class="met-col-top" hidden><summary></summary><p>Two estimates of '
-          + 'the same height. <b>Model</b> (dashed) is where ECMWF’s own turbulence dies '
-          + 'out, and it counts thermals overshooting into the stable air and the wind '
-          + 'stirring it. <b>Parcel</b> (ring) lifts the 2 m air through this sounding '
-          + '(ICON) at ' + DRY_LAPSE + ' °C/km until it is no warmer than the air around '
-          + 'it, and counts neither — so it usually comes out lower. Read the parcel as '
-          + 'the cautious figure and the model as the generous one.</p></details>';
+          + '<details class="met-col-top" hidden><summary></summary><p></p></details>';
         cell.querySelector('i').style.background = seriesColour(slotOf(index));
         cell.querySelector('.name').textContent = conf.sites[index].name;
         // Clicking a column focuses that takeoff, the same as its chip or its table row.
@@ -1384,27 +1378,50 @@ SCRIPT = r"""
     if (!box) return;
     var metres = function (value) { return Math.round(value).toLocaleString('en-GB')
       .replace(/,/g, '\u2009') + ' m'; };
-    var text;
-    if (model == null && parcel == null) text = null;
-    else if (model == null) text = 'Thermal top ' + metres(parcel) + ' (parcel)';
-    else if (parcel == null) {
-      text = 'Thermal top ' + metres(model) + ' (model) · no dry parcel rises from the ground';
-    } else {
+    var MODEL = 'The model’s estimate (dashed) is where ECMWF’s own turbulence dies out; '
+      + 'it counts thermals overshooting into the stable air and the wind stirring it. ';
+    var PARCEL = 'The parcel’s (ring) lifts the 2 m air through this sounding (ICON) at '
+      + DRY_LAPSE + ' °C/km until it is no warmer than the air around it, and counts '
+      + 'neither. ';
+    var text = null, ask = null, why = null;
+    if (model != null && parcel != null) {
       var low = Math.min(model, parcel), high = Math.max(model, parcel);
-      text = Math.abs(model - parcel) < 50
-        ? 'Thermal top ' + metres((model + parcel) / 2) + ' (model and parcel agree)'
-        : 'Thermal top ' + metres(low) + '–' + metres(high);
+      if (Math.abs(model - parcel) < 50) {
+        text = 'Thermal top ' + metres((model + parcel) / 2) + ' (model and parcel agree)';
+        ask = 'how is it estimated?';
+        why = 'Two ways, and this hour they land together. ' + MODEL + PARCEL;
+      } else {
+        text = 'Thermal top ' + metres(low) + '–' + metres(high);
+        ask = 'why two numbers?';
+        why = 'Two estimates of the same height. ' + MODEL + PARCEL
+          + 'So the parcel usually comes out lower: read it as the cautious figure and the '
+          + 'model as the generous one.';
+      }
+    } else if (model != null) {
+      text = 'Thermal top ' + metres(model) + ' (model only)';
+      ask = 'why only one?';
+      why = 'No dry parcel rises from the ground this hour: lifted at ' + DRY_LAPSE
+        + ' °C/km, the 2 m air is already colder than the air above it, so the second '
+        + 'estimate has nothing to mark. ' + MODEL + 'That is why it can still find mixing '
+        + 'the parcel does not.';
+    } else if (parcel != null) {
+      text = 'Thermal top ' + metres(parcel) + ' (parcel only)';
+      ask = 'why only one?';
+      why = 'ECMWF gives no boundary layer height for this hour, so only the parcel’s '
+        + 'estimate is drawn. ' + PARCEL;
     }
     box.hidden = text === null;
     if (text === null || box.dataset.text === text) return;
     box.dataset.text = text;
     var summary = box.querySelector('summary');
     summary.textContent = text + ' · ';
-    var why = document.createElement('span');
-    why.className = 'why';
-    why.textContent = 'why two numbers?';
-    summary.appendChild(why);
+    var link = document.createElement('span');
+    link.className = 'why';
+    link.textContent = ask;
+    summary.appendChild(link);
+    box.querySelector('p').textContent = why;
   }
+
 
   function drawSounding(canvas, profile) {
     var frame = fit(canvas);

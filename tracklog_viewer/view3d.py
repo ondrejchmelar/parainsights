@@ -1234,9 +1234,29 @@ function initView3d(root, cursorTrack, preset) {
     });
   }
 
+  // Where the reader last zoomed, in canvas pixels; the middle of the fit until then.
+  var lastFocus = null;
+
+  // **A patch changes the ground's height, and so where it is on screen.** Over the
+  // Dolomites the ground under the cursor sat 5, 19 and then 39 px from it as each finer
+  // patch landed — the map jumping away a moment after the reader stopped zooming, which
+  // is what "zoom is broken at the detailed levels" was. So the ground at the point the
+  // reader zoomed on is held: picked before the patch goes in, re-projected at its new
+  // height after, and the pan takes up the difference. The terrain around it still
+  // sharpens; the place the reader was looking at does not move.
   function setTerrainDetail(patch) {
+    var focus = lastFocus || [anchorX(), anchorY()];
+    var held = W && H ? groundAtCanvas(focus[0], focus[1]) : null;
+    var lon = held ? lon0 + held[0] / mPerDegLon : null;
+    var lat = held ? lat0 + held[1] / mPerDegLat : null;
     terrainDetail = patch;
     if (renderer && renderer.setTerrainDetail) renderer.setTerrainDetail(patch);
+    reshadeImagery();
+    if (held) {
+      var now = project(held[0], held[1], groundAt(lon, lat));
+      view.panX += focus[0] - now[0];
+      view.panY += focus[1] - now[1];
+    }
     draw();
   }
 
@@ -1428,6 +1448,8 @@ function initView3d(root, cursorTrack, preset) {
           // rather than merely different, because relief is what carries its shape.
           detail = {
             image: shadedTexture(patch, box) || patch,
+            // Kept unshaded, so a new light or finer ground can shade it again.
+            raw: patch,
             box: box, style: styleName, zoom: zoom
           };
           draw();
@@ -1606,6 +1628,12 @@ function initView3d(root, cursorTrack, preset) {
   // `lit` stays within a few hundredths of flat-ground illumination and the overlay does
   // nothing at all — which is how a road map came out looking like a flat sheet. Stretch
   // the observed range instead, so relief reads at whatever scale the ground has.
+  // Where the light comes from — see setLight below. Declared here because measureLit()
+  // runs a few lines down, at startup: declared where setLight is, it was still
+  // undefined then, every slope came out NaN, the lit range stayed zero, and any page
+  // without a sun track — the airspace map and the planner — never had a hillshade at
+  // all. The report was spared only because its sun track relights once it is known.
+  var lightX = -0.55, lightY = 0.55, lightZ = 0.63;
   var litMid = 0.86, litSpread = 0;
   function measureLit() {
     litMid = 0.86; litSpread = 0;
@@ -1669,7 +1697,7 @@ function initView3d(root, cursorTrack, preset) {
   // this always used; `setLight` replaces it with the real sun when the payload carries
   // a day track, which is what makes "which slopes were lit, and when" a question the
   // view can answer rather than a decoration.
-  var lightX = -0.55, lightY = 0.55, lightZ = 0.63;
+  // (Declared up with the lit range, which is measured against it before this point.)
 
   function setLight(azimuth, elevation) {
     // A sun on the horizon lights nothing and the hillshade collapses to a silhouette,
@@ -1810,14 +1838,84 @@ function initView3d(root, cursorTrack, preset) {
 
     // Where the DEM's box sits inside the image's, in the same linear lon/lat mapping
     // sourceRect uses — so the shading registers with the texture cell for cell.
-    var x0 = (dem.west - box.west) / (box.east - box.west) * iw;
-    var x1 = (dem.east - box.west) / (box.east - box.west) * iw;
-    var y0 = (box.north - dem.north) / (box.north - box.south) * ih;
-    var y1 = (box.north - dem.south) / (box.north - box.south) * ih;
-    octx.imageSmoothingEnabled = true;
-    octx.imageSmoothingQuality = 'high';
-    octx.drawImage(shade, 0, 0, cols, rows, x0, y0, x1 - x0, y1 - y0);
+    // The whole shade goes onto one layer first and the layer onto the image, so the
+    // detail terrain's own shading can *replace* the base grid's where the patch lies
+    // rather than being laid over it: two hillshades composited is a double shadow.
+    var layer = document.createElement('canvas');
+    layer.width = iw;
+    layer.height = ih;
+    var lctx = layer.getContext('2d');
+    lctx.imageSmoothingEnabled = true;
+    lctx.imageSmoothingQuality = 'high';
+    var place = function (grid) {
+      return [(grid.west - box.west) / (box.east - box.west) * iw,
+              (box.north - grid.north) / (box.north - box.south) * ih,
+              (grid.east - box.west) / (box.east - box.west) * iw,
+              (box.north - grid.south) / (box.north - box.south) * ih];
+    };
+    var at = place(dem);
+    lctx.drawImage(shade, 0, 0, cols, rows, at[0], at[1], at[2] - at[0], at[3] - at[1]);
+    // The finer ground's hillshade where there is finer ground. Without it a zoomed-in
+    // photograph carried the base grid's 2.5 km shading: the new ridges stood up in the
+    // geometry and the light on them still belonged to the old ones.
+    var patch = terrainDetail;
+    if (patch && patch.east > box.west && patch.west < box.east
+        && patch.north > box.south && patch.south < box.north) {
+      var fine = patchShade(patch, boost);
+      var p = place(patch);
+      lctx.clearRect(p[0], p[1], p[2] - p[0], p[3] - p[1]);
+      lctx.drawImage(fine, 0, 0, patch.cols, patch.rows, p[0], p[1], p[2] - p[0], p[3] - p[1]);
+    }
+    octx.drawImage(layer, 0, 0);
     return out;
+  }
+
+  // The same shade, from the detail terrain's grid and the same light and lit range —
+  // so where the patch's shading meets the base's, the two are one curve at two
+  // resolutions and not two different curves.
+  function patchShade(patch, boost) {
+    var pc = patch.cols, pr = patch.rows, z = patch.z;
+    var a = toMetres(patch.west, patch.north), b = toMetres(patch.east, patch.south);
+    var cellX = (b[0] - a[0]) / (pc - 1), cellY = (a[1] - b[1]) / (pr - 1);
+    var canvasOut = document.createElement('canvas');
+    canvasOut.width = pc;
+    canvasOut.height = pr;
+    var pctx = canvasOut.getContext('2d');
+    var pixels = pctx.createImageData(pc, pr);
+    for (var r = 0; r < pr; r++) {
+      for (var c = 0; c < pc; c++) {
+        var i = r * pc + c;
+        var right = z[i + (c + 1 < pc ? 1 : 0)], below = z[i + (r + 1 < pr ? pc : 0)];
+        var t = Math.max(-1, Math.min(1, (slopeShade((right - z[i]) / cellX,
+                                                     (below - z[i]) / cellY)
+                                          - litMid) / litSpread));
+        var k = i * 4;
+        if (t >= 0) {
+          pixels.data[k] = 255; pixels.data[k + 1] = 252; pixels.data[k + 2] = 242;
+        } else {
+          pixels.data[k] = 18; pixels.data[k + 1] = 26; pixels.data[k + 2] = 38;
+        }
+        pixels.data[k + 3] = Math.round(Math.min(Math.abs(t) * 0.34 * boost, 1) * 255);
+      }
+    }
+    pctx.putImageData(pixels, 0, 0);
+    return canvasOut;
+  }
+
+  // Every draped image re-shaded from the ground and the light as they are now: the base
+  // mosaic of each style, and the detail mosaic from the unshaded copy it keeps. Called
+  // when the sun moves and when a finer terrain patch lands.
+  function reshadeImagery() {
+    var was = style;
+    Object.keys(ready).forEach(function (name) {
+      // Each style at its own strength (reliefBoost reads `style`), as it was first baked.
+      style = name;
+      if (ready[name].image) ready[name].shaded = shadedTexture(ready[name].image,
+                                                               ready[name].box);
+    });
+    style = was;
+    if (style && ready[style]) basemap = ready[style].shaded || ready[style].image;
+    if (detail && detail.raw) detail.image = shadedTexture(detail.raw, detail.box) || detail.raw;
   }
 
   function sourceRect(r, c, rStep, cStep) {
@@ -2721,6 +2819,9 @@ function initView3d(root, cursorTrack, preset) {
     // diving towards the bottom-right on both wheel and pinch.
     var sx = (clientX - box.left) / box.width * W - anchorX();
     var sy = (clientY - box.top) / box.height * H - anchorY();
+    // Remembered, so the ground here is the ground that stays put when a finer terrain
+    // patch lands — see setTerrainDetail.
+    lastFocus = [(clientX - box.left) / box.width * W, (clientY - box.top) / box.height * H];
     var before = view.zoom;
     // 12 was the ceiling and it is not enough: on a cross-country box it stops at about
     // 2 km across the canvas, which is still too far out to see which side of a spine a
@@ -2972,11 +3073,7 @@ function initView3d(root, cursorTrack, preset) {
     appliedSun = where;
     setLight(where.az, where.el);
     measureLit();
-    Object.keys(ready).forEach(function (name) {
-      if (ready[name].image) ready[name].shaded = shadedTexture(ready[name].image,
-                                                               ready[name].box);
-    });
-    if (style && ready[style]) basemap = ready[style].shaded || ready[style].image;
+    reshadeImagery();
     if (renderer && renderer.relight) renderer.relight();
     sampleCellColours();
     draw();
@@ -3426,6 +3523,8 @@ function initView3d(root, cursorTrack, preset) {
                                spacing: terrainDetail.spacing } : null;
     },
     setTerrainDetail: function (patch) { setTerrainDetail(patch); },
+    // Exposed for tests: the draped image as the renderer receives it, shading and all.
+    shadedBasemap: function () { return basemap; },
     // Exposed for tests: stand in for a stitch that cannot happen offline. Takes the
     // same shape the stitcher produces, so the renderer cannot tell the difference.
     setDetail: function (image, box, zoom) {
