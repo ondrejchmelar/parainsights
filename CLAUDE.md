@@ -15,7 +15,7 @@ parainsights/
 ├── pyproject.toml         one project, one venv, one test suite
 ├── tracklog_viewer/       IGC/KML/KMZ → analysis → HTML, KMZ, 3D map
 ├── airspaces/             Czech airspace + the airfields nobody else carries → OpenAir, map
-├── meteo/                 the day's sounding against every Czech takeoff
+├── meteo/                 the day's sounding against pgweb's essential takeoffs
 ├── planner/               a task drawn on the airspace it crosses
 ├── parainsights_common/   the one thing every page shares: the strip between the tools
 ├── ci/                    the checks the pipeline runs that are not tests
@@ -86,7 +86,7 @@ uv run python -m airspaces.cli --html airspace.html     # the airspace map, in 3
 uv run python -m airspaces.cli --report                # what built, and what did not
 
 uv run python -m meteo.cli --html meteo.html           # the day, against every takeoff
-uv run python -m meteo.cli --refresh-sites             # re-fetch the takeoff list
+uv run python -m meteo.cli --refresh-sites             # re-fetch sources.CHOSEN's takeoffs
 uv run python -m meteo.cli --refresh-flymet            # re-read flymet's station map
 
 uv run python -m planner.cli --html plan.html          # draw a task, score it
@@ -171,7 +171,8 @@ the meteo page has no numbers of its own, and the imagery on every 3D map is fet
 Both say so on screen when the fetch fails rather than drawing an empty frame.
 
 **The meteo page compares up to three takeoffs, and three is the palette's number.**
-The full list of 159 sits in a `<dialog>` — on the page it was 571 px of layout and
+The list sits in a `<dialog>` — 15 takeoffs now, gfs.pgweb.cz's ESSENTIALS plus four in
+the Alps (`meteo.sources.CHOSEN`); when it was all 159 Czech ones, on the page it was 571 px of layout and
 **166 tab stops** before a keyboard user reached the forecast, which `docs/meteo-ux.md`
 measures before and after. Wind is in **m/s** throughout, asked of Open-Meteo as
 `wind_speed_unit=ms` so nothing converts anything, with the verdict gates converted

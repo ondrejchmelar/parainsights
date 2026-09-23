@@ -56,21 +56,19 @@ def main(argv=None) -> int:
     parser.add_argument("--html", metavar="FILE", type=Path,
                         help="write the meteo page")
     parser.add_argument("--refresh-sites", action="store_true",
-                        help="re-fetch the takeoff list from ParaglidingEarth and "
-                             "rewrite meteo/sites.py")
+                        help="re-fetch the chosen takeoffs (meteo.sources.CHOSEN) from "
+                             "ParaglidingEarth and rewrite meteo/sites.py")
     parser.add_argument("--refresh-flymet", action="store_true",
                         help="re-read flymet's station map and rewrite meteo/flymet.py")
-    parser.add_argument("--country", default="CZ",
-                        help="ISO country code for --refresh-sites (default CZ)")
     args = parser.parse_args(argv)
 
     if not (args.html or args.refresh_sites or args.refresh_flymet):
         parser.error("nothing to do: pass --html, --refresh-sites or --refresh-flymet")
 
     if args.refresh_sites:
-        fetched = sources.fetch(args.country)
+        fetched = sources.fetch_chosen()
         target = Path(sites.__file__)
-        sources.write(target, fetched, iso=args.country)
+        sources.write(target, fetched)
         with_rose = sum(1 for site in fetched if site["winds"])
         print(f"{target}: {len(fetched)} takeoffs, {with_rose} with a wind rose")
 

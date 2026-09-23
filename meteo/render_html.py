@@ -25,9 +25,9 @@ from . import sites as site_data
 from .sources import distance_m
 
 # Past this the nearest station is not the same weather and saying so would be worse than
-# saying nothing. Nothing in the Czech list is anywhere near it — the worst takeoff here
-# is 21 km from a station and the median is 9 — so this is a guard for a list that grows
-# rather than a filter that fires today.
+# saying nothing. flymet covers Czechia and the edge of its neighbours, so every takeoff
+# north of the Alps has a station well inside this, and the ones in Italy and Slovenia
+# have none at all — they get no meteogram rather than a Czech airfield's.
 FLYMET_RANGE_KM = 60
 
 # Open-Meteo, keyless and CORS-open. The pressure levels are `tracklog_viewer/meteo.py`'s,
@@ -297,11 +297,12 @@ def body(uid: str = "meteo") -> str:
     }, separators=(",", ":"))
     return f"""<article class="flight meteo-article" id="{uid}-article">
   <h1>Will it fly?</h1>
-  <p class="lede">The day's forecast against {len(site_data.SITES)} Czech takeoffs, ranked
+  <p class="lede">The day's forecast against {len(site_data.SITES)} takeoffs — the essentials
+  from <a href="https://gfs.pgweb.cz/">gfs.pgweb.cz</a> and the usual trips south — ranked
   by how the wind sits on each one. Add up to {MAX_CHOSEN} takeoffs and the page compares
   them at the same hour from the same model: a row each in the table, a boundary layer
-  each on one meteogram, a sounding each beside it, and flymet's own meteogram for the
-  airfield nearest each one. The numbers are fetched when you open this page, so they are
+  each on one meteogram, a sounding each beside it, and — north of the Alps, where it
+  has stations — flymet's own meteogram for the airfield nearest each one. The numbers are fetched when you open this page, so they are
   as current as the model is, and there are none at all without a network.</p>
   <div class="met-head">
     <div class="met-days" id="met-days" role="group" aria-label="Which day"></div>
@@ -499,7 +500,7 @@ SCRIPT = r"""
   // ---- fetching ----------------------------------------------------------------------
   //
   // Two requests, deliberately. Every site in one multi-coordinate call for the ranking —
-  // 159 of them cost about half a megabyte and one round trip — and the pressure levels
+  // one round trip however many there are — and the pressure levels
   // for one site only when that site is opened. Asking for the profile of every takeoff
   // up front would be tens of megabytes to answer a question about one hill.
   function surfaceUrl() {
@@ -607,14 +608,20 @@ SCRIPT = r"""
   var RANK = { good: 0, fair: 1, none: 2, poor: 3 };
   var modal = document.getElementById('met-modal');
 
+  // Accents folded away on both sides: the names are pgweb's, with their háčky and
+  // čárky, and "cerna" has to find Černá hora on a keyboard without them.
+  function folded(text) {
+    return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  }
+
   function drawList() {
     var list = document.getElementById('met-list');
     if (!state.surface) return;
-    var needle = state.search.trim().toLowerCase();
+    var needle = folded(state.search.trim());
     var rows = conf.sites.map(function (site, i) { return surfaceAt(i); })
       .filter(Boolean)
       .filter(function (row) {
-        return !needle || row.site.name.toLowerCase().indexOf(needle) >= 0;
+        return !needle || folded(row.site.name).indexOf(needle) >= 0;
       });
     // Ranked by the verdict, then by name. The chosen ones are *not* pulled to the top:
     // the list is a ranking of the day and re-sorting it under the reader's own choices
@@ -1671,7 +1678,7 @@ SCRIPT = r"""
 
   // One profile per chosen takeoff, fetched once and kept. Three requests where there
   // used to be one, and they are the reason the surface call is separate: asking for the
-  // pressure levels of all 159 takeoffs to rank them would be tens of megabytes to
+  // pressure levels of every takeoff to rank them would be megabytes spent to
   // answer a question about three hills.
   function loadProfiles() {
     var wanted = chosen().filter(function (index) { return !state.profiles[index]; });

@@ -23,9 +23,22 @@ from tests.test_view3d_gl import CHROME, CHROME_FLAGS, needs_chrome
 class TestTheSiteList:
     def test_every_site_is_in_the_country_it_claims(self):
         """A stray coordinate would put a takeoff in the sea and rank it anyway."""
+        boxes = {  # (south, north, west, east), loose
+            "CZ": (48.5, 51.1, 12.0, 18.9), "SK": (47.7, 49.7, 16.8, 22.6),
+            "DE": (47.2, 55.1, 5.8, 15.1), "IT": (36.6, 47.1, 6.6, 18.6),
+            "SI": (45.4, 46.9, 13.3, 16.7),
+        }
         for site in sites.SITES:
-            assert 48.3 < site["lat"] < 51.2, site
-            assert 11.9 < site["lon"] < 19.1, site
+            south, north, west, east = boxes[site["country"]]
+            assert south < site["lat"] < north, site
+            assert west < site["lon"] < east, site
+
+    def test_the_list_is_the_chosen_one_in_its_order(self):
+        """`sites.py` is generated from `sources.CHOSEN`; a hand edit to either that the
+        other did not get would leave the page carrying a hill nobody chose."""
+        from meteo import sources
+
+        assert [(s["name"], s["country"], s["id"]) for s in sites.SITES] == list(sources.CHOSEN)
 
     def test_a_wind_rose_is_eight_octants_or_nothing(self):
         """`winds` is indexed by octant, so a short list would read the wrong direction
@@ -124,15 +137,19 @@ class TestPairingATakeoffWithAStation:
         site = {"name": "Hill", "lat": 50.5, "lon": 15.0, "alt": 500, "winds": [], "id": 1}
         assert render_html.nearest_stations([site], [station]) == [None]
 
-    def test_every_czech_takeoff_has_a_station_near_it(self):
-        """Measured, not assumed: the worst takeoff in the list is 21 km from a station
-        and the median is 9, which is why the page can show this beside every site rather
-        than beside some of them."""
+    def test_every_takeoff_north_of_the_alps_has_a_station_near_it(self):
+        """flymet covers Czechia and the border: every takeoff there gets a meteogram,
+        and the Alpine ones get none rather than a Czech airfield's."""
         found = render_html.nearest_stations()
         assert len(found) == len(sites.SITES)
-        assert all(found), "a takeoff was left without a station"
-        worst = max(entry["km"] for entry in found)
+        north = [entry for site, entry in zip(sites.SITES, found)
+                 if site["country"] in ("CZ", "SK", "DE")]
+        assert all(north), "a takeoff north of the Alps was left without a station"
+        worst = max(entry["km"] for entry in north)
         assert worst < 30, f"the worst takeoff is now {worst} km from a station"
+        south = [entry for site, entry in zip(sites.SITES, found)
+                 if site["country"] in ("IT", "SI")]
+        assert south and not any(south), "an Alpine takeoff was paired with a flymet station"
 
 
 class TestThePage:
@@ -521,7 +538,7 @@ class TestChoosingTakeoffs:
         assert answer["openBefore"] is False, "the picker is open before it is asked for"
         assert answer["openAfter"] is True
         assert answer["inDialog"] is True
-        assert answer["rows"] > 100, "the dialog should hold the whole list"
+        assert answer["rows"] == len(sites.SITES), "the dialog should hold the whole list"
 
     def test_searching_narrows_the_list(self):
         answer = _probe_page("""
@@ -538,9 +555,9 @@ class TestChoosingTakeoffs:
         return { all: all, narrowed: narrowed,
                  empty: document.querySelectorAll('.met-empty').length };
         """)
-        assert answer["all"] > 100
-        assert answer["narrowed"], "searching for a real takeoff found nothing"
-        assert all("rana" in name.lower() for name in answer["narrowed"])
+        assert answer["all"] == len(sites.SITES)
+        # Typed without the accent, and it still finds Raná.
+        assert answer["narrowed"] == ["Raná"], "searching for a real takeoff found nothing"
         assert answer["empty"] == 1, "a search with no hits must say so"
 
     def test_three_takeoffs_can_be_compared_and_a_fourth_is_refused(self):
@@ -950,10 +967,20 @@ class TestTheSoundingsAndFlymetCompareToo:
             "one picture per station, and every chosen takeoff's station is a station")
         assert answer["images"] == answer["figures"]
 
-    def test_two_takeoffs_sharing_an_airfield_get_one_picture_naming_both(self):
-        """In a country this size two hills often share their nearest airfield. The same
-        meteogram printed twice under two headings reads as a bug in the page, and costs
-        flymet a second fetch to say the same thing."""
+    def test_two_takeoffs_sharing_an_airfield_get_one_picture_naming_both(self, monkeypatch):
+        """Two hills sharing their nearest airfield: the same meteogram printed twice
+        under two headings reads as a bug in the page, and costs flymet a second fetch to
+        say the same thing. The chosen list is short enough that no two share one today,
+        so the first two are made to — a list that grows would bring the case back."""
+        real = render_html.nearest_stations
+
+        def shared(*args, **kwargs):
+            found = real(*args, **kwargs)
+            assert found[0] and found[1], "the first two takeoffs need a station each"
+            found[1] = dict(found[0])
+            return found
+
+        monkeypatch.setattr(render_html, "nearest_stations", shared)
         answer = _probe_page("""
         var m = window.__meteo;
         var conf = JSON.parse(document.querySelector('.met-data').textContent);
@@ -978,8 +1005,7 @@ class TestTheSoundingsAndFlymetCompareToo:
           names: [conf.sites[pair[0]].name, conf.sites[pair[1]].name]
         };
         """)
-        if answer.get("skipped"):
-            pytest.skip("no two takeoffs in the committed list share an airfield")
+        assert not answer["skipped"], "no two takeoffs share an airfield"
         assert answer["figures"] == 1, "the same picture was printed twice"
         for name in answer["names"]:
             assert name in answer["heading"], (

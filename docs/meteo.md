@@ -71,7 +71,9 @@ to avoid.
 
 Measured: worst anchor 239 m against a map scale of 664 m a pixel, and Mnichovo Hradiště —
 picked because it is the station the whole feature was asked for — lands 150 m from the
-real airfield. Every Czech takeoff has a station within 21 km, median 9 km.
+real airfield. Every takeoff north of the Alps has a station within 20 km, median 10 km;
+the four in Italy and Slovenia have none within the page's 60 km and get no meteogram,
+which is the right answer rather than a Czech airfield's picture under an Alpine name.
 
 ## The forecast is fetched in the page, not baked into it
 
@@ -94,20 +96,32 @@ in**, on its own 0/1/2 scale. That is what turns a forecast into an answer — 2
 the north-west is a good day at one hill and unflyable at the next one along — and it is
 the whole reason the list comes from there rather than from a list of place names.
 
-159 Czech takeoffs, 138 of them with a rose. The 21 without one are **left unjudged**
-rather than guessed at, and the page says so: inventing a direction for a hill nobody
-recorded is the one error this page must not make.
+**Which takeoffs is a choice, and it is gfs.pgweb.cz's.** The first version carried every
+Czech record ParaglidingEarth has, 159 of them, and a ranking of 159 hills is mostly hills
+nobody drives to, sorted above the ones people do because the wind happened to suit them.
+The list now is pgweb's own **ESSENTIALS** group — Raná, Krupka, Kozákov, Černá hora,
+Dolní Morava, Velký Lopeník, Martinské hole, Pálava, Všechov, Doubrava, Hausstein — plus
+four trips south: Bassano, Col Rodella, Meduno and Kobala. pgweb gives a point and a name;
+ParaglidingEarth gives the wind rose; every pgweb point had exactly one PGE takeoff within
+a kilometre, and `sources.CHOSEN` pins each by its PGE id under pgweb's name, which is the
+one a Czech pilot would search for (search folds accents, so `cerna` finds Černá hora).
 
-`meteo.cli --refresh-sites` rewrites `meteo/sites.py`, provenance and fetch date first.
-Takeoffs do not move, so the file is committed and the build needs no network. The flymet
-station list is the same shape — `--refresh-flymet` rewrites `meteo/flymet.py` — and the
-two are paired at build time by `render_html.nearest_stations`, because neither list moves
-and 159 × 186 distances are arithmetic no reader's browser should be asked to repeat.
+15 takeoffs, 14 with a rose. Martinské hole has none on ParaglidingEarth and is **left
+unjudged** rather than guessed at, and the page says so: inventing a direction for a hill
+nobody recorded is the one error this page must not make.
+
+`meteo.cli --refresh-sites` re-fetches the chosen ones and rewrites `meteo/sites.py`,
+provenance and fetch date first, and refuses if a chosen id has gone from PGE rather than
+quietly dropping the hill. Takeoffs do not move, so the file is committed and the build
+needs no network. The flymet station list is the same shape — `--refresh-flymet` rewrites
+`meteo/flymet.py` — and the two are paired at build time by `render_html.nearest_stations`,
+because neither list moves and the distances are arithmetic no reader's browser should be
+asked to repeat.
 
 ## Two requests, and why not one or a hundred and sixty
 
 Every site's *surface* forecast comes in one multi-coordinate call — Open-Meteo accepts
-comma-separated coordinates and answers with an array, so 159 takeoffs cost one round
+comma-separated coordinates and answers with an array, so every takeoff costs one round
 trip and about half a megabyte, which is what the ranking needs. The **pressure levels
 are fetched per chosen takeoff, when it is chosen** — at most three, since that is the
 comparison's cap: asking for the profile of every takeoff up front would be tens of
