@@ -29,8 +29,8 @@ for page in $pages 404.html; do
 <link rel="canonical" href="$TARGET/">
 <meta http-equiv="refresh" content="0; url=$TARGET/">
 <script>
-  // The path under the project, whichever way GitLab served it: /parainsights/meteo/ on
-  // the namespace domain, /meteo/ on a unique domain.
+  // The path under the project, whichever way GitLab served it: /meteo/ on the unique
+  // domain (parainsights-55df51.gitlab.io), /parainsights/meteo/ on the namespace one.
   var path = location.pathname.replace(/^\/parainsights(?=\/|$)/, "");
   location.replace("$TARGET" + (path || "/") + location.search + location.hash);
 </script>
