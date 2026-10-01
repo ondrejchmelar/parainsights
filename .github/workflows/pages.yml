@@ -1,0 +1,166 @@
+# GitHub Pages for the tracklog viewer — the site's home since it moved off GitLab. The
+# GitLab project is deprecated and its Pages site only redirects here (`ci/redirect.sh`).
+#
+# The report is one static HTML file, and it is not built here — building needs the IGC
+# files, and flight tracks stay out of this repository (`*.igc` is ignored). Reports are
+# built locally and the output is committed under `public/`:
+#
+#   uv run python -m tracklog_viewer.cli FLIGHT.igc [...] \
+#       --terrain --meteo --online --html public/index.html
+#
+# `--online` is the reason for being on Pages at all. A published artifact runs under a
+# policy that blocks every external host, which is what forced embedded imagery, an
+# embedded DEM, a flat plane for uploaded tracks and a fake fullscreen. A page served
+# from Pages can fetch, so imagery comes at view time at zoom 12–13 (10–20 m/px against
+# the ~45 an embedded JPEG affords), weather works for a track the reader uploads, and
+# the Fullscreen API is allowed.
+#
+# Settings → Pages → Source must be **GitHub Actions**. "Deploy from a branch" publishes
+# the repository root, which has no index.html, and the site 404s.
+
+name: pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # uv and no pinned Python — deliberately. Pinning an interpreter here as well as in
+  # `requires-python` is what let three versions drift apart (a 3.11 venv, a `>=3.12`
+  # floor, a 3.12 image, no two agreeing). `uv sync` reads `.python-version`, downloads
+  # that interpreter and refuses to build a venv that violates `requires-python`, so the
+  # version lives in one place and CI cannot disagree with a developer's machine.
+  #
+  # `--locked` is the other half: it fails if `uv.lock` does not match `pyproject.toml`
+  # rather than quietly resolving something newer. An upstream release can no longer turn
+  # this pipeline red on its own.
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked --extra dev
+      - run: uv run python --version
+      # `-c pyproject.toml` matters: pytest otherwise walks up and adopts an enclosing
+      # project's config. The 3D view's tests are left out here and run in their own
+      # job below. -rs so skips are named in the log. A silently skipped test is a test
+      # you think you have.
+      - run: >-
+          uv run pytest -c pyproject.toml -rs
+          --ignore=tests/test_view3d_gl.py --ignore=tests/test_view3d_gestures.py
+
+  # The 3D view's tests drive a real browser, and they are the entire regression suite
+  # for the WebGL renderer — no folded cells at any camera, the matrix agreeing with
+  # `project()` to a hundredth of a pixel, the texture not going blurry, a clockwise twist
+  # turning the map clockwise, context loss falling back, disposal returning the context.
+  # Two of those guard bugs found by looking at the output rather than by a test, which is
+  # exactly the kind that comes back.
+  #
+  # GitHub's runner image already carries `google-chrome`, which is all the tests look
+  # for on PATH. Software rendering is forced in the test flags, so no GPU is needed.
+  browser-tests:
+    runs-on: ubuntu-latest
+    # Not yet proven on this runner, and a browser job that is flaky on its first day
+    # must not be what stops the site deploying. Flip this off once it has gone green a
+    # few times — a permanently-allowed-to-fail test job is decoration.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: google-chrome --version
+      - run: uv sync --locked --extra dev
+      - run: uv run pytest -c pyproject.toml -rs tests/test_view3d_gl.py tests/test_view3d_gestures.py
+
+  # What this job can and cannot build, and why the difference matters.
+  #
+  # **The report cannot be built here.** It needs the IGC files and flight tracks stay out
+  # of this repository, so `public/index.html` is a committed artifact — which is exactly
+  # how the site once sat weeks out of date behind a wall of green pipelines: the renderer
+  # changed, nobody rebuilt, and the job had nothing to notice with. `stale.sh` is what
+  # notices now. It asks whether the commit that last built the page contains the last
+  # change to everything that renders it, and fails when it does not. That is the whole
+  # guard: it cannot rebuild the page, but it can refuse to publish a page that no longer
+  # matches the code in the same commit.
+  #
+  # **The other three pages can be built here**, and are — `meteo` needs nothing but its
+  # own committed data, and `airspace` and `planner` fetch from public sources. Building
+  # them means three quarters of the site can never be stale, and the two that need a
+  # network fail the job rather than publishing yesterday's copy if a source is down.
+  build:
+    needs: tests
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # `stale.sh` reads the history. The default clone is one commit deep, and in a
+          # one-commit window the page's last change is usually not there at all — the
+          # check would fail every deploy that did not itself rebuild the report.
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      # `--extra terrain` is Pillow, and the terrain is why. A bare `uv sync` builds an
+      # environment that fetches DEM tiles perfectly and cannot decode a single one, which
+      # is not a shape of failure anyone guesses at: two deploys published without their
+      # 3D view while the diagnosis was "the tile host must be blocking the runner". The
+      # comment above `[project.optional-dependencies]` already records the same mistake
+      # one extra along.
+      - run: uv sync --locked --extra terrain
+      # Fail loudly rather than deploying an empty site: without this the job goes green
+      # and publishes nothing, which looks like Pages being broken.
+      - run: test -f public/index.html || (echo "no public/index.html to publish — build one locally, see the header of this file" && exit 1)
+      # The committed report against the code that renders it.
+      - run: sh ci/stale.sh
+      # The meteo page needs no network — its takeoff list and station map are committed
+      # data — so there is no excuse for it not to build, and a failure here is a bug.
+      - run: uv run python -m meteo.cli --html public/meteo/index.html
+      # The other two fetch from four public sources. Those *are* allowed to be down, and
+      # when they are the committed page is published instead of nothing: it is a few
+      # days old at worst, and refusing to publish a rebuilt *report* because someone
+      # else's CSV is unreachable is the wrong trade. Loud, and not fatal.
+      # `--require-terrain` is what stops a rebuild being a downgrade. Without it a run
+      # that cannot reach the elevation model writes the flat SVG map over the 3D one and
+      # reports success — which is exactly what the first green deploy did.
+      - run: uv run python -m airspaces.cli --html public/airspace/index.html --require-terrain || echo "::warning::the airspace page could not be rebuilt, publishing the committed copy - check airspaces/sources.py"
+      - run: uv run python -m planner.cli --html public/planner/index.html || echo "::warning::the planner page could not be rebuilt, publishing the committed copy"
+      # The airspace page links its OpenAir file by name and the name carries the AIRAC
+      # date, so a half-finished rebuild can leave the page pointing at a file that is not
+      # beside it. "Refuse to publish a site with a dead link in its own nav" already
+      # covers the strip; this is the same rule for the one download button on the site.
+      - run: sh ci/download-link.sh
+      # Every page in the nav strip, because the strip links to all of them from all of
+      # them: a missing sibling is not a smaller site, it is three dead links on every
+      # page that is there.
+      - run: for page in airspace meteo planner; do test -f "public/$page/index.html" || (echo "no public/$page/index.html — the nav strip on every other page links to it" && exit 1); done
+      - run: echo "publishing $(du -sh public | cut -f1)"
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  # A deploy is not cancelled half way: that publishes nothing and leaves the last deploy
+  # standing, which is a confusing state to debug. Queued, never interrupted.
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

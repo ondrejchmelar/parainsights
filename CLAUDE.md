@@ -151,7 +151,7 @@ to run inside a published artifact, behind a policy that blocks every external h
 that one constraint is why there is an embedded DEM, an embedded basemap, locally
 rendered charts, a canvas 3D view instead of a map library, and an inlined font.
 
-That assumption is retired. The site is GitLab Pages, the reader has a connection, and
+That assumption is retired. The site is GitHub Pages, the reader has a connection, and
 the trade was never close: a fetched mosaic is 10–20 m a pixel where an embedded one can
 afford 45, the detail layer makes it sharper again as you zoom in, and the file is half
 the size. So **imagery is fetched at view time** in all three page-writing tools, and
@@ -214,8 +214,10 @@ browser fetches it from flymet, flymet is named in the caption and the caption l
 — so nothing here republishes it. Over `https`, because the site is https and a browser
 drops a mixed-content image without drawing anything or saying why.
 
-Publishing is a build and a commit — the site is `public/`, handed to GitLab Pages by
-the `pages` job in `.gitlab-ci.yml`:
+Publishing is a build and a commit — the site is `public/`, handed to GitHub Pages by
+`.github/workflows/pages.yml`. The repository moved from GitLab in October 2026; the
+GitLab project is deprecated, and `.gitlab-ci.yml` now publishes only redirect stubs
+(`ci/redirect.sh`) so the old address sends readers on to the same page here:
 
 ```bash
 uv run python -m tracklog_viewer.cli FLIGHT.igc --terrain --meteo \
@@ -985,7 +987,7 @@ Still wanted:
 - **`public/index.html` is a committed build artifact — the report needs the IGC files
   and flight tracks stay out of this repository.** That is the trade, and it failed in a
   specific way: the renderer changed, nobody rebuilt, and the site sat weeks out of date
-  behind a wall of green pipelines, because the `pages` job only checked the file
+  behind a wall of green pipelines, because the deploy job only checked the file
   existed. Two things changed.
   **`ci/stale.sh` refuses to publish a report older than the code that renders it.** It
   asks whether the page’s last commit contains the last change to `tracklog_viewer`,
@@ -1012,12 +1014,13 @@ Still wanted:
   job wrote that over the 3D page and reported success. The cause was worth the two
   deploys it took to find, and it was **not** the unreachable tile host everyone assumed:
   the tiles downloaded fine and `Pillow` was not installed, so not one of them could be
-  decoded. `uv sync --extra terrain` in the `pages` job, and `terrain.fetch(report=...)`
+  decoded. `uv sync --extra terrain` in the deploy's `build` job, and `terrain.fetch(report=...)`
   so the next one says so out loud instead of shrugging. The flag
   turns the fallback into a refusal, and the refusal happens *before* anything is
   written, so the committed page and its sidecar both survive. Passing it is the
   pipeline's job; a person building offline still gets the flat map.
-  Two things the first deploy taught, both in the job image: it has **no CA trust store**
+  Two things the first deploy taught, both in GitLab's job image (GitHub's runner has
+  both, but a slim container would not): it has **no CA trust store**
   (`uv` bundles its own roots and Debian's mirror list is plain http, so everything works
   until the first `urllib` call, which then says `CERTIFICATE_VERIFY_FAILED`), and
   `--no-install-recommends` will not pull one in behind `git`. Install `ca-certificates`

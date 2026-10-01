@@ -54,8 +54,8 @@ uv run python -m airspaces.cli --report                     # what built, what d
 `--html` writes **two** files: the page, and the OpenAir file next to it that the page's
 download button links to. Publish them together or the button is dead.
 
-The published copy lives at `public/airspace/`, deployed by the `pages` job in
-`.gitlab-ci.yml` along with the rest of the site. `public/index.html` is the tracklog
+The published copy lives at `public/airspace/`, deployed by
+`.github/workflows/pages.yml` along with the rest of the site. `public/index.html` is the tracklog
 viewer's report and must not be overwritten — the airspace map is a sibling, not the
 front page:
 
