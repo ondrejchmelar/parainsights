@@ -15,7 +15,7 @@ dependencies = [
 # generated PNG, which is the check that caught a corrupt IDAT that Google Earth drew as
 # a red X on every placemark. Installing only `[dev]` left CI without PIL and failed
 # there while passing locally, where a stray Pillow happened to be present.
-dev = ["pytest>=8", "pillow>=10"]
+dev = ["pytest>=8", "pytest-xdist>=3", "pillow>=10"]
 terrain = ["pillow>=10"]
 
 [project.scripts]
@@ -32,7 +32,10 @@ include = ["tracklog_viewer*", "airspaces*", "meteo*", "planner*", "parainsights
 # Set explicitly so pytest does not walk up and adopt an enclosing project's config.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+# In parallel, one worker per core. Most of the suite is headless Chrome, one process
+# per test and mostly waiting, so it parallelises well. `--dist loadfile` keeps a file's
+# tests on one worker: the browser tests share module-level fixtures and fixture servers.
+addopts = "-q -n auto --dist loadfile"
 
 [tool.ruff]
 line-length = 100

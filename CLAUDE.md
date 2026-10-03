@@ -59,7 +59,7 @@ as the packages, so there is nothing to line up by hand:
 
 ```bash
 uv sync --extra dev          # creates .venv on the pinned Python, from uv.lock
-uv run pytest -c pyproject.toml     # 644 tests, ~6 min, no network
+uv run pytest -c pyproject.toml     # 708 tests, ~6 min in parallel, no network
 ```
 
 `-c pyproject.toml` matters when the repo sits inside another project — pytest otherwise
@@ -869,8 +869,11 @@ The numbers are checkable, so check them:
   flymet `<img>`, which every run fetched from flymet.cz; it is served locally now.
   `unshare -rn` runs anything without a network if you want to check by hand.
 - **Why the suite takes minutes.** About 90 tests each launch a headless Chrome with
-  software WebGL, and a few of them stall for 30-50 s on any given run (which ones changes
-  run to run). One cost was not Chrome: `igc._timezone_from_position` built a fresh
+  software WebGL, and a few of them stall for 30-110 s on any given run (which ones changes
+  run to run) — waiting, not computing: Chrome itself starts in ~1 s. The suite runs in
+  parallel (`pytest-xdist`, `-n auto --dist loadfile` in `pyproject.toml`): 708 tests in
+  5 min 46 s on four cores against 8 min 42 s serially. `-p no:xdist` or `-n 0` runs
+  serially when a failure needs reading in order. One cost was not Chrome: `igc._timezone_from_position` built a fresh
   `TimezoneFinder` per parse, 1.6-1.9 s each; it is cached per process now.
 - **Don't pipe a command whose exit code you care about** — `cmd | tail` reports tail's
   status, which once hid a `NameError` for two runs.
