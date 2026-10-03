@@ -1602,11 +1602,22 @@ function initView3d(root, cursorTrack, preset) {
       if (p[1] < minY) minY = p[1];
       if (p[1] > maxY) maxY = p[1];
     }
-    // Sampling the grid is enough for bounds and keeps this cheap.
-    for (var r = 0; r < rows; r += 3) {
-      for (var c = 0; c < cols; c += 6) {
-        var i = r * cols + c;
-        consider(world(nodeX[i], nodeY[i], dem.z[i]));
+    // A payload may name the part of its ground to open on (`view.focus`, a lon/lat
+    // box): the airspace map carries the Alps for the planner, and opens on the country
+    // its airspace covers. Otherwise the whole grid, sampled, which keeps this cheap.
+    var focus = scene.view && scene.view.focus;
+    if (focus) {
+      [[focus.west, focus.south], [focus.east, focus.south], [focus.west, focus.north],
+       [focus.east, focus.north]].forEach(function (corner) {
+        var m = toMetres(corner[0], corner[1]);
+        consider(world(m[0], m[1], dem.min));
+      });
+    } else {
+      for (var r = 0; r < rows; r += 3) {
+        for (var c = 0; c < cols; c += 6) {
+          var i = r * cols + c;
+          consider(world(nodeX[i], nodeY[i], dem.z[i]));
+        }
       }
     }
     var t = scene.track;

@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from planner import cli as planner_cli
+from airspaces import cli as airspaces_cli
 from planner import render_html as planner_html
 from tests.test_view3d_gl import CHROME, CHROME_FLAGS, needs_chrome
 from tracklog_viewer import terrain as terrain_module
@@ -64,7 +64,8 @@ def _page(spaces=(), terrain=None) -> str:
     payload = airspace_scene.build(list(spaces), terrain=terrain or _terrain(),
                                    basemaps={}, tiles=False)
     panel = view3d.panel(payload, "planner")
-    return planner_cli.page(planner_html.body(scene_panel=panel), "Plan a task")
+    return airspaces_cli._page(planner_html.body(scene_panel=panel), "Plan a task",
+                               three_d=True)
 
 
 PROBE = """
@@ -103,6 +104,7 @@ def _run(body: str, spaces=(), terrain=None) -> dict:
 _HARNESS = """
 var canvas = document.querySelector('canvas.view3d');
 var handle = window.__view3dAll[canvas.id];
+document.getElementById('plan-draw').click();
 var box = canvas.getBoundingClientRect();
 function send(type, x, y) {
   canvas.dispatchEvent(new PointerEvent(type, {
@@ -285,6 +287,7 @@ def test_the_planner_scores_with_the_reports_own_constants():
 _DROP = """
 var canvas = document.querySelector('canvas.view3d');
 var handle = window.__view3dAll[canvas.id];
+document.getElementById('plan-draw').click();
 function at(lon, lat) {
   var m = handle.toMetres(lon, lat);
   var p = handle.worldProject(m[0], m[1], handle.groundAt(lon, lat));

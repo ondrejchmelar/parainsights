@@ -1,8 +1,11 @@
-"""Command line: write the planner page.
+"""Command line: write the redirect where the planner page used to be.
 
-The map under the planner is the airspace map, built by `airspaces.scene` — the same
-terrain, the same imagery and the same rings, because the point of planning here rather
-than on a bare basemap is seeing what the line crosses.
+The planner is a section of the airspace page now (`airspaces.render_html.body`) — it
+always drew on the airspace map, and two tabs over the same map were one too many. A
+bookmark to `planner/` still has to land somewhere, so this writes a page that sends it
+on to `../airspace/`, keeping the query and anchor, with a link for a reader without
+JavaScript. Themed like every other page (`common.TOKENS`), because it may be on screen
+for a frame.
 """
 
 from __future__ import annotations
@@ -13,92 +16,42 @@ from pathlib import Path
 
 import parainsights_common as common
 
-from . import render_html
+TARGET = "../airspace/"
 
 
-def page(article: str, title: str, *, extra_style: str = "",
-         extra_script: str = "") -> str:
-    from airspaces import render_html as airspace_html
-    from tracklog_viewer import view3d, view3d_gl
-
+def page() -> str:
     return f"""<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{title}</title>
-<script>{common.THEME_BOOT}</script>
-<style>
-{common.TOKENS}
+<title>The planner has moved</title>
+<meta name="robots" content="noindex">
+<link rel="canonical" href="{TARGET}">
+<meta http-equiv="refresh" content="0; url={TARGET}">
+<script>{common.THEME_BOOT}
+location.replace('{TARGET}' + location.search + location.hash);</script>
+<style>{common.TOKENS}
 body {{ margin:0; background:var(--paper); color:var(--ink); font:15px/1.55
-  system-ui,-apple-system,"Segoe UI",sans-serif; }}
-.wrap {{ max-width:1100px; margin:0 auto; padding:26px 18px 60px; }}
-h1 {{ font-size:26px; margin:0 0 6px; }}
-.lede {{ color:var(--ink-2); margin:0 0 14px; max-width:70ch; }}
-a {{ color: inherit; }}
-.met-links {{ margin:14px 0 0; font-size:12.5px; color:var(--ink-3); }}
-button {{ font:inherit; padding:3px 10px; background:var(--panel);
-  color:var(--ink); border:1px solid var(--rule); border-radius:3px; cursor:pointer; }}
-{airspace_html.STYLE}
-{view3d.STYLE}{view3d_gl.STYLE}
-{render_html.STYLE}
-{common.STYLE}
-{extra_style}
-</style>
-<div class="wrap">
-{common.nav("planner", depth=1)}
-{article}
-</div>
-<script>{view3d.SCRIPT}
-{view3d_gl.SCRIPT}</script>
-<script>{airspace_html.HOURS_SCRIPT}</script>
-<script>{render_html.SCRIPT}</script>
-<script>{common.THEME_SCRIPT}</script>
-{extra_script}
+  system-ui,-apple-system,"Segoe UI",sans-serif; padding:26px 18px; }}
+a {{ color:inherit; }}</style>
+<p>The task planner is now part of the
+<a href="{TARGET}">airspace page</a>.</p>
 """
 
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         prog="planner",
-        description="Draw a task over the terrain and the airspace, and score it.",
+        description="Write the redirect from the old planner page to the airspace page, "
+                    "where the planner now lives.",
     )
     parser.add_argument("--html", metavar="FILE", type=Path, required=True,
-                        help="write the planner page")
-    parser.add_argument("--online", action="store_true",
-                        help=argparse.SUPPRESS)   # now the default
-    parser.add_argument("--no-airspace", action="store_true",
-                        help="terrain only. Faster to build, and the map then shows "
-                             "nothing about what the line crosses")
+                        help="where the old planner page was")
+    parser.add_argument("--online", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--no-airspace", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
-
-    from airspaces import build as airspace_build
-    from airspaces import openair as airspace_openair
-    from airspaces import scene as airspace_scene
-    from airspaces import sources as airspace_sources
-    from tracklog_viewer import view3d
-
-    spaces = []
-    if not args.no_airspace:
-        overlay = airspace_build.build()
-        base_text, _ = airspace_sources.base_airspace()
-        spaces = list(airspace_openair.read(base_text)) + list(overlay.airspaces)
-
-    # The terrain is not carried: the page fetches it (`terrain.remote`). Over the Alps
-    # it was 120 000 heights and half the page.
-    from tracklog_viewer import terrain as viewer_terrain
-
-    payload = airspace_scene.build(spaces, terrain=None, basemaps={}, tiles=True)
-    payload["terrain"] = viewer_terrain.remote(*render_html.PLAN_BOX,
-                                               cols=render_html.PLAN_COLUMNS,
-                                               max_points=render_html.PLAN_NODES)
-    # Same map, same reason as `airspaces/render_html.py`: at national scale a
-    # traffic circuit is a third of a pixel tall.
-    panel = view3d.panel(payload, "planner", verticals=(1, 5, 15), vertical=5)
-
     args.html.parent.mkdir(parents=True, exist_ok=True)
-    args.html.write_text(
-        page(render_html.body(scene_panel=panel), "Plan a task"), encoding="utf-8"
-    )
-    print(f"{args.html}: {len(payload['airspaces'])} airspaces under the planner")
+    args.html.write_text(page(), encoding="utf-8")
+    print(f"{args.html}: redirects to {TARGET}")
     return 0
 
 

@@ -12,7 +12,7 @@ The links are relative and assume the published layout, which is the only layout
     public/index.html        the flight report      → `.`
     public/airspace/         the airspace map       → `airspace/`
     public/meteo/            the day's forecast     → `meteo/`
-    public/planner/          the task planner       → `planner/`
+    public/planner/          a redirect to the airspace page, where the planner is now
 
 `depth` is how far below `public/` the page being written lives, because a page in
 `airspace/` has to reach its siblings through `../`. It is passed in rather than guessed
@@ -24,10 +24,12 @@ from __future__ import annotations
 
 # key, label, directory under public/. Order is the order a day happens in: what is the
 # weather, where shall I go, what will I fly, and then what did I actually do.
+#
+# The planner is not a page of its own any more: it draws on the airspace map, and two
+# tabs over the same map were one too many. `public/planner/` only redirects.
 PAGES = [
     ("meteo", "Meteo", "meteo/"),
-    ("planner", "Planner", "planner/"),
-    ("airspace", "Airspace", "airspace/"),
+    ("airspace", "Airspace & planner", "airspace/"),
     ("flights", "Flights", ""),
 ]
 

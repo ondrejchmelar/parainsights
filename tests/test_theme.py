@@ -36,6 +36,7 @@ class TestTheTokensAreSharedAndScopedBothWays:
         from meteo import cli as meteo_cli
         from planner import cli as planner_cli
 
+        # The planner's is a redirect now, and still themed: it may be on screen a frame.
         for module in (meteo_cli, airspaces_cli, planner_cli):
             source = __import__("pathlib").Path(module.__file__).read_text(encoding="utf-8")
             assert "common.TOKENS" in source, module.__name__
@@ -83,7 +84,7 @@ def test_the_handles_are_walked_the_way_they_are_stored():
 class TestTheOrderIsTheSameEverywhere:
     def test_the_site_strip_is_the_days_own_order(self):
         assert [key for key, _, _ in common.PAGES] == [
-            "meteo", "planner", "airspace", "flights"]
+            "meteo", "airspace", "flights"]
 
     def test_the_report_follows_it_too(self):
         """The report listed its in-document views first and its links after, so it read
@@ -97,7 +98,7 @@ class TestTheOrderIsTheSameEverywhere:
         labels = [re.sub(r"<[^>]+>", "", chunk).strip()
                   for chunk in re.findall(r"<(?:a|button)[^>]*>[^<]*</(?:a|button)>", nav)]
         labels = [label for label in labels if label]
-        assert labels == ["Meteo", "Planner", "Airspace", "Flights"]
+        assert labels == ["Meteo", "Airspace", "Flights"]
 
 
 @needs_chrome

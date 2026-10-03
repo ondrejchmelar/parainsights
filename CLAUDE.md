@@ -7,7 +7,7 @@ Tools for paragliding. One repository, four tools, answering a question each:
 | **tracklog viewer** | how did that flight go? | `public/index.html` |
 | **airspaces** | what is above me, and what does my instrument not know? | `public/airspace/` |
 | **meteo** | is it worth driving anywhere today, and where? | `public/meteo/` |
-| **planner** | what is that task worth, and what does it cross? | `public/planner/` |
+| **planner** | what is that task worth, and what does it cross? | `public/airspace/`, on the airspace map |
 
 ```
 parainsights/
@@ -16,7 +16,7 @@ parainsights/
 ├── tracklog_viewer/       IGC/KML/KMZ → analysis → HTML, KMZ, 3D map
 ├── airspaces/             Czech airspace + the airfields nobody else carries → OpenAir, map
 ├── meteo/                 the day's sounding against pgweb's essential takeoffs
-├── planner/               a task drawn on the airspace it crosses
+├── planner/               a task drawn on the airspace it crosses — a section of the airspace page
 ├── parainsights_common/   the one thing every page shares: the strip between the tools
 ├── ci/                    the checks the pipeline runs that are not tests
 ├── tests/                 pytest, 725 tests, no network
@@ -89,11 +89,11 @@ uv run python -m meteo.cli --html meteo.html           # the day, against every 
 uv run python -m meteo.cli --refresh-sites             # re-fetch sources.CHOSEN's takeoffs
 uv run python -m meteo.cli --refresh-flymet            # re-read flymet's station map
 
-uv run python -m planner.cli --html plan.html          # draw a task, score it
+uv run python -m planner.cli --html plan.html          # only the redirect to ../airspace/
 ```
 
 Only `--meteo` and `--terrain` touch the network. Everything else in the viewer is
-offline. `meteo` and `planner` both need one at build time, and the meteo *page* needs
+offline. `meteo` and `airspaces` both need one at build time, and the meteo *page* needs
 one at view time — it is the one artifact here that is deliberately not self-contained,
 because a forecast built at 03:00 and published is wrong by lunchtime.
 
@@ -122,7 +122,23 @@ coverage and no import path.
 
 The map draws each airspace as the **box** it is, floor to ceiling, which is the whole
 reason it is a 3D view: three zones with the same outline and
-different limits are one red line on a flat map. **The airspace and planner maps open at
+different limits are one red line on a flat map.
+
+**The planner is a section of the airspace page**, not a page of its own (October 2026):
+they were two tabs drawing the same airspace over the same ground. Its bar sits over the
+map, its score and crossing list under it, and drawing is a mode (*Draw a task*), off by
+default, because on a phone a tap on this map names the zone under the finger and one
+gesture must not mean two things. The map is built once by `airspaces.render_html.
+SCRIPT3D`, which publishes the handle as `window.__airspaceMap`; the planner's script
+waits on it, and only the airspace script sets the airspace filter (class, floor, time) —
+the planner listens to the time control only to re-mark its list. The ground is the
+planner's wider box (`scene.PLAN_BOX`, Czechia and the Alps, 120 000 nodes) fetched by
+the page (`scene.remote`), opening framed on Czechia (`view.focus`); in the report the
+fetch waits until the view is first opened. A build can therefore no longer lose the
+terrain, so `--require-terrain` is accepted and does nothing. `public/planner/` is a
+redirect (`planner/cli.py`), and `common.PAGES` has three entries.
+
+**The airspace and planner maps open at
 ×5 vertical**, and that is not a decoration: at true scale over 500 km of country a 300 m
 traffic circuit projects to **0.3 px**, and 2.8 px even zoomed a long way in, so every box
 is two coincident rings and the 3D view shows exactly what the flat one did. The
@@ -908,7 +924,7 @@ The numbers are checkable, so check them:
   status, which once hid a `NameError` for two runs.
 
 **One order across the site, and one theme switch.** `parainsights_common.PAGES` is the
-order — meteo, planner, airspace, flights, which is the order a day happens in — and the
+order — meteo, airspace & planner, flights, which is the order a day happens in — and the
 report's own view strip follows it too; it used to list its in-document views first and
 its links after, so the report read *Flights, Airspace, Meteo, Planner* while every other
 page read the other way round. Whether an entry is a button or a link is an
@@ -946,8 +962,7 @@ the font stays inlined because it is one request for a document's whole appearan
 
 **Queued, in no particular order (October 2026), not started:**
 
-- **Planner and Airspace in one tab.** One page for "what is above me" and "what does
-  this task cross" — today they are two tabs drawing the same airspace.
+- ~~**Planner and Airspace in one tab.**~~ **Done** — see "airspaces, in one paragraph".
 - **The planner on the merged 3D map** (`map3d.py`), the one the flights use, instead of
   the canvas `view3d`.
 - **Only the merged map.** Drop the canvas and plain MapLibre renderers and the switch,
@@ -1153,7 +1168,8 @@ Still wanted:
   unreachable is the wrong trade. `ci/download-link.sh` then checks the one link on the
   site that is not in the nav: the airspace page names its OpenAir file, the name carries
   the AIRAC date, and a half-finished rebuild leaves a button that 404s.
-  **`--require-terrain` is what stops a rebuild being a downgrade**, and it exists
+  **`--require-terrain` was what stopped a rebuild being a downgrade** — moot since the
+  airspace map fetches its ground in the page (October 2026), kept as history. It existed
   because the first green deploy was one: the job could not build a DEM, `airspaces.cli`
   did what it is supposed to do for a person — fell back to the flat SVG map — and the
   job wrote that over the 3D page and reported success. The cause was worth the two

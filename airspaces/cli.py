@@ -24,11 +24,14 @@ def _page(article: str, title: str, *, three_d: bool = False) -> str:
     """
     view_style, view_script = "", ""
     if three_d:
+        from planner import render_html as planner_html
         from tracklog_viewer import view3d, view3d_gl
 
-        view_style = view3d.STYLE + view3d_gl.STYLE
+        view_style = view3d.STYLE + view3d_gl.STYLE + planner_html.STYLE
+        # The planner after the map: it waits on the handle `SCRIPT3D` publishes.
         view_script = (f"<script>{view3d.SCRIPT}\n{view3d_gl.SCRIPT}</script>\n"
-                       f"<script>{render_html.SCRIPT3D}</script>")
+                       f"<script>{render_html.SCRIPT3D}</script>\n"
+                       f"<script>{planner_html.SCRIPT}</script>")
     return f"""<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -40,7 +43,9 @@ body {{ margin:0; background:var(--paper); color:var(--ink); font:15px/1.55
   system-ui,-apple-system,"Segoe UI",sans-serif; }}
 .wrap {{ max-width:1100px; margin:0 auto; padding:26px 18px 60px; }}
 h1 {{ font-size:26px; margin:0 0 6px; }}
-.lede {{ color:var(--ink-2); margin:0 0 14px; }}
+.lede {{ color:var(--ink-2); margin:0 0 14px; max-width:70ch; }}
+.met-links {{ margin:14px 0 0; font-size:12.5px; color:var(--ink-3); }}
+a {{ color: inherit; }}
 button {{ font:inherit; padding:3px 10px; background:var(--panel);
   color:var(--ink); border:1px solid var(--rule); border-radius:3px; cursor:pointer; }}
 {render_html.STYLE}
@@ -84,12 +89,10 @@ def main(argv=None) -> int:
                              "A=82 ICAO aerodromes, B=74 SLZ fields, C=222 heliports, "
                              "D=195 landing sites. Default A,B — C and D are mostly "
                              "hospital pads and add 417 small circles.")
-    parser.add_argument("--require-terrain", action="store_true",
-                        help="fail instead of falling back to the flat map when the "
-                             "elevation model cannot be fetched. For a publishing "
-                             "pipeline: silently replacing the 3D view with the flat "
-                             "one is a downgrade, and a downgrade that reports success "
-                             "is how a worse page gets published behind a green run")
+    # Accepted and ignored: the 3D map's ground is fetched by the page now, so a build
+    # can no longer lose it and fall back. It was the pipeline's guard against exactly
+    # that, and the pipeline still passes it.
+    parser.add_argument("--require-terrain", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--refresh", action="store_true",
                         help="re-fetch every source instead of using the cache")
     parser.add_argument("--report", action="store_true",
@@ -123,26 +126,13 @@ def main(argv=None) -> int:
 
     if args.html:
         base = openair.read(base_text)
-        # The terrain first, and *before* anything is written. A refused build has to
-        # leave the committed page and its sidecar exactly as they were — the whole
-        # point of refusing is that what is already published is better than what this
-        # run can produce.
+        # The ground is the page's to fetch (`scene.remote`), so the 3D map cannot fail
+        # here; the flat SVG map is only drawn when asked for.
         payload = None
         if not args.flat:
             from . import scene as airspace_scene
 
-            payload = airspace_scene.fetch(list(base) + list(overlay.airspaces))
-            if payload is None:
-                # The flat map is a real fallback and stays the default: a build with no
-                # network still produces a usable page, which is "degrade, do not blank".
-                # What it must not be is *silent* where the output is going to be
-                # published — the deploy that taught this rebuilt the page without
-                # terrain, overwrote a good 3D one, and reported success.
-                if args.require_terrain:
-                    parser.exit(1, "terrain unavailable, and --require-terrain says not "
-                                   "to publish the flat map in its place. The 3D view "
-                                   "needs the elevation model; nothing was written.\n")
-                print("terrain unavailable, falling back to the flat map")
+            payload = airspace_scene.remote(list(base) + list(overlay.airspaces))
 
         # The page links to the OpenAir file rather than carrying it, so the file has
         # to be written beside the page — publishing the HTML alone gives a dead button.
@@ -153,7 +143,7 @@ def main(argv=None) -> int:
             overlay, base, base_version, openair_name=name, openair_size=len(text),
             scene=payload,
         )
-        args.html.write_text(_page(article, "Czech airspace",
+        args.html.write_text(_page(article, "Airspace and task planner",
                                    three_d=payload is not None), encoding="utf-8")
         print(f"{args.html}: {len(base)} base airspaces + {len(overlay.airspaces)} added")
         print(f"{beside}: linked from the page ({len(text) / 1024:.0f} KB)")

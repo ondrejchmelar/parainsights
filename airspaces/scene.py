@@ -28,13 +28,6 @@ from __future__ import annotations
 from . import basemap as border
 from .render_html import CLASSES, ceiling_metres, classify, floor_metres, limit_metres
 
-# One grid for the whole country. 320 columns over 6.7 degrees of longitude is about
-# 1.4 km a node, which is coarse for a mountain and about right for a backdrop that
-# exists to say "this zone sits over that ridge". The node budget is the report's, since
-# this grid is embedded the same way.
-COLUMNS = 320
-MAX_NODES = 26000
-
 # Rings are simplified before they ship: at the zoom this map opens on, a 5 500 m circle
 # is 40 pixels across and its 72 published vertices are 36 of them wasted.
 RING_TOLERANCE_DEG = 0.0015    # about 110 m
@@ -180,25 +173,30 @@ def _area(airspace) -> float:
     return abs(total) / 2
 
 
-def fetch(airspaces, *, report=print):
-    """Terrain and rings for these airspaces — or None if the ground could not be
-    fetched, which is the flat map's cue to take over. The imagery is the page's to
-    fetch, at view time.
+# The ground the airspace map and the planner on it are drawn over: Czechia and the Alps,
+# from the Western Alps to the Low Tatras. Wider than the airspace, which is Czech only —
+# a route can be planned anywhere in here, and the planner says how much of it the
+# airspace check could not see. Fetched by the page at view time (`terrain.remote`), so
+# the 120 000 nodes cost the reader tiles rather than the page bytes; zooming in fetches
+# finer ground on top (`terrainPlan`) either way.
+PLAN_BOX = (5.5, 20.5, 45.0, 51.3)     # west, east, south, north
+PLAN_COLUMNS = 560
+PLAN_NODES = 120000
 
-    Both callers want exactly this, so it lives here rather than in either `cli.py`;
-    `tracklog_viewer/cli.py` reaching into `airspaces.cli` for a private helper was how
-    it started and is not a seam anyone should have to find.
-    """
+
+def remote(airspaces) -> dict:
+    """The map's payload with the ground left for the page to fetch. Cannot fail at
+    build time, which is why the flat fallback is now only ever asked for (`--flat`)."""
     from tracklog_viewer import terrain as viewer_terrain
 
+    payload = build(airspaces, terrain=None, basemaps={}, tiles=True)
+    payload["terrain"] = viewer_terrain.remote(*PLAN_BOX, cols=PLAN_COLUMNS,
+                                               max_points=PLAN_NODES)
+    # Open on the airspace, not on the whole box: the Alps are there to plan over, and
+    # the map is first of all the Czech airspace map.
     west, east, south, north = bounds(airspaces)
-    ground = viewer_terrain.fetch(west, east, south, north,
-                                  cols=COLUMNS, max_points=MAX_NODES, report=report)
-    if ground is None:
-        return None
-    if report:
-        report(f"terrain {ground.cols}x{ground.rows} nodes, imagery fetched at view time")
-    return build(airspaces, terrain=ground)
+    payload["view"]["focus"] = {"west": west, "east": east, "south": south, "north": north}
+    return payload
 
 
 def build(airspaces, *, terrain=None, basemaps=None, tiles: bool = True) -> dict:

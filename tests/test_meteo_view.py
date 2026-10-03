@@ -276,7 +276,7 @@ class TestTheSiteStrip:
         import parainsights_common as common
 
         keys = {key for key, _, _ in common.PAGES}
-        assert keys == {"flights", "airspace", "meteo", "planner"}
+        assert keys == {"flights", "airspace", "meteo"}
 
 
 # ------------------------------------------- the sounding, in a browser

@@ -1,5 +1,10 @@
 """The planner: draw a task on the map you will actually fly it over.
 
+It is no longer a page of its own. The planner and the airspace map were two tabs
+drawing the same airspace over the same ground, so the planner is now a section of the
+airspace article (`airspaces.render_html.body`): its bar sits over the map, its figures
+and crossings under it, and `planner/cli.py` only writes a redirect for old links.
+
 flyxc.app is the reference, and the thing worth copying from it is that the route is
 drawn on a real map and scored as you drag it. What this one adds — because both halves
 already live in this repository — is that the map underneath is the **airspace** map: a
@@ -28,17 +33,6 @@ from __future__ import annotations
 import json
 
 from tracklog_viewer import xc
-
-# The ground the planner can be drawn on: Czechia and the Alps, from the Western Alps to
-# the Low Tatras. Wider than the airspace, which is Czech only — a route can be planned
-# anywhere in here, and the list under the map says how much of it the airspace check
-# could not see. The node budget is spent on the wider box, so the relief is about 2.5 km
-# a node here against 1.6 on the airspace map; scoring is on coordinates and does not
-# care, and the imagery sharpens at view time either way. The page fetches the terrain
-# itself (`terrain.remote`), so the budget costs the reader tiles, not page weight.
-PLAN_BOX = (5.5, 20.5, 45.0, 51.3)     # west, east, south, north
-PLAN_COLUMNS = 560
-PLAN_NODES = 120000
 
 STYLE = """
 .plan-bar { display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center;
@@ -75,52 +69,61 @@ STYLE = """
   padding:2px 6px; border-radius:3px; white-space:nowrap; flex:none; }
 .plan-when.is-open { background:#15803d; color:#fff; }
 .plan-when.is-shut { background:var(--panel-2); color:var(--ink-3); }
-.planner-article .asp-hint:empty { display:none; }
+.plan-draw[aria-pressed="true"] { background:var(--ink); color:var(--paper);
+  border-color:var(--ink); }
+.plan-section { margin:18px 0 0; }
+.plan-section h2 { font-size:17px; margin:0 0 4px; }
+[data-planner][data-drawing="on"] canvas.view3d { cursor:crosshair; }
 """
 
 
 def controls() -> str:
-    from airspaces import render_html as airspace_html
-
+    """The bar over the map. Drawing is a mode, off until asked for: the same map is the
+    airspace map, where a tap on a phone names the zone under the finger, and a tap that
+    also dropped a turnpoint would make the one gesture mean two things."""
     return (
         '<div class="plan-bar">'
+        '<button type="button" class="plan-draw" id="plan-draw" aria-pressed="false">'
+        "Draw a task</button>"
         '<button type="button" id="plan-undo">Undo point</button>'
         '<button type="button" id="plan-clear">Clear</button>'
         '<label><input type="checkbox" id="plan-close"> closed course</label>'
-        '<span class="plan-hint">Click the map to drop a turnpoint. '
-        "Drag, pinch and twist still move the view — a click that moved is a drag, not a "
-        "point.</span>"
+        '<span class="plan-hint" id="plan-hint">Press <em>Draw a task</em>, then click the '
+        "map to drop turnpoints. Drag, pinch and twist still move the view — a click that "
+        "moved is a drag, not a point.</span>"
         "</div>"
-        # The same control the airspace map carries, and deliberately the same one: a
-        # planner that answered "which fields are open" differently from the map it is
-        # drawn on would be worse than not answering. Here it also decides what the
-        # crossing list says about each aerodrome layer, which is the point of having a
-        # time on a page whose whole job is planning a particular day.
-        + airspace_html.when_control()
     )
 
 
+def results() -> str:
+    """What the drawn route is worth and what it crosses, under the map."""
+    return f"""<section class="plan-section" aria-label="The task">
+    <div class="plan-figures" id="plan-figures"></div>
+    <p class="plan-legs" id="plan-legs"></p>
+    <div class="plan-airspace" id="plan-airspace"></div>
+    <p class="met-links">Scored with the same rules as the flight report:
+    every side at least {xc.FAI_MIN_SIDE:.0%} of the perimeter for FAI, a closing gap under
+    {xc.MAX_CLOSING:.0%} of it for a closed course, multipliers
+    {xc.MULTIPLIER['open']:g}&thinsp;/&thinsp;{xc.MULTIPLIER['flat']:g}&thinsp;/&thinsp;{xc.MULTIPLIER['fai']:g}.
+    Airspace is drawn for Czechia only.
+    <strong>This is a plan, not a clearance.</strong> Check the airspace and the NOTAMs.</p>
+    <script type="application/json" id="plan-coverage">{_coverage()}</script>
+  </section>"""
+
+
 def body(uid: str = "planner", *, scene_panel: str = "") -> str:
-    """The planner view. `scene_panel` is the 3D map, already built by `airspaces`."""
-    return f"""<article class="flight planner-article" id="{uid}-article">
-  <h1>Plan a task</h1>
-  <p class="lede">Drop turnpoints on the ground you are going to fly over, and see what
-  the route is worth.</p>
+    """The planner on its own over a given panel — the shape the airspace article puts
+    together, kept for a caller that has no airspace overlay to build (the tests)."""
+    from airspaces import render_html as airspace_html
+
+    return f"""<article class="flight airspace-article" id="{uid}-article" data-planner>
+  {airspace_html.when_control()}
   {controls()}
   <div class="asp-holder">
     {scene_panel}
     <div class="asp-name" id="asp-name"></div>
   </div>
-  <div class="plan-figures" id="plan-figures"></div>
-  <p class="plan-legs" id="plan-legs"></p>
-  <div class="plan-airspace" id="plan-airspace"></div>
-  <p class="met-links">Scored with the same rules as the flight report:
-  every side at least {xc.FAI_MIN_SIDE:.0%} of the perimeter for FAI, a closing gap under
-  {xc.MAX_CLOSING:.0%} of it for a closed course, multipliers
-  {xc.MULTIPLIER['open']:g}&thinsp;/&thinsp;{xc.MULTIPLIER['flat']:g}&thinsp;/&thinsp;{xc.MULTIPLIER['fai']:g}.
-  Airspace is drawn for Czechia only.
-  <strong>This is a plan, not a clearance.</strong> Check the airspace and the NOTAMs.</p>
-  <script type="application/json" id="plan-coverage">{_coverage()}</script>
+  {results()}
 </article>"""
 
 
@@ -141,16 +144,13 @@ def _coverage() -> str:
 # stale the moment FAI_MIN_SIDE moved, in the one place that exists to agree with it.
 SCRIPT = """
 (function () {
-  var holder = document.querySelector('.planner-article');
+  var holder = document.querySelector('[data-planner]');
   if (!holder) return;
   var panel = holder.querySelector('.view3d-panel');
-  if (!panel || typeof initView3d !== 'function') return;
-  var existing = window.__view3dAll && window.__view3dAll[
-    (panel.querySelector('canvas.view3d') || {}).id];
-  // The terrain is fetched by the page (`PLAN_BOX` is too much ground to carry), so the
-  // map exists only once it has arrived, and everything below waits for it. The body
-  // of `plan` keeps the indentation it had before it became a function.
-  (existing ? Promise.resolve(existing) : initView3dWhenReady(panel, null))
+  if (!panel) return;
+  // The map is the airspace map's: `airspaces.render_html.SCRIPT3D` builds it once and
+  // publishes the handle here, so the two halves of the page share one view.
+  (window.__airspaceMap || Promise.resolve(null))
     .then(function (handle) { if (handle) plan(handle); },
           function () { /* the panel says why */ });
 
@@ -507,6 +507,7 @@ SCRIPT = """
   });
   canvas.addEventListener('pointerup', function (event) {
     if (!down || down.id !== event.pointerId) { down = null; return; }
+    if (holder.dataset.drawing !== 'on') { down = null; return; }
     var moved = Math.hypot(event.clientX - down.x, event.clientY - down.y);
     down = null;
     if (moved > 6) return;
@@ -516,6 +517,19 @@ SCRIPT = """
                  Math.round(point[1] * 100000) / 100000]);
     redraw();
   });
+
+  var drawButton = document.getElementById('plan-draw');
+  function drawing(on) {
+    holder.dataset.drawing = on ? 'on' : 'off';
+    if (drawButton) {
+      drawButton.setAttribute('aria-pressed', on ? 'true' : 'false');
+      drawButton.textContent = on ? 'Drawing — click the map' : 'Draw a task';
+    }
+  }
+  if (drawButton) drawButton.addEventListener('click', function () {
+    drawing(holder.dataset.drawing !== 'on');
+  });
+  drawing(false);
 
   document.getElementById('plan-undo').addEventListener('click', function () {
     points.pop();
@@ -527,21 +541,12 @@ SCRIPT = """
   });
   document.getElementById('plan-close').addEventListener('change', redraw);
 
-  // The time control does two things at once, and they are the same thing: it takes the
-  // shut fields off the map so the route is readable, and it marks them in the list so
-  // the reader knows why the map went quiet.
-  function retime() {
-    var when = window.aspHours ? window.aspHours.chosen() : null;
-    var holidays = window.aspHours ? window.aspHours.holidays() : {};
-    handle.setAirspaceFilter(when ? function (space) {
-      return window.aspHours.activeAt(space.w, when, holidays);
-    } : null);      // setAirspaceFilter redraws on its own
-    reportAirspace();
-  }
+  // The time control belongs to the airspace map, which takes the shut fields off it;
+  // here it only re-marks the list, which keeps every crossing either way.
   var whenBox = document.getElementById('asp-when-on');
   var whenInput = document.getElementById('asp-when');
-  if (whenBox) whenBox.addEventListener('change', retime);
-  if (whenInput) whenInput.addEventListener('input', retime);
+  if (whenBox) whenBox.addEventListener('change', reportAirspace);
+  if (whenInput) whenInput.addEventListener('input', reportAirspace);
 
   redraw();
   }

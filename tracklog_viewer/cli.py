@@ -136,6 +136,7 @@ def main(argv: list[str] | None = None) -> int:
         from airspaces import build as airspace_build
         from airspaces import openair as airspace_openair
         from airspaces import render_html as airspace_html
+        from planner import render_html as planner_html
         from airspaces import sources as airspace_sources
 
         overlay = airspace_build.build()
@@ -148,17 +149,17 @@ def main(argv: list[str] | None = None) -> int:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(text, encoding="utf-8", newline="")
         base = airspace_openair.read(base_text)
-        # The same 3D view the flights use, over the same terrain. It needs a network at
-        # build time and falls back to the flat SVG map without one — a page that draws
-        # no airspace because a tile server was slow would be the wrong trade.
+        # The airspace page's own map and planner (`airspaces.scene.remote`): the ground
+        # is fetched by the page when the view is first opened. Without --terrain the
+        # flat SVG map, as before.
         payload = None
         if args.terrain:
             from airspaces import scene as airspace_scene
 
-            payload = airspace_scene.fetch(list(base) + list(overlay.airspaces))
+            payload = airspace_scene.remote(list(base) + list(overlay.airspaces))
         extras.append(render_html.Extra(
             uid="airspace",
-            label="Airspace",
+            label="Airspace & planner",
             meta=f"{overlay.atz_count} zones &middot; {overlay.circuits} okruhy",
             body=airspace_html.body(
                 overlay, base, base_version,
@@ -166,9 +167,9 @@ def main(argv: list[str] | None = None) -> int:
                 openair_href=f"{args.airspace}{name}",
                 scene=payload,
             ),
-            style=airspace_html.STYLE,
+            style=airspace_html.STYLE + (planner_html.STYLE if payload else ""),
             script=(airspace_html.SCRIPT
-                    + (airspace_html.SCRIPT3D if payload else "")),
+                    + (airspace_html.SCRIPT3D + planner_html.SCRIPT if payload else "")),
         ))
         print(f"wrote {target}")
 

@@ -135,7 +135,8 @@ jobs:
       # that cannot reach the elevation model writes the flat SVG map over the 3D one and
       # reports success — which is exactly what the first green deploy did.
       - run: uv run python -m airspaces.cli --html public/airspace/index.html --require-terrain || echo "::warning::the airspace page could not be rebuilt, publishing the committed copy - check airspaces/sources.py"
-      - run: uv run python -m planner.cli --html public/planner/index.html || echo "::warning::the planner page could not be rebuilt, publishing the committed copy"
+      # The planner is part of the airspace page now; this is the redirect for old links.
+      - run: uv run python -m planner.cli --html public/planner/index.html
       # The airspace page links its OpenAir file by name and the name carries the AIRAC
       # date, so a half-finished rebuild can leave the page pointing at a file that is not
       # beside it. "Refuse to publish a site with a dead link in its own nav" already

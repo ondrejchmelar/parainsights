@@ -769,10 +769,32 @@ def download_link(filename: str, label: str, note: str) -> str:
 
 SCRIPT3D = """
 (function () {
-  var panel = document.querySelector('.airspace-article .view3d-panel');
+  var article = document.querySelector('.airspace-article');
+  var panel = article && article.querySelector('.view3d-panel');
   if (!panel || typeof initView3d !== 'function') return;
-  var handle = initView3d(panel, null);
-  if (!handle) return;
+  // Built once, and shared: the planner on this page draws on the same handle
+  // (`planner/render_html.py` waits on this promise). The ground is fetched at view time,
+  // so in the report — where this view starts hidden behind its tab — nothing is fetched
+  // until the reader opens it.
+  function visible() { return panel.getClientRects().length > 0; }
+  function whenVisible() {
+    if (visible()) return Promise.resolve();
+    return new Promise(function (resolve) {
+      var watch = new MutationObserver(function () {
+        if (visible()) { watch.disconnect(); resolve(); }
+      });
+      watch.observe(document.body, { attributes: true, subtree: true,
+                                     attributeFilter: ['hidden', 'class', 'style'] });
+    });
+  }
+  window.__airspaceMap = whenVisible().then(function () {
+    return initView3dWhenReady(panel, null);
+  }).then(function (handle) {
+    if (handle) wire(handle);
+    return handle;
+  });
+
+  function wire(handle) {
   var tip = document.getElementById('asp-name');
   var canvas = panel.querySelector('canvas.view3d');
 
@@ -851,7 +873,8 @@ SCRIPT3D = """
     });
     canvas.addEventListener('pointerleave', hide);
     canvas.addEventListener('pointerdown', function (e) {
-      if (e.pointerType !== 'touch') return;
+      // While a task is being drawn a tap is a turnpoint, not a question.
+      if (e.pointerType !== 'touch' || article.dataset.drawing === 'on') return;
       var space = handle.airspaceAt(e.clientX, e.clientY);
       if (space) show(space, e.clientX, e.clientY, true); else hide();
     });
@@ -873,6 +896,7 @@ SCRIPT3D = """
   });
 
   refilter();
+  }
 })();
 """
 
@@ -940,18 +964,31 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
             + "</div>"
         )
 
-    return f"""<article class="flight airspace-article" id="{uid}-article">
-  <h1>Czech airspace</h1>
+    # The planner draws on the 3D view, so the flat fallback carries no planner.
+    plan_bar, plan_results, plan_attr, plan_lede = "", "", "", ""
+    if scene is not None:
+        from planner import render_html as planner_html
+
+        plan_bar, plan_results = planner_html.controls(), planner_html.results()
+        plan_attr = " data-planner"
+        plan_lede = (" <strong>Plan a task on the same map:</strong> press <em>Draw a "
+                     "task</em> and click turnpoints, and the route is scored as XContest "
+                     "would and checked against every zone it crosses.")
+
+    return f"""<article class="flight airspace-article" id="{uid}-article"{plan_attr}>
+  <h1>Airspace and task planner</h1>
   <p class="lede">Everything the published airspace carries, plus the airfields it leaves
   out: a zone around each of the {overlay.atz_count} public aerodromes, and the traffic
   circuit at {overlay.circuit_fields} fields and ultralight strips. A paraglider may fly
   inside the zone but must stay out of the circuit, and no instrument draws either.
-  Scroll to zoom, drag to pan, hover for the name and limits.{boxes}</p>
+  Scroll to zoom, drag to pan, hover for the name and limits.{boxes}{plan_lede}</p>
   {controls(top, flat=scene is None)}
+  {plan_bar}
   <div class="asp-holder">
     {_map(airspaces, project, scene, uid)}
     <div class="asp-name" id="asp-name"></div>
   </div>
+  {plan_results}
   {download}
   {sources_table(overlay, base_version, shift)}
 </article>"""
