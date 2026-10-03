@@ -953,11 +953,22 @@ the font stays inlined because it is one request for a document's whole appearan
   everywhere — once the merged view covers what the airspace and planner pages need from
   the canvas (their own controls, the flat-map fallback).
 - **An airgram on the meteo page**: wind over time and altitude for the chosen takeoff.
-- **Every feature for an uploaded track.** The bundled flights are a showcase; uploads
-  are the product and get a reduced analysis (`quicklook.py`). The agreed direction is
-  JavaScript as the one runtime language for the viewer: port the analysis, checked
-  against the Python on the sample IGC files, then the per-flight article, then route the
-  showcase flights through the same path. Not Pyodide.
+- **Every feature for an uploaded track — in progress.** The bundled flights are a
+  showcase; uploads are the product and get a reduced analysis (`quicklook.py`). The
+  direction is JavaScript as the one runtime language for the viewer (not Pyodide):
+  1. *The analysis, in `tracklog_viewer/js/`, checked against the Python.* **Done for the
+     core**: `np.js` (numpy's behaviours, exactly: pairwise summation, `interp`,
+     `unwrap`, Python's round-half-to-even on the exact binary value), `geo.js`,
+     `igc.js`, `flight.js`, `analysis.js`. `uv run python -m tracklog_viewer.js_parity
+     ~/Downloads` runs both over every IGC there and compares `Analysis.to_dict()` field
+     for field: **63 of 63 identical**. `tests/test_js_parity.py` does the same on
+     synthetic flights in CI. Timezone from take-off position is the one gap — the
+     harness hands Python's timezonefinder answer to the JS (`positionZone`); the page
+     needs its own lookup. Still to port: KML/KMZ, `metrics`, `xc`, `airmass`,
+     `debrief`, `insolation`, `certification`, `plan`, `sun`.
+  2. The per-flight article (`_flight_body`, the SVG charts) in JavaScript.
+  3. The showcase flights through the same path; then retire the Python analysis and
+     `quicklook.py`.
 
 Written up with a plan in `docs/plan.md`:
 

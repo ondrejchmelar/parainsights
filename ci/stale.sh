@@ -34,12 +34,20 @@ SOURCES="tracklog_viewer airspaces parainsights_common"
 # command line, and the report imports `airspaces.build`, `.openair`, `.render_html`,
 # `.scene` and `.sources` — never `.cli`. Check that list is still true before adding to
 # this one: an exclusion that is wrong makes the whole check a decoration.
-IGNORE=":(exclude)airspaces/cli.py"
+#
+# `tracklog_viewer/js_parity.py` and `js/parity_runner.js` are the harness that compares
+# the JavaScript analysis with the Python one; neither is ever in a page. The rest of
+# `tracklog_viewer/js/` is the analysis the page *will* run, and is excluded only until
+# the report embeds it — **remove that exclusion in the commit that does**, or this check
+# stops watching the code that renders uploads.
+IGNORE=":(exclude)airspaces/cli.py :(exclude)tracklog_viewer/js_parity.py :(exclude)tracklog_viewer/js"
 
 commit_of() {
     # The last commit that touched a path, or nothing. A shallow CI clone may not reach
-    # it, and that case is handled below rather than guessed at.
-    git log -1 --format=%H -- "$1" "$IGNORE" 2>/dev/null || true
+    # it, and that case is handled below rather than guessed at. $IGNORE is unquoted on
+    # purpose: it is a list of pathspecs, none with a space in it.
+    # shellcheck disable=SC2086
+    git log -1 --format=%H -- "$1" $IGNORE 2>/dev/null || true
 }
 
 if [ ! -f "$PAGE" ]; then
