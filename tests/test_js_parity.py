@@ -105,6 +105,75 @@ def test_a_ridge_climb_matches_too(tmp_path):
     assert "ridge" in labels, "the fixture no longer reaches the ridge rule"
 
 
+@needs_node
+def test_a_declared_task_matches_too(tmp_path):
+    """C records along the route, the last turnpoint well past where the flight went, so
+    the plan's departure and turnpoint findings run on both sides."""
+    from tests.test_analysis import to_latlon
+
+    points = FLIGHTS["thermal-glide-thermal"]()
+    path = build(tmp_path / "task.igc", points)
+
+    def c_record(x, y, name):
+        lat, lon = to_latlon(x, y)
+        la, lo = int(lat), int(lon)
+        return (f"C{la:02d}{round((lat - la) * 60000):05d}N"
+                f"{lo:03d}{round((lon - lo) * 60000):05d}E{name}")
+
+    task = [c_record(0, 0, "Launch"), c_record(points[600][1], points[600][2], "Glide end"),
+            c_record(points[-1][1] + 9000, points[-1][2] + 9000, "Goal")]
+    lines = path.read_text().splitlines()
+    path.write_text("\n".join(lines[:4] + task + lines[4:]) + "\n")
+
+    [(_, result)] = js_parity.compare([path])
+    assert result == [], result if isinstance(result, str) else "\n".join(result[:20])
+    from tracklog_viewer import igc, plan
+    from tracklog_viewer.analysis import analyse
+    flight = igc.parse(path)
+    assert plan.describes(analyse(flight), plan.from_flight(flight)), "the task no longer fits the flight"
+
+
+@needs_node
+def test_kml_and_kmz_match_too(tmp_path):
+    """Both shapes a KML comes in — gx:Track, and timed placemarks inside a KMZ — read
+    into the same flight on both sides, and a KML with no times refused on both."""
+    import datetime as dt
+    import zipfile
+
+    from tests.test_analysis import to_latlon
+
+    points = FLIGHTS["thermal-glide-thermal"]()[::3]
+    base = dt.datetime(2026, 7, 1, 10, 0, 0, tzinfo=dt.timezone.utc)
+
+    def stamp(seconds):
+        return (base + dt.timedelta(seconds=seconds)).isoformat().replace("+00:00", "Z")
+
+    whens = "".join(f"<when>{stamp(t)}</when>" for t, *_ in points)
+    coords = "".join(f"<gx:coord>{to_latlon(x, y)[1]:.6f} {to_latlon(x, y)[0]:.6f} {alt:.1f}</gx:coord>"
+                     for _, x, y, alt in points)
+    track = (f'<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2" '
+             f'xmlns:gx="http://www.google.com/kml/ext/2.2"><Document><name>Test &amp; track</name>'
+             f'<Placemark><gx:Track>{whens}{coords}</gx:Track></Placemark></Document></kml>')
+    (tmp_path / "track.kml").write_text(track, encoding="utf-8")
+
+    marks = "".join(
+        f"<Placemark><TimeStamp><when>{stamp(t)}</when></TimeStamp><Point><coordinates>"
+        f"{to_latlon(x, y)[1]:.6f},{to_latlon(x, y)[0]:.6f},{alt:.0f}</coordinates></Point></Placemark>"
+        for t, x, y, alt in points)
+    placemarks = (f'<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>Marks</name>'
+                  f'{marks}</Document></kml>')
+    with zipfile.ZipFile(tmp_path / "marks.kmz", "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("doc.kml", placemarks)
+
+    (tmp_path / "line.kml").write_text(
+        '<kml xmlns="http://www.opengis.net/kml/2.2"><Placemark><LineString><coordinates>'
+        '14,46,1000 14.1,46.1,900</coordinates></LineString></Placemark></kml>', encoding="utf-8")
+
+    for name in ("track.kml", "marks.kmz", "line.kml"):
+        [(_, result)] = js_parity.compare([tmp_path / name])
+        assert result == [], (name, result if isinstance(result, str) else "\n".join(result[:20]))
+
+
 def test_differences_are_reported_by_path():
     """The comparison itself: a mismatch names where it is and what each side said."""
     assert js_parity.differences({"a": [1, 2.0]}, {"a": [1, 2.0]}) == []

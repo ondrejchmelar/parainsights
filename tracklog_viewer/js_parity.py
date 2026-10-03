@@ -1,6 +1,6 @@
 """The JavaScript analysis against the Python one, field for field, on real tracklogs.
 
-    uv run python -m tracklog_viewer.js_parity ~/Downloads            # every IGC there
+    uv run python -m tracklog_viewer.js_parity ~/Downloads            # every IGC, KML, KMZ
     uv run python -m tracklog_viewer.js_parity a.igc b.igc --show 20  # more detail
 
 The page is moving to one analysis written in JavaScript (`tracklog_viewer/js/`), so a
@@ -32,7 +32,7 @@ import types
 
 import numpy as np
 
-from . import airmass, debrief, igc, insolation, metrics, view3d, xc
+from . import airmass, debrief, igc, insolation, kml, metrics, plan as plan_module, view3d, xc
 from .terrain import Terrain, clearance as terrain_clearance
 from .analysis import analyse
 
@@ -118,11 +118,26 @@ def _expected(flight) -> dict:
         "debrief": debrief.build(analysis, route=route).to_dict(),
         "debrief_full": debrief.build(analysis, route=route, weather=weather,
                                       clearance=clearance).to_dict(),
+        "plan": _plan(analysis, route),
         "sun": view3d._sun(analysis),
         **{key: _airmass(analysis, model) for key, model in (
             ("airmass", None),
             ("airmass_model", types.SimpleNamespace(wind_at=lambda altitude: (5.0, 270.0))),
         )},
+    }
+
+
+def _plan(analysis, route) -> dict | None:
+    """The task in the tracklog's own C records, judged both ways."""
+    found = plan_module.from_flight(analysis.flight)
+    if found is None:
+        return None
+    return {
+        "plan": found.to_dict(), "describes": plan_module.describes(analysis, found),
+        "adherence": _asdict(plan_module.adherence(analysis, found)),
+        "turnpoints": _asdict(plan_module.turnpoints(analysis, found)),
+        "budget": _asdict(plan_module.budget(analysis, found, route)),
+        "debrief": debrief.build(analysis, route=route, flight_plan=found).to_dict(),
     }
 
 
@@ -167,13 +182,27 @@ def _zone_from_position(flight) -> str | None:
     return source[len("position ("):-1] if source.startswith("position (") else None
 
 
+def _parse(path: Path):
+    return kml.parse(path) if path.suffix.lower() in (".kml", ".kmz") else igc.parse(path)
+
+
 def compare(paths: list[Path], *, terrain=synthetic_terrain) -> list[tuple[Path, list[str] | str]]:
     """`terrain(flight)` makes the ground both sides are given; a test can shape it."""
     jobs, expected = [], []
     for path in paths:
-        flight = igc.parse(path)
+        try:
+            flight = _parse(path)
+        except ValueError as error:
+            # A file the Python refuses has to be refused by the JS too, and that agreement
+            # is a result rather than an error in the harness.
+            expected.append({"refused": str(error)})
+            jobs.append({"path": str(path), "positionZone": None, "terrain": None})
+            continue
         ground = terrain(flight)
         want = _expected(flight)
+        want["parsed"] = {"fixes": len(flight), "warnings": flight.warnings,
+                          "dropped": dict(flight.dropped), "logger_type": flight.headers.logger_type,
+                          "timezone_source": flight.timezone_source}
         want["insolation"] = _insolation(analyse(flight), ground)
         expected.append(_plain(want))
         jobs.append({"path": str(path), "positionZone": _zone_from_position(flight),
@@ -183,7 +212,11 @@ def compare(paths: list[Path], *, terrain=synthetic_terrain) -> list[tuple[Path,
     results = json.loads(run.stdout)
     out = []
     for path, want, got in zip(paths, expected, results):
-        out.append((path, differences(want, got["result"]) if got["ok"] else got["error"]))
+        if "refused" in want:
+            out.append((path, [] if not got["ok"] else
+                        [f"python refused it ({want['refused']}) and javascript did not"]))
+        else:
+            out.append((path, differences(want, got["result"]) if got["ok"] else got["error"]))
     return out
 
 
@@ -194,7 +227,8 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     paths: list[Path] = []
     for item in args.inputs:
-        paths += sorted(p for p in item.iterdir() if p.suffix.lower() == ".igc") if item.is_dir() else [item]
+        paths += sorted(p for p in item.iterdir()
+                        if p.suffix.lower() in (".igc", ".kml", ".kmz")) if item.is_dir() else [item]
 
     failed = 0
     for path, result in compare(paths):

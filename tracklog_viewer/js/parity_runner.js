@@ -9,19 +9,29 @@
 var fs = require('fs');
 var path = require('path');
 global.TV = {};
-['np', 'geo', 'igc', 'flight', 'analysis', 'xc', 'metrics', 'debrief', 'sun', 'airmass', 'terrain', 'insolation'].forEach(function (name) {
+['np', 'geo', 'igc', 'flight', 'analysis', 'xc', 'metrics', 'debrief', 'sun', 'airmass', 'terrain', 'insolation', 'plan', 'kml'].forEach(function (name) {
   require(path.join(__dirname, name + '.js'));
 });
 
+var zlib = require('zlib');
 var input = JSON.parse(fs.readFileSync(0, 'utf8'));
-var out = input.map(function (job) {
+
+function parse(job) {
+  var options = { positionZone: job.positionZone ? function () { return job.positionZone; } : null,
+                  inflateRaw: function (bytes) { return Promise.resolve(new Uint8Array(zlib.inflateRawSync(bytes))); } };
+  if (/\.(kml|kmz)$/i.test(job.path)) {
+    return TV.kml.parseBytes(new Uint8Array(fs.readFileSync(job.path)), path.basename(job.path), options);
+  }
+  return Promise.resolve(TV.igc.parse(fs.readFileSync(job.path, 'utf8'), options));
+}
+
+function run(job, flight) {
   try {
-    var text = fs.readFileSync(job.path, 'utf8');
-    var flight = TV.igc.parse(text, {
-      positionZone: job.positionZone ? function () { return job.positionZone; } : null
-    });
     var analysis = TV.analysis.analyse(flight);
+    var parsed = { fixes: flight.time.length, warnings: flight.warnings, dropped: flight.dropped,
+                   logger_type: flight.headers.logger_type, timezone_source: flight.timezone_source };
     var result = TV.analysis.toDict(analysis);
+    result.parsed = parsed;
     var route = TV.xc.best(flight);
     result.route = Object.assign({}, route, { shape: TV.xc.shape(route), score: TV.xc.score(route) });
     // The same synthetic ground and cloudbase the Python side uses (see js_parity.py), so
@@ -40,6 +50,13 @@ var out = input.map(function (job) {
     };
     result.debrief = TV.debrief.toDict(TV.debrief.build(analysis, { route: route }));
     result.debrief_full = TV.debrief.toDict(TV.debrief.build(analysis, { route: route, weather: weather, clearance: clearance }));
+    var plan = TV.plan.fromFlight(flight);
+    result.plan = plan && {
+      plan: TV.plan.toDict(plan), describes: TV.plan.describes(analysis, plan),
+      adherence: TV.plan.adherence(analysis, plan), turnpoints: TV.plan.turnpoints(analysis, plan),
+      budget: TV.plan.budget(analysis, plan, route),
+      debrief: TV.debrief.toDict(TV.debrief.build(analysis, { route: route, flightPlan: plan }))
+    };
     result.sun = TV.sun.forFlight(flight);
     if (job.terrain) {
       var grid = job.terrain, I = TV.insolation;
@@ -60,5 +77,12 @@ var out = input.map(function (job) {
   } catch (error) {
     return { ok: false, error: String(error && error.stack || error) };
   }
-});
-process.stdout.write(JSON.stringify(out));
+}
+
+var out = [];
+input.reduce(function (chain, job) {
+  return chain.then(function () {
+    return parse(job).then(function (flight) { out.push(run(job, flight)); },
+                           function (error) { out.push({ ok: false, error: String(error && error.stack || error) }); });
+  });
+}, Promise.resolve()).then(function () { process.stdout.write(JSON.stringify(out)); });
