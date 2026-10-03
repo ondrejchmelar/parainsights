@@ -806,6 +806,17 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   imagery and no terrain. And `setTerrain` waits for `style.load`, not `load` (which
   waits for every tile) and not `isStyleLoaded()` (false while any tile is in flight) —
   both lost an early x2 press and drew the track over ground still at x1.
+  **A phone that locks or backgrounds the page takes its WebGL contexts and often never
+  gives them back**: the map stays black while every button still answers. Both MapLibre
+  views check their canvases (`isContextLost`) when the page becomes visible again and
+  1.5 s after MapLibre reports a loss, and rebuild themselves in place from a snapshot —
+  camera, basemap, exaggeration, labels, airspace, the replay and its window
+  (`window.__reviveMaps`, `api.lost/snapshot/dispose`). A rebuild takes its cursor
+  wrappers back off the canvas handle, and builds the restored basemap and exaggeration
+  into its first style: set over it before that style loads, MapLibre throws inside a
+  promise and the rebuild silently never finishes. Not covered by a test, because both
+  views need MapLibre from a CDN and the suite has no network; checked by hand with
+  `WEBGL_lose_context`.
 - **A declared task the flight did not fly is worse than no task at all.** A logger writes
   out whatever task happens to be loaded, so a `C` record is evidence of what was in
   XCTrack, not of what the pilot intended today. On `2021-07-06-XCT-ROP-01` the loaded
@@ -927,6 +938,22 @@ the charts stay local because a chart service that dies takes every graph with i
 the font stays inlined because it is one request for a document's whole appearance.
 
 ## Wanted next
+
+**Queued, in no particular order (October 2026), not started:**
+
+- **Planner and Airspace in one tab.** One page for "what is above me" and "what does
+  this task cross" — today they are two tabs drawing the same airspace.
+- **The planner on the merged 3D map** (`map3d.py`), the one the flights use, instead of
+  the canvas `view3d`.
+- **Only the merged map.** Drop the canvas and plain MapLibre renderers and the switch,
+  everywhere — once the merged view covers what the airspace and planner pages need from
+  the canvas (their own controls, the flat-map fallback).
+- **An airgram on the meteo page**: wind over time and altitude for the chosen takeoff.
+- **Every feature for an uploaded track.** The bundled flights are a showcase; uploads
+  are the product and get a reduced analysis (`quicklook.py`). The agreed direction is
+  JavaScript as the one runtime language for the viewer: port the analysis, checked
+  against the Python on the sample IGC files, then the per-flight article, then route the
+  showcase flights through the same path. Not Pyodide.
 
 Written up with a plan in `docs/plan.md`:
 

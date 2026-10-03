@@ -6283,7 +6283,7 @@ window.__view3dBackend = function (host) {
     return { version: 8, sources: sources, layers: layers, sky: {} };
   }
 
-  function mount(host, handle) {
+  function mount(host, handle, restore) {
     var panel = host.querySelector('.view3d-panel');
     var scene = handle.built.scene, cursorTrack = handle.built.cursorTrack;
     var tr = scene.track;
@@ -6397,7 +6397,9 @@ window.__view3dBackend = function (host) {
       var overlay = new deck.MapboxOverlay({ interleaved: false, layers: layers() });
       map.addControl(overlay);
       function refresh() { overlay.setProps({ layers: layers() }); }
-      if (west < east || south < north) {
+      if (restore) {
+        map.jumpTo(restore);
+      } else if (west < east || south < north) {
         map.fitBounds([[west, south], [east, north]],
                       { padding: 60, pitch: 62, bearing: 15, duration: 0 });
       }
@@ -6459,9 +6461,11 @@ window.__view3dBackend = function (host) {
         if (!cursorTrack || index == null || index < 0 || index >= cursorTrack.lon.length) return null;
         return [cursorTrack.lon[index], cursorTrack.lat[index], cursorTrack.alt[index]];
       }
+      var unwrap = [];
       ['setCursor', 'revealCursor'].forEach(function (name) {
         var original = handle[name];
         if (typeof original !== 'function') return;
+        unwrap.push({ name: name, original: original });
         handle[name] = function (index) {
           cursor = at(index);
           if (!view.hidden) {
@@ -6472,11 +6476,34 @@ window.__view3dBackend = function (host) {
         };
       });
       var clear = handle.clearCursor;
+      unwrap.push({ name: 'clearCursor', original: clear });
       handle.clearCursor = function () {
         cursor = null;
         if (!view.hidden) refresh();
         return clear ? clear.apply(handle, arguments) : undefined;
       };
+      unwrap.forEach(function (w) { w.wrapper = handle[w.name]; });
+      // The same recovery as the merged view's: see `contextLost` there.
+      api.lost = function () {
+        return Array.prototype.some.call(view.querySelectorAll('canvas'), function (canvas) {
+          var gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+          return !!(gl && gl.isContextLost());
+        });
+      };
+      api.snapshot = function () {
+        var c = map.getCenter();
+        return { center: [c.lng, c.lat], zoom: map.getZoom(), bearing: map.getBearing(),
+                 pitch: map.getPitch() };
+      };
+      api.dispose = function () {
+        pause();
+        unwrap.forEach(function (w) { if (handle[w.name] === w.wrapper) handle[w.name] = w.original; });
+        try { map.remove(); } catch (error) { /* a dead context can throw on the way out */ }
+        view.remove();
+      };
+      map.on('webglcontextlost', function () {
+        setTimeout(function () { if (window.__reviveMaps) window.__reviveMaps(); }, 1500);
+      });
       window.__maplibreAll = window.__maplibreAll || {};
       window.__maplibreAll[panel.querySelector('canvas.view3d').id] = {
         map: map, setTime: setTime, cursor: function () { return cursor; }
@@ -6488,6 +6515,31 @@ window.__view3dBackend = function (host) {
     });
     return api;
   }
+
+  function mounts() { return { maplibre: mount, merged: window.__mountMerged }; }
+
+  // Rebuild any MapLibre view whose WebGL context is gone, in place and as it was. A
+  // phone takes the contexts of a page it locks or backgrounds and often never returns
+  // them; the map then stays black while its buttons still answer. Checked when the page
+  // comes back into view, and shortly after MapLibre reports a loss.
+  window.__reviveMaps = function () {
+    document.querySelectorAll('.renderer-host').forEach(function (host) {
+      var all = host.__renderers || {};
+      Object.keys(all).forEach(function (key) {
+        var built = all[key];
+        if (!built.api.lost || !built.api.lost()) return;
+        var snapshot = built.api.snapshot();
+        var shown = !built.api.view.hidden;
+        built.api.dispose();
+        built.api = mounts()[key](host, built.handle, snapshot);
+        if (shown) built.api.show(); else built.api.hide();
+      });
+    });
+  };
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') setTimeout(window.__reviveMaps, 300);
+  });
+  window.addEventListener('pageshow', function () { setTimeout(window.__reviveMaps, 300); });
 
   document.addEventListener('click', function (event) {
     var button = event.target.closest('[data-renderer]');
@@ -6501,8 +6553,8 @@ window.__view3dBackend = function (host) {
       b.classList.toggle('is-on', on);
       b.setAttribute('aria-pressed', String(on));
     });
-    var mounts = { maplibre: mount, merged: window.__mountMerged };
-    if (want !== 'canvas' && (!handle || !handle.built || !mounts[want])) {
+    var mount_ = mounts();
+    if (want !== 'canvas' && (!handle || !handle.built || !mount_[want])) {
       // An upload whose view is still loading: nothing to draw from yet.
       host.querySelector('[data-renderer="canvas"]').click();
       return;
@@ -6517,7 +6569,7 @@ window.__view3dBackend = function (host) {
     var built = host.__renderers[want];
     if (!built || built.handle !== handle) {
       if (built) built.api.view.remove();
-      built = host.__renderers[want] = { handle: handle, api: mounts[want](host, handle) };
+      built = host.__renderers[want] = { handle: handle, api: mount_[want](host, handle) };
     }
     built.api.show();
   });
@@ -6639,7 +6691,19 @@ window.__view3dBackend = function (host) {
     });
   }
 
-  window.__mountMerged = function (host, handle) {
+  // Whether a map's WebGL is gone: MapLibre's canvas or deck.gl's. A phone takes the
+  // contexts of a page it backgrounds or locks and often never gives them back, and the
+  // view then stays black while every button still answers.
+  function contextLost(view) {
+    return Array.prototype.some.call(view.querySelectorAll('canvas'), function (canvas) {
+      var gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+      return !!(gl && gl.isContextLost());
+    });
+  }
+
+  // `restore` is a snapshot from a view being rebuilt after its context was lost: the
+  // camera and every setting come back as the reader left them.
+  window.__mountMerged = function (host, handle, restore) {
     var panel = host.querySelector('.view3d-panel');
     var scene = handle.built.scene, cursorTrack = handle.built.cursorTrack;
     var tr = scene.track || { lon: [], lat: [], alt: [], c: [] };
@@ -6752,7 +6816,11 @@ window.__view3dBackend = function (host) {
       var replay = view.querySelector('.m3-replay');
       var timeRow = view.querySelector('.m3-time');
 
-      var vertical = 1, cursor = null, from = 0, cutoff = duration;
+      // A rebuilt view starts on the basemap and exaggeration it was left on, built into
+      // its first style rather than set over it: setting them before that style has
+      // loaded throws inside this callback, and the rebuild silently never finished.
+      var vertical = restore ? restore.vertical : 1, cursor = null, from = 0, cutoff = duration;
+      if (restore) basemap = restore.basemap;
       var labels = { climb: false, glide: false }, airspaceOn = false;
       var sunMinute = sun ? sun.at : null;
       var lines = segments(scene);
@@ -6841,7 +6909,7 @@ window.__view3dBackend = function (host) {
           // MapLibre's own sky and haze, every value its default: the distance fades into
           // the horizon the way air does, which is what reads as depth at a low pitch.
           sky: {},
-          terrain: { source: 'dem', exaggeration: 1 }
+          terrain: { source: 'dem', exaggeration: vertical }
         };
       }
 
@@ -6929,7 +6997,7 @@ window.__view3dBackend = function (host) {
                       { padding: { top: 70, bottom: 110, left: 50, right: 90 },
                         pitch: 60, bearing: 0, duration: animate ? 600 : 0 });
       }
-      fit(false);
+      if (!restore) fit(false);
 
       // ---- what is drawn over it -----------------------------------------------------
       // The canvas view's labels: the phase as a span from where it began to where it
@@ -7345,9 +7413,13 @@ window.__view3dBackend = function (host) {
             || index >= cursorTrack.lon.length) return null;
         return [cursorTrack.lon[index], cursorTrack.lat[index], cursorTrack.alt[index]];
       }
+      // Every wrapper is remembered, so a rebuilt view can take its own back off: wrapping
+      // again on top would leave the dead view's redraw in the chain.
+      var unwrap = [];
       ['setCursor', 'revealCursor'].forEach(function (name) {
         var original = handle[name];
         if (typeof original !== 'function') return;
+        unwrap.push({ name: name, original: original });
         handle[name] = function (index) {
           cursor = at(index);
           if (!view.hidden) {
@@ -7366,11 +7438,48 @@ window.__view3dBackend = function (host) {
         };
       });
       var clear = handle.clearCursor;
+      unwrap.push({ name: 'clearCursor', original: clear });
       handle.clearCursor = function () {
         cursor = null;
         if (!view.hidden) refresh();
         return clear ? clear.apply(handle, arguments) : undefined;
       };
+      unwrap.forEach(function (w) { w.wrapper = handle[w.name]; });
+
+      api.lost = function () { return contextLost(view); };
+      api.snapshot = function () {
+        var c = map.getCenter();
+        return { center: [c.lng, c.lat], zoom: map.getZoom(), bearing: map.getBearing(),
+                 pitch: map.getPitch(), basemap: basemap, vertical: vertical,
+                 labels: { climb: labels.climb, glide: labels.glide }, airspace: airspaceOn,
+                 replay: !!(replay && !replay.hidden), from: from, cutoff: cutoff, speed: speed };
+      };
+      api.dispose = function () {
+        pause();
+        unwrap.forEach(function (w) { if (handle[w.name] === w.wrapper) handle[w.name] = w.original; });
+        try { map.remove(); } catch (error) { /* a dead context can throw on the way out */ }
+        view.remove();
+      };
+      // MapLibre reports the loss; a browser that is going to restore the context does so
+      // within a moment, so only a context still dead after that is rebuilt.
+      map.on('webglcontextlost', function () {
+        setTimeout(function () { if (window.__reviveMaps) window.__reviveMaps(); }, 1500);
+      });
+
+      if (restore) {
+        map.jumpTo({ center: restore.center, zoom: restore.zoom, bearing: restore.bearing,
+                     pitch: restore.pitch });
+        ['climb', 'glide'].forEach(function (kind) {
+          var b = view.querySelector('[data-m3-label="' + kind + '"]');
+          if (b && restore.labels[kind] !== labels[kind]) b.click();
+        });
+        var a = view.querySelector('[data-m3="airspace"]');
+        if (a && restore.airspace !== airspaceOn) a.click();
+        speed = restore.speed; showSpeed();
+        if (restore.replay) { openReplay(true); pause(); }
+        from = restore.from;
+        setTime(restore.cutoff);
+      }
 
       window.__mergedAll = window.__mergedAll || {};
       window.__mergedAll[panel.querySelector('canvas.view3d').id] = {

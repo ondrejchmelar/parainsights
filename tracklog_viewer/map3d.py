@@ -202,7 +202,19 @@ SCRIPT = r"""
     });
   }
 
-  window.__mountMerged = function (host, handle) {
+  // Whether a map's WebGL is gone: MapLibre's canvas or deck.gl's. A phone takes the
+  // contexts of a page it backgrounds or locks and often never gives them back, and the
+  // view then stays black while every button still answers.
+  function contextLost(view) {
+    return Array.prototype.some.call(view.querySelectorAll('canvas'), function (canvas) {
+      var gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+      return !!(gl && gl.isContextLost());
+    });
+  }
+
+  // `restore` is a snapshot from a view being rebuilt after its context was lost: the
+  // camera and every setting come back as the reader left them.
+  window.__mountMerged = function (host, handle, restore) {
     var panel = host.querySelector('.view3d-panel');
     var scene = handle.built.scene, cursorTrack = handle.built.cursorTrack;
     var tr = scene.track || { lon: [], lat: [], alt: [], c: [] };
@@ -315,7 +327,11 @@ SCRIPT = r"""
       var replay = view.querySelector('.m3-replay');
       var timeRow = view.querySelector('.m3-time');
 
-      var vertical = 1, cursor = null, from = 0, cutoff = duration;
+      // A rebuilt view starts on the basemap and exaggeration it was left on, built into
+      // its first style rather than set over it: setting them before that style has
+      // loaded throws inside this callback, and the rebuild silently never finished.
+      var vertical = restore ? restore.vertical : 1, cursor = null, from = 0, cutoff = duration;
+      if (restore) basemap = restore.basemap;
       var labels = { climb: false, glide: false }, airspaceOn = false;
       var sunMinute = sun ? sun.at : null;
       var lines = segments(scene);
@@ -404,7 +420,7 @@ SCRIPT = r"""
           // MapLibre's own sky and haze, every value its default: the distance fades into
           // the horizon the way air does, which is what reads as depth at a low pitch.
           sky: {},
-          terrain: { source: 'dem', exaggeration: 1 }
+          terrain: { source: 'dem', exaggeration: vertical }
         };
       }
 
@@ -492,7 +508,7 @@ SCRIPT = r"""
                       { padding: { top: 70, bottom: 110, left: 50, right: 90 },
                         pitch: 60, bearing: 0, duration: animate ? 600 : 0 });
       }
-      fit(false);
+      if (!restore) fit(false);
 
       // ---- what is drawn over it -----------------------------------------------------
       // The canvas view's labels: the phase as a span from where it began to where it
@@ -908,9 +924,13 @@ SCRIPT = r"""
             || index >= cursorTrack.lon.length) return null;
         return [cursorTrack.lon[index], cursorTrack.lat[index], cursorTrack.alt[index]];
       }
+      // Every wrapper is remembered, so a rebuilt view can take its own back off: wrapping
+      // again on top would leave the dead view's redraw in the chain.
+      var unwrap = [];
       ['setCursor', 'revealCursor'].forEach(function (name) {
         var original = handle[name];
         if (typeof original !== 'function') return;
+        unwrap.push({ name: name, original: original });
         handle[name] = function (index) {
           cursor = at(index);
           if (!view.hidden) {
@@ -929,11 +949,48 @@ SCRIPT = r"""
         };
       });
       var clear = handle.clearCursor;
+      unwrap.push({ name: 'clearCursor', original: clear });
       handle.clearCursor = function () {
         cursor = null;
         if (!view.hidden) refresh();
         return clear ? clear.apply(handle, arguments) : undefined;
       };
+      unwrap.forEach(function (w) { w.wrapper = handle[w.name]; });
+
+      api.lost = function () { return contextLost(view); };
+      api.snapshot = function () {
+        var c = map.getCenter();
+        return { center: [c.lng, c.lat], zoom: map.getZoom(), bearing: map.getBearing(),
+                 pitch: map.getPitch(), basemap: basemap, vertical: vertical,
+                 labels: { climb: labels.climb, glide: labels.glide }, airspace: airspaceOn,
+                 replay: !!(replay && !replay.hidden), from: from, cutoff: cutoff, speed: speed };
+      };
+      api.dispose = function () {
+        pause();
+        unwrap.forEach(function (w) { if (handle[w.name] === w.wrapper) handle[w.name] = w.original; });
+        try { map.remove(); } catch (error) { /* a dead context can throw on the way out */ }
+        view.remove();
+      };
+      // MapLibre reports the loss; a browser that is going to restore the context does so
+      // within a moment, so only a context still dead after that is rebuilt.
+      map.on('webglcontextlost', function () {
+        setTimeout(function () { if (window.__reviveMaps) window.__reviveMaps(); }, 1500);
+      });
+
+      if (restore) {
+        map.jumpTo({ center: restore.center, zoom: restore.zoom, bearing: restore.bearing,
+                     pitch: restore.pitch });
+        ['climb', 'glide'].forEach(function (kind) {
+          var b = view.querySelector('[data-m3-label="' + kind + '"]');
+          if (b && restore.labels[kind] !== labels[kind]) b.click();
+        });
+        var a = view.querySelector('[data-m3="airspace"]');
+        if (a && restore.airspace !== airspaceOn) a.click();
+        speed = restore.speed; showSpeed();
+        if (restore.replay) { openReplay(true); pause(); }
+        from = restore.from;
+        setTime(restore.cutoff);
+      }
 
       window.__mergedAll = window.__mergedAll || {};
       window.__mergedAll[panel.querySelector('canvas.view3d').id] = {

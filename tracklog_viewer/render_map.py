@@ -580,7 +580,7 @@ SWITCH_SCRIPT = (
     return { version: 8, sources: sources, layers: layers, sky: {} };
   }
 
-  function mount(host, handle) {
+  function mount(host, handle, restore) {
     var panel = host.querySelector('.view3d-panel');
     var scene = handle.built.scene, cursorTrack = handle.built.cursorTrack;
     var tr = scene.track;
@@ -694,7 +694,9 @@ SWITCH_SCRIPT = (
       var overlay = new deck.MapboxOverlay({ interleaved: false, layers: layers() });
       map.addControl(overlay);
       function refresh() { overlay.setProps({ layers: layers() }); }
-      if (west < east || south < north) {
+      if (restore) {
+        map.jumpTo(restore);
+      } else if (west < east || south < north) {
         map.fitBounds([[west, south], [east, north]],
                       { padding: 60, pitch: 62, bearing: 15, duration: 0 });
       }
@@ -756,9 +758,11 @@ SWITCH_SCRIPT = (
         if (!cursorTrack || index == null || index < 0 || index >= cursorTrack.lon.length) return null;
         return [cursorTrack.lon[index], cursorTrack.lat[index], cursorTrack.alt[index]];
       }
+      var unwrap = [];
       ['setCursor', 'revealCursor'].forEach(function (name) {
         var original = handle[name];
         if (typeof original !== 'function') return;
+        unwrap.push({ name: name, original: original });
         handle[name] = function (index) {
           cursor = at(index);
           if (!view.hidden) {
@@ -769,11 +773,34 @@ SWITCH_SCRIPT = (
         };
       });
       var clear = handle.clearCursor;
+      unwrap.push({ name: 'clearCursor', original: clear });
       handle.clearCursor = function () {
         cursor = null;
         if (!view.hidden) refresh();
         return clear ? clear.apply(handle, arguments) : undefined;
       };
+      unwrap.forEach(function (w) { w.wrapper = handle[w.name]; });
+      // The same recovery as the merged view's: see `contextLost` there.
+      api.lost = function () {
+        return Array.prototype.some.call(view.querySelectorAll('canvas'), function (canvas) {
+          var gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+          return !!(gl && gl.isContextLost());
+        });
+      };
+      api.snapshot = function () {
+        var c = map.getCenter();
+        return { center: [c.lng, c.lat], zoom: map.getZoom(), bearing: map.getBearing(),
+                 pitch: map.getPitch() };
+      };
+      api.dispose = function () {
+        pause();
+        unwrap.forEach(function (w) { if (handle[w.name] === w.wrapper) handle[w.name] = w.original; });
+        try { map.remove(); } catch (error) { /* a dead context can throw on the way out */ }
+        view.remove();
+      };
+      map.on('webglcontextlost', function () {
+        setTimeout(function () { if (window.__reviveMaps) window.__reviveMaps(); }, 1500);
+      });
       window.__maplibreAll = window.__maplibreAll || {};
       window.__maplibreAll[panel.querySelector('canvas.view3d').id] = {
         map: map, setTime: setTime, cursor: function () { return cursor; }
@@ -785,6 +812,31 @@ SWITCH_SCRIPT = (
     });
     return api;
   }
+
+  function mounts() { return { maplibre: mount, merged: window.__mountMerged }; }
+
+  // Rebuild any MapLibre view whose WebGL context is gone, in place and as it was. A
+  // phone takes the contexts of a page it locks or backgrounds and often never returns
+  // them; the map then stays black while its buttons still answer. Checked when the page
+  // comes back into view, and shortly after MapLibre reports a loss.
+  window.__reviveMaps = function () {
+    document.querySelectorAll('.renderer-host').forEach(function (host) {
+      var all = host.__renderers || {};
+      Object.keys(all).forEach(function (key) {
+        var built = all[key];
+        if (!built.api.lost || !built.api.lost()) return;
+        var snapshot = built.api.snapshot();
+        var shown = !built.api.view.hidden;
+        built.api.dispose();
+        built.api = mounts()[key](host, built.handle, snapshot);
+        if (shown) built.api.show(); else built.api.hide();
+      });
+    });
+  };
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') setTimeout(window.__reviveMaps, 300);
+  });
+  window.addEventListener('pageshow', function () { setTimeout(window.__reviveMaps, 300); });
 
   document.addEventListener('click', function (event) {
     var button = event.target.closest('[data-renderer]');
@@ -798,8 +850,8 @@ SWITCH_SCRIPT = (
       b.classList.toggle('is-on', on);
       b.setAttribute('aria-pressed', String(on));
     });
-    var mounts = { maplibre: mount, merged: window.__mountMerged };
-    if (want !== 'canvas' && (!handle || !handle.built || !mounts[want])) {
+    var mount_ = mounts();
+    if (want !== 'canvas' && (!handle || !handle.built || !mount_[want])) {
       // An upload whose view is still loading: nothing to draw from yet.
       host.querySelector('[data-renderer="canvas"]').click();
       return;
@@ -814,7 +866,7 @@ SWITCH_SCRIPT = (
     var built = host.__renderers[want];
     if (!built || built.handle !== handle) {
       if (built) built.api.view.remove();
-      built = host.__renderers[want] = { handle: handle, api: mounts[want](host, handle) };
+      built = host.__renderers[want] = { handle: handle, api: mount_[want](host, handle) };
     }
     built.api.show();
   });
