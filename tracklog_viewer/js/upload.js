@@ -40,25 +40,38 @@
     });
   }
 
+  // Let the page paint before a long synchronous stretch, so a stage the caller has just
+  // announced is on screen while it runs. A timeout and not requestAnimationFrame: a
+  // background tab never runs the latter, and the upload must not stall there.
+  function paint() { return new Promise(function (resolve) { setTimeout(resolve, 30); }); }
+
   // The flight's article, with what could be fetched. Resolves to
-  // { article, uid, label, meta, stat }; the caller puts it in the page.
-  function build(flight, name) {
-    var analysis = TV.analysis.analyse(flight);
-    var route = TV.xc.best(flight);
-    var plan = TV.plan.fromFlight(flight);
-    var now = Date.now() / 1000;
+  // { article, uid, label, meta, stat, missing }; the caller puts it in the page.
+  // `progress(stage)` hears 'analysing', 'fetching' and 'writing' as each one starts.
+  function build(flight, name, progress) {
+    progress = progress || function () {};
+    var analysis, route, plan, now = Date.now() / 1000;
+    progress('analysing');
+    return paint().then(function () {
+      analysis = TV.analysis.analyse(flight);
+      route = TV.xc.best(flight);
+      plan = TV.plan.fromFlight(flight);
+      progress('fetching');
 
-    var grid = TV.terrain.remoteFor(flight);
-    var ground = typeof loadTerrain === 'function'
-      ? optional(loadTerrain(grid).then(function () { return grid.z ? grid : null; }), TIMEOUTS.terrain)
-      : Promise.resolve(null);
-    var middle = TV.meteo.middleOf(flight);
-    var weather = optional(json(TV.meteo.request(middle.lat, middle.lon, middle.when, now)).then(function (payload) {
-      return TV.meteo.parse(payload, middle.when, now);
-    }), TIMEOUTS.meteo);
-    var gliders = optional(json('gliders.json'), TIMEOUTS.gliders);
-
-    return Promise.all([ground, weather, gliders]).then(function (inputs) {
+      var grid = TV.terrain.remoteFor(flight);
+      var ground = typeof loadTerrain === 'function'
+        ? optional(loadTerrain(grid).then(function () { return grid.z ? grid : null; }), TIMEOUTS.terrain)
+        : Promise.resolve(null);
+      var middle = TV.meteo.middleOf(flight);
+      var weather = optional(json(TV.meteo.request(middle.lat, middle.lon, middle.when, now)).then(function (payload) {
+        return TV.meteo.parse(payload, middle.when, now);
+      }), TIMEOUTS.meteo);
+      var gliders = optional(json('gliders.json'), TIMEOUTS.gliders);
+      return Promise.all([ground, weather, gliders]);
+    }).then(function (inputs) {
+      progress('writing');
+      return paint().then(function () { return inputs; });
+    }).then(function (inputs) {
       var uid = 'up' + (++counter);
       var html = TV.report.flightBody(analysis, {
         meteo: inputs[1], route: route, terrain: inputs[0], sceneTerrain: inputs[0], uid: uid, hidden: true,
@@ -85,5 +98,5 @@
     return built.article;
   }
 
-  TV.upload = { read: read, build: build, place: place };
+  TV.upload = { read: read, build: build, place: place, paint: paint };
 })(typeof window !== 'undefined' ? (window.TV = window.TV || {}) : (globalThis.TV = globalThis.TV || {}));

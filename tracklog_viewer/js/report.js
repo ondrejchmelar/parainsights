@@ -182,6 +182,8 @@
     }).join('');
   }
 
+  var SHEAR_NOTICEABLE = 1.0;  // m/s, as render_html.SHEAR_NOTICEABLE
+
   function windShearNote(a) {
     var sounded = thermals(a).filter(function (s) { return s.wind && s.turns && s.turns >= 2; })
       .map(function (s) { return [(s.start_altitude + s.finish_altitude) / 2, s.wind]; });
@@ -194,11 +196,11 @@
     upper.forEach(function (p) { high += p[1].speed; });
     low /= lower.length; high /= upper.length;
     var change = high - low;
-    if (Math.abs(change) < 3) {
-      return 'about ' + fmt(low, 0) + ' km/h throughout, with no useful shear between the low climbs and the high ones.';
+    if (Math.abs(change) < SHEAR_NOTICEABLE) {
+      return 'about ' + fmt(low, 1) + ' m/s throughout, with no useful shear between the low climbs and the high ones.';
     }
-    return fmt(low, 0) + ' km/h in the lower climbs against ' + fmt(high, 0) + ' km/h in the higher ones — ' +
-      fmt(Math.abs(change), 0) + ' km/h ' + (change > 0 ? 'stronger' : 'lighter') + ' with height.';
+    return fmt(low, 1) + ' m/s in the lower climbs against ' + fmt(high, 1) + ' m/s in the higher ones — ' +
+      fmt(Math.abs(change), 1) + ' m/s ' + (change > 0 ? 'stronger' : 'lighter') + ' with height.';
   }
 
   function histogramVerdict(a) {
@@ -254,8 +256,8 @@
       '          <li><span class="swatch" style="background:var(--neutral)"></span>dry adiabat from the\n            surface</li>\n        </ul>\n' +
       '        <p class="caption">Where the dry adiabat crosses the temperature curve is as high as a\n          surface thermal can get without help. The shaded band is the altitude you actually\n          used.</p>\n      </div>\n' +
       '      <div>\n        <div class="panel" style="padding:14px 16px 4px">\n          <div class="table-scroll">\n            <table>\n' +
-      '              <thead><tr><th>climb</th><th>start</th><th>height m</th><th>km/h</th><th>from</th>\n' +
-      '                <th>model km/h</th><th>model from</th><th>&Delta; dir</th></tr></thead>\n' +
+      '              <thead><tr><th>climb</th><th>start</th><th>height m</th><th>m/s</th><th>from</th>\n' +
+      '                <th>model m/s</th><th>model from</th><th>&Delta; dir</th></tr></thead>\n' +
       '              <tbody>' + rows.join('') + '</tbody>\n            </table>\n          </div>\n        </div>\n' +
       '        <p class="caption">Wind from circle drift against the model at the same height. Agreement\n          here is the strongest evidence that the drift method works — nothing in the flight data\n          knows about the model, and nothing in the model knows about the flight.</p>\n      </div>\n    </div>';
   }
@@ -282,7 +284,7 @@
       if (!model) return;
       var delta = Math.abs(np.mod(seg.wind.direction - model[1] + 180, 360) - 180);
       rows.push('<tr data-segment="' + seg.start + '"><td>' + (i + 1) + '</td><td>' + seg.start_time + '</td><td>' + fmt(height, 0) + '</td>' +
-        '<td>' + fmt(seg.wind.speed, 1) + '</td><td>' + fmt(seg.wind.direction, 0) + '°</td><td>' + fmt(model[0], 0) + '</td><td>' +
+        '<td>' + fmt(seg.wind.speed, 1) + '</td><td>' + fmt(seg.wind.direction, 0) + '°</td><td>' + fmt(model[0], 1) + '</td><td>' +
         fmt(model[1], 0) + '°</td><td>' + fmt(delta, 0) + '°</td></tr>');
     });
     var ceilingNote = '';

@@ -1754,6 +1754,9 @@ def _glide_rows(analysis: Analysis, sample: list[int] | None = None) -> str:
     return "".join(rows)
 
 
+SHEAR_NOTICEABLE = 1.0  # m/s between the lower and upper half of the sounded climbs
+
+
 def _wind_shear_note(analysis: Analysis) -> str:
     """One sentence on how the measured wind changed with height."""
     sounded = [
@@ -1772,15 +1775,17 @@ def _wind_shear_note(analysis: Analysis) -> str:
     low_speed = sum(w.speed for _, w in lower) / len(lower)
     high_speed = sum(w.speed for _, w in upper) / len(upper)
     change = high_speed - low_speed
-    if abs(change) < 3:
+    # `Wind.speed` is m/s. This sentence said km/h over m/s numbers, and gated on 3 —
+    # a km/h threshold that, read in m/s, called almost any shear "none".
+    if abs(change) < SHEAR_NOTICEABLE:
         return (
-            f"about {low_speed:.0f} km/h throughout, with no useful shear between the low "
+            f"about {low_speed:.1f} m/s throughout, with no useful shear between the low "
             f"climbs and the high ones."
         )
     direction = "stronger" if change > 0 else "lighter"
     return (
-        f"{low_speed:.0f} km/h in the lower climbs against {high_speed:.0f} km/h in the higher "
-        f"ones — {abs(change):.0f} km/h {direction} with height."
+        f"{low_speed:.1f} m/s in the lower climbs against {high_speed:.1f} m/s in the higher "
+        f"ones — {abs(change):.1f} m/s {direction} with height."
     )
 
 
@@ -1981,7 +1986,7 @@ def _meteo_section(analysis: Analysis, meteo, uid: str = "") -> str:
             f'<tr data-segment="{segment.start}"><td>{index}</td>'
             f"<td>{segment.start_time}</td><td>{height:.0f}</td>"
             f"<td>{segment.wind.speed:.1f}</td><td>{segment.wind.direction:.0f}°</td>"
-            f"<td>{model[0]:.0f}</td><td>{model[1]:.0f}°</td>"
+            f"<td>{model[0]:.1f}</td><td>{model[1]:.0f}°</td>"
             f"<td>{delta:.0f}°</td></tr>"
         )
 
@@ -2045,8 +2050,8 @@ def _meteo_profile(analysis: Analysis, meteo, uid: str, rows: list[str]) -> str:
         <div class="panel" style="padding:14px 16px 4px">
           <div class="table-scroll">
             <table>
-              <thead><tr><th>climb</th><th>start</th><th>height m</th><th>km/h</th><th>from</th>
-                <th>model km/h</th><th>model from</th><th>&Delta; dir</th></tr></thead>
+              <thead><tr><th>climb</th><th>start</th><th>height m</th><th>m/s</th><th>from</th>
+                <th>model m/s</th><th>model from</th><th>&Delta; dir</th></tr></thead>
               <tbody>{"".join(rows)}</tbody>
             </table>
           </div>

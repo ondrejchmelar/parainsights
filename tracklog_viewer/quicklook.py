@@ -186,6 +186,13 @@ STYLE = """
   background: var(--panel-2); font-size: 12.5px; color: var(--ink-2); }
 .ql-status { margin: 0; font-size: 12.5px; color: var(--ink-2); flex-basis: 100%; }
 .ql-status.is-error { color: var(--climb); }
+.ql-status.is-busy::before {
+  content: ""; display: inline-block; width: 11px; height: 11px; margin: 0 7px -1px 0;
+  border: 2px solid var(--rule, currentColor); border-top-color: var(--ink, currentColor);
+  border-radius: 50%; animation: ql-spin .8s linear infinite;
+}
+@keyframes ql-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .ql-status.is-busy::before { animation-duration: 2.4s; } }
 canvas.ql-canvas { display: block; width: 100%; height: auto; }
 .ql-stats { margin: 6px 6px 12px; }
 .ql-result .table-scroll { margin: 10px 6px 0; }
@@ -1687,11 +1694,29 @@ SCRIPT = r"""
 
   // The full analysis and the same article a bundled flight gets (`js/upload.js`), with
   // the reduced quick look below kept as the fallback should anything in it throw.
+  // The spinner is on while any upload is in hand: several files can be dropped at once.
+  // It is a CSS transform animation, which the compositor keeps turning while the
+  // analysis holds the main thread; a JavaScript-driven one would freeze exactly then.
+  var busy = 0;
+  function working(on) {
+    busy = Math.max(0, busy + (on ? 1 : -1));
+    status.classList.toggle('is-busy', busy > 0);
+    status.setAttribute('aria-busy', busy > 0 ? 'true' : 'false');
+  }
+  var STAGES = {
+    analysing: 'Analysing {name}…',
+    fetching: 'Analysed {name}; fetching the ground and the day\'s weather…',
+    writing: 'Writing the article for {name}…'
+  };
+
   function handleFull(file) {
     status.classList.remove('is-error');
-    status.textContent = 'Analysing ' + file.name + ' — fetching the ground and the day\'s weather…';
+    status.textContent = 'Reading ' + file.name + '…';
+    working(true);
     return TV.upload.read(file).then(function (flight) {
-      return TV.upload.build(flight, file.name);
+      return TV.upload.build(flight, file.name, function (stage) {
+        status.textContent = STAGES[stage].replace('{name}', file.name);
+      });
     }).then(function (built) {
       TV.upload.place(built, document.getElementById('quicklook'));
       addTab(built.uid, built.label, built.meta, built.stat);
@@ -1699,6 +1724,11 @@ SCRIPT = r"""
       tabs().show(built.uid);
       status.textContent = built.missing.length
         ? 'Analysed. Not available just now: ' + built.missing.join(', ') + '.' : '';
+    }).then(function () {
+      working(false);
+    }, function (error) {
+      working(false);
+      throw error;
     });
   }
 

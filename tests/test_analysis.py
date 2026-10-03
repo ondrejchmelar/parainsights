@@ -339,6 +339,21 @@ class TestWindShearNote:
         assert len(altitudes) != len(set(altitudes)), "the fixture must produce a tie"
         render_html._wind_shear_note(analysis)   # raised TypeError before the key= fix
 
+    def test_the_note_speaks_in_the_unit_the_wind_is_stored_in(self):
+        """`Wind.speed` is m/s. The note printed those numbers as km/h and gated on a
+        km/h threshold, so a 2 m/s shear read as "about 3 km/h throughout"."""
+        from types import SimpleNamespace as NS
+        from tracklog_viewer import render_html
+
+        def climb(alt, speed):
+            return NS(start_altitude=alt, finish_altitude=alt, turns=3,
+                      wind=NS(speed=speed, direction=270.0))
+        flat = NS(thermals=[climb(1000, 3.0), climb(1500, 3.2), climb(2000, 3.4), climb(2500, 3.5)])
+        sheared = NS(thermals=[climb(1000, 2.0), climb(1500, 2.2), climb(2000, 4.0), climb(2500, 4.4)])
+        assert render_html._wind_shear_note(flat).startswith("about 3.1 m/s throughout")
+        note = render_html._wind_shear_note(sheared)
+        assert "km/h" not in note and note.endswith("2.1 m/s stronger with height."), note
+
 
 class TestThermalStartsWhenTurningDoes:
     """A thermal is the circling, not the run-in to it.

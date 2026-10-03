@@ -26,6 +26,12 @@ window.addEventListener('load', function () {
     var input = document.getElementById('ql-file');
     var dt = new DataTransfer(); dt.items.add(file); input.files = dt.files;
     input.dispatchEvent(new Event('change'));
+    var seen = { busy: false };
+    setTimeout(function () {
+      var st = document.getElementById('ql-status');
+      seen.busy = st.classList.contains('is-busy') && st.getAttribute('aria-busy') === 'true';
+      seen.spin = getComputedStyle(st, '::before').animationName;
+    }, 10);
     setTimeout(function () {
       var a = document.querySelector('[data-flight-report="up1"]'), out = { article: !!a };
       if (a) {
@@ -37,6 +43,9 @@ window.addEventListener('load', function () {
         out.verdict = (a.querySelector('.verdict-line') || {}).textContent || '';
       }
       out.status = document.getElementById('ql-status').textContent;
+      out.busyWhileWorking = seen.busy;
+      out.spinner = seen.spin;
+      out.busyAfter = document.getElementById('ql-status').classList.contains('is-busy');
       document.getElementById('probe-out').textContent = JSON.stringify(out);
     }, 12000);
   }, 800);
@@ -68,3 +77,6 @@ def test_an_upload_gets_the_full_article_even_offline(tmp_path):
     assert out["verdict"].startswith("A "), out
     # And it says what it could not fetch.
     assert "ground" in out["status"] and "weather" in out["status"], out["status"]
+    # A spinner while it works, and none once it is done.
+    assert out["busyWhileWorking"] and out["spinner"] == "ql-spin", out
+    assert not out["busyAfter"], out
