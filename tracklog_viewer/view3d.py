@@ -48,6 +48,11 @@ TILE_SOURCES = {
         ],
         "attribution": "Imagery © Esri, Maxar, Earthstar Geographics",
         "max_zoom": 18,
+        # Esri's levels 12 and up are one mosaic; 11 and below are an older, darker one
+        # (over the same Dolomites ground: blue channel 26 against 59). A map that crosses
+        # between them jumps colour on every zoom, so the merged view never shows the
+        # imagery below this level — it builds those tiles from this level's (`map3d`).
+        "consistent_from": 12,
     },
     "map": {
         "label": "Map",
@@ -733,8 +738,17 @@ function loadTerrain(dem) {
         resolve(true);
       };
       // A missing tile is a hole to fill, not a failure: the Python side does the same.
-      image.onerror = function () { resolve(false); };
-      image.src = dem.remote.url.replace('{z}', zoom).replace('{x}', x).replace('{y}', y);
+      // But a tile is asked again twice first, a moment apart: every tile of a page has
+      // been seen to fail at once and succeed on reload, which with no retry is a 3D view
+      // that never appears.
+      var tries = 0;
+      var src = dem.remote.url.replace('{z}', zoom).replace('{x}', x).replace('{y}', y);
+      image.onerror = function () {
+        if (++tries > 2) { resolve(false); return; }
+        setTimeout(function () { image.src = src + (src.indexOf('?') < 0 ? '?' : '&') + 'r=' + tries; },
+                   400 * tries);
+      };
+      image.src = src;
     });
   }
 

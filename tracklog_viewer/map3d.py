@@ -24,7 +24,6 @@ STYLE = """
 .merged-view .m3-rose svg { display: block; margin-left: auto; }
 .merged-view .m3-rose p { margin: 4px 0 0; font-size: 11px; line-height: 1.3; color: #fff;
   text-shadow: 0 0 3px rgba(12,14,18,0.95), 0 0 2px rgba(12,14,18,0.95); }
-.merged-view .view3d-credit { z-index: 3; }
 .merged-view .m3-replay { position: absolute; left: 10px; right: 10px; bottom: 52px; z-index: 3;
   display: flex; gap: 5px; align-items: center; }
 .merged-view .m3-replay[hidden] { display: none; }
@@ -34,13 +33,26 @@ STYLE = """
 .merged-view .m3-replay button:hover { color: var(--ink); background: var(--panel-2); }
 .merged-view .m3-replay button.is-on { background: var(--climb); border-color: var(--climb);
   color: var(--paper); }
+.merged-view .m3-icon svg { display: block; }
+.merged-view .m3-speed { display: flex; align-items: center; }
+.merged-view .m3-speed button { border-radius: 0; }
+.merged-view .m3-speed button:first-child { border-radius: 2px 0 0 2px; }
+.merged-view .m3-speed button:last-child { border-radius: 0 2px 2px 0; }
+.merged-view .m3-speed button:disabled { opacity: 0.4; cursor: default; }
+.merged-view .m3-rate { min-width: 64px; text-align: center; font-size: 12px; color: var(--ink);
+  font-variant-numeric: tabular-nums; background: var(--panel); border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule); padding: 5px 4px; }
 .merged-view .m3-time { flex: 1; display: flex; gap: 8px; align-items: center;
   background: var(--panel); border: 1px solid var(--rule); border-radius: 2px;
   padding: 3px 9px; font-size: 12px; color: var(--ink); font-variant-numeric: tabular-nums; }
 .merged-view .m3-time input { flex: 1; accent-color: var(--climb); }
 .merged-view .m3-status { position: absolute; left: 12px; top: 34px; z-index: 3; margin: 0;
   font-size: 12px; color: var(--ink-2); }
-.merged-view .maplibregl-ctrl-attrib { display: none; }
+/* MapLibre's own credits, the openable kind: an (i) at the top left that opens to name
+   every source on screen. Top left because the rose holds the top right and the
+   controls the bottom. */
+.merged-view .maplibregl-ctrl-top-left { z-index: 3; }
+.merged-view .maplibregl-ctrl-attrib { font-size: 11px; }
 @media (max-width: 640px) {
   .merged-view .m3-replay { bottom: 92px; }
 }
@@ -57,6 +69,10 @@ SCRIPT = r"""
   // Markers and labels draw over the track rather than fighting it for depth: a number
   // at the same point as its own circle otherwise loses to it and vanishes.
   var ON_TOP = { depthCompare: 'always', depthWriteEnabled: false };
+  var PLAY_ICON = '<svg width="11" height="12" viewBox="0 0 11 12" aria-hidden="true">' +
+    '<path d="M1 1 L10 6 L1 11 Z" fill="currentColor"/></svg>';
+  var PAUSE_ICON = '<svg width="11" height="12" viewBox="0 0 11 12" aria-hidden="true">' +
+    '<path d="M1.5 1h3v10h-3zM6.5 1h3v10h-3z" fill="currentColor"/></svg>';
   function rgb(hex, alpha) {
     var v = parseInt(String(hex).replace('#', ''), 16);
     return [(v >> 16) & 255, (v >> 8) & 255, v & 255, alpha];
@@ -93,11 +109,60 @@ SCRIPT = r"""
       '<dt>1 2 4</dt><dd>exaggeration</dd>' +
       '<dt>s m r</dt><dd>satellite, map, relief</dd>' +
       (airspace ? '<dt>a</dt><dd>airspace</dd>' : '') +
-      '<dt>space</dt><dd>play / pause the replay</dd>' +
+      '<dt>space</dt><dd>replay: open, play, pause</dd>' +
       '<dt>f</dt><dd>full screen</dd>' +
       '<dt>0</dt><dd>reset view</dd></dl>' +
       '<p class="view3d-keys-foot">Hovering the charts moves the marker here too. ' +
       'Click this list to close it.</p>';
+  }
+
+  // Tiles below a source's `consistent_from` level, built from that level's tiles. For
+  // Esri the levels under 12 are a different, darker mosaic, so a map that ever shows
+  // them jumps colour as the zoom crosses the line — and at a tilt the far half of the
+  // view always sits on them. One level down costs 4 requests, two levels 16; deeper
+  // than that (64+) the native tile is used, which only the far horizon ever asks for.
+  var STITCH_LEVELS = 2;
+  function registerStitching() {
+    if (window.__m3Stitching) return;
+    window.__m3Stitching = true;
+    maplibregl.addProtocol('m3tiles', function (params, abortController) {
+      var parts = params.url.slice('m3tiles://'.length).split('/');
+      var template = decodeURIComponent(parts[0]);
+      var from = +parts[1], z = +parts[2], x = +parts[3], y = +parts[4];
+      var signal = abortController.signal;
+      function url(zz, xx, yy) {
+        return template.replace('{z}', zz).replace('{x}', xx).replace('{y}', yy);
+      }
+      function image(src) {
+        return fetch(src, { signal: signal }).then(function (response) {
+          if (!response.ok) throw new Error(response.status + ' ' + src);
+          return response.blob();
+        }).then(function (blob) { return createImageBitmap(blob); });
+      }
+      if (z >= from || z < from - STITCH_LEVELS) {
+        return fetch(url(z, x, y), { signal: signal }).then(function (response) {
+          if (!response.ok) throw new Error(response.status + ' ' + url(z, x, y));
+          return response.arrayBuffer();
+        }).then(function (data) { return { data: data }; });
+      }
+      var k = 1 << (from - z), size = 512, cell = size / k;
+      var canvas = document.createElement('canvas');
+      canvas.width = canvas.height = size;
+      var ctx = canvas.getContext('2d');
+      ctx.imageSmoothingQuality = 'high';
+      var jobs = [];
+      for (var i = 0; i < k; i++) for (var j = 0; j < k; j++) {
+        jobs.push((function (i, j) {
+          return image(url(from, x * k + i, y * k + j)).then(function (bitmap) {
+            ctx.drawImage(bitmap, i * cell, j * cell, cell, cell);
+          }, function () { return null; });   // a missing child is a hole, not a failure
+        })(i, j));
+      }
+      return Promise.all(jobs).then(function () {
+        return new Promise(function (resolve) { canvas.toBlob(resolve, 'image/jpeg', 0.92); });
+      }).then(function (blob) { return blob.arrayBuffer(); })
+        .then(function (data) { return { data: data }; });
+    });
   }
 
   window.__mountMerged = function (host, handle) {
@@ -121,7 +186,6 @@ SCRIPT = r"""
       '<div class="ml-map" tabindex="0" aria-label="Interactive three-dimensional map of the ' +
         'flight. Arrow keys pan and shift with them turns and tilts; press question mark ' +
         'for the key list."></div>' +
-      '<p class="view3d-credit"></p>' +
       '<p class="m3-status">Loading MapLibre…</p>' +
       '<div class="m3-rose" hidden><svg width="64" height="64" viewBox="-32 -32 64 64">' +
         '<circle r="30" fill="rgba(16,19,24,0.55)" stroke="rgba(255,255,255,0.28)"/>' +
@@ -136,8 +200,16 @@ SCRIPT = r"""
       '<div class="view3d-asp" hidden></div>' +
       '<div class="view3d-keys" hidden data-m3="help">' + keysHtml(hasAirspace) + '</div>' +
       (hasTime ?
+        // Hidden until the replay button in the bar opens it: most of the time the reader
+        // wants the whole flight, and a slider parked at the end is a row of nothing.
         '<div class="m3-replay" hidden>' +
-          '<button type="button" data-m3="play" aria-pressed="false">play</button>' +
+          '<button type="button" data-m3="play" class="m3-icon" aria-pressed="false"' +
+          ' title="Play / pause (space)" aria-label="Play">' + PLAY_ICON + '</button>' +
+          '<div class="m3-speed" role="group" aria-label="Replay speed">' +
+            '<button type="button" data-m3="slower" title="Slower" aria-label="Slower">&minus;</button>' +
+            '<span class="m3-rate" aria-live="polite"></span>' +
+            '<button type="button" data-m3="faster" title="Faster" aria-label="Faster">+</button>' +
+          '</div>' +
           '<label class="m3-time"><span class="m3-clock"></span>' +
           '<input type="range" min="0" max="' + duration + '" step="1" value="' + duration + '"' +
           ' aria-label="Replay time"></label>' +
@@ -173,6 +245,8 @@ SCRIPT = r"""
         '<div class="view3d-seg view3d-zoom" role="group" aria-label="Zoom">' +
           '<button type="button" data-m3="zoom-out" title="Zoom out" aria-label="Zoom out">&minus;</button>' +
           '<button type="button" data-m3="zoom-in" title="Zoom in" aria-label="Zoom in">+</button></div>' +
+        (hasTime ? '<button type="button" data-m3="replay" class="m3-icon" aria-pressed="false"' +
+          ' title="Replay the flight" aria-label="Replay the flight">' + PLAY_ICON + '</button>' : '') +
         '<button type="button" data-m3="help" title="Controls" aria-label="How to control this view">?</button>' +
         '<button type="button" data-m3="fullscreen" title="Full screen" aria-label="Full screen">' +
           '<svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor"' +
@@ -187,7 +261,10 @@ SCRIPT = r"""
       playing = false;
       if (frame) cancelAnimationFrame(frame);
       var b = view.querySelector('[data-m3="play"]');
-      if (b) { b.textContent = 'play'; b.classList.remove('is-on'); b.setAttribute('aria-pressed', 'false'); }
+      if (b) {
+        b.innerHTML = PLAY_ICON; b.classList.remove('is-on');
+        b.setAttribute('aria-pressed', 'false'); b.setAttribute('aria-label', 'Play');
+      }
     }
     var api = {
       view: view,
@@ -196,10 +273,10 @@ SCRIPT = r"""
     };
 
     window.__mapLibs().then(function () {
+      registerStitching();
       view.querySelector('.m3-status').hidden = true;
       view.querySelector('.view3d-controls').hidden = false;
       var replay = view.querySelector('.m3-replay');
-      if (replay) replay.hidden = false;
 
       var vertical = 1, whole = true, cursor = null, cutoff = duration;
       var labels = { climb: false, glide: false }, airspaceOn = false;
@@ -227,15 +304,25 @@ SCRIPT = r"""
           // four times the tiles, and relief and imagery as sharp as the canvas's grid.
           // At their natural size the DEM it picks is ~4x coarser and the hills read flat.
           dem: { type: 'raster-dem', tiles: [window.__mapTerrarium], tileSize: 128, maxzoom: 15,
-                 encoding: 'terrarium' }
+                 encoding: 'terrarium', attribution: 'Terrain: AWS Open Data Terrain Tiles' },
+          // Its own source for the shading: MapLibre renders both worse when the hillshade
+          // and the 3D terrain share one.
+          shade: { type: 'raster-dem', tiles: [window.__mapTerrarium], tileSize: 128, maxzoom: 15,
+                   encoding: 'terrarium' }
         };
         var layers = [];
         if (source) {
           source.layers.forEach(function (template, i) {
             // The photograph at half size (sharper), the place-name layer at full size —
             // halved, its lettering would be too small to read.
-            sources['b' + i] = { type: 'raster', tiles: [template], tileSize: i ? 256 : 128,
-                                 maxzoom: source.max_zoom || 18 };
+            var consistent = !i && source.consistent_from;
+            sources['b' + i] = { type: 'raster', tileSize: i ? 256 : 128,
+                                 maxzoom: source.max_zoom || 18,
+                                 tiles: [consistent
+                                   ? 'm3tiles://' + encodeURIComponent(template) + '/' +
+                                     source.consistent_from + '/{z}/{x}/{y}'
+                                   : template] };
+            if (!i && source.attribution) sources.b0.attribution = source.attribution;
             // A slight lift: the raw Esri mosaic is dark next to the canvas's, which the
             // shading's highlights brighten by a third on the sunlit side.
             layers.push({ id: 'b' + i, type: 'raster', source: 'b' + i,
@@ -252,7 +339,7 @@ SCRIPT = r"""
         // two colours are what makes the canvas imagery read clean and the relief read at
         // all. Under the labels layer, so place names stay crisp.
         var shade = {
-          id: 'hillshade', type: 'hillshade', source: 'dem', paint: {
+          id: 'hillshade', type: 'hillshade', source: 'shade', paint: {
             'hillshade-exaggeration': source ? 0.45 : 1,
             'hillshade-highlight-color': source ? 'rgba(255,252,242,0.45)' : 'rgba(255,252,242,1)',
             'hillshade-shadow-color': source ? 'rgba(18,26,38,0.7)' : 'rgba(18,26,38,1)',
@@ -271,12 +358,6 @@ SCRIPT = r"""
                  'sky-horizon-blend': 0.6, 'atmosphere-blend': 0 }
         };
       }
-      function credit() {
-        var parts = [];
-        if (tiles[basemap]) parts.push(tiles[basemap].attribution);
-        parts.push('terrain: AWS Terrain Tiles', 'MapLibre');
-        view.querySelector('.view3d-credit').textContent = parts.join(' · ');
-      }
 
       var dem = scene.terrain || {};
       var west = tr.lon.length ? Math.min.apply(null, tr.lon) : dem.west;
@@ -288,8 +369,68 @@ SCRIPT = r"""
         center: [(west + east) / 2, (south + north) / 2], zoom: 10, pitch: 60, bearing: 0,
         maxPitch: 85, attributionControl: false, keyboard: true
       });
+      // Credits from the sources themselves, so switching the basemap changes them.
+      map.addControl(new maplibregl.AttributionControl({ compact: true }), 'top-left');
+      // Start closed: MapLibre opens a compact control on a wide map, and the credits then
+      // sit over the flight until someone closes them.
+      // MapLibre opens it by itself the moment the first credit text arrives from a source,
+      // so close it on that first opening and leave every later one to the reader.
+      (function () {
+        var box = view.querySelector('.maplibregl-ctrl-attrib');
+        if (!box || !window.MutationObserver) return;
+        var watch = new MutationObserver(function () {
+          if (!box.classList.contains('maplibregl-compact-show')) return;
+          box.classList.remove('maplibregl-compact-show');
+          box.removeAttribute('open');
+          watch.disconnect();
+        });
+        watch.observe(box, { attributes: true, attributeFilter: ['class'] });
+      })();
       map.on('style.load', function () { map.setTerrain({ source: 'dem', exaggeration: vertical }); });
-      credit();
+
+      // The canvas view's mouse: a left drag with any modifier — shift, ctrl, alt or meta —
+      // rotates and tilts, as a right drag does. MapLibre only knows ctrl and the right
+      // button, and gives shift-drag to a box zoom the canvas never had.
+      map.boxZoom.disable();
+      (function () {
+        var surface = map.getCanvasContainer(), last = null;
+        function modified(event) {
+          return event.button === 0 && (event.shiftKey || event.altKey || event.metaKey);
+        }
+        surface.addEventListener('pointerdown', function (event) {
+          if (!modified(event)) return;
+          // Ahead of MapLibre's own handlers, which would otherwise start a pan.
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          last = { x: event.clientX, y: event.clientY };
+          surface.setPointerCapture(event.pointerId);
+        }, true);
+        surface.addEventListener('pointermove', function (event) {
+          if (!last) return;
+          event.stopImmediatePropagation();
+          // MapLibre's own right-drag rates, so the two gestures turn the view alike.
+          map.jumpTo({ bearing: map.getBearing() + (event.clientX - last.x) * 0.8,
+                       pitch: map.getPitch() - (event.clientY - last.y) * 0.5 });
+          last = { x: event.clientX, y: event.clientY };
+        }, true);
+        function end(event) {
+          if (!last) return;
+          last = null;
+          event.stopImmediatePropagation();
+        }
+        surface.addEventListener('pointerup', end, true);
+        surface.addEventListener('pointercancel', end, true);
+        // MapLibre listens for the mouse events a browser fires *alongside* pointer events,
+        // so those have to stop too or it pans underneath the turn.
+        ['mousedown', 'mousemove', 'mouseup'].forEach(function (type) {
+          surface.addEventListener(type, function (event) {
+            if (last || (type === 'mousedown' && modified(event))) {
+              event.preventDefault();
+              event.stopImmediatePropagation();
+            }
+          }, true);
+        });
+      })();
       function fit(animate) {
         if (!(west < east || south < north)) return;
         map.fitBounds([[west, south], [east, north]],
@@ -299,10 +440,14 @@ SCRIPT = r"""
       fit(false);
 
       // ---- what is drawn over it -----------------------------------------------------
+      // The canvas view's labels: the phase as a span from where it began to where it
+      // ended, dots at both ends, and its numbers in white over the middle — no box.
       var phaseLabels = (scene.phases || []).map(function (p) {
         return { kind: p.kind, text: p.text,
+                 colour: p.kind === 'climb' ? [235, 104, 52, 242] : [42, 120, 214, 242],
+                 ends: [[p.lon[0], p.lat[0], p.alt[0]], [p.lon[1], p.lat[1], p.alt[1]]],
                  position: [(p.lon[0] + p.lon[1]) / 2, (p.lat[0] + p.lat[1]) / 2,
-                            Math.max(p.alt[0], p.alt[1])] };
+                            (p.alt[0] + p.alt[1]) / 2] };
       });
       var boxes = hasAirspace ? scene.airspaces.map(function (ring) {
         var low = Infinity, high = -Infinity;
@@ -382,15 +527,36 @@ SCRIPT = r"""
           updateTriggers: { getPosition: vertical }, parameters: ON_TOP
         }));
         var shown = phaseLabels.filter(function (p) { return labels[p.kind]; });
-        if (shown.length) out.push(new deck.TextLayer({
-          id: 'phase-labels', data: shown, getText: function (d) { return d.text; },
-          getPosition: function (d) { return [d.position[0], d.position[1], z(d.position[2])]; },
-          getPixelOffset: [0, -16], getSize: 11, characterSet: 'auto',
-          fontFamily: 'ui-sans-serif, system-ui, sans-serif',
-          getColor: [255, 255, 255], background: true, backgroundPadding: [5, 2],
-          getBackgroundColor: function (d) { return d.kind === 'climb' ? [200, 80, 30, 225] : [36, 92, 160, 225]; },
-          updateTriggers: { getPosition: vertical }, parameters: ON_TOP
-        }));
+        if (shown.length) {
+          var lift = function (p) { return [p[0], p[1], z(p[2])]; };
+          out.push(new deck.PathLayer({
+            id: 'phase-spans', data: shown,
+            getPath: function (d) { return d.ends.map(lift); },
+            getColor: function (d) { return d.colour; }, getWidth: 2, widthUnits: 'pixels',
+            capRounded: true, billboard: true, updateTriggers: { getPath: vertical },
+            parameters: ON_TOP
+          }));
+          out.push(new deck.ScatterplotLayer({
+            id: 'phase-ends', data: shown.reduce(function (all, d) {
+              return all.concat([{ p: d.ends[0], c: d.colour }, { p: d.ends[1], c: d.colour }]);
+            }, []),
+            getPosition: function (d) { return lift(d.p); }, getFillColor: function (d) { return d.c; },
+            radiusUnits: 'pixels', getRadius: 2.6, billboard: true,
+            updateTriggers: { getPosition: vertical }, parameters: ON_TOP
+          }));
+          out.push(new deck.TextLayer({
+            id: 'phase-labels', data: shown, getText: function (d) { return d.text; },
+            getPosition: function (d) { return lift(d.position); },
+            getPixelOffset: [0, -9], getSize: 11, fontWeight: 600, characterSet: 'auto',
+            fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+            getColor: [255, 255, 255],
+            // The canvas strokes the text 3 px in translucent black; an SDF outline is the
+            // same thing in deck.gl, and needs the SDF atlas switched on to draw at all.
+            fontSettings: { sdf: true, fontSize: 64, buffer: 6 },
+            outlineWidth: 2.5, outlineColor: [0, 0, 0, 150],
+            updateTriggers: { getPosition: vertical }, parameters: ON_TOP
+          }));
+        }
         if (cursor) {
           var g = ground(cursor[0], cursor[1]);
           out.push(new deck.LineLayer({
@@ -496,22 +662,51 @@ SCRIPT = r"""
         clockLabel.textContent = clockAt(duration);
         slider.addEventListener('input', function () { pause(); setTime(Number(slider.value)); });
       }
+      // Seconds of flight per second of replay. Two minutes a second is where it opens:
+      // a three-hour flight in a minute and a half, a single climb still watchable.
+      var SPEEDS = [10, 30, 60, 120, 300, 600, 1200];
+      var speed = 3;
+      var rateLabel = view.querySelector('.m3-rate');
+      function showSpeed() {
+        if (!rateLabel) return;
+        var s = SPEEDS[speed];
+        rateLabel.textContent = s < 60 ? s + ' s/s' : (s / 60) + ' min/s';
+        view.querySelector('[data-m3="slower"]').disabled = speed === 0;
+        view.querySelector('[data-m3="faster"]').disabled = speed === SPEEDS.length - 1;
+      }
+      showSpeed();
       var last = 0;
       function step(now) {
         var dt = last ? (now - last) / 1000 : 0;
         last = now;
-        var next = cutoff + dt * 120;           // two minutes of flight a second
+        var next = cutoff + dt * SPEEDS[speed];
         setTime(next > duration ? 0 : next);
         if (playing) frame = requestAnimationFrame(step);
       }
       function togglePlay() {
         if (!hasTime) return;
+        if (replay.hidden) { openReplay(true); return; }
         var b = view.querySelector('[data-m3="play"]');
         if (playing) { pause(); return; }
         playing = true; last = 0;
-        b.textContent = 'pause'; b.classList.add('is-on'); b.setAttribute('aria-pressed', 'true');
+        b.innerHTML = PAUSE_ICON; b.classList.add('is-on');
+        b.setAttribute('aria-pressed', 'true'); b.setAttribute('aria-label', 'Pause');
         if (cutoff >= duration) setTime(0);
         frame = requestAnimationFrame(step);
+      }
+      // One button opens the whole replay and closing it puts the flight back as it was:
+      // whole track, no trail, the time at the end.
+      function openReplay(on) {
+        var toggle = view.querySelector('[data-m3="replay"]');
+        toggle.classList.toggle('is-on', on);
+        toggle.setAttribute('aria-pressed', String(on));
+        replay.hidden = !on;
+        if (on) { setTime(0); togglePlay(); return; }
+        pause();
+        whole = true;
+        var w = view.querySelector('[data-m3="whole"]');
+        w.classList.add('is-on'); w.setAttribute('aria-pressed', 'true');
+        setTime(duration);
       }
 
       // ---- controls --------------------------------------------------------------------
@@ -528,7 +723,6 @@ SCRIPT = r"""
         press('[data-m3-style]', view.querySelector('[data-m3-style="' + key + '"]'));
         lastLight = null;
         map.setStyle(style(key));
-        credit();
       }
       function setVertical(v) {
         vertical = v;
@@ -572,6 +766,9 @@ SCRIPT = r"""
         else if (act === 'fullscreen') fullscreen();
         else if (act === 'reset') fit(true);
         else if (act === 'play') togglePlay();
+        else if (act === 'replay') openReplay(replay.hidden);
+        else if (act === 'slower' && speed > 0) { speed--; showSpeed(); }
+        else if (act === 'faster' && speed < SPEEDS.length - 1) { speed++; showSpeed(); }
         else if (act === 'whole') { whole = !whole; toggle(b, whole); refresh(); }
       });
       // Arrows, shift + arrows and + / − are MapLibre's own keyboard handler, which maps
@@ -623,7 +820,7 @@ SCRIPT = r"""
       handle.clearCursor = function () {
         cursor = null;
         if (!view.hidden) refresh();
-        return clear.apply(handle, arguments);
+        return clear ? clear.apply(handle, arguments) : undefined;
       };
 
       window.__mergedAll = window.__mergedAll || {};

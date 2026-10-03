@@ -37,3 +37,13 @@ def test_heights_are_scaled_from_sea_level_in_both_maplibre_views():
     # the track into every ridge at x2 and x4.
     assert "function z(alt) { return alt * vertical; }" in render_map.SWITCH_SCRIPT
     assert "function z(alt) { return alt * vertical; }" in map3d.SCRIPT
+
+
+def test_the_merged_view_never_shows_esri_below_its_consistent_level():
+    # Esri's levels under 12 are an older, darker mosaic: blue channel 26 against 59 over
+    # the same Dolomites ground. The merged view builds those tiles from level 12 instead.
+    from tracklog_viewer import view3d
+
+    assert view3d.TILE_SOURCES["satellite"]["consistent_from"] == 12
+    assert "maplibregl.addProtocol('m3tiles'" in map3d.SCRIPT
+    assert "source.consistent_from" in map3d.SCRIPT

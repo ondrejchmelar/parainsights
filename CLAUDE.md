@@ -779,6 +779,20 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   MapLibre facts both views now honour: terrain is exaggerated **from sea level**, so
   anything drawn over it is `alt × vertical`; and deck.gl layers sharing a point fight
   for depth, so markers and labels draw with `depthCompare: 'always'`.
+  **Esri's levels under 12 are a different, darker mosaic** (blue channel 26 against 59
+  over the same Dolomites ground; levels 12-15 agree within 1%), so a map that ever shows
+  them jumps colour as the zoom crosses the line. `TILE_SOURCES["satellite"]
+  ["consistent_from"] = 12`, and the merged view builds tiles one and two levels under
+  that from the level-12 tiles beneath them (a `m3tiles://` MapLibre protocol); only the
+  far horizon, at three levels down and more, still uses the native tiles. The canvas
+  view has the same jump on large flights, whose whole-flight mosaic falls to level 11
+  under its 120-tile budget — not fixed, because level 12 there means mosaics past iOS
+  Safari's canvas limit.
+  The merged view's controls follow the canvas's: a left drag with shift, alt or meta
+  turns and tilts as a right drag does (box zoom is off), labels are white with an
+  outline over a coloured span, and the replay is one play button in the bar that opens
+  a row with play/pause, speed (10 s/s to 20 min/s) and the slider — closing it puts the
+  whole track back.
 - **A declared task the flight did not fly is worse than no task at all.** A logger writes
   out whatever task happens to be loaded, so a `C` record is evidence of what was in
   XCTrack, not of what the pilot intended today. On `2021-07-06-XCT-ROP-01` the loaded
@@ -848,6 +862,16 @@ The numbers are checkable, so check them:
   on it; and **timing is not asserted there**, because `--virtual-time-budget` does not
   advance the clock during synchronous work and every duration comes back zero. Frame
   costs were measured over the DevTools protocol instead and written into `docs/plan.md`.
+- **No test reaches the internet, and that is enforced.** `tests/conftest.py` refuses
+  any socket to a non-loopback address, and `CHROME_FLAGS` carries a resolver rule that
+  resolves nothing but localhost. A page under test that points at a real tile server,
+  CDN or image fails where it stands. The rule was found broken by the meteo page's
+  flymet `<img>`, which every run fetched from flymet.cz; it is served locally now.
+  `unshare -rn` runs anything without a network if you want to check by hand.
+- **Why the suite takes minutes.** About 90 tests each launch a headless Chrome with
+  software WebGL, and a few of them stall for 30-50 s on any given run (which ones changes
+  run to run). One cost was not Chrome: `igc._timezone_from_position` built a fresh
+  `TimezoneFinder` per parse, 1.6-1.9 s each; it is cached per process now.
 - **Don't pipe a command whose exit code you care about** — `cmd | tail` reports tail's
   status, which once hid a `NameError` for two runs.
 

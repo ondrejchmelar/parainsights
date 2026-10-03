@@ -7,6 +7,7 @@ timezone in a base64 blob or that SkyDrop leaves the pilot name empty.
 
 import base64
 import datetime as dt
+import functools
 import json
 import re
 import zoneinfo
@@ -198,6 +199,15 @@ def _timezone_from_l_records(l_records: list[str]) -> tuple[dt.tzinfo, str] | No
         return None
 
 
+@functools.cache
+def _timezone_finder():
+    """One finder per process. Building one loads its boundary dataset, 1.6-1.9 s, and
+    it used to be built afresh for every file parsed — which is most of what a test of a
+    synthetic 200 s flight spent its time on. The lookup itself is microseconds."""
+    from timezonefinder import TimezoneFinder
+    return TimezoneFinder()
+
+
 def _timezone_from_position(lat: float, lon: float) -> tuple[dt.tzinfo, str] | None:
     """Fall back to looking the timezone up from the take-off coordinates.
 
@@ -206,10 +216,10 @@ def _timezone_from_position(lat: float, lon: float) -> tuple[dt.tzinfo, str] | N
     records a timezone at all.
     """
     try:
-        from timezonefinder import TimezoneFinder
+        finder = _timezone_finder()
     except ImportError:
         return None
-    name = TimezoneFinder().timezone_at(lat=lat, lng=lon)
+    name = finder.timezone_at(lat=lat, lng=lon)
     if not name:
         return None
     return zoneinfo.ZoneInfo(name), f"position ({name})"

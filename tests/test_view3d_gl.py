@@ -34,6 +34,10 @@ CHROME_FLAGS = [
     "--headless", "--disable-gpu", "--no-sandbox", "--window-size=1280,900",
     "--virtual-time-budget=20000", "--enable-unsafe-swiftshader",
     "--use-gl=angle", "--use-angle=swiftshader", "--dump-dom",
+    # No test reaches the internet. Every host but this machine resolves to nothing, so a
+    # page under test that still points at a real tile server, CDN or image fails here
+    # rather than quietly downloading on every run (flymet's meteogram did, for months).
+    "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1",
 ]
 
 

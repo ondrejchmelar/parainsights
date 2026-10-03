@@ -495,9 +495,23 @@ SWITCH_SCRIPT = (
     return libraries;
   }
 
+  // The canvas view's handle where it came up; otherwise a stand-in carrying the scene
+  // from the panel's own data. MapLibre fetches its own ground, so a canvas view that
+  // failed to fetch terrain must not take the other two renderers down with it — there is
+  // just no linked cursor to follow until the canvas exists.
   function handleFor(host) {
     var canvas = host.querySelector('canvas.view3d');
-    return canvas && window.__view3dAll ? window.__view3dAll[canvas.id] : null;
+    var real = canvas && window.__view3dAll ? window.__view3dAll[canvas.id] : null;
+    if (real) return real;
+    if (host.__standIn) return host.__standIn;
+    var data = host.querySelector('.view3d-data');
+    try {
+      var scene = data && JSON.parse(data.textContent);
+      if (!scene || !scene.track || !scene.track.lon || !scene.track.lon.length) return null;
+      return (host.__standIn = { built: { scene: scene, cursorTrack: null } });
+    } catch (error) {
+      return null;
+    }
   }
 
   // The track cut into runs of one colour, which is what a PathLayer wants: the canvas
@@ -755,7 +769,7 @@ SWITCH_SCRIPT = (
       handle.clearCursor = function () {
         cursor = null;
         if (!view.hidden) refresh();
-        return clear.apply(handle, arguments);
+        return clear ? clear.apply(handle, arguments) : undefined;
       };
       window.__maplibreAll = window.__maplibreAll || {};
       window.__maplibreAll[panel.querySelector('canvas.view3d').id] = {

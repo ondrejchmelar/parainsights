@@ -7,16 +7,20 @@ the only way this page can actively mislead somebody. So is everything the sound
 about the air, and for the same reason.
 """
 
+import base64
+import contextlib
 import datetime as dt
+import http.server
 import json
 import re
 import subprocess
 import tempfile
+import threading
 from pathlib import Path
 
 import pytest
 
-from meteo import cli, render_html, sites
+from meteo import cli, render_html, sites, sources
 from tests.test_view3d_gl import CHROME, CHROME_FLAGS, needs_chrome
 
 
@@ -362,6 +366,37 @@ def _as_two_models(profile: dict) -> dict:
     return {**profile, "hourly": hourly}
 
 
+# A 1 x 1 PNG for every flymet meteogram the page asks for. The page loads flymet's
+# picture as an <img>, which the `fetch` stub cannot answer: left pointing at flymet.cz,
+# every run of these tests reached the internet, and offline the image failed, the page
+# swapped its caption for "flymet has no meteogram", and a test failed for a reason that
+# had nothing to do with the code.
+_PIXEL = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")
+_FLYMET_HOST = sources.FLYMET_INDEX.split("/meteogram/")[0]
+
+
+@contextlib.contextmanager
+def _local_flymet():
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Content-Length", str(len(_PIXEL)))
+            self.end_headers()
+            self.wfile.write(_PIXEL)
+
+        def log_message(self, *args):
+            pass
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}"
+    finally:
+        server.shutdown()
+
+
 def _probe_page(body: str, *, site_count: int = 3) -> dict:
     """Run the real meteo page against a stubbed Open-Meteo and return what `body` says."""
     chrome = CHROME
@@ -395,6 +430,7 @@ def _probe_page(body: str, *, site_count: int = 3) -> dict:
     </script>
     """ % (profile, surface, json.dumps(_FAKE_META))
     page = cli.page(render_html.body(), "Meteo")
+    assert _FLYMET_HOST in page, "flymet's host moved; this test rewrites it by hand"
     probe = """
     <pre id="probe-out"></pre>
     <script>
@@ -406,9 +442,9 @@ def _probe_page(body: str, *, site_count: int = 3) -> dict:
     }, 700); });
     </script>
     """ % body
-    with tempfile.TemporaryDirectory() as folder:
+    with tempfile.TemporaryDirectory() as folder, _local_flymet() as flymet:
         target = Path(folder) / "meteo.html"
-        target.write_text(stub + page + probe, encoding="utf-8")
+        target.write_text(stub + page.replace(_FLYMET_HOST, flymet) + probe, encoding="utf-8")
         out = subprocess.run([chrome, *CHROME_FLAGS, target.as_uri()],
                              capture_output=True, text=True, timeout=180).stdout
     found = re.search(r'<pre id="probe-out">(.*?)</pre>', out, re.S)
