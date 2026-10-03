@@ -434,6 +434,8 @@ def switch_html() -> str:
         ' aria-pressed="true">canvas</button>'
         '<button type="button" class="toggle-button" data-renderer="maplibre"'
         ' aria-pressed="false">MapLibre</button>'
+        '<button type="button" class="toggle-button" data-renderer="merged"'
+        ' aria-pressed="false">merged</button>'
         "</div>"
     )
 
@@ -479,7 +481,9 @@ SWITCH_SCRIPT = (
     });
   }
 
-  // Once per page, however many flights switch.
+  // Once per page, however many flights switch — and shared with `map3d`'s merged view.
+  window.__mapTerrarium = TERRARIUM;
+  window.__mapLibs = libs;
   function libs() {
     if (!libraries) {
       libraries = Promise.all([
@@ -633,10 +637,9 @@ SWITCH_SCRIPT = (
                     times: hasTime ? tr.t : [] }];
       var cutoff = duration, whole = true, cursor = null;
 
-      // Heights are the flight's own; the terrain under them is exaggerated, so the track
-      // is lifted by the same factor about the lowest ground or it would sink into hills.
-      var base = dem.min != null ? dem.min : 0;
-      function z(alt) { return base + (alt - base) * vertical; }
+      // MapLibre exaggerates the terrain from sea level, so the track is scaled the same
+      // way or it would float over the valleys and sink into the ridges.
+      function z(alt) { return alt * vertical; }
 
       function layers() {
         var out = [];
@@ -778,20 +781,25 @@ SWITCH_SCRIPT = (
       b.classList.toggle('is-on', on);
       b.setAttribute('aria-pressed', String(on));
     });
-    if (want === 'maplibre') {
-      if (!handle || !handle.built) {
-        // An upload whose view is still loading: nothing to draw from yet.
-        host.querySelector('[data-renderer="canvas"]').click();
-        return;
-      }
-      if (!host.__maplibre || host.__maplibre.handle !== handle) {
-        if (host.__maplibre) host.__maplibre.api.view.remove();
-        host.__maplibre = { handle: handle, api: mount(host, handle) };
-      }
-      host.__maplibre.api.show();
-    } else if (host.__maplibre) {
-      host.__maplibre.api.hide();
+    var mounts = { maplibre: mount, merged: window.__mountMerged };
+    if (want !== 'canvas' && (!handle || !handle.built || !mounts[want])) {
+      // An upload whose view is still loading: nothing to draw from yet.
+      host.querySelector('[data-renderer="canvas"]').click();
+      return;
     }
+    // One overlay per renderer, kept once built: switching back is instant and the camera
+    // is where it was left. Rebuilt only when the panel underneath is a new one.
+    host.__renderers = host.__renderers || {};
+    Object.keys(host.__renderers).forEach(function (key) {
+      if (key !== want) host.__renderers[key].api.hide();
+    });
+    if (want === 'canvas') return;
+    var built = host.__renderers[want];
+    if (!built || built.handle !== handle) {
+      if (built) built.api.view.remove();
+      built = host.__renderers[want] = { handle: handle, api: mounts[want](host, handle) };
+    }
+    built.api.show();
   });
 })();
 """

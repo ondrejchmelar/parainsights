@@ -268,7 +268,8 @@ geometry in a renderer, no rendering in the analysis.
 | `view3d.py` | The 3D view: camera, gestures, tiles, track overlay — and a canvas 2D heightfield as the fallback |
 | `view3d_gl.py` | WebGL heightfield, registered as a backend for `view3d.py` |
 | `render_kmz.py` | Google Earth KMZ: LOD folders, balloons, animation, local charts |
-| `render_map.py` | Richer 3D map (MapLibre + deck.gl); needs network at view time. Also a second renderer in the report, behind a canvas/MapLibre switch |
+| `render_map.py` | Richer 3D map (MapLibre + deck.gl); needs network at view time. Also the report's renderer switch and the shared MapLibre loader |
+| `map3d.py` | The merged 3D map: MapLibre's engine under the canvas view's controls, rose, labels, airspace and shading |
 | `render_html.py` | The report; `quicklook.py` is its in-browser sibling |
 | `quicklook.py` | Reduced analysis in JavaScript, for a track the reader supplies; its own DEM fetch and linked cursor |
 | `cli.py` | Argument handling and orchestration |
@@ -764,6 +765,20 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   by wrapping that handle's `setCursor`/`revealCursor`/`clearCursor`. It adds a replay
   slider, which is why `scene.track` carries `t` (seconds since the first fix). MapLibre
   and deck.gl are loaded from unpkg on the first switch, never before.
+  **The switch is three-way now — `canvas | MapLibre | merged` — and the merged view is
+  where this is heading** (it is to replace both, everywhere, once compared).
+  `map3d.py` keeps from MapLibre the whole planet, streamed tiles and the replay; and
+  from the canvas the control bar and its keys, the sun and wind rose, the climb and
+  glide labels, the airspace boxes and the imagery treatment. That last one is the
+  canvas's hillshade *colours* — warm white (255, 252, 242) on sunlit slopes, dark blue
+  (18, 26, 38) in shadow, lit from the sun's real azimuth and following the cursor —
+  through MapLibre's `hillshade-highlight-color`/`-shadow-color`; its default black and
+  white is what greyed the photograph. The DEM and the photograph are declared at
+  `tileSize: 128` so MapLibre asks one zoom deeper (4x the tiles): at their natural size
+  it picks a DEM ~4x coarser than the canvas's grid and the relief reads flat. Two
+  MapLibre facts both views now honour: terrain is exaggerated **from sea level**, so
+  anything drawn over it is `alt × vertical`; and deck.gl layers sharing a point fight
+  for depth, so markers and labels draw with `depthCompare: 'always'`.
 - **A declared task the flight did not fly is worse than no task at all.** A logger writes
   out whatever task happens to be loaded, so a `C` record is evidence of what was in
   XCTrack, not of what the pilot intended today. On `2021-07-06-XCT-ROP-01` the loaded

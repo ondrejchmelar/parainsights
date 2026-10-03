@@ -20,7 +20,7 @@ from pathlib import Path
 import parainsights_common as common
 
 from . import (airmass, certification, charts, charts_client, debrief, geo, insolation,
-               metrics, quicklook, render_map, terrain as terrain_module, view3d,
+               map3d, metrics, quicklook, render_map, terrain as terrain_module, view3d,
                view3d_gl)
 from numpy import asarray as np_asarray, median as np_median
 from .analysis import TURN_RESOLUTION_LIMIT, Analysis, Phase
@@ -1402,8 +1402,10 @@ var flightTabs = (function () {
           if (handle && handle.dispose) handle.dispose();
           delete window.__view3dAll[canvas.id];
           // The MapLibre renderer, where the reader switched to it, holds a context too.
-          var other = window.__maplibreAll && window.__maplibreAll[canvas.id];
-          if (other) { other.map.remove(); delete window.__maplibreAll[canvas.id]; }
+          ['__maplibreAll', '__mergedAll'].forEach(function (registry) {
+            var other = window[registry] && window[registry][canvas.id];
+            if (other) { other.map.remove(); delete window[registry][canvas.id]; }
+          });
         });
       }
       report.parentNode.removeChild(report);
@@ -2882,7 +2884,7 @@ def _page(title: str, bodies: list[str], tabs: str = "", extras: "list[Extra]" =
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{charts.escape(title)}</title>
 <script>{common.THEME_BOOT}</script>
-<style>{_font_face()}{STYLE}{view3d.STYLE}{view3d_gl.STYLE}{render_map.SWITCH_STYLE}{quicklook.STYLE}{charts_client.STYLE}
+<style>{_font_face()}{STYLE}{view3d.STYLE}{view3d_gl.STYLE}{render_map.SWITCH_STYLE}{map3d.STYLE}{quicklook.STYLE}{charts_client.STYLE}
 {VIEW_STYLE if extras else ""}{"".join(e.style for e in extras)}</style>
 <div class="wrap">
 {_view_nav(extras)}
@@ -2893,6 +2895,7 @@ def _page(title: str, bodies: list[str], tabs: str = "", extras: "list[Extra]" =
 <script>{view3d.SCRIPT}
 {view3d_gl.SCRIPT}
 {render_map.SWITCH_SCRIPT}
+{map3d.SCRIPT}
 {charts_client.SCRIPT}
 {SCRIPT}</script>
 <script>{quicklook.SCRIPT}</script>
