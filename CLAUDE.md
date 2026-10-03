@@ -791,8 +791,13 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   The merged view's controls follow the canvas's: a left drag with shift, alt or meta
   turns and tilts as a right drag does (box zoom is off), labels are white with an
   outline over a coloured span, and the replay is one play button in the bar that opens
-  the slider (full width) with play/pause, speed (10 s/s to 20 min/s) and whole-track
-  under it at the left — closing it puts the whole track back. Climbs are dots, not
+  a **from-to range** (two handles on one bar, full width) with play/pause and speed
+  (10 s/s to 20 min/s) under it at the left. The track is drawn only between the handles
+  — the left one hides the start of a flight that overlaps itself, the right one is the
+  replay's "now" — by a `TripsLayer` per colour run with `trailLength = to − from` and no
+  fade; climbs, phase labels and the landing follow the same window (each given the time
+  of its nearest fix). Both handles at the ends is the whole track, a double click puts
+  them there, and closing the replay does too. Climbs are dots, not
   numbers, and the track is the canvas's width (2.6 px over the device ratio, capped at
   2). **Ground and exaggeration are one cycling button each**, against the canvas's
   segmented groups, because the merged bar has to fit one row on a phone.

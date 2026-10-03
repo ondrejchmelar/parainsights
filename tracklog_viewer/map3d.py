@@ -51,7 +51,26 @@ STYLE = """
 .merged-view .m3-time { flex: 1 1 100%; display: flex; gap: 8px; align-items: center;
   background: var(--panel); border: 1px solid var(--rule); border-radius: 2px;
   padding: 3px 9px; font-size: 12px; color: var(--ink); font-variant-numeric: tabular-nums; }
-.merged-view .m3-time input { flex: 1; accent-color: var(--climb); }
+.merged-view .m3-clock { white-space: nowrap; }
+/* Two range inputs stacked on one track: each input ignores the pointer and only its
+   thumb takes it, so either handle can be grabbed wherever the two sit. */
+.merged-view .m3-range { position: relative; flex: 1; height: 22px; }
+.merged-view .m3-range::before { content: ""; position: absolute; left: 0; right: 0; top: 9px;
+  height: 4px; border-radius: 2px; background: var(--rule); }
+.merged-view .m3-fill { position: absolute; top: 9px; height: 4px; border-radius: 2px;
+  background: var(--climb); }
+.merged-view .m3-range input { position: absolute; left: 0; top: 0; width: 100%; height: 22px;
+  margin: 0; background: none; pointer-events: none; -webkit-appearance: none; appearance: none; }
+.merged-view .m3-range input::-webkit-slider-runnable-track { background: none; height: 22px; }
+.merged-view .m3-range input::-moz-range-track { background: none; }
+.merged-view .m3-range input::-webkit-slider-thumb { -webkit-appearance: none; appearance: none;
+  pointer-events: auto; width: 16px; height: 16px; margin-top: 3px; border-radius: 50%;
+  background: var(--paper, #fff); border: 2px solid var(--climb); cursor: grab; }
+.merged-view .m3-range input::-moz-range-thumb { pointer-events: auto; width: 12px; height: 12px;
+  border-radius: 50%; background: var(--paper, #fff); border: 2px solid var(--climb); cursor: grab; }
+@media (pointer: coarse) {
+  .merged-view .m3-range input::-webkit-slider-thumb { width: 22px; height: 22px; margin-top: 0; }
+}
 .merged-view .m3-status { position: absolute; left: 12px; top: 34px; z-index: 3; margin: 0;
   font-size: 12px; color: var(--ink-2); }
 /* MapLibre's own credits, the openable kind: an (i) at the top left that opens to name
@@ -92,19 +111,24 @@ SCRIPT = r"""
   }
 
   // The track as runs of one colour: the palette index per fix is the canvas view's own.
+  // Each run carries its fixes' times too, so the track can be cut to a window of the
+  // flight (the from-to slider) by a TripsLayer rather than rebuilt on every drag.
   function segments(scene) {
-    var tr = scene.track, out = [], run = [], colour = null;
+    var tr = scene.track, out = [], run = [], times = [], colour = null;
+    var t = tr.t || [];
     for (var i = 0; i < tr.lon.length; i++) {
       var point = [tr.lon[i], tr.lat[i], tr.alt[i]];
       run.push(point);
+      times.push(t[i] || 0);
       if (colour === null) colour = tr.c[i];
       if (tr.c[i] !== colour) {
-        if (run.length > 1) out.push({ path: run, colour: scene.palette[colour] });
+        if (run.length > 1) out.push({ path: run, times: times, colour: scene.palette[colour] });
         run = [point];
+        times = [t[i] || 0];
         colour = tr.c[i];
       }
     }
-    if (run.length > 1) out.push({ path: run, colour: scene.palette[colour] });
+    if (run.length > 1) out.push({ path: run, times: times, colour: scene.palette[colour] });
     return out;
   }
 
@@ -219,9 +243,17 @@ SCRIPT = r"""
       // flight, and a slider parked at the end is a row of nothing.
       '<div class="m3-bottom">' +
       (hasTime ?
-        '<label class="m3-time" hidden><span class="m3-clock"></span>' +
-          '<input type="range" min="0" max="' + duration + '" step="1" value="' + duration + '"' +
-          ' aria-label="Replay time"></label>' +
+        // Two handles on one bar: the track is drawn between them. Left hides the start of
+        // the flight where it overlaps the rest; right is the replay's "now". Both at the
+        // ends is the whole track, and a double click puts them there.
+        '<div class="m3-time" hidden><span class="m3-clock"></span>' +
+          '<div class="m3-range" title="Drag either end; double-click for the whole flight">' +
+            '<div class="m3-fill"></div>' +
+            '<input type="range" class="m3-from" min="0" max="' + duration + '" step="1" value="0"' +
+            ' aria-label="Show the track from">' +
+            '<input type="range" class="m3-to" min="0" max="' + duration + '" step="1"' +
+            ' value="' + duration + '" aria-label="Show the track to">' +
+          '</div></div>' +
         '<div class="m3-replay" hidden>' +
           '<button type="button" data-m3="play" class="m3-icon" aria-pressed="false"' +
           ' title="Play / pause (space)" aria-label="Play">' + PLAY_ICON + '</button>' +
@@ -230,8 +262,6 @@ SCRIPT = r"""
             '<span class="m3-rate" aria-live="polite"></span>' +
             '<button type="button" data-m3="faster" title="Faster" aria-label="Faster">+</button>' +
           '</div>' +
-          '<button type="button" data-m3="whole" class="is-on" aria-pressed="true"' +
-          ' title="Show the whole track behind the replay">whole track</button>' +
         '</div>' : '') +
       '<div class="view3d-controls" hidden>' +
         // One button each, naming what is on and stepping to the next: two segmented
@@ -285,7 +315,7 @@ SCRIPT = r"""
       var replay = view.querySelector('.m3-replay');
       var timeRow = view.querySelector('.m3-time');
 
-      var vertical = 1, whole = true, cursor = null, cutoff = duration;
+      var vertical = 1, cursor = null, from = 0, cutoff = duration;
       var labels = { climb: false, glide: false }, airspaceOn = false;
       var sunMinute = sun ? sun.at : null;
       var lines = segments(scene);
@@ -469,8 +499,24 @@ SCRIPT = r"""
       // ---- what is drawn over it -----------------------------------------------------
       // The canvas view's labels: the phase as a span from where it began to where it
       // ended, dots at both ends, and its numbers in white over the middle — no box.
+      // When a point on the track was flown: the time of the nearest fix. The climbs and
+      // the phases arrive as places, not times, and the from-to window hides by time.
+      function flownAt(lon, lat) {
+        if (!hasTime) return 0;
+        var best = 0, bestD = Infinity;
+        for (var i = 0; i < tr.lon.length; i++) {
+          var d = (tr.lon[i] - lon) * (tr.lon[i] - lon) + (tr.lat[i] - lat) * (tr.lat[i] - lat);
+          if (d < bestD) { bestD = d; best = i; }
+        }
+        return tr.t[best];
+      }
+      function inWindow(t) { return !hasTime || (t >= from - 1 && t <= cutoff + 1); }
+      var marks = (scene.climbs || []).map(function (c) {
+        return { label: c.label, tow: c.tow, position: [c.lon, c.lat, c.alt], t: flownAt(c.lon, c.lat) };
+      });
       var phaseLabels = (scene.phases || []).map(function (p) {
         return { kind: p.kind, text: p.text,
+                 t: [flownAt(p.lon[0], p.lat[0]), flownAt(p.lon[1], p.lat[1])],
                  colour: p.kind === 'climb' ? [235, 104, 52, 242] : [42, 120, 214, 242],
                  ends: [[p.lon[0], p.lat[0], p.alt[0]], [p.lon[1], p.lat[1], p.alt[1]]],
                  position: [(p.lon[0] + p.lon[1]) / 2, (p.lat[0] + p.lat[1]) / 2,
@@ -512,43 +558,53 @@ SCRIPT = r"""
             getWidth: 1.2, widthUnits: 'pixels', updateTriggers: { data: vertical }
           }));
         }
-        if (whole || !hasTime) out.push(new deck.PathLayer({
+        if (!hasTime) out.push(new deck.PathLayer({
           id: 'track', data: lines,
           getPath: function (d) { return d.path.map(function (p) { return [p[0], p[1], z(p[2])]; }); },
           getColor: function (d) { return d.colour; }, getWidth: TRACK_WIDTH, widthUnits: 'pixels',
           capRounded: true, jointRounded: true, billboard: true,
           updateTriggers: { getPath: vertical }
         }));
+        // The track between the two handles, in its climb colours: a trip whose "now" is
+        // the right handle and whose trail reaches back to the left one, unfaded.
         if (hasTime) out.push(new deck.TripsLayer({
+          id: 'track', data: lines,
+          getPath: function (d) { return d.path.map(function (p) { return [p[0], p[1], z(p[2])]; }); },
+          getTimestamps: function (d) { return d.times; },
+          getColor: function (d) { return d.colour; }, getWidth: TRACK_WIDTH, widthUnits: 'pixels',
+          currentTime: cutoff, trailLength: Math.max(cutoff - from, 0) + 0.5, fadeTrail: false,
+          capRounded: true, jointRounded: true, updateTriggers: { getPath: vertical }
+        }));
+        // While the replay runs, its leading edge: the last seven minutes in white.
+        if (hasTime && replay && !replay.hidden) out.push(new deck.TripsLayer({
           id: 'replay', data: [{ path: tr.lon.map(function (lon, i) { return [lon, tr.lat[i], tr.alt[i]]; }),
                                  times: tr.t }],
           getPath: function (d) { return d.path.map(function (p) { return [p[0], p[1], z(p[2])]; }); },
           getTimestamps: function (d) { return d.times; },
           getColor: [255, 255, 255], getWidth: TRACK_WIDTH * 1.5, widthUnits: 'pixels',
-          trailLength: whole ? 420 : duration + 1, currentTime: cutoff,
+          trailLength: Math.min(420, Math.max(cutoff - from, 0)), currentTime: cutoff,
           capRounded: true, jointRounded: true, updateTriggers: { getPath: vertical }
         }));
-        var marks = (scene.climbs || []).map(function (c) {
-          return { label: c.label, tow: c.tow, position: [c.lon, c.lat, c.alt] };
-        });
         // Where each climb was, as a dot: the numbers crowded the track and said nothing
         // the climbs table does not.
         out.push(new deck.ScatterplotLayer({
-          id: 'climbs', data: marks,
+          id: 'climbs', data: marks.filter(function (d) { return inWindow(d.t); }),
           getPosition: function (d) { return [d.position[0], d.position[1], z(d.position[2])]; },
           getFillColor: function (d) { return d.tow ? [27, 175, 122] : [226, 96, 44]; },
           getLineColor: [255, 255, 255, 220], stroked: true, lineWidthMinPixels: 1,
           radiusUnits: 'pixels', getRadius: 4, billboard: true, updateTriggers: { getPosition: vertical },
           parameters: ON_TOP
         }));
-        if (scene.landing) out.push(new deck.ScatterplotLayer({
+        if (scene.landing && inWindow(duration)) out.push(new deck.ScatterplotLayer({
           id: 'landing', data: [scene.landing],
           getPosition: function (d) { return [d.lon, d.lat, z(d.alt)]; },
           getFillColor: [20, 22, 26], getLineColor: [255, 255, 255], stroked: true,
           lineWidthMinPixels: 2, radiusUnits: 'pixels', getRadius: 6, billboard: true,
           updateTriggers: { getPosition: vertical }, parameters: ON_TOP
         }));
-        var shown = phaseLabels.filter(function (p) { return labels[p.kind]; });
+        var shown = phaseLabels.filter(function (p) {
+          return labels[p.kind] && inWindow(p.t[0]) && inWindow(p.t[1]);
+        });
         if (shown.length) {
           var lift = function (p) { return [p[0], p[1], z(p[2])]; };
           out.push(new deck.PathLayer({
@@ -662,7 +718,8 @@ SCRIPT = r"""
       }
 
       // ---- replay ----------------------------------------------------------------------
-      var slider = view.querySelector('.m3-time input');
+      var fromInput = view.querySelector('.m3-from'), toInput = view.querySelector('.m3-to');
+      var fill = view.querySelector('.m3-fill');
       var clockLabel = view.querySelector('.m3-clock');
       function clockAt(seconds) {
         if (sun && sun.launch !== undefined) {
@@ -673,16 +730,33 @@ SCRIPT = r"""
         var e = Math.floor(seconds / 60);
         return '+' + Math.floor(e / 60) + ':' + pad(e % 60);
       }
+      function showRange() {
+        if (!fromInput) return;
+        fromInput.value = from;
+        toInput.value = cutoff;
+        fill.style.left = (from / duration * 100) + '%';
+        fill.style.right = (100 - cutoff / duration * 100) + '%';
+        clockLabel.textContent = clockAt(from) + ' – ' + clockAt(cutoff);
+      }
+      // The right handle: the replay's "now", and the moment the sun is lit for.
       function setTime(seconds) {
-        cutoff = seconds;
-        if (slider) slider.value = seconds;
-        if (clockLabel) clockLabel.textContent = clockAt(seconds);
-        if (sun && sun.launch !== undefined) sunTo(sun.launch + seconds / 60);
+        cutoff = Math.max(seconds, from);
+        showRange();
+        if (sun && sun.launch !== undefined) sunTo(sun.launch + cutoff / 60);
         refresh();
       }
-      if (slider) {
-        clockLabel.textContent = clockAt(duration);
-        slider.addEventListener('input', function () { pause(); setTime(Number(slider.value)); });
+      function setFrom(seconds) {
+        from = Math.min(Math.max(seconds, 0), cutoff);
+        showRange();
+        refresh();
+      }
+      if (fromInput) {
+        fromInput.addEventListener('input', function () { pause(); setFrom(Number(fromInput.value)); });
+        toInput.addEventListener('input', function () { pause(); setTime(Number(toInput.value)); });
+        view.querySelector('.m3-range').addEventListener('dblclick', function () {
+          pause(); from = 0; setTime(duration);
+        });
+        showRange();
       }
       // Seconds of flight per second of replay. Two minutes a second is where it opens:
       // a three-hour flight in a minute and a half, a single climb still watchable.
@@ -702,7 +776,8 @@ SCRIPT = r"""
         var dt = last ? (now - last) / 1000 : 0;
         last = now;
         var next = cutoff + dt * SPEEDS[speed];
-        setTime(next > duration ? 0 : next);
+        // At the end it starts again from the left handle, not from launch.
+        setTime(next > duration ? from : next);
         if (playing) frame = requestAnimationFrame(step);
       }
       function togglePlay() {
@@ -713,21 +788,19 @@ SCRIPT = r"""
         playing = true; last = 0;
         b.innerHTML = PAUSE_ICON; b.classList.add('is-on');
         b.setAttribute('aria-pressed', 'true'); b.setAttribute('aria-label', 'Pause');
-        if (cutoff >= duration) setTime(0);
+        if (cutoff >= duration) setTime(from);
         frame = requestAnimationFrame(step);
       }
-      // One button opens the whole replay and closing it puts the flight back as it was:
-      // whole track, no trail, the time at the end.
+      // One button opens the replay and closing it puts the flight back as it was: the
+      // whole track, no trail.
       function openReplay(on) {
         var toggle = view.querySelector('[data-m3="replay"]');
         toggle.classList.toggle('is-on', on);
         toggle.setAttribute('aria-pressed', String(on));
         replay.hidden = timeRow.hidden = !on;
-        if (on) { setTime(0); togglePlay(); return; }
+        if (on) { from = 0; setTime(0); togglePlay(); return; }
         pause();
-        whole = true;
-        var w = view.querySelector('[data-m3="whole"]');
-        w.classList.add('is-on'); w.setAttribute('aria-pressed', 'true');
+        from = 0;
         setTime(duration);
       }
 
@@ -811,7 +884,6 @@ SCRIPT = r"""
         else if (act === 'replay') openReplay(replay.hidden);
         else if (act === 'slower' && speed > 0) { speed--; showSpeed(); }
         else if (act === 'faster' && speed < SPEEDS.length - 1) { speed++; showSpeed(); }
-        else if (act === 'whole') { whole = !whole; toggle(b, whole); refresh(); }
       });
       // Arrows, shift + arrows and + / − are MapLibre's own keyboard handler, which maps
       // them the way the canvas view does. These are the rest of the canvas's keys.
@@ -867,7 +939,7 @@ SCRIPT = r"""
 
       window.__mergedAll = window.__mergedAll || {};
       window.__mergedAll[panel.querySelector('canvas.view3d').id] = {
-        map: map, setTime: setTime, cursor: function () { return cursor; },
+        map: map, setTime: setTime, setFrom: setFrom, cursor: function () { return cursor; },
         setBasemap: setBasemap, setVertical: setVertical,
         state: function () {
           return { basemap: basemap, vertical: vertical, labels: labels, airspace: airspaceOn,

@@ -94,8 +94,17 @@ _PROBE = """
                              json: function () { return Promise.resolve(answer); } });
   };
 })();
+// Waits for the request rather than a fixed time: the report asks from an idle callback,
+// and under a loaded parallel run that came after a fixed 4 s often enough to fail.
+function whenAsked(done) {
+  var started = Date.now();
+  (function poll() {
+    if (window.__askedFor || Date.now() - started > 15000) { setTimeout(done, 500); return; }
+    setTimeout(poll, 100);
+  })();
+}
 window.addEventListener('load', function () {
-  setTimeout(function () {
+  whenAsked(function () {
     var out = {};
     try {
       var svg = document.querySelector('.chart-wind');
@@ -138,7 +147,7 @@ window.addEventListener('load', function () {
       out.error = String((error && error.stack) || error);
     }
     document.getElementById('probe-out').textContent = JSON.stringify(out);
-  }, 4000);
+  });
 });
 </script>
 """
