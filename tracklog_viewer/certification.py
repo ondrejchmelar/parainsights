@@ -265,6 +265,39 @@ def lookup(header: str, table=None) -> "Certification | None":
 _CACHE: dict | None = None
 
 
+def compact(table=None) -> dict:
+    """Every answer `lookup` can give, precomputed, for the page.
+
+    The page looks a glider up for a track the reader uploads, and shipping the 6 000-row
+    register and the rules to pick from it would be 720 KB and a second copy of `_pick`.
+    The answer for a key depends only on the rows under that key, so it is decided here,
+    once, and the page keeps only what turns a header into a key — `normalise` and
+    `_split_brand`, which `js/certification.js` ports and the parity harness compares.
+    An answer is [label, register name, certificate, register]; -1 is a refusal.
+    """
+    table = _table() if table is None else table
+    answers: list[list[str]] = []
+    seen: dict[tuple, int] = {}
+
+    def keep(entry) -> int:
+        if entry is None:
+            return -1
+        row = (entry.label, entry.name, entry.certificate, entry.source)
+        if row not in seen:
+            seen[row] = len(answers)
+            answers.append(list(row))
+        return seen[row]
+
+    by_brand = {f"{brand}\t{model}": keep(_pick(rows))
+                for (brand, model), rows in table["by_brand"].items()}
+    by_model = {}
+    for model, loose in table["by_model"].items():
+        single = len({maker for maker, _ in loose}) == 1
+        by_model[model] = keep(_pick([entry for _, entry in loose])) if single else -1
+    return {"answers": answers, "brands": sorted(table["brands"]),
+            "company": sorted(table["company"]), "by_brand": by_brand, "by_model": by_model}
+
+
 def vocabulary(entries: list) -> tuple[set, set]:
     """(brands, company words) — both read out of the registers, neither typed here.
 

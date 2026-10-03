@@ -174,6 +174,44 @@ def test_kml_and_kmz_match_too(tmp_path):
         assert result == [], (name, result if isinstance(result, str) else "\n".join(result[:20]))
 
 
+@needs_node
+def test_the_glider_class_lookup_matches(tmp_path):
+    """The page's lookup against Python's, over every name in both registers and the ways
+    a logger writes them: case, a size left off, a number run into the name, no brand.
+    The answers themselves come from `certification.compact()`; what is compared is the
+    half the page runs — turning a header into a key."""
+    import json
+    import re
+    import subprocess
+
+    from tracklog_viewer import certification
+    from tracklog_viewer.gliders import GLIDERS
+
+    names = {"", "OZONE", "Ozone Zeolite 2", "GIN GLIDERS Bonanza 2", "Advance Sigma 10",
+             "SKY PARAGLIDERS Apollo", "Apollo", "Rush 6", "Nova Mentor 7 &amp; light"}
+    for row in GLIDERS:
+        n = row[0]
+        names.update({n, n.upper(), re.sub(r"\s+\S+$", "", n), re.sub(r"\s+(\d)", r"\1", n),
+                      " ".join(n.split()[1:])})
+    names = sorted(names)
+    want = [None if (w := certification.lookup(n)) is None else
+            {"label": w.label, "name": w.name, "certificate": w.certificate, "source": w.source}
+            for n in names]
+    runner = tmp_path / "lookup.js"
+    runner.write_text(
+        "global.TV = {};\n"
+        f"require({json.dumps(str(js_parity.RUNNER.parent / 'certification.js'))});\n"
+        "var input = JSON.parse(require('fs').readFileSync(0, 'utf8'));\n"
+        "process.stdout.write(JSON.stringify(input.names.map(function (n) {"
+        " return TV.certification.lookup(n, input.table); })));\n")
+    got = json.loads(subprocess.run(
+        ["node", str(runner)], input=json.dumps({"names": names, "table": certification.compact()}),
+        capture_output=True, text=True, check=True).stdout)
+    differ = [(n, a, b) for n, a, b in zip(names, want, got) if a != b]
+    assert not differ, differ[:5]
+    assert sum(w is not None for w in want) > 1000, "the lookup stopped answering"
+
+
 def test_differences_are_reported_by_path():
     """The comparison itself: a mismatch names where it is and what each side said."""
     assert js_parity.differences({"a": [1, 2.0]}, {"a": [1, 2.0]}) == []

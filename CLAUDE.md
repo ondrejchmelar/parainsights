@@ -966,7 +966,10 @@ the font stays inlined because it is one request for a document's whole appearan
      (`Terrain.at` and `clearance` on the page's own grid shape), `insolation.js`,
      `plan.js` (C-record tasks and sidecar JSON), `kml.js` (gx:Track and timed
      placemarks, with its own small XML and ZIP readers — `DOMParser` does not exist in
-     Node, and KMZ inflation is the browser's `DecompressionStream`).
+     Node, and KMZ inflation is the browser's `DecompressionStream`), `certification.js`
+     (the header-to-key half; every answer is precomputed by `certification.compact()`,
+     217 KB / 50 KB gzipped, fetched beside the page only when an upload needs it —
+     identical to `lookup` over 35 739 register names and logger spellings).
      `uv run python -m tracklog_viewer.js_parity ~/Downloads` runs both over every IGC
      there and compares field for field — the analysis, the route, every metric and the
      debrief with and without terrain and weather (synthetic ground and cloudbase, the
@@ -975,8 +978,7 @@ the font stays inlined because it is one request for a document's whole appearan
      identical** (a file one side refuses, the other must refuse too). `tests/test_js_parity.py` does the same on
      synthetic flights in CI. Timezone from take-off position is the one gap — the
      harness hands Python's timezonefinder answer to the JS (`positionZone`); the page
-     needs its own lookup. Still to port: `certification` (and `gliders.py` as
-     data) and `meteo`'s reading of the profile.
+     needs its own lookup. Still to port: `meteo`'s reading of the profile.
   2. The per-flight article (`_flight_body`, the SVG charts) in JavaScript.
   3. The showcase flights through the same path; then retire the Python analysis and
      `quicklook.py`.
