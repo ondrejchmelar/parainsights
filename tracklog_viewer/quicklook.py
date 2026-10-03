@@ -1685,8 +1685,36 @@ SCRIPT = r"""
                                function (error) { fail(error.message || String(error)); });
   };
 
+  // The full analysis and the same article a bundled flight gets (`js/upload.js`), with
+  // the reduced quick look below kept as the fallback should anything in it throw.
+  function handleFull(file) {
+    status.classList.remove('is-error');
+    status.textContent = 'Analysing ' + file.name + ' — fetching the ground and the day\'s weather…';
+    return TV.upload.read(file).then(function (flight) {
+      return TV.upload.build(flight, file.name);
+    }).then(function (built) {
+      TV.upload.place(built, document.getElementById('quicklook'));
+      addTab(built.uid, built.label, built.meta, built.stat);
+      if (window.__measureScrollbar) window.__measureScrollbar();
+      tabs().show(built.uid);
+      status.textContent = built.missing.length
+        ? 'Analysed. Not available just now: ' + built.missing.join(', ') + '.' : '';
+    });
+  }
+
   function handleFile(file) {
     if (!file) return;
+    if (window.TV && TV.upload) {
+      handleFull(file).catch(function (error) {
+        if (window.console) console.warn('full analysis failed, falling back to the quick look', error);
+        handleQuick(file);
+      });
+      return;
+    }
+    handleQuick(file);
+  }
+
+  function handleQuick(file) {
     status.classList.remove('is-error');
     status.textContent = 'Reading ' + file.name + '…';
     if (/\.kmz$/i.test(file.name)) {

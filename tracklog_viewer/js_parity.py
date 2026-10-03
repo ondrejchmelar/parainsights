@@ -22,8 +22,10 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import datetime as dt
 import json
 import math
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -224,6 +226,8 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("inputs", nargs="+", type=Path, help="IGC files, or directories of them")
     parser.add_argument("--show", type=int, default=5, help="differences to print per file")
+    parser.add_argument("--report", action="store_true",
+                        help="compare the rendered article instead of the analysis")
     args = parser.parse_args(argv)
     paths: list[Path] = []
     for item in args.inputs:
@@ -231,7 +235,7 @@ def main(argv=None) -> int:
                         if p.suffix.lower() in (".igc", ".kml", ".kmz")) if item.is_dir() else [item]
 
     failed = 0
-    for path, result in compare(paths):
+    for path, result in (compare_reports(paths) if args.report else compare(paths)):
         if isinstance(result, str):
             failed += 1
             print(f"ERROR {path.name}: {result.splitlines()[0]}")
@@ -244,6 +248,91 @@ def main(argv=None) -> int:
             print(f"ok    {path.name}")
     print(f"{len(paths) - failed} of {len(paths)} identical")
     return 1 if failed else 0
+
+
+
+# ---------------------------------------------------------------------------------------
+# The article: `render_html._flight_body` against `js/report.js`.
+# ---------------------------------------------------------------------------------------
+
+REPORT_RUNNER = Path(__file__).parent / "js" / "report_runner.js"
+_JSON_SCRIPT = re.compile(r'<script type="application/json" class="([^"]+)">(.*?)</script>', re.S)
+
+
+def normalise_html(html: str) -> tuple[str, list]:
+    """Markup with comments dropped and whitespace collapsed, and the JSON payloads lifted
+    out to be compared as values: Python writes 1.0 where JavaScript writes 1."""
+    payloads = [(name, json.loads(body)) for name, body in _JSON_SCRIPT.findall(html)]
+    html = _JSON_SCRIPT.sub(lambda m: f'<script class="{m.group(1)}"></script>', html)
+    html = re.sub(r"<!--.*?-->", "", html, flags=re.S)
+    html = re.sub(r"\s+", " ", html)
+    html = re.sub(r">\s+<", "><", html)
+    return html.strip(), payloads
+
+
+def _first_difference(a: str, b: str, context: int = 90) -> str:
+    at = next((i for i, (x, y) in enumerate(zip(a, b)) if x != y), min(len(a), len(b)))
+    return f"python  …{a[max(at - context, 0):at + context]}…\n        javascript …{b[max(at - context, 0):at + context]}…"
+
+
+def compare_reports(paths: list[Path]) -> list[tuple[Path, list[str] | str]]:
+    """Each flight's article both ways, with the inputs a published report has: the route,
+    the synthetic ground, the glider table, and the day's weather where the cache holds
+    it. No network: a weather fetch the cache cannot answer fails, as on a train."""
+    import time
+
+    from . import certification, meteo as meteo_module, render_html
+
+    captured = {}
+
+    def offline(*_args, **_kwargs):
+        raise OSError("parity harness: no network")
+
+    real_parse = meteo_module._parse
+
+    def capture(payload, when):
+        captured["payload"], captured["when"] = payload, when
+        return real_parse(payload, when)
+
+    meteo_module._request, meteo_module._parse = offline, capture
+    table = certification.compact()
+    now = time.time()
+    jobs, expected = [], []
+    for path in paths:
+        flight = _parse(path)
+        analysis = analyse(flight)
+        route = _best_route(flight)
+        ground = synthetic_terrain(flight)
+        captured.clear()
+        weather = meteo_module.for_flight(analysis)
+        found = plan_module.for_flight(analysis)
+        html = render_html._flight_body(analysis, meteo=weather, route=route, terrain=ground,
+                                        uid="f0", flight_plan=found)
+        expected.append(normalise_html(html))
+        jobs.append({"path": str(path), "positionZone": _zone_from_position(flight),
+                     "terrain": _grid(ground), "sceneTerrain": ground.to_remote(),
+                     "meteo": captured.get("payload") if weather is not None else None,
+                     "when": captured["when"].replace(tzinfo=dt.timezone.utc).timestamp()
+                     if weather is not None else None,
+                     "now": now})
+    stdin = json.dumps({"jobs": jobs, "certification": table})
+    run = subprocess.run(["node", str(REPORT_RUNNER)], input=stdin, capture_output=True,
+                         text=True, check=True)
+    out = []
+    for path, (want_html, want_json), got in zip(paths, expected, json.loads(run.stdout)):
+        if not got["ok"]:
+            out.append((path, got["error"]))
+            continue
+        got_html, got_json = normalise_html(got["html"])
+        problems = []
+        if want_html != got_html:
+            problems.append("markup differs:\n        " + _first_difference(want_html, got_html))
+        if [n for n, _ in want_json] != [n for n, _ in got_json]:
+            problems.append(f"payloads differ: {[n for n, _ in want_json]} != {[n for n, _ in got_json]}")
+        for (name, a), (_, b) in zip(want_json, got_json):
+            problems += [f"{name}{line}" for line in differences(a, b)]
+        out.append((path, problems))
+    return out
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 
 from . import (
     baseline,
+    certification,
     kml,
     meteo as meteo_module,
     plan as plan_module,
@@ -205,6 +206,12 @@ def main(argv: list[str] | None = None) -> int:
                 archive=held if args.archive else None, extras=extras,
             )
         print(f"wrote {args.html}")
+        # The glider classes an uploaded track is looked up in, beside the page and fetched
+        # only when an upload needs one (`js/upload.js`): 50 KB compressed, not 720 KB.
+        gliders = args.html.parent / "gliders.json"
+        gliders.write_text(json.dumps(certification.compact(), separators=(",", ":")),
+                           encoding="utf-8")
+        print(f"wrote {gliders}")
     if args.kmz:
         render_kmz.write(
             reports[0]["analysis"], args.kmz,

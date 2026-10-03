@@ -32,5 +32,46 @@
     return f.lat.map(function (lat, i) { return alt[i] - at(grid, lat, f.lon[i]); });
   }
 
-  TV.terrain = { at: at, clearance: clearance, cell: cell };
+  // ---- the grid an upload asks for: `terrain.for_flight` + `Terrain.to_remote` ---------
+  var TILE_URL = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
+  var MAX_TILES = 64;
+
+  function tileIndices(lat, lon, zoom) {
+    var n = Math.pow(2, zoom), r = lat * TV.np.DEG;
+    return [(lon + 180.0) / 360.0 * n, (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n];
+  }
+  function chooseZoom(west, east, south, north) {
+    for (var zoom = 12; zoom > 5; zoom--) {
+      var a = tileIndices(north, west, zoom), b = tileIndices(south, east, zoom);
+      if ((Math.trunc(b[0]) - Math.trunc(a[0]) + 1) * (Math.trunc(b[1]) - Math.trunc(a[1]) + 1) <= MAX_TILES) return zoom;
+    }
+    return 6;
+  }
+  function grid(west, east, south, north, cols, maxPoints) {
+    var widthM = (east - west) * 111320 * Math.cos((north + south) / 2 * TV.np.DEG);
+    var heightM = (north - south) * 110540;
+    var rows = Math.max(Math.trunc(TV.np.pyRound(cols * heightM / Math.max(widthM, 1))), 8);
+    rows = Math.min(rows, cols);
+    if (rows * cols > maxPoints) {
+      var shrink = Math.sqrt(maxPoints / (rows * cols));
+      cols = Math.max(Math.trunc(cols * shrink), 24);
+      rows = Math.max(Math.trunc(rows * shrink), 8);
+    }
+    return [rows, cols];
+  }
+  // The DEM box and grid the CLI would fetch for this flight (margin 0.35, at least 0.06°,
+  // 480 columns, 120 000 nodes), as the page's `loadTerrain` takes it.
+  function remoteFor(flight, options) {
+    options = options || {};
+    var margin = options.margin === undefined ? 0.35 : options.margin;
+    var cols = options.cols || 480, maxPoints = options.maxPoints || 120000;
+    var np = TV.np, west = np.min(flight.lon), east = np.max(flight.lon), south = np.min(flight.lat), north = np.max(flight.lat);
+    var padX = Math.max((east - west) * margin, 0.06), padY = Math.max((north - south) * margin, 0.06);
+    west -= padX; east += padX; south -= padY; north += padY;
+    var size = grid(west, east, south, north, cols, maxPoints);
+    return { west: np.pyRound(west, 6), east: np.pyRound(east, 6), south: np.pyRound(south, 6), north: np.pyRound(north, 6),
+             rows: size[0], cols: size[1], remote: { url: TILE_URL, zoom: chooseZoom(west, east, south, north) } };
+  }
+
+  TV.terrain = { at: at, clearance: clearance, cell: cell, remoteFor: remoteFor, chooseZoom: chooseZoom };
 })(typeof window !== 'undefined' ? (window.TV = window.TV || {}) : (globalThis.TV = globalThis.TV || {}));

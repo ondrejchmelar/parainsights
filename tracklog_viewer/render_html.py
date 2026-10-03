@@ -2898,11 +2898,28 @@ def _page(title: str, bodies: list[str], tabs: str = "", extras: "list[Extra]" =
 {map3d.SCRIPT}
 {charts_client.SCRIPT}
 {SCRIPT}</script>
+<script>{js_bundle()}</script>
 <script>{quicklook.SCRIPT}</script>
 <script>{common.THEME_SCRIPT}</script>
 {"".join(f"<script>{e.script}</script>" for e in extras)}
 {f"<script>{VIEW_SCRIPT}</script>" if extras else ""}
 """
+
+
+# The flight analysis and the article, in JavaScript, for a track the reader uploads:
+# the same output as this module and `analysis.py` (`js_parity.py` holds them together).
+# In dependency order; tz-lookup first, as the IGC parser asks it for a take-off's zone.
+JS_DIR = Path(__file__).parent / "js"
+JS_MODULES = ("vendor/tz-lookup", "np", "geo", "igc", "flight", "analysis", "xc", "metrics",
+              "debrief", "sun", "airmass", "terrain", "insolation", "plan", "kml",
+              "certification", "meteo", "charts", "scene", "report", "upload")
+
+
+def js_bundle() -> str:
+    """The modules as one inline script. `</script` inside them — report.js writes the
+    payload tags — is escaped, or the browser would end the element there."""
+    return "\n".join((JS_DIR / f"{name}.js").read_text(encoding="utf-8")
+                     for name in JS_MODULES).replace("</script", "<\\/script")
 
 
 def first_name(pilot: str | None) -> str:

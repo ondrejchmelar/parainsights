@@ -19,7 +19,7 @@ parainsights/
 ├── planner/               a task drawn on the airspace it crosses
 ├── parainsights_common/   the one thing every page shares: the strip between the tools
 ├── ci/                    the checks the pipeline runs that are not tests
-├── tests/                 pytest, 644 tests, no network
+├── tests/                 pytest, 725 tests, no network
 └── docs/
     ├── formats.md            IGC and KML/KMZ format research, measured on real files
     ├── plan.md               tracklog viewer: scope, decisions and status
@@ -59,7 +59,7 @@ as the packages, so there is nothing to line up by hand:
 
 ```bash
 uv sync --extra dev          # creates .venv on the pinned Python, from uv.lock
-uv run pytest -c pyproject.toml     # 708 tests, ~6 min in parallel, no network
+uv run pytest -c pyproject.toml     # 725 tests, ~6 min in parallel, no network
 ```
 
 `-c pyproject.toml` matters when the repo sits inside another project — pytest otherwise
@@ -271,7 +271,8 @@ geometry in a renderer, no rendering in the analysis.
 | `render_map.py` | Richer 3D map (MapLibre + deck.gl); needs network at view time. Also the report's renderer switch and the shared MapLibre loader |
 | `map3d.py` | The merged 3D map: MapLibre's engine under the canvas view's controls, rose, labels, airspace and shading |
 | `render_html.py` | The report; `quicklook.py` is its in-browser sibling |
-| `quicklook.py` | Reduced analysis in JavaScript, for a track the reader supplies; its own DEM fetch and linked cursor |
+| `quicklook.py` | The upload panel. Hands a dropped track to `js/upload.js` for the full article; its own reduced analysis is the fallback if that throws |
+| `js/` | The analysis and the per-flight article in JavaScript, inlined into the report (`render_html.js_bundle`); checked against the Python by `js_parity.py` |
 | `cli.py` | Argument handling and orchestration |
 
 ## Decisions, and the reasons behind them
@@ -985,9 +986,21 @@ the font stays inlined because it is one request for a document's whole appearan
      analysis rather than two boundary datasets. `meteo.js` reads the Open-Meteo answer
      (identical on 106 readings of the cached responses). The take-off timezone is
      **tz-lookup** (`js/vendor`, CC0, 73 KB): the same clock as timezonefinder at all 136
-     sample take-offs, the same zone name at 131. **The analysis port is complete**;
-     next is the article.
-  2. The per-flight article (`_flight_body`, the SVG charts) in JavaScript.
+     sample take-offs, the same zone name at 131. **The analysis port is complete.**
+  2. *The per-flight article in JavaScript.* **Done**: `charts.js` (every server-side
+     SVG chart and the client-chart payload), `scene.js` (`view3d.data` and the panel
+     markup), `report.js` (`_flight_body` and all its helpers) and `upload.js`, which
+     reads a dropped file, fetches the ground, the day's profile and `gliders.json` in
+     parallel — each optional, each with a timeout — and places the article where a
+     bundled flight's would be, then runs `__drawCharts` and `initFlight` on it. An upload
+     now gets the same article as a showcase flight: the 3D view, debrief, climbs and
+     glides tables, wind, sounding, polar, sun and the EN chip. A failed fetch costs only
+     what rests on it, and the status line names it. `js_parity --report` compares the
+     article's HTML with `_flight_body`'s (comments stripped, whitespace collapsed, JSON
+     payloads by value): **63 of 63 identical**. `tests/test_upload.py` uploads a track
+     into a page with no network and requires the full article. The CLI writes
+     `gliders.json` beside the page; `public/gliders.json` is committed with it.
+     `quicklook.py`'s own analysis is now only the fallback for an exception in that path.
   3. The showcase flights through the same path; then retire the Python analysis and
      `quicklook.py`.
 
@@ -1218,9 +1231,9 @@ Still wanted:
   **The third is not, and this is the remaining gap:** resolving a zone from the
   take-off coordinates needs `timezonefinder`'s dataset, which is not going in a page.
   That is the common case — XCTrack only started writing `os.timezone` in 0.9.12, and
-  three of six sample files predate it — so those still read UTC. Honest, but wrong by
-  an hour or two, and there is no browser API that fixes it. Do not be tempted by
-  `lon / 15`.
+  three of six sample files predate it. **Closed for the full upload path** by
+  `js/vendor/tz-lookup.js` (see "Wanted next"); the quick-look fallback still reads UTC
+  for those. Do not be tempted by `lon / 15`.
   One trap worth keeping: the `L` chunking drops base64 padding, and `atob` throws on
   the wrong *amount* of it where Python's `b64decode(validate=False)` ignores the
   excess — so a blind `+ '=='` fails on any payload already a multiple of four. It

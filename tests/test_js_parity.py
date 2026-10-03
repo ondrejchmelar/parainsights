@@ -293,6 +293,16 @@ def test_the_take_off_zone_reads_the_same_clock(tmp_path):
             when.astimezone(zoneinfo.ZoneInfo(expected)).utcoffset(), (lat, lon, zone, expected)
 
 
+@needs_node
+@pytest.mark.parametrize("name", ["thermal-glide-thermal", "tow-then-thermal", "slalom-and-reversal"])
+def test_the_article_renders_the_same(tmp_path, name):
+    """The whole article — markup, sentences and payloads — from `render_html._flight_body`
+    and from `js/report.js`, on the same flight with the same inputs."""
+    path = build(tmp_path / f"{name}.igc", FLIGHTS[name]())
+    [(_, result)] = js_parity.compare_reports([path])
+    assert result == [], result if isinstance(result, str) else "\n".join(result[:10])
+
+
 def test_differences_are_reported_by_path():
     """The comparison itself: a mismatch names where it is and what each side said."""
     assert js_parity.differences({"a": [1, 2.0]}, {"a": [1, 2.0]}) == []

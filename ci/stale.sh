@@ -35,12 +35,11 @@ SOURCES="tracklog_viewer airspaces parainsights_common"
 # `.scene` and `.sources` — never `.cli`. Check that list is still true before adding to
 # this one: an exclusion that is wrong makes the whole check a decoration.
 #
-# `tracklog_viewer/js_parity.py` and `js/parity_runner.js` are the harness that compares
-# the JavaScript analysis with the Python one; neither is ever in a page. The rest of
-# `tracklog_viewer/js/` is the analysis the page *will* run, and is excluded only until
-# the report embeds it — **remove that exclusion in the commit that does**, or this check
-# stops watching the code that renders uploads.
-IGNORE=":(exclude)airspaces/cli.py :(exclude)tracklog_viewer/js_parity.py :(exclude)tracklog_viewer/js"
+# `tracklog_viewer/js_parity.py` and the two Node runners in `js/` are the harness that
+# compares the JavaScript with the Python; none of them is ever in a page. Everything else
+# in `tracklog_viewer/js/` is inlined into the report (`render_html.JS_MODULES`) and is
+# watched like any other renderer code.
+IGNORE=":(exclude)airspaces/cli.py :(exclude)tracklog_viewer/js_parity.py :(exclude)tracklog_viewer/js/parity_runner.js :(exclude)tracklog_viewer/js/report_runner.js"
 
 commit_of() {
     # The last commit that touched a path, or nothing. A shallow CI clone may not reach
