@@ -1048,16 +1048,14 @@ SCRIPT = r"""
   //     metres = R * 256 + G + B / 256 - 32768
   var DEM_TILE = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
   var DEM_TILE_SIZE = 256;
-  // Fewer tiles than the CLI's 20: this is a fetch the reader waits through, not a build
-  // step, and every tile is a request against a donated service.
-  var DEM_MAX_TILES = 12;
+  // The CLI's budget: quality over the wait, and the finer patch on zoom-in comes on top.
+  var DEM_MAX_TILES = 64;
   // Long enough for a slow phone, short enough that a blocked page is not left staring at
   // a spinner. A CSP refusal fires `onerror` immediately and never reaches this.
   var DEM_TIMEOUT = 9000;
-  // Nodes in the grid. The CLI's 26 000 is a budget in *bytes*, because that grid is
-  // embedded in the document; this one is never serialised, so the only cost is the mesh
-  // itself — and the drape is budgeted separately from it.
-  var DEM_NODES = 16000;
+  // Nodes in the grid, matching the CLI's 120 000. Never serialised, so the only cost is
+  // the mesh itself — and the drape is budgeted separately from it.
+  var DEM_NODES = 120000;
 
   function demTileXY(lat, lon, zoom) {
     var n = Math.pow(2, zoom);
@@ -1150,7 +1148,7 @@ SCRIPT = r"""
     var mid = (box.north + box.south) / 2;
     var wideM = (box.east - box.west) * 111320 * Math.cos(mid * Math.PI / 180);
     var highM = (box.north - box.south) * 110540;
-    var cols = 240;
+    var cols = 480;
     var rows = Math.max(Math.round(cols * highM / Math.max(wideM, 1)), 8);
     rows = Math.min(rows, cols);
     if (rows * cols > DEM_NODES) {
@@ -1312,11 +1310,12 @@ SCRIPT = r"""
     var z = new Array(cols * rows);
     for (var i = 0; i < z.length; i++) z[i] = ground;
 
-    // The decimated sample comes in rather than being recomputed here: the cursor track
-    // is indexed by position in it, so the two must be the same list or the marker lands
-    // on a different moment than the one being pointed at.
+    // Every fix, not the decimated sample: the sample keeps ~1 400 points whatever the
+    // flight's length, which on a long 1 Hz flight is one point per 13 s — a thermal
+    // circle drawn as a triangle. The cursor track (built in `show3d`) still uses the
+    // sample, because that is what the charts index; the view reads the two separately.
     var track = { lon: [], lat: [], alt: [], c: [], t: [] };
-    sample.forEach(function (k) {
+    a.lon.forEach(function (_, k) {
       track.lon.push(+a.lon[k].toFixed(5));
       track.lat.push(+a.lat[k].toFixed(5));
       track.alt.push(Math.round(a.alt[k]));

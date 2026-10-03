@@ -285,9 +285,17 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   vertical speed exceeds 30 m/s; on GPS-only files that discards good horizontal track
   to fix a vertical glitch. A local-median despike costs 50 repairs where dropping cost
   122 fixes.
-- **The DEM budget is 26 000 nodes** (17 000 per flight in a shared document). 2 600 was
-  59×43 over an alpine box — every facet of the heightfield visible as a quadrilateral.
-  A finer grid costs bytes, not frames, because the drape mesh is budgeted separately.
+- **Fidelity over page weight and frames, everywhere a budget is chosen.** The report's
+  flights are a showcase; an uploaded track is the product. So: the 3D track carries
+  **every fix** (it was Douglas–Peucker at 4 m, 12 m in a shared document, plus 4-decimal
+  rounding — five or six vertices per thermal circle, drawn as zigzags), at 5 decimals.
+  The DEM grid is **120 000 nodes over up to 480 columns**, fetched from up to 64 tiles,
+  and the showcase flights **fetch it at view time** (`Terrain.to_remote`) rather than
+  embedding ~600 KB of heights each; the Python analysis still uses the heights it
+  fetched. Zooming in fetches patches of up to 320 nodes across from 36 tiles, down to
+  the DEM's ~25 m, and imagery from up to 96 tiles. Measure a perf problem before
+  trading any of this back. (History: 2 600 nodes was 59×43 over an alpine box — every
+  facet of the heightfield visible as a quadrilateral.)
 - **XContest ranks by score, not distance, and that changes which route wins.** The
   multipliers are open 1.0, flat triangle 1.2, FAI triangle 1.4, so a *shorter* triangle
   routinely beats a longer one — and the open optimum. `xc.triangle()` maximises
@@ -576,10 +584,9 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   because there is no shared source between Python and the page. It works because the
   tiles carry `Access-Control-Allow-Origin: *`; without that the canvas is tainted and
   `getImageData` throws, which the code treats as *no DEM* rather than as an error, along
-  with every other way a tile can fail. Budgets differ from the CLI's on purpose: 12 tiles
-  rather than 20 (a reader waits through this one, and at ~320 m node spacing a zoom-10
-  tile already over-samples the grid) and 16 000 nodes rather than 26 000 (that budget is
-  bytes in a document; this grid is never serialised). Fetched **before** `initView3d`,
+  with every other way a tile can fail. Budgets match the CLI's: 64 tiles and 120 000
+  nodes over up to 480 columns. The 3D track is every fix, not the ~1 400-point sample
+  the charts and the cursor share — the view reads the two separately. Fetched **before** `initView3d`,
   because re-running it on a live panel binds a second set of pointer handlers and every
   gesture counts twice.
 - **An uploaded track carries the same linked cursor a built report does.** It carried

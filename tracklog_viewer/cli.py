@@ -283,12 +283,13 @@ def _one(source: str, args, index: int = 0) -> dict:
     ground = None
     tiles = None
     if args.terrain:
-        # Several flights in one document each carry their own grid, so trim the
-        # budget when the report is shared. 2 600 nodes was 59x43 over an alpine box —
-        # every facet of the heightfield visible as a quadrilateral. The drape mesh is
+        # 2 600 nodes was 59x43 over an alpine box — every facet of the heightfield
+        # visible as a quadrilateral; 26 000 (17 000 in a shared document) still showed
+        # them up close. Fidelity over page weight now, shared or not: the drape mesh is
         # capped separately in the renderer, so a finer grid costs bytes, not frames.
-        budget = 26000 if len(args.flight) == 1 else 17000
-        ground = terrain_module.for_flight(analysis, max_points=budget, report=print)
+        budget = 120000
+        ground = terrain_module.for_flight(analysis, cols=480, max_points=budget,
+                                           report=print)
         if ground is None:
             print(f"warning: no terrain data for {label}", file=sys.stderr)
 

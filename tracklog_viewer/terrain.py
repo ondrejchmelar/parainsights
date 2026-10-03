@@ -24,7 +24,7 @@ import numpy as np
 TILE_URL = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
 CACHE = Path.home() / ".cache" / "parainsights" / "dem"
 TILE_SIZE = 256
-MAX_TILES = 20
+MAX_TILES = 64
 TIMEOUT = 30
 USER_AGENT = "parainsights-tracklog-viewer/0.1 (+https://github.com/)"
 
@@ -80,6 +80,18 @@ class Terrain:
             # Where to fetch finer ground when the reader zooms in (`terrainPlan` in
             # view3d). The heights above are the whole grid; this is only the source.
             "remote": {"url": TILE_URL},
+        }
+
+    def to_remote(self) -> dict:
+        """The same grid as `to_dict`, without the heights: the page fetches the tiles
+        `fetch` used, at the same zoom, and samples them onto the same nodes
+        (`view3d`'s `loadTerrain`). A few hundred bytes instead of ~600 KB a flight."""
+        return {
+            "west": round(self.west, 6), "east": round(self.east, 6),
+            "south": round(self.south, 6), "north": round(self.north, 6),
+            "rows": self.rows, "cols": self.cols,
+            "remote": {"url": TILE_URL,
+                       "zoom": _choose_zoom(self.west, self.east, self.south, self.north)},
         }
 
 

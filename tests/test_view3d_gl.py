@@ -799,7 +799,7 @@ def test_zooming_in_asks_for_a_sharper_mosaic_and_only_once():
         "zooming further in did not buy a finer tile zoom")
     assert answer["nearer"]["width"] < answer["near"]["width"], (
         "the box asked for did not shrink as the view zoomed in")
-    assert answer["near"]["tiles"] <= 48, "a detail fetch blew the tile budget"
+    assert answer["near"]["tiles"] <= 96, "a detail fetch blew the tile budget"
     assert answer["repeat"] is None, "the same camera asked for the same patch twice"
     assert answer["state"]["zoom"] == answer["near"]["zoom"]
 
@@ -1040,7 +1040,9 @@ return { rest: plan(1), near: plan(8), nearer: plan(24) };
 
 @needs_chrome
 def test_zooming_in_plans_finer_ground_and_resting_does_not():
-    dem = _terrain()
+    # A base grid nearer a real flight's (~400 columns) than the 81 the other tests use:
+    # with a 320-node patch, an 81-column base is coarse enough to want a patch at rest.
+    dem = _terrain(161, 161)
     base_m = (dem["east"] - dem["west"]) * 111320 * math.cos(math.radians(49.125)) \
         / (dem["cols"] - 1)
     answer = _probe(_scene(terrain=_remote(dem), basemap=False), _TERRAIN_PLAN)
@@ -1049,9 +1051,10 @@ def test_zooming_in_plans_finer_ground_and_resting_does_not():
         plan = answer[key]
         assert plan, f"zoomed in ({key}) and asked for no finer ground"
         assert plan["spacing"] <= base_m * 0.4, plan
-        assert plan["tiles"] <= 16, "a terrain patch blew the tile budget"
-        assert plan["rows"] * plan["cols"] <= 170 * 170
-    assert answer["nearer"]["spacing"] < answer["near"]["spacing"]
+        assert plan["tiles"] <= 36, "a terrain patch blew the tile budget"
+        assert plan["rows"] * plan["cols"] <= 330 * 330
+    # `<=`: with a 320-node patch both can already sit on the DEM's own ~25 m floor.
+    assert answer["nearer"]["spacing"] <= answer["near"]["spacing"]
     assert answer["nearer"]["zoom"] >= answer["near"]["zoom"]
 
     without = _probe(_scene(terrain=dem, basemap=False), _TERRAIN_PLAN)

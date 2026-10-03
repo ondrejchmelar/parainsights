@@ -1062,8 +1062,14 @@ function initFlight(root) {
   var tip = document.getElementById('tip');
   if (!tip || !payload) return;
   var data = JSON.parse(payload.textContent);
-  var terrainView = typeof initView3d === 'function'
-    ? initView3d(root, data.cursor3d || null) : null;
+  // The ground is fetched by the page (`terrain.to_remote`), so the view arrives once it
+  // has; every use of `terrainView` below is in a handler that runs after that.
+  var terrainView = null;
+  if (typeof initView3dWhenReady === 'function') {
+    initView3dWhenReady(root, data.cursor3d || null).then(function (handle) {
+      terrainView = handle;
+    }, function () {});
+  }
 
   // Every chart that can host the cursor publishes its own projected sample
   // coordinates on its hit rect, so one index drives a dot in all of them and
@@ -2372,9 +2378,8 @@ def _flight_body(analysis: Analysis, *, meteo=None, route=None, terrain=None,
     view3d_section = ""
     clearance = None
     if terrain is not None:
-        # A shared document carries several flights, so trade 3D track detail for size.
         payload = view3d.data(
-            analysis, terrain, tolerance=4.0 if uid == "f0" else 12.0,
+            analysis, terrain,
             basemaps=basemaps, tiles=fetch_tiles, airspace=airspace
         )
         kmz_uri = None

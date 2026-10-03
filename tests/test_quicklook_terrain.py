@@ -150,7 +150,7 @@ class TestAnUploadedTrackGetsRealTerrain:
         assert terrain["max"] == HIGH
         assert terrain["distinct"] == 2, "only the two encoded elevations should appear"
         assert terrain["nodes"] == terrain["cols"] * terrain["rows"]
-        assert terrain["nodes"] <= 16000, "the node budget"
+        assert terrain["nodes"] <= 120000, "the node budget"
         assert 6 <= terrain["zoom"] <= 12
 
     def test_the_caption_says_where_the_ground_came_from(self):

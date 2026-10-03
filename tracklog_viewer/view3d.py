@@ -19,7 +19,10 @@ from .analysis import Analysis, Phase
 from .charts import decimate
 from .render_map import RAMP_RGB, climb_rgb
 
-TRACK_TOLERANCE = 4.0  # metres of horizontal detail kept in the 3D track
+# Metres of horizontal detail the 3D track may drop; 0 keeps every fix. It was 4 m (12 m
+# per flight in a shared document), and Douglas-Peucker at that tolerance left five or six
+# vertices per thermal circle — every climb drawn as a jagged polygon. Fidelity first.
+TRACK_TOLERANCE = 0.0
 
 
 def _colour_index(value: float) -> int:
@@ -70,14 +73,15 @@ def data(analysis: Analysis, terrain, *, tolerance: float | None = None,
     altitude = flight.alt_gps if np.any(flight.alt_gps) else series.alt
 
     tolerance = TRACK_TOLERANCE if tolerance is None else tolerance
-    keep = np.union1d(
+    keep = np.arange(len(flight.lon)) if tolerance <= 0 else np.union1d(
         decimate(series.x, series.y, tolerance),
         decimate(series.t, series.alt, tolerance * 0.75),
     )
     track = {
-        # 4 decimals is ~11 m — below what a pixel represents at these zooms.
-        "lon": [round(float(flight.lon[i]), 4) for i in keep],
-        "lat": [round(float(flight.lat[i]), 4) for i in keep],
+        # 5 decimals is ~1 m. 4 was ~11 m, a grid coarse enough to put a staircase into a
+        # 40 m thermal circle once the reader zooms in.
+        "lon": [round(float(flight.lon[i]), 5) for i in keep],
+        "lat": [round(float(flight.lat[i]), 5) for i in keep],
         "alt": [int(altitude[i]) for i in keep],
         "c": [_colour_index(float(series.climb[i])) for i in keep],
         # Seconds since the first fix, for the replay in `render_map`'s renderer.
@@ -137,7 +141,9 @@ def data(analysis: Analysis, terrain, *, tolerance: float | None = None,
 
     # Cursor positions for the shared hover, at the same sample indices the charts use.
     return {
-        "terrain": terrain.to_dict(),
+        # Fetched by the page, not embedded: the report's flights are a showcase and the
+        # grid was ~600 KB of each. The analysis still used the fetched heights in Python.
+        "terrain": terrain.to_remote(),
         "trackTop": int(max(track["alt"])) if track["alt"] else 0,
         "track": track,
         "climbs": climbs,
@@ -1009,7 +1015,7 @@ function initView3d(root, cursorTrack, preset) {
   //    fetched and ask for nothing.
   var detail = null;          // { image, box, shaded, style, zoom }
   var detailPending = null;   // the box currently being stitched, so it is asked once
-  var DETAIL_TILES = 48;      // a fetch is one screenful; politeness matters more here
+  var DETAIL_TILES = 96;      // a fetch is one screenful at retina density; quality first
   var DETAIL_STEP = 1;        // zoom levels of improvement worth a fetch
   var DETAIL_PAD = 0.35;      // of the visible box, on each side
   var DETAIL_DELAY = 420;     // ms of stillness before asking
@@ -1180,8 +1186,8 @@ function initView3d(root, cursorTrack, preset) {
   // would be worse than the coarse answer — so without a backend there is no patch.
   var terrainDetail = null;     // { west, east, south, north, rows, cols, z, min, max, spacing }
   var terrainPending = null;
-  var TERRAIN_NODES = 160;      // across the longer side of a patch
-  var TERRAIN_TILES = 16;       // DEM tiles a patch may cost
+  var TERRAIN_NODES = 320;      // across the longer side of a patch; ~25 m caps it anyway
+  var TERRAIN_TILES = 36;       // DEM tiles a patch may cost
   var TERRAIN_FINEST_M = 25;    // the DEM behind the tiles is about 30 m; no finer than that
   var TERRAIN_MAX_ZOOM = 15;    // the deepest terrarium tiles there are
 
@@ -1214,6 +1220,9 @@ function initView3d(root, cursorTrack, preset) {
     var zoom = Math.min(TERRAIN_MAX_ZOOM,
                         Math.max(0, Math.ceil(Math.log(pixelAtZero / spacing) / Math.LN2)));
     while (zoom > 1 && tileCount(want, zoom) > TERRAIN_TILES) zoom--;
+    // Nodes no finer than the pixels behind them. Where the budget backed the zoom off,
+    // a finer grid is only nearest-pixel steps — a staircase, not detail.
+    spacing = Math.max(spacing, pixelAtZero / Math.pow(2, zoom));
     return {
       west: want.west, east: want.east, south: want.south, north: want.north,
       cols: Math.max(2, Math.round(widthM / spacing) + 1),
@@ -1230,6 +1239,10 @@ function initView3d(root, cursorTrack, preset) {
       if (terrainPending === plan) terrainPending = null;
       if (!renderer) return;
       setTerrainDetail(patch);
+      // Ask again. While this patch was in the air it covered the view and blocked any
+      // newer plan, so a reader who zoomed in meanwhile would be left on ground fetched
+      // for where they had been. A plan that matches what just landed returns null.
+      scheduleDetail();
     }, function () {
       // A patch that does not arrive changes nothing: the base grid is still there.
       if (terrainPending === plan) terrainPending = null;
