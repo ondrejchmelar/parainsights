@@ -801,6 +801,10 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   numbers, and the track is the canvas's width (2.6 px over the device ratio, capped at
   2). **Ground and exaggeration are one cycling button each**, against the canvas's
   segmented groups, because the merged bar has to fit one row on a phone.
+  **The hillshade is two layers with fixed paint** (light over imagery, strong on
+  relief), switched by visibility too: changing one layer's paint between the two left
+  tiles under the 3D terrain shaded the old way — white streaks down every slope after
+  satellite, relief, satellite. Paint transitions are off for the same reason.
   **Basemaps switch by layer visibility, never `setStyle`**: every basemap is in the one
   style and hidden ones fetch nothing. Three quick `setStyle` calls left the map with no
   imagery and no terrain. And `setTerrain` waits for `style.load`, not `load` (which

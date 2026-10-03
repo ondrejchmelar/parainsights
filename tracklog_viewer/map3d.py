@@ -351,15 +351,22 @@ SCRIPT = r"""
         return { az: t.az[i] + (t.az[j] - t.az[i]) * f, el: t.el[i] + (t.el[j] - t.el[i]) * f };
       }
       // How strongly the ground is shaded: lightly over a photograph or a map, fully on
-      // bare relief, where the shading *is* the picture.
-      function shading(key) {
-        var over = key !== 'off';
+      // bare relief, where the shading *is* the picture. Two layers with fixed paint,
+      // switched by visibility like the basemaps — changing one layer's paint between
+      // the two left tiles shaded the old way under the 3D terrain: white streaks down
+      // every slope after satellite, relief, satellite.
+      function shading(over) {
         return {
           'hillshade-exaggeration': over ? 0.45 : 1,
           'hillshade-highlight-color': over ? 'rgba(255,252,242,0.45)' : 'rgba(255,252,242,1)',
-          'hillshade-shadow-color': over ? 'rgba(18,26,38,0.7)' : 'rgba(18,26,38,1)'
+          'hillshade-shadow-color': over ? 'rgba(18,26,38,0.7)' : 'rgba(18,26,38,1)',
+          'hillshade-accent-color': 'rgba(0,0,0,0)',
+          'hillshade-illumination-anchor': 'map',
+          'hillshade-illumination-direction': sun ? ((sunAt(sunMinute).az % 360) + 360) % 360 : 315
         };
       }
+      var SHADES = ['hillshade-over', 'hillshade-relief'];
+      function shadeFor(key) { return key === 'off' ? 'hillshade-relief' : 'hillshade-over'; }
       // Every basemap in one style, and a switch shows one and hides the rest. Swapping
       // whole styles with `setStyle` was the first version, and three quick presses left
       // the map with no imagery and no terrain: MapLibre does not survive a style change
@@ -408,15 +415,16 @@ SCRIPT = r"""
         // towards a warm white and shaded ones towards a dark blue, lit from where the sun
         // was. Black-and-white shading over the photograph is what greyed it out. Under
         // any label layer, so place names stay crisp.
-        var paint = shading(key);
-        paint['hillshade-accent-color'] = 'rgba(0,0,0,0)';
-        paint['hillshade-illumination-anchor'] = 'map';
-        paint['hillshade-illumination-direction'] =
-          sun ? ((sunAt(sunMinute).az % 360) + 360) % 360 : 315;
+        var shades = SHADES.map(function (id) {
+          return { id: id, type: 'hillshade', source: 'shade', paint: shading(id === 'hillshade-over'),
+                   layout: { visibility: id === shadeFor(key) ? 'visible' : 'none' } };
+        });
         return {
           version: 8, sources: sources,
-          layers: below.concat([{ id: 'hillshade', type: 'hillshade', source: 'shade', paint: paint }],
-                               above),
+          // No paint transitions: the sun's direction moves in steps with the cursor, and
+          // a half-finished transition is one more way for tiles to disagree.
+          transition: { duration: 0, delay: 0 },
+          layers: below.concat(shades, above),
           // MapLibre's own sky and haze, every value its default: the distance fades into
           // the horizon the way air does, which is what reads as depth at a low pitch.
           sky: {},
@@ -722,11 +730,13 @@ SCRIPT = r"""
         if (!sun || minute === null || minute === undefined) return;
         sunMinute = minute;
         drawRose();
-        if (map.getLayer('hillshade')) {
+        if (styleReady) {
           var az = ((sunAt(minute).az % 360) + 360) % 360;
           if (lastLight === null || Math.abs(az - lastLight) >= 1) {
             lastLight = az;
-            map.setPaintProperty('hillshade', 'hillshade-illumination-direction', az);
+            SHADES.forEach(function (id) {
+              map.setPaintProperty(id, 'hillshade-illumination-direction', az);
+            });
           }
         }
       }
@@ -843,8 +853,9 @@ SCRIPT = r"""
             map.setLayoutProperty(name + '-' + i, 'visibility', name === key ? 'visible' : 'none');
           });
         });
-        var paint = shading(key);
-        Object.keys(paint).forEach(function (k) { map.setPaintProperty('hillshade', k, paint[k]); });
+        SHADES.forEach(function (id) {
+          map.setLayoutProperty(id, 'visibility', id === shadeFor(key) ? 'visible' : 'none');
+        });
       }
       function setVertical(v) {
         vertical = v;
