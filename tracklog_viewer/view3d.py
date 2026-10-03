@@ -80,6 +80,8 @@ def data(analysis: Analysis, terrain, *, tolerance: float | None = None,
         "lat": [round(float(flight.lat[i]), 4) for i in keep],
         "alt": [int(altitude[i]) for i in keep],
         "c": [_colour_index(float(series.climb[i])) for i in keep],
+        # Seconds since the first fix, for the replay in `render_map`'s renderer.
+        "t": [int(series.t[i]) for i in keep],
     }
 
     climbs = []
@@ -3594,6 +3596,9 @@ function initView3d(root, cursorTrack, preset) {
                credit: (root.querySelector('.view3d-credit') || {}).textContent };
     }
   };
+  // What the panel was built from, for a second renderer to draw the same flight with
+  // (`render_map.SWITCH_SCRIPT`): one scene, one cursor track, read rather than rebuilt.
+  handle.built = { scene: scene, cursorTrack: cursorTrack || null };
   window.__view3d = handle;
   // A multi-flight document initialises one of these per tab, so the bare global is
   // whichever went last. Keyed by canvas id as well, so a test can address the panel it

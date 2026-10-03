@@ -268,7 +268,7 @@ geometry in a renderer, no rendering in the analysis.
 | `view3d.py` | The 3D view: camera, gestures, tiles, track overlay — and a canvas 2D heightfield as the fallback |
 | `view3d_gl.py` | WebGL heightfield, registered as a backend for `view3d.py` |
 | `render_kmz.py` | Google Earth KMZ: LOD folders, balloons, animation, local charts |
-| `render_map.py` | Richer 3D map (MapLibre + deck.gl); needs network at view time |
+| `render_map.py` | Richer 3D map (MapLibre + deck.gl); needs network at view time. Also a second renderer in the report, behind a canvas/MapLibre switch |
 | `render_html.py` | The report; `quicklook.py` is its in-browser sibling |
 | `quicklook.py` | Reduced analysis in JavaScript, for a track the reader supplies; its own DEM fetch and linked cursor |
 | `cli.py` | Argument handling and orchestration |
@@ -750,6 +750,13 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   survived a green suite. There are now regression tests for each.
 - **Two 3D views on purpose.** `render_map.py` is better but needs network at view time;
   `view3d.py` gives up the basemap library to be embeddable. Both share the climb ramp.
+  The report carries both, for comparison: a `canvas | MapLibre` switch above each 3D
+  panel (`render_map.switch_html`, `SWITCH_SCRIPT`), bundled flights and uploads alike.
+  The MapLibre side draws from the scene the canvas view was built from
+  (`handle.built`), so it cannot show a different flight, and follows the linked cursor
+  by wrapping that handle's `setCursor`/`revealCursor`/`clearCursor`. It adds a replay
+  slider, which is why `scene.track` carries `t` (seconds since the first fix). MapLibre
+  and deck.gl are loaded from unpkg on the first switch, never before.
 - **A declared task the flight did not fly is worse than no task at all.** A logger writes
   out whatever task happens to be loaded, so a `C` record is evidence of what was in
   XCTrack, not of what the pilot intended today. On `2021-07-06-XCT-ROP-01` the loaded

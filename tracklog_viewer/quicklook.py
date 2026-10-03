@@ -20,7 +20,7 @@ host, and falls back to a flat plane where it is not.
 
 import json
 
-from . import analysis, debrief, flight, meteo, view3d
+from . import analysis, debrief, flight, meteo, render_map, view3d
 from .render_map import RAMP_RGB
 
 
@@ -118,7 +118,10 @@ def panel() -> str:
              ground falls back to a flat plane and the caption says so. The altitudes are
              your own either way, at true vertical scale.</p>
         </div>
+        <div class="renderer-host">
+        {render_map.switch_html()}
         {view3d.panel(dict(tiles=view3d.TILE_SOURCES), "own")}
+        </div>
         <p class="caption ql-3d-note"></p>
       </div>
       <div class="panel hero ql-result">
@@ -1312,12 +1315,13 @@ SCRIPT = r"""
     // The decimated sample comes in rather than being recomputed here: the cursor track
     // is indexed by position in it, so the two must be the same list or the marker lands
     // on a different moment than the one being pointed at.
-    var track = { lon: [], lat: [], alt: [], c: [] };
+    var track = { lon: [], lat: [], alt: [], c: [], t: [] };
     sample.forEach(function (k) {
       track.lon.push(+a.lon[k].toFixed(5));
       track.lat.push(+a.lat[k].toFixed(5));
       track.alt.push(Math.round(a.alt[k]));
       track.c.push(bandIndex(a.climb[k]));
+      track.t.push(Math.round(a.t[k] - a.t[0]));
     });
 
     var climbs = a.climbs.map(function (climb, index) {
