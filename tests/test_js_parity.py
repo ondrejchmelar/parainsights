@@ -212,6 +212,87 @@ def test_the_glider_class_lookup_matches(tmp_path):
     assert sum(w is not None for w in want) > 1000, "the lookup stopped answering"
 
 
+@needs_node
+def test_the_profile_reads_the_same(tmp_path):
+    """The Open-Meteo answer read both ways: the hour picked, the levels kept and sorted,
+    Python's `or` treating a 0 °C dew point as missing, the thermal top, and the wind
+    interpolated the short way round the compass."""
+    import datetime as dt
+    import json
+    import math
+    import subprocess
+
+    from tracklog_viewer import meteo
+
+    hours = [dt.datetime(2026, 7, 1) + dt.timedelta(hours=h) for h in range(48)]
+    hourly = {"time": [h.strftime("%Y-%m-%dT%H:%M") for h in hours]}
+    for k, name in enumerate(meteo.SURFACE_FIELDS):
+        hourly[name] = [round(10 + 5 * math.sin(h / 5 + k), 2) for h in range(48)]
+    hourly["dew_point_2m"][13] = 0.0
+    for p_i, pressure in enumerate(meteo.PRESSURE_LEVELS):
+        hourly[f"geopotential_height_{pressure}hPa"] = [100 + 600 * p_i + h for h in range(48)]
+        hourly[f"temperature_{pressure}hPa"] = [round(22 - 4.5 * p_i + math.cos(h / 7), 2) for h in range(48)]
+        hourly[f"dew_point_{pressure}hPa"] = [0.0 if pressure == 850 else 5.0 - p_i for _ in range(48)]
+        hourly[f"wind_speed_{pressure}hPa"] = [3.0 + p_i for _ in range(48)]
+        hourly[f"wind_direction_{pressure}hPa"] = [(350 + 25 * p_i) % 360 for _ in range(48)]
+    hourly["temperature_700hPa"][20] = None
+    for pressure in meteo.PRESSURE_LEVELS:
+        hourly[f"geopotential_height_{pressure}hPa"][30] = None
+    payload = {"latitude": 46.5, "longitude": 11.75, "elevation": 950.0, "hourly": hourly}
+
+    heights = [500, 1500, 2500, 4000, 7000]
+    jobs, want = [], []
+    for hour in (0, 13, 20, 30, 47, 400):
+        when = dt.datetime(2026, 7, 1) + dt.timedelta(hours=hour, minutes=17)
+        m = meteo._parse(payload, when)
+        want.append(m and {"dict": m.to_dict(), "wind": [list(w) if w else None for w in map(m.wind_at, heights)]})
+        jobs.append({"payload": payload, "when": when.replace(tzinfo=dt.timezone.utc).timestamp(),
+                     "now": dt.datetime.now(dt.timezone.utc).timestamp(), "heights": heights})
+    runner = tmp_path / "meteo.js"
+    js = js_parity.RUNNER.parent
+    runner.write_text(
+        "global.TV = {};\n"
+        + "".join(f"require({json.dumps(str(js / (n + '.js')))});\n" for n in ("np", "geo", "meteo"))
+        + "var input = JSON.parse(require('fs').readFileSync(0, 'utf8'));\n"
+        "process.stdout.write(JSON.stringify(input.map(function (job) {\n"
+        "  var m = TV.meteo.parse(job.payload, job.when, job.now);\n"
+        "  return m && { dict: TV.meteo.toDict(m), wind: job.heights.map(function (h) { return TV.meteo.windAt(m, h); }) };\n"
+        "})));\n")
+    got = json.loads(subprocess.run(["node", str(runner)], input=json.dumps(jobs),
+                                    capture_output=True, text=True, check=True).stdout)
+    differ = [d for w, g in zip(want, got) for d in js_parity.differences(json.loads(json.dumps(w)), g)]
+    assert not differ, differ[:5]
+    assert want[-1] is None and sum(w is not None for w in want) >= 4
+
+
+@needs_node
+def test_the_take_off_zone_reads_the_same_clock(tmp_path):
+    """tz-lookup in the page against timezonefinder in the CLI: the zone names may be
+    neighbours (Europe/Bratislava for Europe/Prague), the clock may not differ."""
+    import datetime as dt
+    import json
+    import subprocess
+    import zoneinfo
+
+    from tracklog_viewer.igc import _timezone_finder
+
+    places = [(50.55, 14.05), (46.52, 11.75), (36.3, 74.6), (48.9, 18.5), (47.2, 9.9),
+              (45.9, 6.9), (49.4, 20.1), (43.9, 7.0), (-33.9, 18.4), (37.9, -122.6)]
+    runner = tmp_path / "zone.js"
+    runner.write_text(
+        f"var tz = require({json.dumps(str(js_parity.RUNNER.parent / 'vendor' / 'tz-lookup.js'))});\n"
+        "var input = JSON.parse(require('fs').readFileSync(0, 'utf8'));\n"
+        "process.stdout.write(JSON.stringify(input.map(function (p) { return tz(p[0], p[1]); })));\n")
+    got = json.loads(subprocess.run(["node", str(runner)], input=json.dumps(places),
+                                    capture_output=True, text=True, check=True).stdout)
+    when = dt.datetime(2026, 7, 1, 12, tzinfo=dt.timezone.utc)
+    finder = _timezone_finder()
+    for (lat, lon), zone in zip(places, got):
+        expected = finder.timezone_at(lat=lat, lng=lon)
+        assert when.astimezone(zoneinfo.ZoneInfo(zone)).utcoffset() == \
+            when.astimezone(zoneinfo.ZoneInfo(expected)).utcoffset(), (lat, lon, zone, expected)
+
+
 def test_differences_are_reported_by_path():
     """The comparison itself: a mismatch names where it is and what each side said."""
     assert js_parity.differences({"a": [1, 2.0]}, {"a": [1, 2.0]}) == []

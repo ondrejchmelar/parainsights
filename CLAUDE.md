@@ -951,7 +951,11 @@ the font stays inlined because it is one request for a document's whole appearan
   the canvas `view3d`.
 - **Only the merged map.** Drop the canvas and plain MapLibre renderers and the switch,
   everywhere — once the merged view covers what the airspace and planner pages need from
-  the canvas (their own controls, the flat-map fallback).
+  the canvas (their own controls, the flat-map fallback). **Fix first:** on desktop a
+  shift/alt/meta left-drag in the merged view turns about the centre of the map, where
+  the canvas turns about the point grabbed (`pickAnchor`/`holdGround` in `view3d.py`);
+  touch is fine. The merged drag handler (`map3d.py`, the modified-drag block) needs to
+  pivot on the ground under the pointer.
 - **An airgram on the meteo page**: wind over time and altitude for the chosen takeoff.
 - **Every feature for an uploaded track — in progress.** The bundled flights are a
   showcase; uploads are the product and get a reduced analysis (`quicklook.py`). The
@@ -974,11 +978,15 @@ the font stays inlined because it is one request for a document's whole appearan
      there and compares field for field — the analysis, the route, every metric and the
      debrief with and without terrain and weather (synthetic ground and cloudbase, the
      same on both sides), the sun table, the air-mass frame with and without a model
-     wind, and insolation over a synthetic ridged DEM: **63 of 63 IGC and 75 of 75 KMZ samples
-     identical** (a file one side refuses, the other must refuse too). `tests/test_js_parity.py` does the same on
-     synthetic flights in CI. Timezone from take-off position is the one gap — the
-     harness hands Python's timezonefinder answer to the JS (`positionZone`); the page
-     needs its own lookup. Still to port: `meteo`'s reading of the profile.
+     wind, and insolation over a synthetic ridged DEM: **63 of 63 IGC and 75 of 75 KMZ
+     samples identical** (a file one side refuses, the other must refuse too).
+     `tests/test_js_parity.py` does the same on synthetic flights in CI. The harness
+     hands Python's timezonefinder answer to the JS (`positionZone`), so it compares the
+     analysis rather than two boundary datasets. `meteo.js` reads the Open-Meteo answer
+     (identical on 106 readings of the cached responses). The take-off timezone is
+     **tz-lookup** (`js/vendor`, CC0, 73 KB): the same clock as timezonefinder at all 136
+     sample take-offs, the same zone name at 131. **The analysis port is complete**;
+     next is the article.
   2. The per-flight article (`_flight_body`, the SVG charts) in JavaScript.
   3. The showcase flights through the same path; then retire the Python analysis and
      `quicklook.py`.

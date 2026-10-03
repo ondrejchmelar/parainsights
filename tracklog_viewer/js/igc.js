@@ -4,10 +4,10 @@
  * once and carried as `{ iana: name }` or `{ offsetHours: h }` (or null for UTC), which
  * `localParts` turns into a clock reading the way Python's `astimezone` does.
  *
- * One source of timezone is not portable yet: Python looks the zone up from the take-off
- * coordinates with `timezonefinder`, whose dataset is not in the page. `options.
- * positionZone(lat, lon)` is that lookup, supplied by the caller — the parity harness
- * passes Python's own answer through it so the comparison isolates that one gap.
+ * The zone from the take-off position is Python's `timezonefinder` there and tz-lookup
+ * here (`defaultZone`). `options.positionZone(lat, lon)` overrides it — the parity
+ * harness passes Python's own answer, so the comparison is of the analysis rather than
+ * of two boundary datasets.
  */
 (function (TV) {
   'use strict';
@@ -144,6 +144,16 @@
              source: 'HFTZN (' + (hours < 0 || Object.is(hours, -0) ? '-' : '+') + formatG(hours) + ')' };
   }
 
+  // The zone at a take-off when the file does not say: tz-lookup (js/vendor), where the
+  // page has loaded it. It gives the same clock as Python's timezonefinder at all 136
+  // sample take-offs, and the same zone name at 131 — the rest name a neighbour with the
+  // same offset (Europe/Bratislava for Europe/Prague).
+  function defaultZone(lat, lon) {
+    var lookup = typeof tzlookup === 'function' ? tzlookup : null;
+    if (!lookup) return null;
+    try { return lookup(lat, lon); } catch (error) { return null; }
+  }
+
   function parse(text, options) {
     options = options || {};
     var filterFixes = options.filterFixes !== false;
@@ -242,8 +252,9 @@
                    timezone_source: null, task: task, warnings: warnings, dropped: {} };
 
     var resolved = zoneFromLRecords(lRecords) || zoneFromHeader(headers);
-    if (!resolved && options.positionZone) {
-      var name = options.positionZone(lats[0], lons[0]);
+    var byPosition = options.positionZone || defaultZone;
+    if (!resolved) {
+      var name = byPosition(lats[0], lons[0]);
       if (name && zoneExists(name)) resolved = { zone: { iana: name }, source: 'position (' + name + ')' };
     }
     if (resolved) { flight.timezone = resolved.zone; flight.timezone_source = resolved.source; }
@@ -306,7 +317,7 @@
              warnings: flight.warnings, dropped: dropped };
   }
 
-  TV.igc = { parse: parse, filterBadFixes: filterBadFixes, despikeAltitude: despikeAltitude,
+  TV.igc = { parse: parse, defaultZone: defaultZone, filterBadFixes: filterBadFixes, despikeAltitude: despikeAltitude,
              hasBaro: hasBaro, altitude: altitude, baroOffset: baroOffset,
              localParts: localParts, clock: clock, isoDate: isoDate };
 })(typeof window !== 'undefined' ? (window.TV = window.TV || {}) : (globalThis.TV = globalThis.TV || {}));

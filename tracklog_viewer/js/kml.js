@@ -186,8 +186,9 @@
                  np.fmt(interval, 0) + ' s, no pressure altitude'],
       dropped: {}
     };
-    if (options.positionZone) {
-      var zone = options.positionZone(flight.lat[0], flight.lon[0]);
+    var byPosition = options.positionZone || igc.defaultZone;
+    if (byPosition) {
+      var zone = byPosition(flight.lat[0], flight.lon[0]);
       if (zone) { flight.timezone = { iana: zone }; flight.timezone_source = 'position (' + zone + ')'; }
     }
     return options.filterFixes === false ? flight : igc.filterBadFixes(flight);
