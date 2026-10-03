@@ -474,6 +474,9 @@ SWITCH_SCRIPT = (
   function load(tag, attrs) {
     return new Promise(function (resolve, reject) {
       var node = document.createElement(tag);
+      // CORS mode, so an error inside MapLibre or deck.gl reaches `window.onerror` with
+      // its message rather than as an opaque "Script error.".
+      node.crossOrigin = 'anonymous';
       Object.keys(attrs).forEach(function (key) { node[key] = attrs[key]; });
       node.onload = resolve;
       node.onerror = function () { reject(new Error('could not load ' + (attrs.src || attrs.href))); };

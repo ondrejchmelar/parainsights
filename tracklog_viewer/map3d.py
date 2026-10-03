@@ -24,9 +24,13 @@ STYLE = """
 .merged-view .m3-rose svg { display: block; margin-left: auto; }
 .merged-view .m3-rose p { margin: 4px 0 0; font-size: 11px; line-height: 1.3; color: #fff;
   text-shadow: 0 0 3px rgba(12,14,18,0.95), 0 0 2px rgba(12,14,18,0.95); }
-.merged-view .m3-replay { position: absolute; left: 10px; right: 10px; bottom: 52px; z-index: 3;
-  display: flex; gap: 5px; align-items: center; }
-.merged-view .m3-replay[hidden] { display: none; }
+.merged-view .m3-bottom { position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 3;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 5px; pointer-events: none; }
+.merged-view .m3-bottom > * { pointer-events: auto; }
+.merged-view .m3-bottom .view3d-controls { position: static; margin-left: auto; }
+.merged-view .m3-replay { display: flex; gap: 5px; align-items: center; }
+.merged-view .m3-replay[hidden], .merged-view .m3-time[hidden],
+.merged-view .view3d-controls[hidden] { display: none; }
 .merged-view .m3-replay button { font: inherit; font-size: 11px; letter-spacing: 0.06em;
   text-transform: uppercase; padding: 6px 9px; cursor: pointer; color: var(--ink-2);
   background: var(--panel); border: 1px solid var(--rule); border-radius: 2px; }
@@ -34,6 +38,8 @@ STYLE = """
 .merged-view .m3-replay button.is-on { background: var(--climb); border-color: var(--climb);
   color: var(--paper); }
 .merged-view .m3-icon svg { display: block; }
+.merged-view .m3-cycle { min-width: 3.2em; }
+.merged-view .view3d-controls { flex-wrap: wrap; }
 .merged-view .m3-speed { display: flex; align-items: center; }
 .merged-view .m3-speed button { border-radius: 0; }
 .merged-view .m3-speed button:first-child { border-radius: 2px 0 0 2px; }
@@ -42,7 +48,7 @@ STYLE = """
 .merged-view .m3-rate { min-width: 64px; text-align: center; font-size: 12px; color: var(--ink);
   font-variant-numeric: tabular-nums; background: var(--panel); border-top: 1px solid var(--rule);
   border-bottom: 1px solid var(--rule); padding: 5px 4px; }
-.merged-view .m3-time { flex: 1; display: flex; gap: 8px; align-items: center;
+.merged-view .m3-time { flex: 1 1 100%; display: flex; gap: 8px; align-items: center;
   background: var(--panel); border: 1px solid var(--rule); border-radius: 2px;
   padding: 3px 9px; font-size: 12px; color: var(--ink); font-variant-numeric: tabular-nums; }
 .merged-view .m3-time input { flex: 1; accent-color: var(--climb); }
@@ -53,8 +59,11 @@ STYLE = """
    controls the bottom. */
 .merged-view .maplibregl-ctrl-top-left { z-index: 3; }
 .merged-view .maplibregl-ctrl-attrib { font-size: 11px; }
+/* Last, so it wins over the rules above it at equal specificity. */
+/* A phone: the bar stays one row; where it and the replay buttons do not fit side by
+   side, the bar wraps under them, still at the right. */
 @media (max-width: 640px) {
-  .merged-view .m3-replay { bottom: 92px; }
+  .merged-view .view3d-controls { flex-wrap: nowrap; justify-content: flex-end; }
 }
 """
 
@@ -69,6 +78,10 @@ SCRIPT = r"""
   // Markers and labels draw over the track rather than fighting it for depth: a number
   // at the same point as its own circle otherwise loses to it and vanishes.
   var ON_TOP = { depthCompare: 'always', depthWriteEnabled: false };
+  // The canvas view strokes its track 2.6 px wide on a backing store of up to twice the
+  // screen's density, so on a phone it is 1.3 CSS px and on a desktop 2.6. deck.gl's
+  // pixels are CSS pixels, so the same line takes the same arithmetic.
+  var TRACK_WIDTH = 2.6 / Math.min(window.devicePixelRatio || 1, 2);
   var PLAY_ICON = '<svg width="11" height="12" viewBox="0 0 11 12" aria-hidden="true">' +
     '<path d="M1 1 L10 6 L1 11 Z" fill="currentColor"/></svg>';
   var PAUSE_ICON = '<svg width="11" height="12" viewBox="0 0 11 12" aria-hidden="true">' +
@@ -199,9 +212,16 @@ SCRIPT = r"""
       '</svg><p class="m3-rose-text"></p></div>' +
       '<div class="view3d-asp" hidden></div>' +
       '<div class="view3d-keys" hidden data-m3="help">' + keysHtml(hasAirspace) + '</div>' +
+      // The bottom of the map, in one flowing box: the slider across the full width, and
+      // under it the replay's own buttons at the left and the bar at the right. On a phone
+      // the two groups do not fit one line, and wrap onto two. The replay half is hidden
+      // until the bar's play button opens it: most of the time the reader wants the whole
+      // flight, and a slider parked at the end is a row of nothing.
+      '<div class="m3-bottom">' +
       (hasTime ?
-        // Hidden until the replay button in the bar opens it: most of the time the reader
-        // wants the whole flight, and a slider parked at the end is a row of nothing.
+        '<label class="m3-time" hidden><span class="m3-clock"></span>' +
+          '<input type="range" min="0" max="' + duration + '" step="1" value="' + duration + '"' +
+          ' aria-label="Replay time"></label>' +
         '<div class="m3-replay" hidden>' +
           '<button type="button" data-m3="play" class="m3-icon" aria-pressed="false"' +
           ' title="Play / pause (space)" aria-label="Play">' + PLAY_ICON + '</button>' +
@@ -210,28 +230,14 @@ SCRIPT = r"""
             '<span class="m3-rate" aria-live="polite"></span>' +
             '<button type="button" data-m3="faster" title="Faster" aria-label="Faster">+</button>' +
           '</div>' +
-          '<label class="m3-time"><span class="m3-clock"></span>' +
-          '<input type="range" min="0" max="' + duration + '" step="1" value="' + duration + '"' +
-          ' aria-label="Replay time"></label>' +
           '<button type="button" data-m3="whole" class="is-on" aria-pressed="true"' +
           ' title="Show the whole track behind the replay">whole track</button>' +
         '</div>' : '') +
       '<div class="view3d-controls" hidden>' +
-        '<div class="view3d-seg" role="group" aria-label="What the ground is">' +
-          styles.map(function (k) {
-            var on = k === basemap;
-            return '<button type="button" data-m3-style="' + k + '" aria-pressed="' + on + '"' +
-              (on ? ' class="is-on"' : '') + '>' + ((tiles[k] || {}).label || k) + '</button>';
-          }).join('') +
-          '<button type="button" data-m3-style="off" aria-pressed="false">relief</button>' +
-        '</div>' +
-        '<div class="view3d-seg view3d-vert" role="group" aria-label="Vertical exaggeration">' +
-          [1, 2, 4].map(function (v) {
-            return '<button type="button" data-m3-vert="' + v + '" aria-pressed="' + (v === 1) + '"' +
-              (v === 1 ? ' class="is-on"' : '') + ' aria-label="Vertical exaggeration &#215;' + v +
-              '">&#215;' + v + '</button>';
-          }).join('') +
-        '</div>' +
+        // One button each, naming what is on and stepping to the next: two segmented
+        // groups of three were six of the bar's slots, and on a phone the bar is one row.
+        '<button type="button" data-m3="ground" class="m3-cycle"></button>' +
+        '<button type="button" data-m3="vertical" class="m3-cycle"></button>' +
         (hasPhases ?
           '<div class="view3d-seg view3d-labels" role="group" aria-label="Phase labels">' +
           '<button type="button" data-m3-label="climb" aria-pressed="false"' +
@@ -253,7 +259,7 @@ SCRIPT = r"""
           ' stroke-width="1.5"><path d="M1 4.5V1h3.5M8.5 1H12v3.5M12 8.5V12H8.5M4.5 12H1V8.5"/></svg></button>' +
         '<button type="button" class="view3d-reset" data-m3="reset" title="Reset view"' +
         ' aria-label="Reset view">&#8634;</button>' +
-      '</div>';
+      '</div></div>';
     panel.appendChild(view);
 
     var playing = false, frame = null, map = null;
@@ -277,6 +283,7 @@ SCRIPT = r"""
       view.querySelector('.m3-status').hidden = true;
       view.querySelector('.view3d-controls').hidden = false;
       var replay = view.querySelector('.m3-replay');
+      var timeRow = view.querySelector('.m3-time');
 
       var vertical = 1, whole = true, cursor = null, cutoff = duration;
       var labels = { climb: false, glide: false }, airspaceOn = false;
@@ -297,8 +304,22 @@ SCRIPT = r"""
         if (j === 0) return { az: t.az[i], el: t.el[i] };
         return { az: t.az[i] + (t.az[j] - t.az[i]) * f, el: t.el[i] + (t.el[j] - t.el[i]) * f };
       }
+      // How strongly the ground is shaded: lightly over a photograph or a map, fully on
+      // bare relief, where the shading *is* the picture.
+      function shading(key) {
+        var over = key !== 'off';
+        return {
+          'hillshade-exaggeration': over ? 0.45 : 1,
+          'hillshade-highlight-color': over ? 'rgba(255,252,242,0.45)' : 'rgba(255,252,242,1)',
+          'hillshade-shadow-color': over ? 'rgba(18,26,38,0.7)' : 'rgba(18,26,38,1)'
+        };
+      }
+      // Every basemap in one style, and a switch shows one and hides the rest. Swapping
+      // whole styles with `setStyle` was the first version, and three quick presses left
+      // the map with no imagery and no terrain: MapLibre does not survive a style change
+      // arriving while the last one is still loading. A hidden layer fetches no tiles,
+      // so carrying all of them costs nothing until one is shown.
       function style(key) {
-        var source = tiles[key];
         var sources = {
           // Declared at half their size so MapLibre asks one zoom deeper than it would:
           // four times the tiles, and relief and imagery as sharp as the canvas's grid.
@@ -310,52 +331,52 @@ SCRIPT = r"""
           shade: { type: 'raster-dem', tiles: [window.__mapTerrarium], tileSize: 128, maxzoom: 15,
                    encoding: 'terrarium' }
         };
-        var layers = [];
-        if (source) {
+        var below = [{ id: 'bg', type: 'background', paint: { 'background-color': '#d6d2c4' } }];
+        var above = [];
+        styles.forEach(function (name) {
+          var source = tiles[name];
           source.layers.forEach(function (template, i) {
-            // The photograph at half size (sharper), the place-name layer at full size —
-            // halved, its lettering would be too small to read.
+            var id = name + '-' + i;
+            // The photograph at half size (sharper), a label layer at full size — halved,
+            // its lettering would be too small to read.
             var consistent = !i && source.consistent_from;
-            sources['b' + i] = { type: 'raster', tileSize: i ? 256 : 128,
-                                 maxzoom: source.max_zoom || 18,
-                                 tiles: [consistent
-                                   ? 'm3tiles://' + encodeURIComponent(template) + '/' +
-                                     source.consistent_from + '/{z}/{x}/{y}'
-                                   : template] };
-            if (!i && source.attribution) sources.b0.attribution = source.attribution;
-            // A slight lift: the raw Esri mosaic is dark next to the canvas's, which the
-            // shading's highlights brighten by a third on the sunlit side.
-            layers.push({ id: 'b' + i, type: 'raster', source: 'b' + i,
-                          paint: i ? { 'raster-fade-duration': 150 }
-                                   : { 'raster-fade-duration': 150, 'raster-brightness-min': 0.06,
-                                       'raster-contrast': 0.05 } });
+            sources[id] = { type: 'raster', tileSize: i ? 256 : 128,
+                            maxzoom: source.max_zoom || 18,
+                            tiles: [consistent
+                              ? 'm3tiles://' + encodeURIComponent(template) + '/' +
+                                source.consistent_from + '/{z}/{x}/{y}'
+                              : template] };
+            if (!i && source.attribution) sources[id].attribution = source.attribution;
+            // A slight lift on the picture itself: the raw Esri mosaic is dark next to the
+            // canvas's, which the shading's highlights brighten on the sunlit side.
+            (i ? above : below).push({
+              id: id, type: 'raster', source: id,
+              layout: { visibility: name === key ? 'visible' : 'none' },
+              paint: i ? { 'raster-fade-duration': 150 }
+                       : { 'raster-fade-duration': 150, 'raster-brightness-min': 0.06,
+                           'raster-contrast': 0.05 }
+            });
           });
-        } else {
-          layers.push({ id: 'bg', type: 'background', paint: { 'background-color': '#d6d2c4' } });
-        }
+        });
         // The canvas view's own shading, not MapLibre's default: sunlit slopes lifted
         // towards a warm white and shaded ones towards a dark blue, lit from where the sun
-        // was. Black-and-white shading over the photograph is what greyed it out; these
-        // two colours are what makes the canvas imagery read clean and the relief read at
-        // all. Under the labels layer, so place names stay crisp.
-        var shade = {
-          id: 'hillshade', type: 'hillshade', source: 'shade', paint: {
-            'hillshade-exaggeration': source ? 0.45 : 1,
-            'hillshade-highlight-color': source ? 'rgba(255,252,242,0.45)' : 'rgba(255,252,242,1)',
-            'hillshade-shadow-color': source ? 'rgba(18,26,38,0.7)' : 'rgba(18,26,38,1)',
-            'hillshade-accent-color': 'rgba(0,0,0,0)',
-            'hillshade-illumination-anchor': 'map',
-            'hillshade-illumination-direction': sun ? ((sunAt(sunMinute).az % 360) + 360) % 360 : 315
-          }
-        };
-        if (layers.length > 1) layers.splice(1, 0, shade); else layers.push(shade);
+        // was. Black-and-white shading over the photograph is what greyed it out. Under
+        // any label layer, so place names stay crisp.
+        var paint = shading(key);
+        paint['hillshade-accent-color'] = 'rgba(0,0,0,0)';
+        paint['hillshade-illumination-anchor'] = 'map';
+        paint['hillshade-illumination-direction'] =
+          sun ? ((sunAt(sunMinute).az % 360) + 360) % 360 : 315;
         return {
-          version: 8, sources: sources, layers: layers,
+          version: 8, sources: sources,
+          layers: below.concat([{ id: 'hillshade', type: 'hillshade', source: 'shade', paint: paint }],
+                               above),
           // A sky without the haze: fog only at the horizon, and no atmosphere tint over
           // the ground — the haze is what washed the satellite colours out.
           sky: { 'sky-color': '#7fa3c4', 'horizon-color': '#c9d6e0', 'fog-color': '#c9d6e0',
                  'fog-ground-blend': 1, 'horizon-fog-blend': 0.15,
-                 'sky-horizon-blend': 0.6, 'atmosphere-blend': 0 }
+                 'sky-horizon-blend': 0.6, 'atmosphere-blend': 0 },
+          terrain: { source: 'dem', exaggeration: 1 }
         };
       }
 
@@ -364,10 +385,17 @@ SCRIPT = r"""
       var east = tr.lon.length ? Math.max.apply(null, tr.lon) : dem.east;
       var south = tr.lat.length ? Math.min.apply(null, tr.lat) : dem.south;
       var north = tr.lat.length ? Math.max.apply(null, tr.lat) : dem.north;
+      var styleReady = false;
       map = new maplibregl.Map({
         container: view.querySelector('.ml-map'), style: style(basemap),
         center: [(west + east) / 2, (south + north) / 2], zoom: 10, pitch: 60, bearing: 0,
         maxPitch: 85, attributionControl: false, keyboard: true
+      });
+      // 'style.load', not 'load': 'load' waits for the first complete frame, every tile
+      // included, which on a slow connection is long after a reader has pressed things.
+      map.once('style.load', function () {
+        styleReady = true;
+        if (vertical !== 1) map.setTerrain({ source: 'dem', exaggeration: vertical });
       });
       // Credits from the sources themselves, so switching the basemap changes them.
       map.addControl(new maplibregl.AttributionControl({ compact: true }), 'top-left');
@@ -386,7 +414,6 @@ SCRIPT = r"""
         });
         watch.observe(box, { attributes: true, attributeFilter: ['class'] });
       })();
-      map.on('style.load', function () { map.setTerrain({ source: 'dem', exaggeration: vertical }); });
 
       // The canvas view's mouse: a left drag with any modifier — shift, ctrl, alt or meta —
       // rotates and tilts, as a right drag does. MapLibre only knows ctrl and the right
@@ -488,7 +515,7 @@ SCRIPT = r"""
         if (whole || !hasTime) out.push(new deck.PathLayer({
           id: 'track', data: lines,
           getPath: function (d) { return d.path.map(function (p) { return [p[0], p[1], z(p[2])]; }); },
-          getColor: function (d) { return d.colour; }, getWidth: 3, widthUnits: 'pixels',
+          getColor: function (d) { return d.colour; }, getWidth: TRACK_WIDTH, widthUnits: 'pixels',
           capRounded: true, jointRounded: true, billboard: true,
           updateTriggers: { getPath: vertical }
         }));
@@ -497,27 +524,22 @@ SCRIPT = r"""
                                  times: tr.t }],
           getPath: function (d) { return d.path.map(function (p) { return [p[0], p[1], z(p[2])]; }); },
           getTimestamps: function (d) { return d.times; },
-          getColor: [255, 255, 255], getWidth: 4, widthUnits: 'pixels',
+          getColor: [255, 255, 255], getWidth: TRACK_WIDTH * 1.5, widthUnits: 'pixels',
           trailLength: whole ? 420 : duration + 1, currentTime: cutoff,
           capRounded: true, jointRounded: true, updateTriggers: { getPath: vertical }
         }));
         var marks = (scene.climbs || []).map(function (c) {
           return { label: c.label, tow: c.tow, position: [c.lon, c.lat, c.alt] };
         });
+        // Where each climb was, as a dot: the numbers crowded the track and said nothing
+        // the climbs table does not.
         out.push(new deck.ScatterplotLayer({
           id: 'climbs', data: marks,
           getPosition: function (d) { return [d.position[0], d.position[1], z(d.position[2])]; },
           getFillColor: function (d) { return d.tow ? [27, 175, 122] : [226, 96, 44]; },
-          getLineColor: [255, 255, 255, 235], stroked: true, lineWidthMinPixels: 1.5,
-          radiusUnits: 'pixels', getRadius: 9, billboard: true, updateTriggers: { getPosition: vertical },
+          getLineColor: [255, 255, 255, 220], stroked: true, lineWidthMinPixels: 1,
+          radiusUnits: 'pixels', getRadius: 4, billboard: true, updateTriggers: { getPosition: vertical },
           parameters: ON_TOP
-        }));
-        out.push(new deck.TextLayer({
-          id: 'climb-numbers', data: marks, getText: function (d) { return d.label; },
-          getPosition: function (d) { return [d.position[0], d.position[1], z(d.position[2])]; },
-          getColor: [255, 255, 255], getSize: 11, fontWeight: 700,
-          fontFamily: 'ui-sans-serif, system-ui, sans-serif', billboard: true,
-          updateTriggers: { getPosition: vertical }, parameters: ON_TOP
         }));
         if (scene.landing) out.push(new deck.ScatterplotLayer({
           id: 'landing', data: [scene.landing],
@@ -700,7 +722,7 @@ SCRIPT = r"""
         var toggle = view.querySelector('[data-m3="replay"]');
         toggle.classList.toggle('is-on', on);
         toggle.setAttribute('aria-pressed', String(on));
-        replay.hidden = !on;
+        replay.hidden = timeRow.hidden = !on;
         if (on) { setTime(0); togglePlay(); return; }
         pause();
         whole = true;
@@ -710,26 +732,46 @@ SCRIPT = r"""
       }
 
       // ---- controls --------------------------------------------------------------------
-      function press(selector, button) {
-        view.querySelectorAll(selector).forEach(function (b) {
-          var on = b === button;
-          b.classList.toggle('is-on', on);
-          b.setAttribute('aria-pressed', String(on));
-        });
+      var GROUNDS = styles.concat(['off']), VERTICALS = [1, 2, 4];
+      function groundName(key) {
+        return key === 'off' ? 'relief' : ((tiles[key] || {}).label || key);
+      }
+      function label() {
+        var g = view.querySelector('[data-m3="ground"]'), v = view.querySelector('[data-m3="vertical"]');
+        var nextGround = GROUNDS[(GROUNDS.indexOf(basemap) + 1) % GROUNDS.length];
+        var nextVertical = VERTICALS[(VERTICALS.indexOf(vertical) + 1) % VERTICALS.length];
+        g.textContent = groundName(basemap);
+        g.title = 'Ground: ' + groundName(basemap) + ' — press for ' + groundName(nextGround) + ' (s m r)';
+        g.setAttribute('aria-label', g.title);
+        v.innerHTML = '&#215;' + vertical;
+        v.title = 'Vertical exaggeration ×' + vertical + ' — press for ×' + nextVertical + ' (1 2 4)';
+        v.setAttribute('aria-label', v.title);
       }
       function setBasemap(key) {
         if (key !== 'off' && !tiles[key]) return;
         basemap = key;
-        press('[data-m3-style]', view.querySelector('[data-m3-style="' + key + '"]'));
-        lastLight = null;
-        map.setStyle(style(key));
+        label();
+        styles.forEach(function (name) {
+          tiles[name].layers.forEach(function (_, i) {
+            map.setLayoutProperty(name + '-' + i, 'visibility', name === key ? 'visible' : 'none');
+          });
+        });
+        var paint = shading(key);
+        Object.keys(paint).forEach(function (k) { map.setPaintProperty('hillshade', k, paint[k]); });
       }
       function setVertical(v) {
         vertical = v;
-        press('[data-m3-vert]', view.querySelector('[data-m3-vert="' + v + '"]'));
-        map.setTerrain({ source: 'dem', exaggeration: v });
+        label();
+        // The redraw first: if MapLibre throws below, the climbs, the track and the
+        // ground must not end up at three different heights.
         refresh();
+        // Before the style is parsed MapLibre throws here, so a press that early is
+        // applied when it is. Not `isStyleLoaded()`: that stays false while any tile is still
+        // arriving, long after 'load' has fired, and a press then was silently lost — the
+        // track went to x2 over ground left at x1.
+        if (styleReady) map.setTerrain({ source: 'dem', exaggeration: v });
       }
+      label();
       function toggle(button, on) {
         button.classList.toggle('is-on', on);
         button.setAttribute('aria-pressed', String(on));
@@ -753,8 +795,8 @@ SCRIPT = r"""
         var b = event.target.closest('button, .view3d-keys');
         if (!b || !view.contains(b)) return;
         var act = b.dataset.m3;
-        if (b.dataset.m3Style) setBasemap(b.dataset.m3Style);
-        else if (b.dataset.m3Vert) setVertical(Number(b.dataset.m3Vert));
+        if (act === 'ground') setBasemap(GROUNDS[(GROUNDS.indexOf(basemap) + 1) % GROUNDS.length]);
+        else if (act === 'vertical') setVertical(VERTICALS[(VERTICALS.indexOf(vertical) + 1) % VERTICALS.length]);
         else if (b.dataset.m3Label) {
           labels[b.dataset.m3Label] = !labels[b.dataset.m3Label];
           toggle(b, labels[b.dataset.m3Label]);

@@ -791,8 +791,16 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   The merged view's controls follow the canvas's: a left drag with shift, alt or meta
   turns and tilts as a right drag does (box zoom is off), labels are white with an
   outline over a coloured span, and the replay is one play button in the bar that opens
-  a row with play/pause, speed (10 s/s to 20 min/s) and the slider — closing it puts the
-  whole track back.
+  the slider (full width) with play/pause, speed (10 s/s to 20 min/s) and whole-track
+  under it at the left — closing it puts the whole track back. Climbs are dots, not
+  numbers, and the track is the canvas's width (2.6 px over the device ratio, capped at
+  2). **Ground and exaggeration are one cycling button each**, against the canvas's
+  segmented groups, because the merged bar has to fit one row on a phone.
+  **Basemaps switch by layer visibility, never `setStyle`**: every basemap is in the one
+  style and hidden ones fetch nothing. Three quick `setStyle` calls left the map with no
+  imagery and no terrain. And `setTerrain` waits for `style.load`, not `load` (which
+  waits for every tile) and not `isStyleLoaded()` (false while any tile is in flight) —
+  both lost an early x2 press and drew the track over ground still at x1.
 - **A declared task the flight did not fly is worse than no task at all.** A logger writes
   out whatever task happens to be loaded, so a `C` record is evidence of what was in
   XCTrack, not of what the pilot intended today. On `2021-07-06-XCT-ROP-01` the loaded
