@@ -179,9 +179,48 @@
     return out === 0 ? 0 : out;   // never -0, which JSON prints as 0 and Python as -0.0
   }
 
+  // Python's format(x, '.Nf') and friends, for the sentences the debrief writes: rounded
+  // half-to-even on the exact value like `round`, and — unlike `round` — the sign is
+  // kept when the result is zero: f"{-0.004:.2f}" is "-0.00" in Python. `plus` is the
+  // '+' flag; `percent` is the '%' type, which multiplies by 100 first.
+  function fmt(x, digits, options) {
+    options = options || {};
+    if (options.percent) x = x * 100;
+    var negative = x < 0 || Object.is(x, -0);
+    var body = Math.abs(pyRound(x, digits)).toFixed(digits);
+    var sign = negative ? '-' : (options.plus ? '+' : '');
+    var out = sign + body;
+    if (options.thousands) {
+      var parts = body.split('.');
+      parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, options.thousands);
+      out = sign + parts.join('.');
+    }
+    return out + (options.percent ? '%' : '');
+  }
+
+  // Weighted least squares line, as np.polyfit(x, y, 1, w=w): numpy weights the
+  // *residuals* by w, so the squared error is weighted by w².
+  function weightedLinefit(x, y, w) {
+    var W = w.map(function (v) { return v * v; }), sw = 0, sx = 0, sy = 0, i;
+    for (i = 0; i < x.length; i++) { sw += W[i]; sx += W[i] * x[i]; sy += W[i] * y[i]; }
+    var mx = sx / sw, my = sy / sw, sxy = 0, sxx = 0;
+    for (i = 0; i < x.length; i++) { sxy += W[i] * (x[i] - mx) * (y[i] - my); sxx += W[i] * (x[i] - mx) * (x[i] - mx); }
+    var slope = sxx ? sxy / sxx : 0;
+    return { slope: slope, intercept: my - slope * mx };
+  }
+
+  // np.linspace(start, stop, num), endpoint included.
+  function linspace(start, stop, num) {
+    var out = [], step = num > 1 ? (stop - start) / (num - 1) : 0;
+    for (var i = 0; i < num; i++) out.push(i * step + start);
+    if (num > 1) out[num - 1] = stop;
+    return out;
+  }
+
   TV.np = {
     DEG: DEG, RAD: RAD, sum: sum, mean: mean, median: median, max: max, min: min,
     nanmax: nanmax, diff: diff, cumsum: cumsum, clip: clip, mod: mod, interp: interp,
-    unwrap: unwrap, linefit: linefit, histogram: histogram, pyRound: pyRound
+    unwrap: unwrap, linefit: linefit, weightedLinefit: weightedLinefit, histogram: histogram,
+    linspace: linspace, pyRound: pyRound, fmt: fmt
   };
 })(typeof window !== 'undefined' ? (window.TV = window.TV || {}) : (globalThis.TV = globalThis.TV || {}));
