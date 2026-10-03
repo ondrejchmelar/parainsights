@@ -217,7 +217,32 @@
     return out;
   }
 
+  // np.gradient(f) at unit spacing: central differences inside, one-sided at the ends.
+  function gradient(f) {
+    var n = f.length, out = new Array(n);
+    if (n < 2) return f.map(function () { return 0; });
+    out[0] = f[1] - f[0];
+    out[n - 1] = f[n - 1] - f[n - 2];
+    for (var i = 1; i < n - 1; i++) out[i] = (f[i + 1] - f[i - 1]) / 2.0;
+    return out;
+  }
+
+  // np.percentile(a, q), 'linear': the virtual index q/100 * (n - 1), and numpy's _lerp,
+  // which interpolates from the upper neighbour once the fraction reaches 0.5.
+  function percentile(a, q) {
+    var s = Array.prototype.slice.call(a).sort(function (x, y) { return x - y; });
+    var n = s.length;
+    if (!n) return NaN;
+    var virtual = (q / 100) * (n - 1);
+    var below = Math.floor(virtual), above = Math.min(below + 1, n - 1);
+    below = Math.min(Math.max(below, 0), n - 1);
+    var t = virtual - Math.floor(virtual);
+    var lo = s[below], hi = s[above], d = hi - lo;
+    return t >= 0.5 ? hi - d * (1 - t) : lo + d * t;
+  }
+
   TV.np = {
+    gradient: gradient, percentile: percentile,
     DEG: DEG, RAD: RAD, sum: sum, mean: mean, median: median, max: max, min: min,
     nanmax: nanmax, diff: diff, cumsum: cumsum, clip: clip, mod: mod, interp: interp,
     unwrap: unwrap, linefit: linefit, weightedLinefit: weightedLinefit, histogram: histogram,

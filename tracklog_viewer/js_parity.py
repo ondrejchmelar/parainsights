@@ -30,7 +30,10 @@ from pathlib import Path
 
 import types
 
-from . import debrief, igc, metrics, xc
+import numpy as np
+
+from . import airmass, debrief, igc, insolation, metrics, view3d, xc
+from .terrain import Terrain, clearance as terrain_clearance
 from .analysis import analyse
 
 RUNNER = Path(__file__).parent / "js" / "parity_runner.js"
@@ -115,6 +118,47 @@ def _expected(flight) -> dict:
         "debrief": debrief.build(analysis, route=route).to_dict(),
         "debrief_full": debrief.build(analysis, route=route, weather=weather,
                                       clearance=clearance).to_dict(),
+        "sun": view3d._sun(analysis),
+        **{key: _airmass(analysis, model) for key, model in (
+            ("airmass", None),
+            ("airmass_model", types.SimpleNamespace(wind_at=lambda altitude: (5.0, 270.0))),
+        )},
+    }
+
+
+def _airmass(analysis, weather) -> dict:
+    wind = airmass.field(analysis, weather=weather)
+    return {"field": dataclasses.asdict(wind),
+            "glide": _asdict(airmass.glide_performance(analysis, wind)),
+            "wander": _asdict(airmass.circle_wander(analysis, wind)),
+            "polar": _asdict(airmass.polar(analysis, wind))}
+
+
+def synthetic_terrain(flight) -> Terrain:
+    """Ridges over the flight's box, steep enough for the ridge rule to have something to
+    find, and in whole decimetres so both sides read the same numbers from the JSON."""
+    west, east = float(flight.lon.min()) - 0.03, float(flight.lon.max()) + 0.03
+    south, north = float(flight.lat.min()) - 0.03, float(flight.lat.max()) + 0.03
+    rows, cols = 90, 110
+    lat = np.linspace(north, south, rows)[:, None]
+    lon = np.linspace(west, east, cols)[None, :]
+    base = float(np.min(flight.alt_gps if np.any(flight.alt_gps) else flight.alt_baro)) - 250
+    z = base + 380 * np.sin(lat * 230.0) * np.cos(lon * 170.0) + 60 * np.sin(lon * 900.0)
+    return Terrain(west, east, south, north, np.round(z, 1))
+
+
+def _grid(t: Terrain) -> dict:
+    return {"west": t.west, "east": t.east, "south": t.south, "north": t.north,
+            "rows": t.rows, "cols": t.cols, "z": t.elevations.ravel().tolist()}
+
+
+def _insolation(analysis, t: Terrain) -> dict:
+    agl = terrain_clearance(t, analysis)
+    return {
+        "clearance": agl[::37].tolist(),
+        "triggers": [dataclasses.asdict(x) for x in insolation.triggers(analysis, t)],
+        "sources": {str(k): dataclasses.asdict(v) for k, v in insolation.sources(analysis, t).items()},
+        "windward": _asdict(insolation.windward(analysis, t)),
     }
 
 
@@ -123,12 +167,17 @@ def _zone_from_position(flight) -> str | None:
     return source[len("position ("):-1] if source.startswith("position (") else None
 
 
-def compare(paths: list[Path]) -> list[tuple[Path, list[str] | str]]:
+def compare(paths: list[Path], *, terrain=synthetic_terrain) -> list[tuple[Path, list[str] | str]]:
+    """`terrain(flight)` makes the ground both sides are given; a test can shape it."""
     jobs, expected = [], []
     for path in paths:
         flight = igc.parse(path)
-        expected.append(_plain(_expected(flight)))
-        jobs.append({"path": str(path), "positionZone": _zone_from_position(flight)})
+        ground = terrain(flight)
+        want = _expected(flight)
+        want["insolation"] = _insolation(analyse(flight), ground)
+        expected.append(_plain(want))
+        jobs.append({"path": str(path), "positionZone": _zone_from_position(flight),
+                     "terrain": _grid(ground)})
     run = subprocess.run(["node", str(RUNNER)], input=json.dumps(jobs),
                          capture_output=True, text=True, check=True)
     results = json.loads(run.stdout)

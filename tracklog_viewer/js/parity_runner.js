@@ -9,7 +9,7 @@
 var fs = require('fs');
 var path = require('path');
 global.TV = {};
-['np', 'geo', 'igc', 'flight', 'analysis', 'xc', 'metrics', 'debrief'].forEach(function (name) {
+['np', 'geo', 'igc', 'flight', 'analysis', 'xc', 'metrics', 'debrief', 'sun', 'airmass', 'terrain', 'insolation'].forEach(function (name) {
   require(path.join(__dirname, name + '.js'));
 });
 
@@ -40,6 +40,22 @@ var out = input.map(function (job) {
     };
     result.debrief = TV.debrief.toDict(TV.debrief.build(analysis, { route: route }));
     result.debrief_full = TV.debrief.toDict(TV.debrief.build(analysis, { route: route, weather: weather, clearance: clearance }));
+    result.sun = TV.sun.forFlight(flight);
+    if (job.terrain) {
+      var grid = job.terrain, I = TV.insolation;
+      var agl = TV.terrain.clearance(grid, analysis);
+      result.insolation = {
+        clearance: agl.filter(function (_, i) { return i % 37 === 0; }),
+        triggers: I.triggers(analysis, grid), sources: I.sources(analysis, grid),
+        windward: I.windward(analysis, grid)
+      };
+    }
+    var AM = TV.airmass;
+    [['airmass', null], ['airmass_model', { windAt: function () { return [5.0, 270.0]; } }]].forEach(function (pair) {
+      var wind = AM.field(analysis, pair[1]);
+      result[pair[0]] = { field: wind, glide: AM.glidePerformance(analysis, wind),
+                          wander: AM.circleWander(analysis, wind), polar: AM.polar(analysis, wind) };
+    });
     return { ok: true, result: result };
   } catch (error) {
     return { ok: false, error: String(error && error.stack || error) };

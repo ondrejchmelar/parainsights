@@ -79,6 +79,32 @@ def test_a_coarse_file_matches_too(tmp_path):
     assert result == [], result if isinstance(result, str) else "\n".join(result[:20])
 
 
+@needs_node
+def test_a_ridge_climb_matches_too(tmp_path):
+    """A beat flown 100 m over a steep slope, so the ridge rule fires on both sides."""
+    import numpy as np
+
+    from tracklog_viewer.terrain import Terrain
+
+    def slope_under(flight):
+        west, east = float(flight.lon.min()) - 0.02, float(flight.lon.max()) + 0.02
+        south, north = float(flight.lat.min()) - 0.02, float(flight.lat.max()) + 0.02
+        lon = np.linspace(west, east, 80)[None, :]
+        lat = np.linspace(north, south, 60)[:, None]
+        # A face rising 30 m per 100 m eastwards, set so the beat sits ~100 m over it.
+        z = 950.0 + (lon - (west + east) / 2) * 111000 * 0.3 + 0 * lat
+        return Terrain(west, east, south, north, np.round(z, 1))
+
+    path = build(tmp_path / "ridge.igc", beat(500, bearing=0.0, climb=0.6))
+    [(_, result)] = js_parity.compare([path], terrain=slope_under)
+    assert result == [], result if isinstance(result, str) else "\n".join(result[:20])
+    from tracklog_viewer import igc, insolation
+    from tracklog_viewer.analysis import analyse
+    flight = igc.parse(path)
+    labels = {s.label for s in insolation.sources(analyse(flight), slope_under(flight)).values()}
+    assert "ridge" in labels, "the fixture no longer reaches the ridge rule"
+
+
 def test_differences_are_reported_by_path():
     """The comparison itself: a mismatch names where it is and what each side said."""
     assert js_parity.differences({"a": [1, 2.0]}, {"a": [1, 2.0]}) == []
