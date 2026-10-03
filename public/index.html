@@ -6838,11 +6838,9 @@ window.__view3dBackend = function (host) {
           version: 8, sources: sources,
           layers: below.concat([{ id: 'hillshade', type: 'hillshade', source: 'shade', paint: paint }],
                                above),
-          // A sky without the haze: fog only at the horizon, and no atmosphere tint over
-          // the ground — the haze is what washed the satellite colours out.
-          sky: { 'sky-color': '#7fa3c4', 'horizon-color': '#c9d6e0', 'fog-color': '#c9d6e0',
-                 'fog-ground-blend': 1, 'horizon-fog-blend': 0.15,
-                 'sky-horizon-blend': 0.6, 'atmosphere-blend': 0 },
+          // MapLibre's own sky and haze, every value its default: the distance fades into
+          // the horizon the way air does, which is what reads as depth at a low pitch.
+          sky: {},
           terrain: { source: 'dem', exaggeration: 1 }
         };
       }
