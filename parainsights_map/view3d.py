@@ -18,11 +18,12 @@ TILE_SOURCES = {
         "layers": [
             "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery"
             "/MapServer/tile/{z}/{y}/{x}",
-            # Place names only. `Reference/World_Boundaries_and_Places` carried them with
-            # every country, region and district border drawn in white over the photo;
-            # this one is the names alone, light grey, and no lines.
-            "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas"
-            "/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}",
+            # The place names of `World_Boundaries_and_Places` (white on a dark halo)
+            # without its region and district borders; only the national one remains.
+            # Canvas/World_Dark_Gray_Reference has no lines at all, but its names are
+            # faint grey with no halo, made for a dark canvas rather than a photograph.
+            "https://server.arcgisonline.com/ArcGIS/rest/services/Reference"
+            "/World_Boundaries_and_Places_Alternate/MapServer/tile/{z}/{y}/{x}",
         ],
         "attribution": "Imagery © Esri, Maxar, Earthstar Geographics",
         "max_zoom": 18,

@@ -464,8 +464,11 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   every graph in its output is a broken image. Don't reintroduce a network dependency
   into a chart.
 - **Satellite imagery is the default basemap**, composited from Esri World Imagery plus
-  its `Canvas/World_Dark_Gray_Reference` label layer (place names and no border lines;
-  `World_Boundaries_and_Places` drew every district border over the photo) — both keyless. A photograph tells a pilot
+  its `World_Boundaries_and_Places_Alternate` label layer — the same place names as
+  `World_Boundaries_and_Places`, without the region and district borders it drew over the
+  photo; only the national border stays. Esri's caches are one fused raster, so a layer
+  cannot be switched off, and `Canvas/World_Dark_Gray_Reference` (no lines at all) draws
+  its names faint grey with no halo. Both keyless. A photograph tells a pilot
   what the ground under a climb was; a road map does not. Attribution to Esri/Maxar is
   required and is rendered on the map and in the caption.
 - **Every basemap style is fetched at view time.** When stitching from tiles, give each
