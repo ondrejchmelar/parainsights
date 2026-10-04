@@ -15,7 +15,8 @@ import pytest
 from tests.flights import FLIGHTS
 from tests.js import needs_node
 from tests.test_analysis import LAT0, LON0, build
-from tracklog_viewer import cli, js_build, terrain as terrain_module
+from tracklog_viewer import cli, js_build
+from parainsights_map import terrain as terrain_module
 
 pytestmark = needs_node
 

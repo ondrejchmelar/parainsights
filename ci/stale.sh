@@ -21,12 +21,11 @@ set -eu
 
 PAGE=public/index.html
 
-# Everything whose output ends up inside that file. `airspaces` and
-# `parainsights_common` are in the list for the same reason as the viewer: the report
-# carries the airspace layer as one of its views and the nav strip as its header, so a
-# change to either leaves the published copy a version behind the standalone page. This
-# is the list CLAUDE.md's "including when only `airspaces` or `view3d` changed" names.
-SOURCES="tracklog_viewer airspaces parainsights_common"
+# Everything whose output ends up inside that file. `airspaces`, `parainsights_common` and
+# `parainsights_map` are in the list for the same reason as the viewer: the report carries
+# the Planner as one of its views, the nav strip as its header and the 3D map in every
+# flight, so a change to any of them leaves the published copy a version behind.
+SOURCES="tracklog_viewer airspaces parainsights_common parainsights_map"
 
 # One file inside those trees cannot change the report, and watching it made the guard
 # fire on a change that could not possibly have mattered. `tracklog_viewer/cli.py` builds

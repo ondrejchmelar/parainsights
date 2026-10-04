@@ -185,7 +185,7 @@ PLAN_NODES = 120000
 def remote(airspaces) -> dict:
     """The map's payload with the ground left for the page to fetch. Cannot fail at
     build time, which is why the flat fallback is now only ever asked for (`--flat`)."""
-    from tracklog_viewer import terrain as viewer_terrain
+    from parainsights_map import terrain as viewer_terrain
 
     payload = build(airspaces, terrain=None, tiles=True)
     payload["terrain"] = viewer_terrain.remote(*PLAN_BOX, cols=PLAN_COLUMNS,
@@ -204,7 +204,7 @@ def build(airspaces, *, terrain=None, tiles: bool = True) -> dict:
     `terrain` is passed in rather than fetched here so that a caller without a network —
     every test in this suite — can build the payload from fixtures.
     """
-    from tracklog_viewer import view3d
+    from parainsights_map import view3d
 
     payload = {
         "terrain": terrain.to_dict() if terrain is not None else None,

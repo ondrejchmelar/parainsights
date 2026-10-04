@@ -8,7 +8,9 @@ handler can find, and the page carries both mounts.
 
 import re
 
-from tracklog_viewer import map3d, render_html, render_map
+from tracklog_viewer import render_html
+
+from parainsights_map import map3d, render_map
 
 
 def test_the_switch_offers_all_three_renderers():
@@ -46,7 +48,7 @@ def test_heights_are_scaled_from_sea_level_in_both_maplibre_views():
 def test_the_merged_view_never_shows_esri_below_its_consistent_level():
     # Esri's levels under 12 are an older, darker mosaic: blue channel 26 against 59 over
     # the same Dolomites ground. The merged view builds those tiles from level 12 instead.
-    from tracklog_viewer import view3d
+    from parainsights_map import view3d
 
     assert view3d.TILE_SOURCES["satellite"]["consistent_from"] == 12
     assert "maplibregl.addProtocol('m3tiles'" in map3d.SCRIPT

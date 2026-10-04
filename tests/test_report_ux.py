@@ -15,7 +15,8 @@ import re
 import pytest
 
 from tests.js import needs_node
-from tracklog_viewer import render_html, view3d
+from tracklog_viewer import render_html
+from parainsights_map import view3d
 
 
 def media_block(css: str, query: str) -> str:

@@ -1243,7 +1243,7 @@ def test_the_3d_map_gives_the_same_answer_as_the_flat_one():
 
     from airspaces import cli as airspace_cli
     from airspaces import scene as airspace_scene
-    from tracklog_viewer import terrain as terrain_module
+    from parainsights_map import terrain as terrain_module
 
     overlay, base = _hours_fixture()
     ground = terrain_module.Terrain(
@@ -1283,7 +1283,7 @@ def _box_page():
 
     from airspaces import cli as airspace_cli
     from airspaces import scene as airspace_scene
-    from tracklog_viewer import terrain as terrain_module
+    from parainsights_map import terrain as terrain_module
 
     overlay, base = _hours_fixture()
     ground = terrain_module.Terrain(
@@ -1381,7 +1381,7 @@ def test_pointing_at_the_wall_names_the_airspace():
 def _terrain_box(west=14.0, east=14.5, south=50.0, north=50.4):
     import numpy as np
 
-    from tracklog_viewer import terrain as terrain_module
+    from parainsights_map import terrain as terrain_module
 
     return terrain_module.Terrain(west=west, east=east, south=south, north=north,
                                   elevations=np.full((8, 8), 400.0))

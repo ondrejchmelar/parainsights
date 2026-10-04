@@ -25,7 +25,7 @@ def _page(article: str, title: str, *, three_d: bool = False) -> str:
     view_style, view_script = "", ""
     if three_d:
         from planner import render_html as planner_html
-        from tracklog_viewer import map3d, render_map, view3d, view3d_gl
+        from parainsights_map import map3d, render_map, view3d, view3d_gl
 
         view_style = (view3d.STYLE + view3d_gl.STYLE + render_map.SWITCH_STYLE + map3d.STYLE
                       + planner_html.STYLE)

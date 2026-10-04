@@ -12,8 +12,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import parainsights_common as common
+from parainsights_map import map3d, render_map, view3d, view3d_gl
 
-from . import charts_client, map3d, render_map, upload_panel, view3d, view3d_gl
+from . import charts_client, upload_panel
 
 FONT_PATH = Path(__file__).parent / "assets" / "display.woff2.b64"
 

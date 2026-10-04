@@ -16,7 +16,9 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from . import certification, js_build, render_html, sources, terrain as terrain_module
+from parainsights_map import terrain as terrain_module
+
+from . import certification, js_build, render_html, sources
 
 # Where a pilot's pre-flight plans are remembered, by date and site, when there is no
 # sidecar beside the tracklog.

@@ -25,8 +25,8 @@ from tests.js import needs_node
 
 xc = planner_html.xc
 from tests.test_view3d_gl import CHROME, CHROME_FLAGS, needs_chrome
-from tracklog_viewer import terrain as terrain_module
-from tracklog_viewer import view3d
+from parainsights_map import terrain as terrain_module
+from parainsights_map import view3d
 
 
 def _terrain():

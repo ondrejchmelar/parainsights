@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from tracklog_viewer import view3d, view3d_gl
+from parainsights_map import view3d, view3d_gl
 
 CHROME = shutil.which("google-chrome") or shutil.which("chromium")
 needs_chrome = pytest.mark.skipif(CHROME is None, reason="needs headless Chrome")

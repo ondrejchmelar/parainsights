@@ -7,8 +7,8 @@ import pytest
 
 from tests import js
 from tests.js import needs_node
-from tracklog_viewer import terrain
-from tracklog_viewer.terrain import Terrain
+from parainsights_map import terrain
+from parainsights_map.terrain import Terrain
 
 
 @pytest.fixture

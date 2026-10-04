@@ -18,6 +18,7 @@ parainsights/
 ├── meteo/                 the day's sounding against pgweb's essential takeoffs
 ├── planner/               a task drawn on the airspace it crosses — a section of the airspace page
 ├── parainsights_common/   the one thing every page shares: the strip between the tools
+├── parainsights_map/      the 3D map every page draws with: canvas, WebGL, merged, MapLibre, terrain
 ├── ci/                    the checks the pipeline runs that are not tests
 ├── tests/                 pytest, ~630 tests, no network; the JS through Node (tests/js.py)
 └── docs/
@@ -42,12 +43,13 @@ the same geodesy: the viewer works on the FAI sphere because that is what a scor
 distance is measured on, and airspace is published against WGS84. That is the rule, and
 it is about *geodesy and analysis*, where the tools genuinely disagree.
 
-`view3d` is the exception that shows the edge of it. It is a **map widget** — hand it a
+The 3D map is the exception that shows the edge of it. It is a **map widget** — hand it a
 terrain grid, some imagery and a list of things to draw and it never asks what a flight
-is — so `airspaces`, `meteo` and `planner` all use it rather than carrying a copy of
-120 KB of JavaScript. The right end state is a third package holding it, and since its
-flight code moved to `js/scene.js` that is a move rather than a refactor. Every such
-import is lazy, so no tool fails to build because another is absent. Likewise `planner`
+is — so the viewer and the Planner share it, as the package `parainsights_map` (the canvas
+view, its WebGL backend, the merged and plain MapLibre views, the renderer switch and the
+DEM fetcher), rather than each carrying 120 KB of JavaScript. Its flight code went to
+`js/scene.js` first, which is what made it a move. Imports of it from `airspaces` are
+lazy, so the OpenAir file still builds with the map absent. Likewise `planner`
 reads its scoring constants out of `tracklog_viewer/js/xc.js` — a planner that scored a
 task differently from the report that later measures the flight would be worse than no
 planner.
@@ -298,15 +300,11 @@ build and the page around the articles.
 | `cli.py` | The build: inputs, fetches, plan discovery, airspace, the page |
 | `js_build.py` | Runs `build_runner.js` |
 | `sources.py` | A file, a URL's download, or a refusal for an XContest page |
-| `terrain.py` | Fetches DEM grids (AWS terrarium, keyless) for the build |
 | `certification.py` | The register-matching rules and `gliders.py`, compiled to `gliders.json` |
 | `render_html.py` | The page around the articles: stylesheet, page script, strips, bundle |
 | `upload_panel.py` | The `+ your track` panel |
 | `charts_client.py` | The side and top views, drawn in the browser from the article's payload |
-| `view3d.py` | The canvas 3D view: camera, gestures, tiles — a map widget, not flight code |
-| `view3d_gl.py` | WebGL heightfield, registered as a backend for `view3d.py` |
-| `render_map.py` | The plain MapLibre view, the renderer switch and the shared MapLibre loader |
-| `map3d.py` | The merged 3D map: MapLibre's engine under the canvas view's controls |
+| `parainsights_map/` | The 3D map (a package of its own): `view3d` (canvas), `view3d_gl` (WebGL backend), `map3d` (merged), `render_map` (plain MapLibre, the switch, the loader), `terrain` (DEM grids) |
 
 ## Decisions, and the reasons behind them
 
@@ -1003,8 +1001,8 @@ the font stays inlined because it is one request for a document's whole appearan
   existed. Two things changed.
   **`ci/stale.sh` refuses to publish a report older than the code that renders it.** It
   asks whether the page’s last commit contains the last change to `tracklog_viewer`,
-  `airspaces` and `parainsights_common` — the last two because the report carries the
-  airspace layer and the nav strip — and fails the pipeline when it does not. Ancestry
+  `airspaces`, `parainsights_common` and `parainsights_map` — the report carries the
+  Planner, the nav strip and the 3D map — and fails the pipeline when it does not. Ancestry
   rather than dates, because two commits in the same second compare equal. One file is
   excluded and the exclusion is checked rather than assumed: `airspaces/cli.py` is the
   *standalone* page's command line, and the report imports `airspaces.build`,

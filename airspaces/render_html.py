@@ -1025,14 +1025,14 @@ def _map(airspaces, project, scene: dict | None, uid: str) -> str:
     airspace because a tile server was slow."""
     if scene is None:
         return map_svg(airspaces, project)
-    from tracklog_viewer import view3d
+    from parainsights_map import view3d
 
     # The exaggeration this map offers, and it starts at x5. At true scale over 500 km
     # of country a 300 m traffic circuit is **0.3 px** tall and an ATZ 0.7 px, so every
     # box is two coincident rings — the flat map with extra steps. x1 is still one press
     # away and the segmented control says which is on, so nothing here is hidden; what is
     # hidden at true scale is the entire point of the view.
-    from tracklog_viewer import render_map
+    from parainsights_map import render_map
 
     # The flights' renderer switch, opening on the merged map (MapLibre's engine under
     # the canvas's controls), which the planner draws on too. The canvas stays one press

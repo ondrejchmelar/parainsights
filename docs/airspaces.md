@@ -346,15 +346,14 @@ so its filename is read from the directory listing instead of computed.
   to `map_svg` when the fetch fails and `--flat` asks for it outright — a slow tile server
   must never cost the reader the airspace itself.
 
-- **`airspaces` importing `tracklog_viewer.view3d` does not break the "share a page, not
-  code" rule; it marks where the rule ends.** The rule is about geodesy and analysis,
+- **`airspaces` importing the 3D map (`parainsights_map`) does not break the "share a
+  page, not code" rule; it marks where the rule ends.** The rule is about geodesy and analysis,
   where the two tools genuinely disagree — the viewer measures on the FAI sphere because
   that is what a scored distance is measured on, and airspace is published against WGS84,
-  which is why `airspaces/geo.py` exists beside `tracklog_viewer/geo.py`. A map widget is
-  not that. The alternative was copying 120 KB of JavaScript. The right end state is a
-  third package; what stops it today is that `view3d.data()` and `cursor_track()` in the
-  same module *are* flight code, so it is a refactor rather than a move. Both imports are
-  lazy, so either tool still builds with the other absent.
+  which is why `airspaces/geo.py` exists beside the viewer's `js/geo.js`. A map widget is
+  not that, and since October 2026 it is a package of its own, `parainsights_map`, which
+  both tools import. The imports are lazy, so `airspaces` still builds its OpenAir file
+  with the map absent.
 
 - **No tile layer on the *flat* map.** Same constraint as the rest of the repository: a
   published artifact reaches no external host, so the backdrop is an embedded Natural

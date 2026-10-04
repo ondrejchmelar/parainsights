@@ -20,7 +20,7 @@ import numpy as np
 import pytest
 
 from tests.test_view3d_gl import CHROME, CHROME_FLAGS, needs_chrome
-from tracklog_viewer import terrain, view3d
+from parainsights_map import terrain, view3d
 
 BOX = (13.6, 14.9, 49.1, 50.2)          # west, east, south, north
 COLS, MAX_NODES = 90, 5000

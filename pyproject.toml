@@ -25,7 +25,8 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["tracklog_viewer*", "airspaces*", "meteo*", "planner*", "parainsights_common*"]
+include = ["tracklog_viewer*", "airspaces*", "meteo*", "planner*", "parainsights_common*",
+           "parainsights_map*"]
 
 # The analysis and the articles, in JavaScript: read from beside the package, not imported.
 [tool.setuptools.package-data]
