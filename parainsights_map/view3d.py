@@ -543,13 +543,38 @@ function loadTerrain(dem) {
   });
 }
 
+// A scene as the page carries it, parsed and decoded. The track (every fix) and the
+// airspace rings are delta-encoded where they are written (`js/scene.js`,
+// `airspaces.scene.rings`): each value the difference from the one before, in steps of
+// 1/`enc` for coordinates. Decoded here, once, so everything else reads plain arrays.
+function readScene(node) {
+  var scene = JSON.parse(node.textContent);
+  function run(steps, scale) {
+    var out = new Array(steps.length), total = 0;
+    for (var i = 0; i < steps.length; i++) { total += steps[i]; out[i] = scale ? total / scale : total; }
+    return out;
+  }
+  var t = scene.track;
+  if (t && t.enc) {
+    t.lon = run(t.lon, t.enc); t.lat = run(t.lat, t.enc);
+    t.alt = run(t.alt); if (t.t) t.t = run(t.t);
+    delete t.enc;
+  }
+  (scene.airspaces || []).forEach(function (ring) {
+    if (!ring.enc) return;
+    ring.lon = run(ring.lon, ring.enc); ring.lat = run(ring.lat, ring.enc);
+    delete ring.enc;
+  });
+  return scene;
+}
+
 // `initView3d` for a scene that may still have to fetch its terrain. Resolves with the
 // handle, or with null where `initView3d` would have returned null; rejects only when the
 // terrain could not be fetched at all, which the caller has to say something about.
 function initView3dWhenReady(root, cursorTrack) {
   var payload = root.querySelector('.view3d-data');
   if (!payload) return Promise.resolve(null);
-  var scene = JSON.parse(payload.textContent);
+  var scene = readScene(payload);
   var dem = scene.terrain;
   if (!dem || !dem.remote || dem.z) return Promise.resolve(initView3d(root, cursorTrack, scene));
   var box = root.querySelector('.view3d-loading');
@@ -575,7 +600,7 @@ function initView3d(root, cursorTrack, preset) {
   var payload = root.querySelector('.view3d-data');
   if (!canvas || !payload) return null;
   // `preset` is the scene `initView3dWhenReady` has already parsed and completed.
-  var scene = preset || JSON.parse(payload.textContent);
+  var scene = preset || readScene(payload);
   // A scene need not carry a flight. The airspace map is the same widget over the same
   // terrain with no track in it, so the flight-shaped members are defaulted here once
   // rather than guarded at each of the dozen places that read them.
@@ -1221,9 +1246,12 @@ function initView3d(root, cursorTrack, preset) {
         detailPending = null;
         if (done === 0) return;
         layers.forEach(function (layer) { mctx.drawImage(layer, 0, 0); });
-        var patch = new Image();
-        patch.onerror = function () { detailPending = null; };
-        patch.onload = function () {
+        // The stitched canvas is used as it is: drawImage and texImage2D both take a
+        // canvas. It went through `toDataURL('image/jpeg')` and back into an Image, which
+        // was the costliest thing on the page — a multi-megapixel JPEG encode on the main
+        // thread and a data URL several megabytes long, to arrive at the same pixels.
+        var patch = mosaic;
+        setTimeout(function () {
           if (style !== styleName) return;   // the reader cycled on while we stitched
           // Shaded exactly as the base image is, or the sharp patch would read as a
           // flat rectangle laid over hillshaded ground — the terrain looks *wrong*
@@ -1235,8 +1263,7 @@ function initView3d(root, cursorTrack, preset) {
             box: box, style: styleName, zoom: zoom
           };
           draw();
-        };
-        patch.src = mosaic.toDataURL('image/jpeg', 0.85);
+        }, 0);
         return;
       }
       loading = false;
@@ -1258,12 +1285,11 @@ function initView3d(root, cursorTrack, preset) {
       }
       mosaicZoom = zoom;
       layers.forEach(function (layer) { mctx.drawImage(layer, 0, 0); });
-      var image = new Image();
-      // Hidden once the stitched image has decoded, not when the last tile arrives:
-      // `shadedTexture` and `sampleCellColours` still run after that, and hiding early
-      // leaves the reader looking at unchanged terrain with nothing happening.
-      image.onerror = hideLoading;
-      image.onload = function () {
+      // The canvas itself, as for a detail patch above. Hidden once it is shaded, not when
+      // the last tile arrives: `shadedTexture` and `sampleCellColours` still run after
+      // that, and hiding early leaves the reader looking at unchanged terrain.
+      var image = mosaic;
+      setTimeout(function () {
         var was = style;
         style = styleName;
         ready[styleName] = {image: image, box: box, shaded: shadedTexture(image, box)};
@@ -1275,8 +1301,7 @@ function initView3d(root, cursorTrack, preset) {
         showCredit(source.attribution);
         hideLoading();
         draw();
-      };
-      image.src = mosaic.toDataURL('image/jpeg', 0.82);
+      }, 0);
     }
 
     progress();

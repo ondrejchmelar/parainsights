@@ -1108,16 +1108,35 @@ SCRIPT = """
   }, true);
 })();
 
+// Resolves when `element` is first on screen: now if it already is, else on the first
+// change that reveals it (the flight tabs and the view strip toggle `hidden`).
+function whenShown(element) {
+  function shown() { return element.getClientRects().length > 0; }
+  if (shown()) return Promise.resolve();
+  return new Promise(function (resolve) {
+    var watch = new MutationObserver(function () {
+      if (shown()) { watch.disconnect(); resolve(); }
+    });
+    watch.observe(document.body, { attributes: true, subtree: true,
+                                   attributeFilter: ['hidden', 'class', 'style'] });
+  });
+}
+
 function initFlight(root) {
   var payload = root.querySelector('.cursor-data');
   var tip = document.getElementById('tip');
   if (!tip || !payload) return;
   var data = JSON.parse(payload.textContent);
   // The ground is fetched by the page (`terrain.to_remote`), so the view arrives once it
-  // has; every use of `terrainView` below is in a handler that runs after that.
+  // has; every use of `terrainView` below is in a handler that runs after that. And only
+  // once the flight is first shown: each 3D view fetches its own ground and imagery and
+  // holds a WebGL context, and a page of three flights was starting all three on arrival
+  // for the one the reader sees — 600 requests and most of the page's memory.
   var terrainView = null;
   if (typeof initView3dWhenReady === 'function') {
-    initView3dWhenReady(root, data.cursor3d || null).then(function (handle) {
+    whenShown(root).then(function () {
+      return initView3dWhenReady(root, data.cursor3d || null);
+    }).then(function (handle) {
       terrainView = handle;
     }, function () {});
   }

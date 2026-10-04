@@ -109,7 +109,7 @@ SWITCH_SCRIPT = (
     if (host.__standIn) return host.__standIn;
     var data = host.querySelector('.view3d-data');
     try {
-      var scene = data && JSON.parse(data.textContent);
+      var scene = data && readScene(data);
       if (!scene || !scene.track || !scene.track.lon || !scene.track.lon.length) return null;
       return (host.__standIn = { built: { scene: scene, cursorTrack: null } });
     } catch (error) {

@@ -366,7 +366,6 @@ class TestBasemapSpinner:
         never going to change is worse than no spinner."""
         script = view3d.SCRIPT
         assert script.count("hideLoading()") >= 3
-        assert "image.onerror = hideLoading" in script
 
     def test_a_hung_request_is_given_up_on(self):
         """The failure this suite originally missed.
@@ -390,13 +389,15 @@ class TestBasemapSpinner:
         # Every tile outcome re-arms it, errors included: the host answered either way.
         assert script.count("progress();") >= 3
 
-    def test_it_clears_after_the_stitched_image_decodes_not_before(self):
+    def test_it_clears_after_the_stitched_image_is_shaded_not_before(self):
         """`shadedTexture` and `sampleCellColours` run after the last tile arrives, so
         hiding on tile count leaves the reader watching unchanged terrain."""
         script = view3d.SCRIPT
-        decode = script.index("image.onload = function ()")
-        assert script.index("hideLoading()", decode) < script.index(
-            "image.src = mosaic.toDataURL", decode)
+        stitched = script.index("var image = mosaic;")
+        shaded = script.index("shadedTexture(image, box)", stitched)
+        colours = script.index("sampleCellColours();", shaded)
+        assert colours < script.index("hideLoading()", colours), (
+            "the spinner clears before the stitched imagery is shaded and sampled")
 
     def test_the_label_survives_reduced_motion(self):
         """The global reduced-motion rule stops the ring, so the text beside it is what

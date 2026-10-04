@@ -48,6 +48,25 @@ DRAWN_TOP = 4000.0
 MIN_BOX_M = 150.0
 
 
+def _deltas(values: list[int]) -> list[int]:
+    """Each value as the difference from the one before; the first from zero."""
+    return [b - a for a, b in zip([0] + values[:-1], values)]
+
+
+def decoded(ring: dict) -> dict:
+    """A ring's lon/lat as degrees again — what the page's `readScene` does."""
+    if not ring.get("enc"):
+        return ring
+    def run(steps):
+        total, out = 0, []
+        for step in steps:
+            total += step
+            out.append(total / ring["enc"])
+        return out
+    return {**{k: v for k, v in ring.items() if k != "enc"},
+            "lon": run(ring["lon"]), "lat": run(ring["lat"])}
+
+
 def bounds(airspaces, margin: float = 0.12):
     """The box to fetch terrain and imagery for: everything drawn, plus a margin."""
     lats = [lat for a in airspaces for lat, _ in a.points] or [lat for lat, _ in border.BORDER]
@@ -146,8 +165,12 @@ def rings(airspaces) -> list[dict]:
             # slider and the drawing height can never disagree. `_box` adds the rest of
             # the vertical: the lid, and whether either end follows the terrain.
             **_box(airspace),
-            "lon": [round(lon, 4) for _, lon in points],
-            "lat": [round(lat, 4) for lat, _ in points],
+            # Delta-encoded in 1e-4° steps (the precision they had as decimals): 19 000
+            # vertices on the Planner map, and about half the bytes this way. The page's
+            # `readScene` (`parainsights_map.view3d`) decodes them before anything reads.
+            "enc": 1e4,
+            "lon": _deltas([round(lon * 1e4) for _, lon in points]),
+            "lat": _deltas([round(lat * 1e4) for lat, _ in points]),
         }
         # Only where hours were actually read. A ring with no `w` is a ring the time
         # filter must never hide — that covers all 251 base airspaces, whose activation

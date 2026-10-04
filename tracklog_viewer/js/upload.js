@@ -124,7 +124,7 @@
     if (typeof document === 'undefined') return airspaceRings;
     var data = document.querySelector('.airspace-article .view3d-data');
     try {
-      var scene = data && JSON.parse(data.textContent);
+      var scene = data && (typeof readScene === 'function' ? readScene(data) : JSON.parse(data.textContent));
       if (scene && scene.airspaces && scene.airspaces.length) {
         airspaceRings = { rings: scene.airspaces, colours: scene.airspaceColours || {} };
       }

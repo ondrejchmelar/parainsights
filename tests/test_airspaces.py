@@ -1433,3 +1433,18 @@ def test_a_flight_with_nothing_near_it_gets_no_layer_at_all():
 
     away = _band("AWAY", 74.0, 74.2, 36.0, 36.2)
     assert airspace_scene.layer([away], _terrain_box()) == {}
+
+
+def test_the_rings_are_delta_encoded_and_lose_nothing():
+    """19 000 vertices on the Planner map, sent as steps of 1e-4° from the vertex before:
+    about half the bytes, and the decoded ring is the four-decimal ring exactly."""
+    from airspaces import openair, scene as airspace_scene
+
+    space = openair.Airspace("BOX", "C", floor="GND", ceiling="FL 95",
+                             points=[(50.0, 14.0), (50.1234, 14.0), (50.1234, 14.5678), (50.0, 14.5678)])
+    [ring] = airspace_scene.rings([space])
+    assert ring["enc"] == 1e4
+    plain = airspace_scene.decoded(ring)
+    assert "enc" not in plain
+    assert plain["lat"] == pytest.approx([50.0, 50.1234, 50.1234, 50.0], abs=1e-9)
+    assert plain["lon"] == pytest.approx([14.0, 14.0, 14.5678, 14.5678], abs=1e-9)

@@ -120,10 +120,25 @@ class TestView3dPayload:
         assert payload["terrain"]["rows"] == 3
         assert len(payload["track"]["lon"]) == len(payload["track"]["alt"])
         assert len(payload["track"]["c"]) == len(payload["track"]["lon"])
-        assert payload["trackTop"] >= max(payload["track"]["alt"])
+        assert payload["trackTop"] >= max(np.cumsum(payload["track"]["alt"]))
         assert payload["climbs"], "the synthetic circling flight is a climb"
         assert all(0 <= i < len(payload["palette"]) for i in payload["track"]["c"])
         assert all(len(colour) == 3 for colour in payload["palette"])
+
+    def test_the_track_is_every_fix_to_the_same_precision(self, ramp, tmp_path):
+        """Delta-encoded to halve its bytes, and nothing lost: the running sums are each
+        fix's coordinates at 1e-5°, its altitude and its time, exactly."""
+        from tests.test_analysis import build, circling
+        out = js.run("""var f = await load(input.path), a = TV.analysis.analyse(f);
+          return { scene: TV.scene.data(a, input.grid, {}), lon: f.lon, lat: f.lat, t: a.series.t };""",
+                     path=build(tmp_path / "enc.igc", circling(120)), grid=_grid(ramp))
+        track = out.scene["track"]
+        assert track["enc"] == 1e5
+        assert list(np.cumsum(track["lon"])) == [round(v * 1e5) for v in out.lon]
+        assert list(np.cumsum(track["lat"])) == [round(v * 1e5) for v in out.lat]
+        assert list(np.cumsum(track["t"])) == [int(v) for v in out.t]
+        # Mostly one or two characters a step at 1 Hz, which is the whole saving.
+        assert max(abs(v) for v in track["lon"][1:]) < 100
 
     def test_every_style_is_fetched_at_view_time(self, ramp, tmp_path):
         payload = self._scene(ramp, tmp_path).scene

@@ -47,13 +47,20 @@
     options = options || {};
     var f = a.flight, s = a.series;
     var alt = f.alt_gps.some(function (v) { return v !== 0; }) ? f.alt_gps : s.alt;
-    var track = { lon: [], lat: [], alt: [], c: [], t: [] };
+    // Every fix, delta-encoded: lon and lat in 1e-5° steps (the precision they had as
+    // decimals), altitude in metres and time in seconds, each as the difference from the
+    // fix before. The same values in about half the bytes — `readScene` in the page
+    // (`parainsights_map.view3d`) puts them back before anything reads them.
+    var track = { enc: 1e5, lon: [], lat: [], alt: [], c: [], t: [] };
+    var prev = [0, 0, 0, 0];
     for (var i = 0; i < f.lon.length; i++) {
-      track.lon.push(R(f.lon[i], 5));
-      track.lat.push(R(f.lat[i], 5));
-      track.alt.push(Math.trunc(alt[i]));
+      var now = [Math.round(f.lon[i] * 1e5), Math.round(f.lat[i] * 1e5), Math.trunc(alt[i]), Math.trunc(s.t[i])];
+      track.lon.push(now[0] - prev[0]);
+      track.lat.push(now[1] - prev[1]);
+      track.alt.push(now[2] - prev[2]);
+      track.t.push(now[3] - prev[3]);
       track.c.push(colourIndex(s.climb[i]));
-      track.t.push(Math.trunc(s.t[i]));
+      prev = now;
     }
     var climbs = [], number = 0;
     a.segments.forEach(function (seg) {
@@ -82,7 +89,7 @@
     var n = f.lon.length;
     var out = {
       terrain: terrain,
-      trackTop: track.alt.length ? Math.max.apply(null, track.alt) : 0,
+      trackTop: f.lon.length ? Math.max.apply(null, alt.map(Math.trunc)) : 0,
       track: track, climbs: climbs, phases: phases,
       palette: RAMP_RGB.map(function (r) { return r[1].slice(); }),
       tiles: Object.assign({}, TILE_SOURCES),
