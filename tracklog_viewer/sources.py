@@ -1,7 +1,8 @@
 """Where a flight can come from: a file, a URL, or an XContest page.
 
-One entry point, :func:`load`, so the CLI and any future front-end do not have to
-know how many shapes an input can take.
+One entry point, :func:`local_path`: the bytes of the input on disk, whatever shape it
+arrived in. Reading them is the JavaScript's job (`js/upload.js`, `readBytes`), the same
+dispatch an uploaded file goes through.
 
 On XContest links: a flight *detail page* does not carry the track. The page is a
 JavaScript shell behind Cloudflare Turnstile, and the download links only appear for
@@ -21,9 +22,6 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import igc, kml
-from .igc import Flight
-
 CACHE = Path.home() / ".cache" / "parainsights" / "downloads"
 TIMEOUT = 30
 # Plain browser UA: some track hosts refuse the urllib default outright.
@@ -42,7 +40,7 @@ TRACK_SUFFIXES = (".igc", ".kmz", ".kml")
 
 
 class SourceError(ValueError):
-    """The input could not be turned into a flight."""
+    """The input is not somewhere a flight can be read from."""
 
 
 @dataclass
@@ -97,39 +95,11 @@ def _is_xcontest_page(parsed) -> bool:
     return not parsed.path.lower().endswith(TRACK_SUFFIXES)
 
 
-def _parse_bytes(body: bytes, name: str, *, filter_fixes: bool) -> Flight:
-    """Dispatch on content, not just on the file name, since URLs lie."""
-    suffix = Path(name).suffix.lower()
-    scratch = CACHE / f"parse-{name}"
-    CACHE.mkdir(parents=True, exist_ok=True)
-    scratch.write_bytes(body)
-    try:
-        if suffix == ".igc" or body[:1] in (b"A", b"H"):
-            return igc.parse(scratch, filter_fixes=filter_fixes)
-        if suffix in (".kmz", ".kml") or body[:2] == b"PK" or b"<kml" in body[:2000]:
-            return kml.parse(scratch, filter_fixes=filter_fixes)
-    finally:
-        scratch.unlink(missing_ok=True)
-    raise SourceError(f"{name}: not recognised as IGC, KML or KMZ")
-
-
 def local_path(source: str | Path) -> Path:
     """Where the bytes of a source are on disk: the file itself, or a URL's download in
-    the cache (`load` has fetched it by the time anyone asks)."""
+    the cache. An XContest flight *page* is refused with what it says about the flight."""
     text = str(source)
     parsed = urllib.parse.urlparse(text)
-    if parsed.scheme in ("http", "https"):
-        _download(text)
-        key = hashlib.sha256(text.encode()).hexdigest()[:16]
-        return CACHE / f"{key}-{Path(parsed.path).name or 'download'}"
-    return Path(text).expanduser()
-
-
-def load(source: str | Path, *, filter_fixes: bool = True) -> Flight:
-    """Load a flight from a path, a track URL, or raise for an XContest page."""
-    text = str(source)
-    parsed = urllib.parse.urlparse(text)
-
     if parsed.scheme in ("http", "https"):
         if _is_xcontest_page(parsed):
             meta = xcontest_metadata(text)
@@ -145,16 +115,10 @@ def load(source: str | Path, *, filter_fixes: bool = True) -> Flight:
                 "session. Download the IGC or KMZ from the page and pass the file, or "
                 "pass a direct link to the .igc/.kmz."
             )
-        body, name = _download(text)
-        return _parse_bytes(body, name, filter_fixes=filter_fixes)
-
+        _download(text)
+        key = hashlib.sha256(text.encode()).hexdigest()[:16]
+        return CACHE / f"{key}-{Path(parsed.path).name or 'download'}"
     path = Path(text).expanduser()
     if not path.exists():
         raise SourceError(f"{path} does not exist")
-    suffix = path.suffix.lower()
-    if suffix == ".igc":
-        return igc.parse(path, filter_fixes=filter_fixes)
-    if suffix in (".kmz", ".kml"):
-        return kml.parse(path, filter_fixes=filter_fixes)
-    # Unknown extension: sniff the content rather than refuse.
-    return _parse_bytes(path.read_bytes(), path.name, filter_fixes=filter_fixes)
+    return path

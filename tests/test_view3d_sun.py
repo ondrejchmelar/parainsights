@@ -1,6 +1,6 @@
 """The sun and the wind in the 3D view: the light following the hover, and the arrows.
 
-The Python side of the sun is `sun.py`, tested against a second algorithm in
+The solar table comes from `js/sun.js`, tested against a second algorithm in
 `test_sun.py`. What that cannot see is whether the terrain is *lit* from where the table
 says the sun was, whether hovering a chart moves it, and whether the arrows point where
 they claim to. The shading is computed in the page — baked into vertex colours by the
@@ -11,18 +11,21 @@ and the wind one inverts a convention (`from` is where the wind comes *from*), w
 exactly the kind of error a screenshot cannot fail on.
 """
 
-import datetime as dt
 import json
 import math
 
 import pytest
 
 from tests.test_view3d_gl import _probe, _scene, needs_chrome
-from tracklog_viewer import sun as sun_module
 
 # A real day over the fixture's own terrain, from the real generator: a table typed by
 # hand here would be a second implementation to keep in step.
-DAY = sun_module.day_track(dt.date(2024, 6, 20), 49.12, 14.12)
+if __import__("shutil").which("node"):
+    from tests import js
+    DAY = {k: (v.tolist() if hasattr(v, "tolist") else v) for k, v in js.run(
+        "return TV.sun.dayTrack({ year: 2024, month: 6, day: 20 }, 49.12, 14.12);").items()}
+else:
+    DAY = {"step": 10, "az": [], "el": []}
 SUN = {
     "track": DAY,
     "date": "2024-06-20",
@@ -187,9 +190,10 @@ def test_the_light_moves_on_the_canvas_renderer_too():
     assert answer["restored"] is False
 
 
+@pytest.mark.skipif(not DAY["az"], reason="needs node")
 def test_the_payload_carries_a_day_the_page_can_interpolate():
-    """No solar algorithm in JavaScript: a table cannot drift out of step with `sun.py`
-    the way `quicklook.py`'s duplicated thresholds can."""
+    """The view interpolates a table rather than running the solar algorithm per frame:
+    144 pairs of numbers, small enough to carry with every flight."""
     assert set(SUN["track"]) == {"step", "az", "el"}
     assert len(SUN["track"]["az"]) == 24 * 60 // SUN["track"]["step"]
     assert len(json.dumps(SUN, separators=(",", ":"))) < 2500

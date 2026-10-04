@@ -1,4 +1,5 @@
 /* The glider's class, from its name in the tracklog: `certification.lookup`, ported.
+ * The Python is retired; it is in git at `ada5e5b`.
  *
  * Only the half that turns a header into a key lives here — `normalise`, the size and
  * company-word stripping, the brand split. The answers are decided by the Python

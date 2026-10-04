@@ -1,5 +1,6 @@
 /* The 3D view's scene and panel for one flight: `view3d.data`, `view3d.panel` and
  * `render_map.switch_html`, ported.
+ * The Python is retired; it is in git at `ada5e5b`.
  *
  * The renderers (`view3d.SCRIPT`, `map3d.SCRIPT`, `render_map.SWITCH_SCRIPT`) were always
  * in the page; what was built in Python was what they draw — the track, the climbs, the
@@ -30,10 +31,6 @@
   };
   var RAMP_RGB = [[-4.0, [23, 80, 143]], [-2.0, [42, 120, 214]], [-0.7, [143, 182, 230]], [0.7, [169, 164, 154]],
                   [2.0, [240, 160, 122]], [4.0, [235, 104, 52]], [Infinity, [200, 67, 26]]];
-  var GLOBE_ICON = '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false">' +
-    '<circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" stroke-width="1.4"/>' +
-    '<ellipse cx="8" cy="8" rx="2.9" ry="6.6" fill="none" stroke="currentColor" stroke-width="1.1"/>' +
-    '<path d="M1.6 6.1h12.8M1.6 9.9h12.8" stroke="currentColor" stroke-width="1.1" fill="none"/></svg>';
   var EXPAND_ICON = '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false">' +
     '<path d="M1.5 5.5v-4h4M14.5 10.5v4h-4M14.5 5.5v-4h-4M1.5 10.5v4h4" fill="none" ' +
     'stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
@@ -44,8 +41,8 @@
   }
 
   // `terrain` is the grid object as the page carries it (`Terrain.to_remote()` for a
-  // bundled flight, the fetched grid for an upload); `options`: basemaps, tiles
-  // (default true), airspace (a layer dict, merged in).
+  // bundled flight, the fetched grid for an upload); `options`: airspace (a layer dict,
+  // merged in). The imagery is always fetched in the page (`tiles`).
   function data(a, terrain, options) {
     options = options || {};
     var f = a.flight, s = a.series;
@@ -82,20 +79,13 @@
                     lat: [R(f.lat[seg.start], 5), R(f.lat[last], 5)],
                     alt: [Math.trunc(alt[seg.start]), Math.trunc(alt[last])] });
     });
-    var basemaps = options.basemaps || {}, tiles = options.tiles === undefined ? true : options.tiles;
-    var tileSet = null;
-    if (tiles) {
-      tileSet = {};
-      Object.keys(TILE_SOURCES).forEach(function (k) { if (!(k in basemaps)) tileSet[k] = TILE_SOURCES[k]; });
-      if (!Object.keys(tileSet).length) tileSet = null;
-    }
     var n = f.lon.length;
     var out = {
       terrain: terrain,
       trackTop: track.alt.length ? Math.max.apply(null, track.alt) : 0,
       track: track, climbs: climbs, phases: phases,
       palette: RAMP_RGB.map(function (r) { return r[1].slice(); }),
-      basemaps: basemaps, tiles: tileSet,
+      tiles: Object.assign({}, TILE_SOURCES),
       landing: { lon: R(f.lon[n - 1], 5), lat: R(f.lat[n - 1], 5), alt: Math.trunc(alt[n - 1]) },
       sun: sun.forFlight(f),
       wind: a.wind ? { ms: R(a.wind.speed, 1), from: R(a.wind.direction, 1), cardinal: a.wind.cardinal } : null
@@ -106,17 +96,10 @@
     return out;
   }
 
-  function attr(text) { return TV.charts.escape(text); }
-
   function panel(payload, uid, options) {
     options = options || {};
     var verticals = options.verticals || [1, 2, 4];
     var vertical = options.vertical === undefined ? null : options.vertical;
-    var earth = '';
-    if (options.kmzUri) {
-      earth = '<a class="view3d-earth" href="' + options.kmzUri + '" download="' + (options.kmzName || 'flight.kmz') + '" ' +
-        'title="Download the KMZ and open it in Google Earth">' + GLOBE_ICON + '<span>Open in Earth</span></a>';
-    }
     var available = Object.assign({}, payload.tiles || {}, payload.basemaps || {});
     var keys = Object.keys(available);
     var initial = 'satellite' in available ? 'satellite' : (keys[0] || '');
@@ -150,7 +133,7 @@
       '              aria-label="Interactive three-dimensional view of the flight over terrain.\n' +
       '                          Arrow keys pan and shift with them turns and tilts; press\n' +
       '                          question mark for the key list.">\n      </canvas>\n' +
-      '      ' + earth + '\n      ' + airspaceName + '\n' +
+      '      ' + airspaceName + '\n' +
       '      <p class="view3d-credit">' + credit + '</p>\n' +
       '      <p class="view3d-hint" hidden>arrows pan &middot; shift + arrows turn and tilt &middot;\n' +
       '        <kbd>?</kbd> for keys</p>\n' +
@@ -187,6 +170,5 @@
       '<button type="button" class="toggle-button" data-renderer="merged" aria-pressed="false">merged</button></div>';
   }
 
-  TV.scene = { TILE_SOURCES: TILE_SOURCES, RAMP_RGB: RAMP_RGB, data: data, panel: panel, switchHtml: switchHtml,
-               attr: attr };
+  TV.scene = { TILE_SOURCES: TILE_SOURCES, RAMP_RGB: RAMP_RGB, data: data, panel: panel, switchHtml: switchHtml };
 })(typeof window !== 'undefined' ? (window.TV = window.TV || {}) : (globalThis.TV = globalThis.TV || {}));

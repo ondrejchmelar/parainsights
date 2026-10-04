@@ -1,4 +1,5 @@
 /* Tier-1 measurements over an analysis: `tracklog_viewer/metrics.py`, ported.
+ * The Python is retired; it is in git at `ada5e5b`.
  *
  * Every function returns null where the data cannot support the measurement, never a
  * plausible number, and none of them decides whether a number is worth printing — that
@@ -9,8 +10,7 @@
   var np = TV.np, A = TV.analysis, R = np.pyRound;
   var C = A.constants;
 
-  var MIN_GLIDE_FOR_LD = 60.0, MIN_CLIMB_FOR_CENTRING = 120.0, CENTRING_WINDOW = 60.0;
-  var MIN_SAVE_GAIN = 300.0;
+  var MIN_CLIMB_FOR_CENTRING = 120.0, CENTRING_WINDOW = 60.0;
 
   function thermals(a) { return a.segments.filter(function (s) { return s.phase === 'thermal'; }); }
   function glides(a) { return a.segments.filter(function (s) { return s.phase === 'glide'; }); }
@@ -23,11 +23,6 @@
     items.forEach(function (it) { if (key(it) > key(best)) best = it; });
     return best;
   }
-  function firstMin(items, key) {
-    var best = items[0];
-    items.forEach(function (it) { if (key(it) < key(best)) best = it; });
-    return best;
-  }
 
   function airborneWindow(clearance, margin) {
     if (clearance === null || clearance === undefined) return null;
@@ -37,38 +32,6 @@
     if (first < 0 || first === last) return null;
     var low = first, high = last + 1;
     return high - low >= 2 ? [low, high] : null;
-  }
-
-  function straightAir(a) {
-    var steps = gaps(a);
-    if (!steps.length) return null;
-    var s = a.series, n = steps.length, i;
-    var straight = s.progress.slice(0, n).map(function (p) { return p >= C.GLIDE_PROGRESS; });
-    if (!straight.some(Boolean)) return null;
-    var inGlide = new Array(n).fill(false);
-    a.segments.forEach(function (seg) {
-      if (seg.phase === 'glide') for (i = seg.start; i < Math.max(seg.stop - 1, seg.start); i++) inGlide[i] = true;
-    });
-    var dz = np.diff(s.alt), pick = function (arr, mask) { return arr.filter(function (_, k) { return mask[k]; }); };
-    var rising = straight.map(function (v, k) { return v && s.climb[k] > 0; });
-    return {
-      seconds: Math.trunc(R(np.sum(pick(steps, straight)))),
-      rising_seconds: Math.trunc(R(np.sum(pick(steps, rising)))),
-      rising_gain: R(np.sum(pick(dz, rising))),
-      gain_in_glides: R(np.sum(pick(dz, rising.map(function (v, k) { return v && inGlide[k]; })))),
-      gain_outside_glides: R(np.sum(pick(dz, rising.map(function (v, k) { return v && !inGlide[k]; }))))
-    };
-  }
-
-  function crossCountrySpeed(a, route) {
-    if (!route || !route.distance || !a.summary.duration) return null;
-    return R(3.6 * route.distance / a.summary.duration, 1);
-  }
-
-  function glideRatioMedian(a) {
-    var ratios = glides(a).filter(function (s) { return s.average_ld !== null && s.duration >= MIN_GLIDE_FOR_LD; })
-      .map(function (s) { return s.average_ld; });
-    return ratios.length ? R(np.median(ratios), 1) : null;
   }
 
   function climbSelection(a) {
@@ -176,22 +139,6 @@
              hours: R(span, 1) };
   }
 
-  function detour(a, route) {
-    if (!route || !route.distance) return null;
-    var scored = route.distance, track = a.summary.track_distance;
-    if (scored <= 0 || track <= 0) return null;
-    return { ratio: R(track / scored, 2), track_km: R(track / 1000.0, 1), scored_km: R(scored / 1000.0, 2) };
-  }
-
-  function lowestSave(a, clearance) {
-    if (!clearance || clearance.length !== a.series.t.length) return null;
-    var saves = thermals(a).filter(function (s) { return s.altitude_change >= MIN_SAVE_GAIN && isFinite(clearance[s.start]); });
-    if (!saves.length) return null;
-    var best = firstMin(saves, function (s) { return clearance[s.start]; });
-    return { gain: R(best.altitude_change), from_agl: R(clearance[best.start]),
-             from_altitude: best.start_altitude, at: best.start_time };
-  }
-
   // `weather` carries `cloudbase` and/or `thermal_top`, as numbers or functions.
   function ceilingUse(a, weather) {
     if (!weather) return null;
@@ -208,11 +155,10 @@
   }
 
   TV.metrics = {
-    MIN_GLIDE_FOR_LD: MIN_GLIDE_FOR_LD, thermals: thermals, glides: glides, pySum: pySum,
-    firstMax: firstMax, firstMin: firstMin, argmax: argmax, argmin: argmin,
-    airborneWindow: airborneWindow, straightAir: straightAir, crossCountrySpeed: crossCountrySpeed,
-    glideRatioMedian: glideRatioMedian, climbSelection: climbSelection, workingBand: workingBand,
+    thermals: thermals, glides: glides, pySum: pySum,
+    firstMax: firstMax, argmax: argmax, argmin: argmin,
+    airborneWindow: airborneWindow, climbSelection: climbSelection, workingBand: workingBand,
     centring: centring, climbGaps: climbGaps, concentration: concentration, dayEnvelope: dayEnvelope,
-    detour: detour, lowestSave: lowestSave, ceilingUse: ceilingUse
+    ceilingUse: ceilingUse
   };
 })(typeof window !== 'undefined' ? (window.TV = window.TV || {}) : (globalThis.TV = globalThis.TV || {}));

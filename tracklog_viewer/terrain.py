@@ -1,16 +1,15 @@
-"""Ground elevation under and around the flight, from DEM tiles.
+"""Ground elevation from DEM tiles, for the build.
 
-Source is the AWS Open Data terrarium DEM — global, free, no API key. Tiles are
-fetched once, cached, and turned into a coarse grid that gets embedded in the
-report: that is what makes a 3D terrain view possible inside a page that is not
-allowed to touch the network when it is opened.
+Source is the AWS Open Data terrarium DEM — global, free, no API key. The CLI fetches the
+grid the JavaScript asks for (`TV.terrain.remoteFor`), so the articles can measure height
+above the ground; the page itself carries only the box (`Terrain.to_remote`) and fetches
+the same tiles at view time to draw them.
 
 Terrarium encodes elevation in the RGB channels of an ordinary PNG:
 
     metres = R * 256 + G + B / 256 - 32768
 """
 
-import hashlib
 import io
 import math
 import urllib.error
@@ -47,22 +46,6 @@ class Terrain:
     def cols(self) -> int:
         return self.elevations.shape[1]
 
-    def at(self, lat, lon):
-        """Bilinear ground elevation at (lat, lon). Scalars or arrays."""
-        # Fractional grid coordinates; row 0 is the northern edge.
-        gx = (np.asarray(lon) - self.west) / (self.east - self.west) * (self.cols - 1)
-        gy = (self.north - np.asarray(lat)) / (self.north - self.south) * (self.rows - 1)
-        gx = np.clip(gx, 0, self.cols - 1)
-        gy = np.clip(gy, 0, self.rows - 1)
-        x0 = np.floor(gx).astype(int)
-        y0 = np.floor(gy).astype(int)
-        x1 = np.minimum(x0 + 1, self.cols - 1)
-        y1 = np.minimum(y0 + 1, self.rows - 1)
-        fx = gx - x0
-        fy = gy - y0
-        top = self.elevations[y0, x0] * (1 - fx) + self.elevations[y0, x1] * fx
-        bottom = self.elevations[y1, x0] * (1 - fx) + self.elevations[y1, x1] * fx
-        return top * (1 - fy) + bottom * fy
 
     def to_dict(self, *, decimals: int = 0) -> dict:
         return {
@@ -262,28 +245,3 @@ def remote(west: float, east: float, south: float, north: float, *,
     }
 
 
-def for_flight(analysis, *, margin: float = 0.35, cols: int = 320,
-               max_points: int = 26000, report=None) -> Terrain | None:
-    """Terrain covering the flight's bounding box, with a margin for context."""
-    flight = analysis.flight
-    west, east = float(flight.lon.min()), float(flight.lon.max())
-    south, north = float(flight.lat.min()), float(flight.lat.max())
-    # Pad generously for context. The node budget is unchanged, so a wider box costs
-    # nothing to draw — each cell simply covers more ground.
-    pad_x = max((east - west) * margin, 0.06)
-    pad_y = max((north - south) * margin, 0.06)
-    return fetch(
-        west - pad_x, east + pad_x, south - pad_y, north + pad_y,
-        cols=cols, max_points=max_points, report=report,
-    )
-
-
-def clearance(terrain: Terrain, analysis) -> np.ndarray:
-    """Height above terrain for every fix, in metres.
-
-    Uses GPS altitude: the DEM is geometric, and pressure altitude is offset by the
-    day's QNH, which would show up as a constant error in ground clearance.
-    """
-    flight = analysis.flight
-    altitude = flight.alt_gps if np.any(flight.alt_gps) else analysis.series.alt
-    return altitude - terrain.at(flight.lat, flight.lon)

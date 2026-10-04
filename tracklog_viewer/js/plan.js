@@ -1,4 +1,5 @@
 /* The pilot's intent: `tracklog_viewer/plan.py`, ported.
+ * The Python is retired; it is in git at `ada5e5b`.
  *
  * A plan from the tracklog's own C records (three turnpoints at least), or from the
  * sidecar JSON a pre-flight run writes; then where the flight left the planned line,
@@ -122,5 +123,5 @@
   TV.plan = { DEPARTURE_METRES: DEPARTURE_METRES, DEPARTURE_SECONDS: DEPARTURE_SECONDS,
               STALE_MEDIAN_METRES: STALE_MEDIAN_METRES, fromFlight: fromFlight, fromJson: fromJson,
               toDict: toDict, describes: describes, adherence: adherence, turnpoints: turnpoints,
-              budget: budget, crossTrack: crossTrack, reconstructed: reconstructed };
+              budget: budget, crossTrack: crossTrack, reconstructed: reconstructed, declared: declared };
 })(typeof window !== 'undefined' ? (window.TV = window.TV || {}) : (globalThis.TV = globalThis.TV || {}));

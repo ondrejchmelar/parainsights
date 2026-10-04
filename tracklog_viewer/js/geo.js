@@ -1,4 +1,5 @@
 /* Spherical geometry on the FAI sphere: `tracklog_viewer/geo.py`, ported.
+ * The Python is retired; it is in git at `ada5e5b`.
  *
  * FAI-sanctioned distances are measured on a sphere of radius 6 371 000 m, so this is
  * the correct model for flight distances, not an approximation tolerated.

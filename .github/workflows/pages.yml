@@ -3,17 +3,13 @@
 #
 # The report is one static HTML file, and it is not built here — building needs the IGC
 # files, and flight tracks stay out of this repository (`*.igc` is ignored). Reports are
-# built locally and the output is committed under `public/`:
+# built locally, with Node (the articles are the JavaScript in tracklog_viewer/js/), and
+# the output is committed under `public/` — the command is in CLAUDE.md.
 #
-#   uv run python -m tracklog_viewer.cli FLIGHT.igc [...] \
-#       --terrain --meteo --online --html public/index.html
-#
-# `--online` is the reason for being on Pages at all. A published artifact runs under a
-# policy that blocks every external host, which is what forced embedded imagery, an
-# embedded DEM, a flat plane for uploaded tracks and a fake fullscreen. A page served
-# from Pages can fetch, so imagery comes at view time at zoom 12–13 (10–20 m/px against
-# the ~45 an embedded JPEG affords), weather works for a track the reader uploads, and
-# the Fullscreen API is allowed.
+# Fetching at view time is the reason for being on Pages at all. A published artifact runs
+# under a policy that blocks every external host; a page served from Pages fetches its
+# imagery and ground when it is opened, an uploaded track gets its weather, and the
+# Fullscreen API is allowed.
 #
 # Settings → Pages → Source must be **GitHub Actions**. "Deploy from a branch" publishes
 # the repository root, which has no index.html, and the site 404s.
@@ -49,6 +45,9 @@ jobs:
     container: ghcr.io/astral-sh/uv:bookworm-slim
     steps:
       - uses: actions/checkout@v4
+      # Node, because the flight analysis is JavaScript and its tests run it (`tests/js.py`).
+      # Without it they skip, and this job would pass having tested none of the analysis.
+      - run: apt-get update && apt-get install -y --no-install-recommends nodejs && node --version
       - run: uv sync --locked --extra dev
       - run: uv run python --version
       # `-c pyproject.toml` matters: pytest otherwise walks up and adopts an enclosing
@@ -130,11 +129,10 @@ jobs:
       # The other two fetch from four public sources. Those *are* allowed to be down, and
       # when they are the committed page is published instead of nothing: it is a few
       # days old at worst, and refusing to publish a rebuilt *report* because someone
-      # else's CSV is unreachable is the wrong trade. Loud, and not fatal.
-      # `--require-terrain` is what stops a rebuild being a downgrade. Without it a run
-      # that cannot reach the elevation model writes the flat SVG map over the 3D one and
-      # reports success — which is exactly what the first green deploy did.
-      - run: uv run python -m airspaces.cli --html public/airspace/index.html --require-terrain || echo "::warning::the airspace page could not be rebuilt, publishing the committed copy - check airspaces/sources.py"
+      # else's CSV is unreachable is the wrong trade. Loud, and not fatal. The 3D map's
+      # ground is fetched by the page, so a build cannot lose it and fall back to the flat
+      # map — which is what the first green deploy once did, with the build's own fetch.
+      - run: uv run python -m airspaces.cli --html public/airspace/index.html || echo "::warning::the airspace page could not be rebuilt, publishing the committed copy - check airspaces/sources.py"
       # The planner is part of the airspace page now; this is the redirect for old links.
       - run: uv run python -m planner.cli --html public/planner/index.html
       # The airspace page links its OpenAir file by name and the name carries the AIRAC

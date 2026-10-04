@@ -14,7 +14,6 @@ the 3D views quietly kept the old sky.
 
 import re
 
-import pytest
 
 import parainsights_common as common
 from tests.test_view3d_gl import needs_chrome

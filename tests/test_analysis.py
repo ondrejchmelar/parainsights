@@ -11,9 +11,12 @@ import math
 import numpy as np
 import pytest
 
-from tracklog_viewer import igc
-from tracklog_viewer.analysis import Phase, analyse
-from tracklog_viewer.geo import R
+from tests import js
+from tests.js import needs_node
+
+pytestmark = needs_node
+
+R = 6371000.0          # the FAI sphere, as `js/geo.js`
 
 LAT0, LON0 = 49.0, 14.0
 
@@ -129,15 +132,14 @@ def straight(duration, *, speed=11.0, climb=0.0, t0=0.0, alt0=1000.0, x0=0.0, y0
 class TestTurnCounting:
     def test_counts_exact_circles(self, tmp_path):
         """200 s at 20 s per circle is 10 turns."""
-        flight = igc.parse(build(tmp_path / "t.igc", circling(200)))
-        thermal = analyse(flight).thermals[0]
+        path = build(tmp_path / "t.igc", circling(200))
+        thermal = js.analyse(path).thermals[0]
         assert thermal.turns == pytest.approx(10.0, abs=0.4)
         assert thermal.circle_seconds == pytest.approx(20.0, abs=1.0)
 
     def test_reports_turn_direction(self, tmp_path):
-        right = analyse(igc.parse(build(tmp_path / "r.igc", circling(200)))).thermals[0]
-        left = analyse(
-            igc.parse(build(tmp_path / "l.igc", circling(200, clockwise=False)))
+        right = js.analyse(build(tmp_path / "r.igc", circling(200))).thermals[0]
+        left = js.analyse(build(tmp_path / "l.igc", circling(200, clockwise=False))
         ).thermals[0]
         assert right.turn_direction == "right"
         assert left.turn_direction == "left"
@@ -146,7 +148,7 @@ class TestTurnCounting:
     def test_counts_reversals_when_direction_changes(self, tmp_path):
         points = circling(100)
         points += circling(100, t0=101, alt0=points[-1][3], clockwise=False)
-        thermal = analyse(igc.parse(build(tmp_path / "s.igc", points))).thermals[0]
+        thermal = js.analyse(build(tmp_path / "s.igc", points)).thermals[0]
         assert thermal.turn_direction == "mixed"
         assert thermal.reversals >= 1
         # Five circles each way is ten circles flown: a reversal does not cancel the
@@ -155,7 +157,7 @@ class TestTurnCounting:
 
     def test_swinging_the_nose_is_not_a_turn(self, tmp_path):
         """A wingover, or a slalom: 180° out and 180° back, over and over, no circle."""
-        thermal = analyse(igc.parse(build(tmp_path / "w.igc", slalom(200)))).thermals[0]
+        thermal = js.analyse(build(tmp_path / "w.igc", slalom(200))).thermals[0]
         assert thermal.turns == 0.0
         # 200 s of half-circles at 10 s each is 20 of them: ten turns' worth of heading
         # for no circles at all. That is what the tow test asks about, so it has to stay
@@ -167,47 +169,47 @@ class TestTurnCounting:
         """Three quarters of a circle and out again: 0.75 of a turn is not a turn."""
         points = circling(15)  # 15 s of a 20 s circle
         points += straight(120, speed=11.0, climb=-1.0, t0=16, alt0=points[-1][3])
-        thermals = analyse(igc.parse(build(tmp_path / "p.igc", points))).thermals
+        thermals = js.analyse(build(tmp_path / "p.igc", points)).thermals
         assert all(t.turns == 0.0 for t in thermals)
 
     def test_recovers_circle_radius(self, tmp_path):
-        flight = igc.parse(build(tmp_path / "t.igc", circling(200, radius=60.0)))
-        assert analyse(flight).thermals[0].circle_radius == pytest.approx(60, abs=12)
+        path = build(tmp_path / "t.igc", circling(200, radius=60.0))
+        assert js.analyse(path).thermals[0].circle_radius == pytest.approx(60, abs=12)
 
 
 class TestWind:
     def test_recovers_drift_as_wind(self, tmp_path):
         """A thermal drifting east at 4 m/s means a 4 m/s wind from the west."""
-        flight = igc.parse(build(tmp_path / "w.igc", circling(300, drift=(4.0, 0.0))))
-        wind = analyse(flight).thermals[0].wind
+        path = build(tmp_path / "w.igc", circling(300, drift=(4.0, 0.0)))
+        wind = js.analyse(path).thermals[0].wind
         assert wind.speed == pytest.approx(4.0, abs=0.4)
         assert wind.direction == pytest.approx(270.0, abs=8.0)
         assert wind.cardinal == "W"
 
     def test_recovers_northerly(self, tmp_path):
-        flight = igc.parse(build(tmp_path / "n.igc", circling(300, drift=(0.0, -3.0))))
-        wind = analyse(flight).thermals[0].wind
+        path = build(tmp_path / "n.igc", circling(300, drift=(0.0, -3.0)))
+        wind = js.analyse(path).thermals[0].wind
         assert wind.direction == pytest.approx(0.0, abs=8.0) or wind.direction == pytest.approx(
             360.0, abs=8.0
         )
         assert wind.cardinal == "N"
 
     def test_still_air_reads_calm(self, tmp_path):
-        flight = igc.parse(build(tmp_path / "c.igc", circling(300)))
-        assert analyse(flight).thermals[0].wind.speed < 0.5
+        path = build(tmp_path / "c.igc", circling(300))
+        assert js.analyse(path).thermals[0].wind.speed < 0.5
 
 
 class TestPhases:
     def test_circling_climb_is_a_thermal(self, tmp_path):
-        analysis = analyse(igc.parse(build(tmp_path / "t.igc", circling(200))))
-        assert [s.phase for s in analysis.segments] == [Phase.THERMAL]
+        analysis = js.analyse(build(tmp_path / "t.igc", circling(200)))
+        assert [s.phase for s in analysis.segments] == ["thermal"]
         assert analysis.thermals[0].average_climb == pytest.approx(2.0, abs=0.1)
         assert analysis.thermals[0].altitude_change == pytest.approx(400, abs=10)
 
     def test_straight_glide_gives_glide_ratio(self, tmp_path):
         # 10 m/s forward, 1 m/s down for 300 s: glide ratio 10:1.
-        flight = igc.parse(build(tmp_path / "g.igc", straight(300, speed=10.0, climb=-1.0)))
-        glide = analyse(flight).glides[0]
+        path = build(tmp_path / "g.igc", straight(300, speed=10.0, climb=-1.0))
+        glide = js.analyse(path).glides[0]
         assert glide.average_ld == pytest.approx(10.0, abs=0.3)
         assert glide.average_speed == pytest.approx(36.0, abs=1.0)
 
@@ -215,10 +217,10 @@ class TestPhases:
         """A winch or aerotow launch, not a thermal off the deck."""
         points = straight(180, speed=8.0, climb=3.0, alt0=400.0)
         points += straight(300, speed=10.0, climb=-1.0, t0=181, alt0=points[-1][3], x0=1440.0)
-        analysis = analyse(igc.parse(build(tmp_path / "tow.igc", points)))
+        analysis = js.analyse(build(tmp_path / "tow.igc", points))
         tow = analysis.tow
         assert tow is not None
-        assert tow.phase is Phase.TOW
+        assert tow.phase == "tow"
         assert tow.average_climb == pytest.approx(3.0, abs=0.2)
         assert tow.finish_altitude == pytest.approx(940, abs=15)
         assert analysis.thermals == []  # not counted as a thermal
@@ -229,9 +231,9 @@ class TestPhases:
         """Only the launch can be a tow — mid-flight it is convergence or ridge lift."""
         points = circling(200, climb=2.0, alt0=1000.0)
         points += straight(200, speed=10.0, climb=2.0, t0=201, alt0=points[-1][3])
-        analysis = analyse(igc.parse(build(tmp_path / "late.igc", points)))
+        analysis = js.analyse(build(tmp_path / "late.igc", points))
         assert analysis.tow is None
-        assert all(s.phase is not Phase.TOW for s in analysis.segments)
+        assert all(s.phase != "tow" for s in analysis.segments)
 
     def test_tow_is_refused_when_sampling_cannot_resolve_one(self, tmp_path):
         """The same straight launch climb, sampled every 40 s instead of every second.
@@ -245,17 +247,17 @@ class TestPhases:
         points += straight(600, speed=10.0, climb=-1.0, t0=601, alt0=points[-1][3],
                            x0=4800.0)
         coarse = points[::40]
-        analysis = analyse(igc.parse(build(tmp_path / "coarse.igc", coarse)))
+        analysis = js.analyse(build(tmp_path / "coarse.igc", coarse))
         assert analysis.summary.sample_interval > 15
         assert analysis.tow is None
-        assert all(s.phase is not Phase.TOW for s in analysis.segments)
+        assert all(s.phase != "tow" for s in analysis.segments)
 
-        fine = analyse(igc.parse(build(tmp_path / "fine.igc", points)))
+        fine = js.analyse(build(tmp_path / "fine.igc", points))
         assert fine.tow is not None, "the same flight at 1 Hz is still a tow"
 
     def test_circling_climb_at_launch_stays_a_thermal(self, tmp_path):
         """Soarable launch: climbing away in circles immediately is not a tow."""
-        analysis = analyse(igc.parse(build(tmp_path / "soar.igc", circling(300, alt0=400.0))))
+        analysis = js.analyse(build(tmp_path / "soar.igc", circling(300, alt0=400.0)))
         assert analysis.tow is None
         assert len(analysis.thermals) == 1
 
@@ -264,15 +266,15 @@ class TestBudgetAndSummary:
     def test_budget_accounts_for_the_whole_flight(self, tmp_path):
         points = circling(200)
         points += straight(300, speed=10.0, climb=-1.0, t0=201, alt0=points[-1][3])
-        analysis = analyse(igc.parse(build(tmp_path / "b.igc", points)))
+        analysis = js.analyse(build(tmp_path / "b.igc", points))
         assert analysis.budget.total == analysis.summary.duration
         assert analysis.budget.thermalling > 0
         assert analysis.budget.gliding > 0
-        assert sum(analysis.budget.fractions().values()) == pytest.approx(1.0)
+        assert sum(analysis.budget.fractions.values()) == pytest.approx(1.0)
 
     def test_summary_distances(self, tmp_path):
-        flight = igc.parse(build(tmp_path / "d.igc", straight(300, speed=10.0, climb=-1.0)))
-        summary = analyse(flight).summary
+        path = build(tmp_path / "d.igc", straight(300, speed=10.0, climb=-1.0))
+        summary = js.analyse(path).summary
         assert summary.track_distance == pytest.approx(3000, abs=20)
         assert summary.straight_distance == pytest.approx(3000, abs=20)
         assert summary.max_altitude == 1000
@@ -281,15 +283,15 @@ class TestBudgetAndSummary:
     def test_total_gain_accumulates_only_climbs(self, tmp_path):
         points = circling(100, climb=2.0)
         points += straight(100, speed=10.0, climb=-2.0, t0=101, alt0=points[-1][3])
-        summary = analyse(igc.parse(build(tmp_path / "gain.igc", points))).summary
+        summary = js.analyse(build(tmp_path / "gain.igc", points)).summary
         assert summary.total_gain == pytest.approx(200, abs=10)
         assert summary.max_gain == pytest.approx(200, abs=10)
 
     def test_serialises_to_plain_data(self, tmp_path):
-        analysis = analyse(igc.parse(build(tmp_path / "j.igc", circling(200))))
-        data = analysis.to_dict()
+        data = js.run("return TV.analysis.toDict(TV.analysis.analyse(await load(input.path)));",
+                      path=build(tmp_path / "j.igc", circling(200)))
         assert data["segments"][0]["phase"] == "thermal"
-        assert isinstance(data["summary"]["duration"], int)
+        assert float(data["summary"]["duration"]).is_integer()
         assert set(data["budget"]["fractions"]) == {
             "thermalling", "gliding", "diving", "towing", "other",
         }
@@ -307,10 +309,8 @@ class TestSeries:
             x += speed
             alt += (20.0**2 - speed**2) / (2 * 9.80665) - (alt - 1000.0)
             points.append((second, x, 0.0, 1000.0 + (20.0**2 - speed**2) / (2 * 9.80665)))
-        flight = igc.parse(build(tmp_path / "te.igc", points))
-        from tracklog_viewer.flight import derive
-
-        series = derive(flight)
+        series = js.run("return TV.flight.derive(await load(input.path));",
+                        path=build(tmp_path / "te.igc", points))
         middle = slice(10, 50)
         assert np.mean(series.climb[middle]) > 0.1  # barometrically, a climb
         assert abs(np.mean(series.te_climb[middle])) < 0.1  # energetically, nothing
@@ -321,8 +321,6 @@ class TestWindShearNote:
         """A bare sort() on (altitude, wind) pairs falls through to comparing Wind objects
         when two climbs share a mean altitude, which is not orderable. That took down the
         whole report on a real flight with eighteen climbs."""
-        from tracklog_viewer import render_html
-
         points = []
         t = 0
         # Three identical circled climbs, so their mean altitudes match exactly.
@@ -331,27 +329,28 @@ class TestWindShearNote:
             t = points[-1][0] + 1
             points += straight(200, speed=10.0, climb=-1.5, t0=t, alt0=points[-1][3])
             t = points[-1][0] + 1
-        analysis = analyse(igc.parse(build(tmp_path / "flat.igc", points)))
+        analysis = js.analyse(build(tmp_path / "flat.igc", points))
         altitudes = [
             (s.start_altitude + s.finish_altitude) / 2
             for s in analysis.thermals if s.wind and s.turns and s.turns >= 2
         ]
         assert len(altitudes) != len(set(altitudes)), "the fixture must produce a tie"
-        render_html._wind_shear_note(analysis)   # raised TypeError before the key= fix
+        js.run("return TV.report.parts.windShearNote(TV.analysis.analyse(await load(input.path)));",
+               path=tmp_path / "flat.igc")   # Python raised TypeError here before the key= fix
 
     def test_the_note_speaks_in_the_unit_the_wind_is_stored_in(self):
         """`Wind.speed` is m/s. The note printed those numbers as km/h and gated on a
         km/h threshold, so a 2 m/s shear read as "about 3 km/h throughout"."""
-        from types import SimpleNamespace as NS
-        from tracklog_viewer import render_html
-
         def climb(alt, speed):
-            return NS(start_altitude=alt, finish_altitude=alt, turns=3,
-                      wind=NS(speed=speed, direction=270.0))
-        flat = NS(thermals=[climb(1000, 3.0), climb(1500, 3.2), climb(2000, 3.4), climb(2500, 3.5)])
-        sheared = NS(thermals=[climb(1000, 2.0), climb(1500, 2.2), climb(2000, 4.0), climb(2500, 4.4)])
-        assert render_html._wind_shear_note(flat).startswith("about 3.1 m/s throughout")
-        note = render_html._wind_shear_note(sheared)
+            return {"phase": "thermal", "start_altitude": alt, "finish_altitude": alt, "turns": 3,
+                    "wind": {"speed": speed, "direction": 270.0}}
+
+        def note(speeds):
+            segments = [climb(1000 + 500 * i, v) for i, v in enumerate(speeds)]
+            return js.run("return TV.report.parts.windShearNote({ segments: input.segments });",
+                          segments=segments)
+        assert note([3.0, 3.2, 3.4, 3.5]).startswith("about 3.1 m/s throughout")
+        note = note([2.0, 2.2, 4.0, 4.4])
         assert "km/h" not in note and note.endswith("2.1 m/s stronger with height."), note
 
 
@@ -376,7 +375,7 @@ class TestThermalStartsWhenTurningDoes:
                            x0=0.0, y0=2160.0, heading=90.0)
         points += circling(200, climb=2.0, t0=272, alt0=points[-1][3],
                            x0=900.0, y0=2160.0)
-        return analyse(igc.parse(build(tmp_path / name, points)))
+        return js.analyse(build(tmp_path / name, points))
 
     def test_a_straight_run_in_is_not_part_of_the_thermal(self, tmp_path):
         analysis = self._glide_then_runin_then_circle(tmp_path, "runin.igc")
@@ -388,8 +387,8 @@ class TestThermalStartsWhenTurningDoes:
             "the straight climb into the thermal was counted as part of it")
         # And with the run-in excluded the drift is what it should be: nothing.
         assert thermal.wind is not None
-        assert thermal.wind.kmh < 4.0, (
-            f"a straight run-in leaked into the wind fit: {thermal.wind.kmh:.1f} km/h")
+        assert thermal.wind.speed * 3.6 < 4.0, (
+            f"a straight run-in leaked into the wind fit: {thermal.wind.speed * 3.6:.1f} km/h")
 
     def test_the_glide_ends_where_the_climb_begins(self, tmp_path):
         """Not when progress finally breaks, which is well after the air started giving
@@ -412,12 +411,12 @@ class TestThermalStartsWhenTurningDoes:
         points += straight(150, speed=12.0, climb=1.2, t0=161,
                            alt0=points[-1][3], heading=90.0)
         points += circling(160, climb=2.0, t0=312, alt0=points[-1][3], x0=1800.0)
-        analysis = analyse(igc.parse(build(tmp_path / "welded.igc", points)))
+        analysis = js.analyse(build(tmp_path / "welded.igc", points))
 
         assert len(analysis.thermals) == 2, (
             "the glide between the two climbs was absorbed into one thermal")
         for thermal in analysis.thermals:
-            assert thermal.wind is None or thermal.wind.kmh < 5.0, (
+            assert thermal.wind is None or thermal.wind.speed * 3.6 < 5.0, (
                 "the glide between the climbs was measured as wind")
 
 
@@ -440,7 +439,7 @@ class TestOtherDecomposition:
                            alt0=points[-1][3], heading=90.0)
         points += straight(200, speed=12.0, climb=-1.2, t0=312,
                            alt0=points[-1][3], heading=90.0)
-        analysis = analyse(igc.parse(build(tmp_path / "recon.igc", points)))
+        analysis = js.analyse(build(tmp_path / "recon.igc", points))
         other = analysis.other
 
         assert other.straight_sink + other.scratching + other.rising == other.seconds
@@ -455,18 +454,18 @@ class TestOtherDecomposition:
         would be the first confidently wrong sentence in the report: this one gains height.
         """
         points = straight(240, speed=12.0, climb=1.0, alt0=1000.0, heading=90.0)
-        analysis = analyse(igc.parse(build(tmp_path / "rising.igc", points)))
+        analysis = js.analyse(build(tmp_path / "rising.igc", points))
         other = analysis.other
 
         assert other.rising > other.straight_sink + other.scratching
         assert other.net_altitude > 0, "a climbing slice was reported as a loss"
         assert other.mean_climb > 0
-        assert other.fractions()["rising"] > 0.8
+        assert other.fractions["rising"] > 0.8
 
     def test_a_straight_glide_is_charged_to_straight_sink(self, tmp_path):
         """Short enough that no GLIDE phase claims it, so it falls to the slice."""
         points = straight(90, speed=12.0, climb=-1.5, alt0=2000.0, heading=90.0)
-        other = analyse(igc.parse(build(tmp_path / "sink.igc", points))).other
+        other = js.analyse(build(tmp_path / "sink.igc", points)).other
 
         assert other.straight_sink > other.rising
         assert other.net_altitude < 0

@@ -1,4 +1,5 @@
 /* What the sun was doing to the ground: `tracklog_viewer/insolation.py`, ported.
+ * The Python is retired; it is in git at `ada5e5b`.
  *
  * Slope and aspect from the DEM's gradient, the sun's incidence on each face, and the
  * ridge-or-thermal call per climb — which needs three things to agree (a steep face, the
@@ -150,5 +151,5 @@
 
   TV.insolation = { MIN_SLOPE: MIN_SLOPE, RIDGE_CLEARANCE: RIDGE_CLEARANCE, RIDGE_SLOPE: RIDGE_SLOPE,
                     RIDGE_TURN_RATE: RIDGE_TURN_RATE, RIDGE_TOLERANCE: RIDGE_TOLERANCE,
-                    faceAt: faceAt, litGrid: litGrid, triggers: triggers, sources: sources, windward: windward };
+                    faceAt: faceAt, litGrid: litGrid, sunVector: sunVector, triggers: triggers, sources: sources, windward: windward };
 })(typeof window !== 'undefined' ? (window.TV = window.TV || {}) : (globalThis.TV = globalThis.TV || {}));

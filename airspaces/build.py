@@ -132,11 +132,6 @@ class Overlay:
     def circle_count(self) -> int:
         return sum(1 for z in self.zones if z.is_circle)
 
-    @property
-    def scheduled_fields(self) -> int:
-        """How many fields publish hours this tool could read. 68 of 156, every one of
-        them an ICAO aerodrome — no SLZ strip publishes any."""
-        return sum(1 for f in self.fields.values() if f.hours.known)
 
     @property
     def by_publication(self) -> dict[str, int]:

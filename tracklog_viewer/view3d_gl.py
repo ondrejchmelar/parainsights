@@ -31,23 +31,9 @@ changes. Two consequences worth knowing:
 # The payload, the markup and the controls are unchanged — this replaces how the
 # heightfield is drawn, not what is in the document. Re-exported so a caller can treat
 # the two modules as one surface.
-from .view3d import (  # noqa: F401
-    TILE_SOURCES,
-    TRACK_TOLERANCE,
-    cursor_track,
-    data,
-    panel,
-)
+from .view3d import TILE_SOURCES, panel  # noqa: F401
 
-__all__ = [
-    "SCRIPT",
-    "STYLE",
-    "TILE_SOURCES",
-    "TRACK_TOLERANCE",
-    "cursor_track",
-    "data",
-    "panel",
-]
+__all__ = ["SCRIPT", "STYLE", "TILE_SOURCES", "panel"]
 
 
 STYLE = """

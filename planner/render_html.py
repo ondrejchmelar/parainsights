@@ -21,7 +21,7 @@ That is the whole reason the planner is ~200 lines. It also means a planned task
 flown flight are drawn by exactly the same code, and cannot disagree about where a line
 on this map is.
 
-The scoring rules are XContest's and are `tracklog_viewer/xc.py`'s, transcribed with
+The scoring rules are XContest's and are `tracklog_viewer/js/xc.js`'s, read from it with
 their constants asserted against it by a test: every side at least 28% of the perimeter
 for FAI, a closing gap under 20% of the perimeter for a closed course, and multipliers
 1.0 / 1.2 / 1.4. A planner that scored a task differently from the report that later
@@ -32,7 +32,28 @@ from __future__ import annotations
 
 import json
 
-from tracklog_viewer import xc
+import re
+from pathlib import Path
+from types import SimpleNamespace
+
+
+def _scoring() -> SimpleNamespace:
+    """XContest's constants as the report's scorer holds them, read from `js/xc.js`: the
+    planner must score a task exactly as the flight it becomes will be scored, and that
+    scorer is the JavaScript. Read, not retyped, so the two cannot drift."""
+    source = (Path(__file__).parent.parent / "tracklog_viewer" / "js" / "xc.js").read_text(
+        encoding="utf-8")
+
+    def number(name):
+        return float(re.search(rf"var {name} = ([0-9.]+);", source).group(1))
+
+    multipliers = re.search(r"var MULTIPLIER = \{([^}]*)\}", source).group(1)
+    return SimpleNamespace(
+        FAI_MIN_SIDE=number("FAI_MIN_SIDE"), MAX_CLOSING=number("MAX_CLOSING"),
+        MULTIPLIER={k: float(v) for k, v in re.findall(r"(\w+): ([0-9.]+)", multipliers)})
+
+
+xc = _scoring()
 
 STYLE = """
 .plan-bar { display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center;
@@ -140,7 +161,7 @@ def _coverage() -> str:
                       separators=(",", ":"))
 
 
-# The constants are interpolated from `xc.py` rather than typed, so the planner cannot
+# The constants are interpolated from `js/xc.js` rather than typed, so the planner cannot
 # drift from the scorer that later measures the flight. A hand-written 0.28 here would go
 # stale the moment FAI_MIN_SIDE moved, in the one place that exists to agree with it.
 SCRIPT = """

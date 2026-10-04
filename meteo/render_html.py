@@ -416,7 +416,7 @@ SCRIPT = r"""
   // `probe` is the height the pointer is at in the sounding, in metres, and `probeX`
   // where it is across it — the readout follows the pointer sideways but reads the
   // profile, so what it says never depends on which temperature you happen to be over.
-  var MAX_CHOSEN = 3;
+  var MAX_CHOSEN = __MAX_CHOSEN__;
   var state = { day: 0, hour: 14, slots: [null, null, null], site: null,
                 surface: null, profile: null, profiles: {}, search: '',
                 probe: null, probeX: 0 };
@@ -2108,3 +2108,5 @@ SCRIPT = r"""
   });
 })();
 """
+# One number for the cap, in the page and in the prose that states it.
+SCRIPT = SCRIPT.replace("__MAX_CHOSEN__", str(MAX_CHOSEN))

@@ -19,8 +19,8 @@ def test_the_switch_offers_all_three_renderers():
 
 
 def test_every_3d_panel_sits_in_a_renderer_host():
-    # An upload's article is written by `js/report.js`, the same markup as a bundled
-    # flight's (`js_parity --report`); its panel must be switchable too.
+    # Every article is written by `js/report.js`, an upload's and a bundled flight's
+    # alike; its panel must be switchable too.
     from pathlib import Path
 
     js = Path(render_html.__file__).parent / "js"

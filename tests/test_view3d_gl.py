@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from tracklog_viewer import render_kmz, view3d, view3d_gl
+from tracklog_viewer import view3d, view3d_gl
 
 CHROME = shutil.which("google-chrome") or shutil.which("chromium")
 needs_chrome = pytest.mark.skipif(CHROME is None, reason="needs headless Chrome")
@@ -59,9 +59,8 @@ def _terrain(cols: int = 81, rows: int = 81) -> dict:
 
 
 def _png(rgba) -> bytes:
-    """PNG out of a numpy RGBA array. `render_kmz._png` takes lists of tuples, which is
-    fine for a 16 px icon and far too slow for the 1024 px texture the sharpness test
-    needs."""
+    """PNG out of a numpy RGBA array, with zlib and struct: the 1024 px texture the
+    sharpness test needs, without making Pillow a requirement of the suite."""
     import struct
     import zlib
 
@@ -616,7 +615,7 @@ class TestWiring:
     def test_the_module_offers_the_same_surface_as_view3d(self):
         """The payload, the markup and the controls are unchanged: this replaces how the
         heightfield is drawn, not what is in the document."""
-        for name in ("data", "panel", "cursor_track", "TILE_SOURCES"):
+        for name in ("panel", "TILE_SOURCES"):
             assert getattr(view3d_gl, name) is getattr(view3d, name)
 
     def test_the_report_carries_both_renderers(self):

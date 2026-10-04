@@ -1,7 +1,7 @@
 """Local-plane geodesy on the WGS84 ellipsoid.
 
-Deliberately not `tracklog_viewer.geo`, which works on the FAI sphere of radius
-6 371 000 m. That sphere is the right model for a scored distance and the wrong one
+Deliberately not the flight viewer's geodesy (`tracklog_viewer/js/geo.js`), which works on
+the FAI sphere of radius 6 371 000 m. That sphere is the right model for a scored distance and the wrong one
 here: an airspace boundary is published against WGS84, and the two disagree by about
 0.2%. Over the 5 500 m radius of a Czech ATZ that is 11 m — small, but it is the
 difference between the fitted radius reading 5 500.3 m and reading 5 490 m, and the

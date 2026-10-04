@@ -1,4 +1,5 @@
 /* Cross-country distance and triangles: `tracklog_viewer/xc.py`, ported.
+ * The Python is retired; it is in git at `ada5e5b`.
  *
  * Free distance through up to three turnpoints by dynamic programming over a sampled
  * track, and the best-*scoring* closed triangle by XContest's rules: perimeter times the
@@ -196,7 +197,7 @@
     return (closed && score(closed) > free.distance / 1000.0) ? closed : free;
   }
 
-  TV.xc = { MULTIPLIER: MULTIPLIER, FAI_MIN_SIDE: FAI_MIN_SIDE, MAX_CLOSING: MAX_CLOSING,
+  TV.xc = { MULTIPLIER: MULTIPLIER, FAI_MIN_SIDE: FAI_MIN_SIDE, MAX_CLOSING: MAX_CLOSING, MAX_SAMPLES: MAX_SAMPLES,
             classify: classify, sides: sides, shape: shape, score: score, sample: sample,
             optimise: optimise, triangle: triangle, best: best };
 })(typeof window !== 'undefined' ? (window.TV = window.TV || {}) : (globalThis.TV = globalThis.TV || {}));

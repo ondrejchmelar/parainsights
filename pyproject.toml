@@ -5,16 +5,14 @@ description = "Tools for paragliding flight analysis"
 requires-python = ">=3.14"
 dependencies = [
     "numpy>=1.26",
-    "timezonefinder>=6",
 ]
 
 
 [project.optional-dependencies]
-# Pillow is optional at *runtime* — basemap stitching and the KMZ barogram import it
-# lazily — but the test suite is not optional about it: the icon test decodes every
-# generated PNG, which is the check that caught a corrupt IDAT that Google Earth drew as
-# a red X on every placemark. Installing only `[dev]` left CI without PIL and failed
-# there while passing locally, where a stray Pillow happened to be present.
+# Pillow decodes the terrain tiles a build fetches (`terrain.fetch`). Optional, because
+# a page built without --terrain needs none, and the tests that decode tiles need it too.
+# Node is the other build requirement and is not a Python package: the analysis and the
+# articles are the JavaScript in tracklog_viewer/js/ (`js_build.py`).
 dev = ["pytest>=8", "pytest-xdist>=3", "pillow>=10"]
 terrain = ["pillow>=10"]
 
@@ -29,7 +27,7 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["tracklog_viewer*", "airspaces*", "meteo*", "planner*", "parainsights_common*"]
 
-# The analysis the page runs, in JavaScript: read from beside the package, not imported.
+# The analysis and the articles, in JavaScript: read from beside the package, not imported.
 [tool.setuptools.package-data]
 tracklog_viewer = ["js/*.js"]
 

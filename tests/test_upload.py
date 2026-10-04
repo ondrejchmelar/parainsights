@@ -12,7 +12,7 @@ import tempfile
 from pathlib import Path
 
 from tests.test_analysis import build
-from tests.test_js_parity import FLIGHTS
+from tests.flights import FLIGHTS
 from tests.test_view3d_gl import CHROME, CHROME_FLAGS, needs_chrome
 from tracklog_viewer import render_html
 

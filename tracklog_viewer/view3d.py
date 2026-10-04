@@ -1,40 +1,15 @@
-"""An interactive 3D view that survives a content-security policy.
+"""The canvas 3D view: a heightfield, imagery, and whatever the scene asks to draw.
 
-`render_map.py` gives the better 3D map — real basemap, real tiles, deck.gl — but it
-needs the network at view time, so it cannot be embedded in a published page. This
-renders the same idea with nothing but a canvas and about a hundred lines of
-JavaScript: the DEM is fetched once at build time and travels inside the document.
+A map widget, not flight code: it takes a payload — a terrain grid (or the box to fetch
+one for), tile sources, and optionally a track, climbs, airspace rings — and knows nothing
+about flights. A flight's payload is written by `js/scene.js`; the airspace map's by
+`airspaces.scene`. The ground and the imagery are fetched in the page.
 
-The heightfield is drawn back-to-front by walking the grid from the farthest corner,
-which is exact for a regular grid seen from outside it — no depth sort, no z-buffer.
+The heightfield is drawn by WebGL where it can be (`view3d_gl`) and back-to-front on the
+2D canvas where it cannot, which is exact for a regular grid seen from outside it.
 """
 
-import datetime as dt
 import json
-
-import numpy as np
-
-from . import sun
-from .analysis import Analysis, Phase
-from .charts import decimate
-from .render_map import RAMP_RGB, climb_rgb
-
-# Metres of horizontal detail the 3D track may drop; 0 keeps every fix. It was 4 m (12 m
-# per flight in a shared document), and Douglas-Peucker at that tolerance left five or six
-# vertices per thermal circle — every climb drawn as a jagged polygon. Fidelity first.
-TRACK_TOLERANCE = 0.0
-
-
-def _colour_index(value: float) -> int:
-    """Index into the shared climb ramp.
-
-    An index costs three characters in the payload where an [r,g,b] triple costs
-    fifteen, and a long flight has thousands of points.
-    """
-    for index, (threshold, _) in enumerate(RAMP_RGB):
-        if value < threshold:
-            return index
-    return len(RAMP_RGB) - 1
 
 
 TILE_SOURCES = {
@@ -63,198 +38,6 @@ TILE_SOURCES = {
 }
 
 
-def data(analysis: Analysis, terrain, *, tolerance: float | None = None,
-         basemaps: dict | None = None, tiles: bool = True,
-         airspace: dict | None = None) -> dict:
-    """Terrain grid, track and climbs, in the compact form the renderer wants.
-
-    `airspace` is a layer built by `airspaces.scene.layer` — rings and their colours,
-    already cut to this terrain's box. It arrives prepared rather than as airspace
-    objects because nothing in this module knows what an ATZ is, which is the property
-    that lets the airspace tool reuse this view at all.
-    """
-    flight = analysis.flight
-    series = analysis.series
-    altitude = flight.alt_gps if np.any(flight.alt_gps) else series.alt
-
-    tolerance = TRACK_TOLERANCE if tolerance is None else tolerance
-    keep = np.arange(len(flight.lon)) if tolerance <= 0 else np.union1d(
-        decimate(series.x, series.y, tolerance),
-        decimate(series.t, series.alt, tolerance * 0.75),
-    )
-    track = {
-        # 5 decimals is ~1 m. 4 was ~11 m, a grid coarse enough to put a staircase into a
-        # 40 m thermal circle once the reader zooms in.
-        "lon": [round(float(flight.lon[i]), 5) for i in keep],
-        "lat": [round(float(flight.lat[i]), 5) for i in keep],
-        "alt": [int(altitude[i]) for i in keep],
-        "c": [_colour_index(float(series.climb[i])) for i in keep],
-        # Seconds since the first fix, for the replay in `render_map`'s renderer.
-        "t": [int(series.t[i]) for i in keep],
-    }
-
-    climbs = []
-    number = 0
-    for segment in analysis.segments:
-        if segment.phase not in (Phase.THERMAL, Phase.TOW):
-            continue
-        middle = (segment.start + segment.stop) // 2
-        if segment.phase is Phase.TOW:
-            label = "T"
-        else:
-            number += 1
-            label = str(number)
-        climbs.append(
-            {
-                "label": label,
-                "lon": round(float(flight.lon[middle]), 5),
-                "lat": round(float(flight.lat[middle]), 5),
-                "alt": int(altitude[middle]),
-                "tow": segment.phase is Phase.TOW,
-            }
-        )
-
-    # Every climb and glide as a start point, an end point and what it was worth, for the
-    # optional labels on the view. The numbers are the table's own — a climb rate and a
-    # height gain, a glide ratio and a distance — so the map cannot disagree with the
-    # rows below it. About 40 bytes a phase, which is why it ships unconditionally and
-    # the *drawing* is what the toggle controls.
-    phases = []
-    for segment in analysis.segments:
-        if segment.phase is Phase.THERMAL:
-            kind, value = "climb", (
-                f"{segment.average_climb:+.1f} m/s · {segment.altitude_change:+.0f} m"
-            )
-        elif segment.phase is Phase.GLIDE:
-            kind, value = "glide", (
-                f"{segment.average_ld:.1f}:1 · {segment.distance / 1000:.1f} km"
-                if segment.average_ld
-                else f"{segment.distance / 1000:.1f} km"
-            )
-        else:
-            continue
-        last = segment.stop - 1
-        phases.append({
-            "kind": kind,
-            "text": value,
-            "lon": [round(float(flight.lon[segment.start]), 5),
-                    round(float(flight.lon[last]), 5)],
-            "lat": [round(float(flight.lat[segment.start]), 5),
-                    round(float(flight.lat[last]), 5)],
-            "alt": [int(altitude[segment.start]), int(altitude[last])],
-        })
-
-    # Cursor positions for the shared hover, at the same sample indices the charts use.
-    return {
-        # Fetched by the page, not embedded: the report's flights are a showcase and the
-        # grid was ~600 KB of each. The analysis still used the fetched heights in Python.
-        "terrain": terrain.to_remote(),
-        "trackTop": int(max(track["alt"])) if track["alt"] else 0,
-        "track": track,
-        "climbs": climbs,
-        "phases": phases,
-        "palette": [list(colour) for _, colour in RAMP_RGB],
-        # Imagery baked into the document, keyed by the style the button names. A
-        # published artifact cannot fetch anything, so a style that is not in here has no
-        # way to appear there — which is why both are embedded by default and the tile
-        # templates below are only an upgrade for a page that does have a network.
-        "basemaps": {name: image.to_dict() for name, image in (basemaps or {}).items()},
-        "tiles": (tiles and {
-            name: source for name, source in TILE_SOURCES.items()
-            if name not in (basemaps or {})
-        }) or None,
-        "landing": {
-            "lon": round(float(flight.lon[-1]), 5),
-            "lat": round(float(flight.lat[-1]), 5),
-            "alt": int(altitude[-1]),
-        },
-        "sun": _sun(analysis),
-        # The flight's wind, for the arrow on the view. `direction` is where it blows
-        # *from*, the way every pilot and every forecast states it; the arrow has to
-        # point the other way, and that inversion is done once, in the drawing code.
-        "wind": ({
-            "ms": round(analysis.wind.speed, 1),
-            "from": round(analysis.wind.direction, 1),
-            "cardinal": analysis.wind.cardinal,
-        } if analysis.wind else None),
-        # The airspace over this flight's own ground, and the switch that says the reader
-        # owns it. On a map whose subject *is* the airspace there is no switch and the
-        # layer is simply on; here the flight is the subject, so it starts off and the bar
-        # carries a button — the same call the phase labels make, for the same reason.
-        **(airspace or {}),
-        **({"airspaceToggle": True} if airspace else {}),
-    }
-
-
-def _sun(analysis: Analysis) -> dict:
-    """The day's sun over the middle of the flight, tabulated for the slider.
-
-    A table rather than the algorithm: porting `sun.py` into JavaScript would be a second
-    place for it to be wrong, and 144 pairs of numbers cannot drift. The browser
-    interpolates between samples, which is why `day_track` unwraps the azimuth.
-
-    Times are handled as UTC minutes throughout and turned into clock time only for the
-    label, using the offset the flight's own timezone had *that day* — one flight, one
-    place, one date, so a single offset is exact and a timezone database is not needed in
-    the page.
-    """
-    flight = analysis.flight
-    lat = float(np.median(flight.lat))
-    lon = float(np.median(flight.lon))
-    launch = flight.local_time(0)
-    day = launch.astimezone(dt.timezone.utc).date() if launch.tzinfo else launch.date()
-
-    def utc_minutes(index: int) -> int:
-        when = flight.time[index].astype("datetime64[s]").astype(object)
-        return when.hour * 60 + when.minute
-
-    offset = launch.utcoffset() or dt.timedelta(0)
-    rise, set_ = sun.rise_and_set(day, lat, lon)
-    start, finish = utc_minutes(0), utc_minutes(len(flight.time) - 1)
-    return {
-        "track": sun.day_track(day, lat, lon),
-        "date": day.isoformat(),
-        # Minutes to add to a UTC minute to read it as the pilot's own clock.
-        "offset": int(offset.total_seconds() // 60),
-        "launch": start,
-        "landing": finish,
-        # Mid-flight is what the view opens on: the light the day was actually worked in,
-        # rather than an hour nobody flew.
-        "at": (start + finish) // 2 if finish >= start else start,
-        "rise": round(rise) if rise is not None else None,
-        "set": round(set_) if set_ is not None else None,
-    }
-
-
-def cursor_track(analysis: Analysis, sample) -> dict:
-    """Positions for the hover cursor, aligned with the chart sample indices.
-
-    `min` is the UTC minute of each sample, which is what lets the hover move the sun:
-    the reader points at a moment in the flight and the terrain is lit as it was then.
-    """
-    flight = analysis.flight
-    altitude = flight.alt_gps if np.any(flight.alt_gps) else analysis.series.alt
-
-    def minute(index: int) -> int:
-        when = flight.time[index].astype("datetime64[s]").astype(object)
-        return when.hour * 60 + when.minute
-
-    return {
-        "lon": [round(float(flight.lon[i]), 5) for i in sample],
-        "lat": [round(float(flight.lat[i]), 5) for i in sample],
-        "alt": [int(altitude[i]) for i in sample],
-        "min": [minute(i) for i in sample],
-    }
-
-
-GLOBE_ICON = (
-    '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false">'
-    '<circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" stroke-width="1.4"/>'
-    '<ellipse cx="8" cy="8" rx="2.9" ry="6.6" fill="none" stroke="currentColor" '
-    'stroke-width="1.1"/>'
-    '<path d="M1.6 6.1h12.8M1.6 9.9h12.8" stroke="currentColor" stroke-width="1.1" '
-    'fill="none"/></svg>'
-)
 EXPAND_ICON = (
     '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false">'
     '<path d="M1.5 5.5v-4h4M14.5 10.5v4h-4M14.5 5.5v-4h-4M1.5 10.5v4h4" fill="none" '
@@ -262,9 +45,8 @@ EXPAND_ICON = (
 )
 
 
-def panel(payload: dict, uid: str, *, kmz_uri: str | None = None,
-          kmz_name: str = "flight.kmz",
-          verticals: tuple = (1, 2, 4), vertical: float | None = None) -> str:
+def panel(payload: dict, uid: str, *, verticals: tuple = (1, 2, 4),
+          vertical: float | None = None) -> str:
     """The canvas, its controls, and the embedded data.
 
     `verticals` is the exaggeration the segmented control offers and `vertical` is where
@@ -277,15 +59,6 @@ def panel(payload: dict, uid: str, *, kmz_uri: str | None = None,
     box on it is two coincident rings and the 3D view shows nothing the flat map did not.
     See `airspaces/cli.py`, which asks for more.
     """
-    earth = ""
-    if kmz_uri:
-        # A download link rather than a button: the KMZ travels inside the report, so
-        # the file is available with no server and no second request.
-        earth = (
-            f'<a class="view3d-earth" href="{kmz_uri}" download="{kmz_name}" '
-            f'title="Download the KMZ and open it in Google Earth">'
-            f'{GLOBE_ICON}<span>Open in Earth</span></a>'
-        )
     # A segmented control rather than a cycle. The code's old comment defended naming what
     # is on screen rather than what comes next, and for a *two*-state toggle that is right
     # — but basemap is three states and exaggeration is three. With a cycle you cannot see
@@ -360,7 +133,6 @@ def panel(payload: dict, uid: str, *, kmz_uri: str | None = None,
                           Arrow keys pan and shift with them turns and tilts; press
                           question mark for the key list.">
       </canvas>
-      {earth}
       {airspace_name}
       <p class="view3d-credit">{credit}</p>
       <p class="view3d-hint" hidden>arrows pan &middot; shift + arrows turn and tilt &middot;
@@ -462,27 +234,8 @@ canvas.view3d { display: block; width: 100%; aspect-ratio: 21 / 9; cursor: grab;
 .view3d-panel.is-maximised { position: fixed; inset: 0; z-index: 60; width: auto;
   height: auto; margin: 0; }
 .view3d-panel.is-maximised canvas.view3d { width: 100%; height: 100%; aspect-ratio: auto; }
-.view3d-earth {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-family: 'NarrowDisplay', "Liberation Sans Narrow", ui-sans-serif, sans-serif;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.09em;
-  text-decoration: none;
-  padding: 7px 12px;
-  border-radius: 2px;
-  border: 1px solid var(--rule-strong);
-  background: var(--panel);
-  color: var(--ink);
-}
-.view3d-earth:hover { background: var(--climb); border-color: var(--climb); color: var(--paper); }
-/* Top right, opposite the Earth link: at the bottom it fought the control row, which
-   on a phone wraps into the same space. */
+/* Top right: at the bottom it fought the control row, which on a phone wraps into the
+   same space. */
 .view3d-credit { position: absolute; right: 12px; top: 12px; margin: 0; font-size: 11px;
   color: var(--ink-2); background: color-mix(in srgb, var(--panel) 78%, transparent);
   padding: 3px 7px; border-radius: 2px; max-width: 46%; text-align: right; }
@@ -559,7 +312,7 @@ canvas.view3d.is-dragging { cursor: grabbing; }
    the "s m r" line describing it. The stack is stated here instead: badges at the bottom,
    then the loading spinner, then the controls, and the help list over all of it, because
    it is the one overlay a reader opens deliberately and expects to obscure the view. */
-.view3d-earth, .view3d-credit, .view3d-hint { z-index: 1; }
+.view3d-credit, .view3d-hint { z-index: 1; }
 .view3d-loading { z-index: 2; }
 .view3d-controls { z-index: 3; }
 .view3d-keys { z-index: 4; }

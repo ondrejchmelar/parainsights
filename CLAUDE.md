@@ -13,13 +13,13 @@ Tools for paragliding. One repository, four tools, answering a question each:
 parainsights/
 ├── CLAUDE.md              this file
 ├── pyproject.toml         one project, one venv, one test suite
-├── tracklog_viewer/       IGC/KML/KMZ → analysis → HTML, KMZ, 3D map
+├── tracklog_viewer/       IGC/KML/KMZ → the report page; the analysis is JavaScript (js/)
 ├── airspaces/             Czech airspace + the airfields nobody else carries → OpenAir, map
 ├── meteo/                 the day's sounding against pgweb's essential takeoffs
 ├── planner/               a task drawn on the airspace it crosses — a section of the airspace page
 ├── parainsights_common/   the one thing every page shares: the strip between the tools
 ├── ci/                    the checks the pipeline runs that are not tests
-├── tests/                 pytest, 725 tests, no network
+├── tests/                 pytest, ~630 tests, no network; the JS through Node (tests/js.py)
 └── docs/
     ├── formats.md            IGC and KML/KMZ format research, measured on real files
     ├── plan.md               tracklog viewer: scope, decisions and status
@@ -37,7 +37,7 @@ A fifth tool goes in as a sibling package (`parainsights/<tool_name>/`) sharing 
 other three link to it.
 
 **Where the "no shared code" rule applies, and where it does not.** `airspaces/geo.py`
-exists alongside `tracklog_viewer/geo.py` rather than importing it, because they are not
+exists alongside `tracklog_viewer/js/geo.js` rather than sharing it, because they are not
 the same geodesy: the viewer works on the FAI sphere because that is what a scored
 distance is measured on, and airspace is published against WGS84. That is the rule, and
 it is about *geodesy and analysis*, where the tools genuinely disagree.
@@ -45,12 +45,12 @@ it is about *geodesy and analysis*, where the tools genuinely disagree.
 `view3d` is the exception that shows the edge of it. It is a **map widget** — hand it a
 terrain grid, some imagery and a list of things to draw and it never asks what a flight
 is — so `airspaces`, `meteo` and `planner` all use it rather than carrying a copy of
-120 KB of JavaScript. The right end state is a third package holding it; what stops that
-today is that `view3d.data()` and `cursor_track()` in the same module *are* flight code,
-so it is a refactor rather than a move. Every such import is lazy, so no tool fails to
-build because another is absent. Likewise `planner` reads its scoring constants from
-`tracklog_viewer/xc.py` — a planner that scored a task differently from the report that
-later measures the flight would be worse than no planner.
+120 KB of JavaScript. The right end state is a third package holding it, and since its
+flight code moved to `js/scene.js` that is a move rather than a refactor. Every such
+import is lazy, so no tool fails to build because another is absent. Likewise `planner`
+reads its scoring constants out of `tracklog_viewer/js/xc.js` — a planner that scored a
+task differently from the report that later measures the flight would be worse than no
+planner.
 
 ## Getting set up
 
@@ -59,11 +59,13 @@ as the packages, so there is nothing to line up by hand:
 
 ```bash
 uv sync --extra dev          # creates .venv on the pinned Python, from uv.lock
-uv run pytest -c pyproject.toml     # ~700 tests, ~6 min in parallel, no network
+uv run pytest -c pyproject.toml     # ~630 tests, a few minutes in parallel, no network
 ```
 
 `-c pyproject.toml` matters when the repo sits inside another project — pytest otherwise
-walks up and adopts the enclosing config.
+walks up and adopts the enclosing config. **Node is the other requirement**: the flight
+analysis and the article are JavaScript, the report is built by running them in Node,
+and the tests reach them through Node too (`tests/js.py`). Without Node those tests skip.
 
 **The installed set is a fact, not a coincidence.** `uv.lock` is committed and CI runs
 `uv sync --locked`, which fails rather than silently resolving something new — so an
@@ -78,8 +80,6 @@ Run it:
 uv run python -m tracklog_viewer.cli FLIGHT.igc --html out.html
 uv run python -m tracklog_viewer.cli FLIGHT.igc --meteo --terrain --html out.html
 uv run python -m tracklog_viewer.cli a.igc b.kmz c.igc --html all.html   # flight picker
-uv run python -m tracklog_viewer.cli FLIGHT.igc --kmz flight.kmz         # Google Earth
-uv run python -m tracklog_viewer.cli FLIGHT.igc --map map.html           # 3D map
 
 uv run python -m airspaces.cli --openair CZ_airfields.txt  # aerodrome zones + okruhy for XCTrack
 uv run python -m airspaces.cli --html airspace.html     # the airspace map, in 3D
@@ -92,8 +92,8 @@ uv run python -m meteo.cli --refresh-flymet            # re-read flymet's statio
 uv run python -m planner.cli --html plan.html          # only the redirect to ../airspace/
 ```
 
-Only `--meteo` and `--terrain` touch the network. Everything else in the viewer is
-offline. `meteo` and `airspaces` both need one at build time, and the meteo *page* needs
+Only `--meteo`, `--terrain` and `--airspace` touch the network at build time. Everything
+else in the viewer is offline. `meteo` and `airspaces` both need one at build time, and the meteo *page* needs
 one at view time — it is the one artifact here that is deliberately not self-contained,
 because a forecast built at 03:00 and published is wrong by lunchtime.
 
@@ -257,46 +257,62 @@ Test data: `~/Downloads/*.igc` (60 files: XCTrack, SkyBean SkyDrop, Flytec) with
 igc2kmz KMZs. `~/bin/igc2kmz` is Tom Payne's original Python-2 tool — the ancestor of this
 one, still runnable under `python2.7` as an oracle.
 
+**The analysis is JavaScript, and only JavaScript** (October 2026). It was written in
+Python first, ported to `tracklog_viewer/js/` and held to the Python field for field —
+63 of 63 real IGC files, 75 of 75 KMZ, every article identical — and then the Python was
+retired. It is in git at `ada5e5b`, docstrings and all, which is where to read the long
+reasoning behind a rule when the comment in the JavaScript is short. What went with it,
+because nothing in the page used it: the Google Earth KMZ export, the pilot's archive
+(`--archive`), the threshold calibrator, `--json` and the standalone `--map` page.
+
 ## Architecture
 
-Analysis is one pass producing plain dataclasses; renderers consume only those. No
-geometry in a renderer, no rendering in the analysis.
+One flight goes through one function, `TV.upload.compose` (`js/upload.js`): parse, analyse,
+score the route, write the article. An uploaded track goes through it in the page; the
+report's own flights go through it at build time in Node (`js_build.py`). The Python is the
+build and the page around the articles.
 
 | Module | Responsibility |
 |---|---|
-| `igc.py` | IGC parsing. **Every logger quirk lives here and nowhere else.** |
-| `kml.py` | Track out of KML/KMZ (`gx:Track`, timed placemarks) |
-| `sources.py` | One entry point: file, URL, or XContest page → `Flight` |
-| `geo.py` | FAI-sphere haversine distance, bearing, cardinals |
-| `flight.py` | Derived series over a 20 s interpolated window |
-| `analysis.py` | Phases, per-climb and per-glide stats, wind, time budget, the `other` decomposition |
-| `metrics.py` | Tier-1 measurements over an `Analysis`: climb selection, working band, centring, gaps, concentration, day envelope, detour, lowest save |
-| `debrief.py` | `Finding`, the ranking pass, and the one `THRESHOLDS` dict |
-| `calibrate.py` | What those thresholds do to a real archive: firing rates and distributions |
-| `certification.py` | The wing's LTF/EN class, matched against `gliders.py` — and refused when unsure |
-| `airmass.py` | Wind field from the per-thermal soundings; corrected glides, circle wander, the empirical polar |
-| `insolation.py` | Slope, aspect and sun incidence from the DEM and `sun.py`; ridge-or-thermal per climb |
-| `baseline.py` | The pilot's archive: summary JSON per flight, percentiles behind `--archive` |
-| `plan.py` | The declared task or a sidecar plan, and what the flight did against it |
-| `xc.py` | Free distance through ≤3 turnpoints (own dynamic program) |
-| `terrain.py` | DEM grid + height above terrain (AWS terrarium, keyless) |
-| `basemap.py` | Satellite (Esri) or OSM tiles stitched to one embedded JPEG |
-| `meteo.py` | The day's vertical profile (Open-Meteo) |
-| `sun.py` | Solar position (NOAA), and the day tabulated for the 3D view |
-| `charts.py` | All SVG charts, rendered locally |
-| `charts_client.py` | The side and top views, drawn in the browser from the cursor's own payload |
-| `view3d.py` | The 3D view: camera, gestures, tiles, track overlay — and a canvas 2D heightfield as the fallback |
+| `js/igc.js` | IGC parsing. **Every logger quirk lives here and nowhere else.** The take-off's timezone from `js/vendor/tz-lookup.js` |
+| `js/kml.js` | Track out of KML/KMZ (`gx:Track`, timed placemarks), with its own small XML and ZIP readers |
+| `js/np.js` | The numpy behaviours the analysis was written against, reproduced exactly |
+| `js/geo.js` | FAI-sphere haversine distance, bearing, cardinals |
+| `js/flight.js` | Derived series over a 20 s interpolated window |
+| `js/analysis.js` | Phases, per-climb and per-glide stats, wind, time budget, the `other` decomposition |
+| `js/metrics.js` | Tier-1 measurements: climb selection, working band, centring, gaps, concentration, day envelope, ceiling use |
+| `js/debrief.js` | The verdict, the findings ranked by cost, and the one `THRESHOLDS` table |
+| `js/certification.js` | The wing's LTF/EN class from its header; the answers are precomputed by `certification.py` into `gliders.json` |
+| `js/airmass.js` | Wind field from the per-thermal soundings; corrected glides, the empirical polar |
+| `js/insolation.js` | Slope, aspect and sun incidence from the DEM; ridge-or-thermal per climb |
+| `js/plan.js` | The declared task or a sidecar plan, and what the flight did against it |
+| `js/xc.js` | Free distance through ≤3 turnpoints, and the best-scoring triangle |
+| `js/terrain.js` | Height above the ground on a DEM grid, and the grid an upload asks for |
+| `js/meteo.js` | The Open-Meteo request and the reading of its answer |
+| `js/sun.js` | Solar position (NOAA), and the day tabulated for the 3D view |
+| `js/charts.js` | The SVG charts the article carries, and the payload for the two drawn in the page |
+| `js/scene.js` | A flight's 3D scene and panel markup |
+| `js/report.js` | One flight's article, masthead to footer |
+| `js/upload.js` | `compose`, `readBytes` (the one file dispatch) and the upload flow in the page |
+| `js/build_runner.js` | Node side of the build: `inspect` (what to fetch) and `render` |
+| `cli.py` | The build: inputs, fetches, plan discovery, airspace, the page |
+| `js_build.py` | Runs `build_runner.js` |
+| `sources.py` | A file, a URL's download, or a refusal for an XContest page |
+| `terrain.py` | Fetches DEM grids (AWS terrarium, keyless) for the build |
+| `certification.py` | The register-matching rules and `gliders.py`, compiled to `gliders.json` |
+| `render_html.py` | The page around the articles: stylesheet, page script, strips, bundle |
+| `upload_panel.py` | The `+ your track` panel |
+| `charts_client.py` | The side and top views, drawn in the browser from the article's payload |
+| `view3d.py` | The canvas 3D view: camera, gestures, tiles — a map widget, not flight code |
 | `view3d_gl.py` | WebGL heightfield, registered as a backend for `view3d.py` |
-| `render_kmz.py` | Google Earth KMZ: LOD folders, balloons, animation, local charts |
-| `render_map.py` | Richer 3D map (MapLibre + deck.gl); needs network at view time. Also the report's renderer switch and the shared MapLibre loader |
-| `map3d.py` | The merged 3D map: MapLibre's engine under the canvas view's controls, rose, labels, airspace and shading |
-| `render_html.py` | The page around the articles, and the Python article renderer — the parity reference, and `--python-articles` |
-| `upload_panel.py` | The `+ your track` panel: hands a dropped file to `js/upload.js` and adds its tab. No analysis of its own |
-| `js_build.py` | Renders the report's articles with `js/upload.js`'s `compose` in Node at build time |
-| `js/` | The analysis and the per-flight article in JavaScript, inlined into the report (`render_html.js_bundle`); checked against the Python by `js_parity.py` |
-| `cli.py` | Argument handling and orchestration |
+| `render_map.py` | The plain MapLibre view, the renderer switch and the shared MapLibre loader |
+| `map3d.py` | The merged 3D map: MapLibre's engine under the canvas view's controls |
 
 ## Decisions, and the reasons behind them
+
+The rules below name the functions they live in as they were named in Python
+(`_revolutions`, `insolation.sources`, `xc.triangle()`); the JavaScript keeps the names,
+in camelCase where the Python had underscores.
 
 Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
 
@@ -354,7 +370,7 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
 - **Wind is metres per second, everywhere it is shown, and everywhere it is stored.**
   `Wind.speed` always was m/s and `.kmh` was a display conversion applied in a dozen
   places; the report, the KMZ, the 3D overlay, the console, the wind chart's axis and the
-  in-page analysis all print m/s now, and `meteo.py` asks Open-Meteo for
+  in-page analysis all print m/s now, and `js/meteo.js` asks Open-Meteo for
   `wind_speed_unit=ms` so the model arrives in it too. **Ground speed stays km/h** — a
   pilot says "35 km/h" of a glide and "5 m/s" of the wind, and the glide table's speed
   column is unchanged.
@@ -363,9 +379,6 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   fallback for a flight with no circled climb — a modelled wind **3.6× too strong**, and
   a corrected glide ratio to match, on exactly the flights that had nothing better. One
   unit at rest is what makes that unforgettable: there is no conversion left to forget.
-  The archive migrates on read (`baseline._in_metres_per_second`) rather than bumping
-  `FORMAT`: the old key held the same measurement in another unit, and a format bump
-  means "this file cannot be understood", which is not true of it.
 - **A thermal is the circling, not the run-in to it — and "circling" means *sustained*
   turning.** Wind is a straight-line fit to the drift, so any straight flight inside the
   phase is measured as if it were moving air. Two faults, one cause, both from the old
@@ -440,35 +453,23 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   `_reclassify_tow`'s job and a `progress` test breaks on any discontinuity in the track.
 - **Tow is a fourth phase**, detected at the launch and excluded from thermal statistics
   and from the wind estimate.
-- **`timezonefinder` is a hard dependency.** Only XCTrack ≥0.9.12 records a timezone;
-  47 of 61 test files need the coordinate lookup.
+- **The take-off's timezone comes from its position** when the file does not say (only
+  XCTrack ≥0.9.12 records one; 47 of 61 test files need the lookup), through
+  `js/vendor/tz-lookup.js` — the same clock timezonefinder gave at all 136 sample
+  take-offs. Do not be tempted by `lon / 15`.
 - **Haversine, not the law of cosines** — `acos` loses precision at the ~7 m separations
   between 1 Hz fixes, which is what every derived series is built from.
 - **Charts are rendered locally.** igc2kmz's Google Image Charts URLs died in 2019, so
   every graph in its output is a broken image. Don't reintroduce a network dependency
   into a chart.
-- **KML colours are `aabbggrr`, and every colour in `render_kmz.py` goes through
-  `kml_colour()`.** Writing `#eb6834` directly yields blue. That bug painted an entire
-  track solid blue on Google Earth mobile, because the solid-colour folder drew last.
-- **Assume a viewer may ignore `Region`, `visibility` and `radioFolder`, and make the
-  fallback correct rather than removing the feature.** Google Earth mobile demonstrably
-  ignores `visibility` (a folder marked hidden was what the user saw). Whether it honours
-  `Region` was never established — the reported symptom was fully explained by the colour
-  bug. So the three detail levels are ordered coarse → fine and the colourings within
-  each end with climb: a viewer that honours `Region` draws one level, and one that
-  ignores everything draws them all and the last painted is the right one.
 - **Satellite imagery is the default basemap**, composited from Esri World Imagery plus
   its `World_Boundaries_and_Places` label layer — both keyless. A photograph tells a pilot
   what the ground under a climb was; a road map does not. Attribution to Esri/Maxar is
   required and is rendered on the map and in the caption.
-- **Every basemap style the button offers is embedded**, unless `--online` says the page
-  will have a network. Fetching tiles by default was tried and reverted: a published
-  artifact cannot reach any host, so the toggle switched to nothing at all and the report
-  had no imagery whatsoever. `tiles` carries templates only for styles that are *not*
-  embedded. `--no-basemap` opts out of imagery entirely.
-  When stitching from tiles, give each source layer **its own canvas** and composite in
-  order at the end: the label layer is requested second and frequently answers first, so
-  painting into a shared mosaic as tiles arrive makes z-order a race.
+- **Every basemap style is fetched at view time.** When stitching from tiles, give each
+  source layer **its own canvas** and composite in order at the end: the label layer is
+  requested second and frequently answers first, so painting into a shared mosaic as tiles
+  arrive makes z-order a race.
 - **One tile level of improvement is worth a fetch; two is a 4x zoom of nothing.**
   Halving the visible box buys exactly one tile level inside a fixed tile budget, so
   `DETAIL_STEP = 2` meant the imagery stood still across a fourfold zoom. Measured on the
@@ -550,10 +551,6 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   draped road map came out looking like a flat sheet. `litMid`/`litSpread` are measured
   once from the grid and the shading is normalised against them (and skipped entirely when
   the range is under 0.01, as on a flat plane).
-- **The KMZ is written on demand, not embedded.** `--earth-link` puts it in the report as
-  a data URI behind "Open in Earth" (~170 KB, first flight only); by default `--kmz`
-  writes a file. The report is for reading; a copy of the same flight in a second format
-  is dead weight in it.
 - **Uploading your own track is the first tab, not the last.** The bundled flights are a
   showcase. The reader's own file is the product, so the `+ your track` tab leads and a
   note under the tabs says the analysis happens in the page.
@@ -573,7 +570,7 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   by calling `scrollTo(300, 0)` and reading `scrollX` back.
 - **The hillshade is the real sun, and the sun follows the chart cursor.** The light was
   a fixed north-west lamp, which is a direction the sun is never in anywhere in the
-  northern hemisphere, so the shading answered nothing a pilot asks. `sun.py` is the NOAA
+  northern hemisphere, so the shading answered nothing a pilot asks. `js/sun.js` is the NOAA
   solar position algorithm; the payload carries the flight day sampled every ten minutes
   — under 2 KB — and **hovering a chart lights the terrain as it was at that moment**,
   which is the question itself: was that face still in the sun when I got there. A slider
@@ -746,27 +743,8 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
 - **The 3D canvas has no width/height attributes.** CSS sizes the box (`aspect-ratio`)
   and JS matches the backing store to it, capped at 2× pixel ratio; that is what lets the
   same code serve an inline panel and full screen.
-- **`Region`/`Lod` saves drawing, not bytes.** All three levels are in the file either
-  way; Earth just skips the ones whose on-screen size falls outside their pixel window
-  (56 points when the flight is a thumbnail, 1 727 when it fills the window). Real
-  streaming needs `NetworkLink`, which a self-contained KMZ cannot use.
-- **A Document description is shown verbatim on mobile.** HTML tables go on a Placemark
-  (`Flight summary`, at the launch point); the Document gets plain text.
-- **Icons are generated, never hand-typed.** `_png()` writes them with `zlib` and
-  `struct`. A hand-written base64 constant passed the PNG signature check, had a corrupt
-  IDAT, and Earth drew a red X on every placemark.
-- **The KMZ batches geometry, igc2kmz does not.** One `LineString` per colour run and
-  three `Region`/`Lod` detail levels, against one placemark per fix: 125 KB and 2 534
-  placemarks where igc2kmz produces 612 KB and 11 373 for the same flight (129 KB / 2 535
-  with the three detail levels restored). Watch the
-  integer division when sampling — floor division gave one animation placemark per fix
-  on short flights, which is the very thing this avoids.
-- **Test the KMZ against a real viewer.** Structure tests pass on files that look wrong
-  in Earth: the colour inversion, the corrupt icon and the raw-HTML description all
-  survived a green suite. There are now regression tests for each.
-- **Two 3D views on purpose.** `render_map.py` is better but needs network at view time;
-  `view3d.py` gives up the basemap library to be embeddable. Both share the climb ramp.
-  The report carries both, for comparison: a `canvas | MapLibre` switch above each 3D
+- **Three 3D views, for now.** `view3d.py` (canvas) and plain MapLibre (`render_map.py`)
+  came first; the report carries both, for comparison: a `canvas | MapLibre` switch above each 3D
   panel (`render_map.switch_html`, `SWITCH_SCRIPT`), bundled flights and uploads alike.
   The MapLibre side draws from the scene the canvas view was built from
   (`handle.built`), so it cannot show a different flight, and follows the linked cursor
@@ -874,7 +852,7 @@ The numbers are checkable, so check them:
 - **Against igc2kmz** (`python2.7 ~/bin/igc2kmz/bin/igc2kmz.py -i F.igc -o out.kmz`):
   same 12 climbs and 11 glides on the reference flight, start times within 4 s.
 - **Against XContest**: its page title carries the scored distance. On
-  `20260728XCTOCH10.igc` it says 64.09 km and `xc.py` says 64.08 km.
+  `20260728XCTOCH10.igc` it says 64.09 km and `js/xc.js` says 64.08 km.
 - **Against the model**: the wind chart draws the model profile behind the measured
   per-thermal winds. Agreement there is evidence the drift method works, since neither
   source knows about the other.
@@ -988,179 +966,25 @@ the font stays inlined because it is one request for a document's whole appearan
   cloudbase, both named at their evening end. Each column is the airgram and the sounding,
   side by side on one height scale for a single takeoff. The airgram reads on a tap and
   does not take vertical drags, so it is the column's strip to scroll the page from.
-- **Every feature for an uploaded track — done (steps 1-3).** The bundled flights are a
-  showcase; uploads are the product. The
-  direction is JavaScript as the one runtime language for the viewer (not Pyodide):
-  1. *The analysis, in `tracklog_viewer/js/`, checked against the Python.* **Done for the
-     core**: `np.js` (numpy's behaviours, exactly: pairwise summation, `interp`,
-     `unwrap`, Python's round-half-to-even on the exact binary value), `geo.js`,
-     `igc.js`, `flight.js`, `analysis.js`, `xc.js` (open distance, triangles, the route
-     `cli.py` picks), `metrics.js`, `debrief.js` (verdict and findings word for word —
-     `np.fmt` is Python's format specs, and `_num`'s separator is a no-break space),
-     `sun.js` (NOAA, plus `view3d._sun` as `forFlight`), `airmass.js`, `terrain.js`
-     (`Terrain.at` and `clearance` on the page's own grid shape), `insolation.js`,
-     `plan.js` (C-record tasks and sidecar JSON), `kml.js` (gx:Track and timed
-     placemarks, with its own small XML and ZIP readers — `DOMParser` does not exist in
-     Node, and KMZ inflation is the browser's `DecompressionStream`), `certification.js`
-     (the header-to-key half; every answer is precomputed by `certification.compact()`,
-     217 KB / 50 KB gzipped, fetched beside the page only when an upload needs it —
-     identical to `lookup` over 35 739 register names and logger spellings).
-     `uv run python -m tracklog_viewer.js_parity ~/Downloads` runs both over every IGC
-     there and compares field for field — the analysis, the route, every metric and the
-     debrief with and without terrain and weather (synthetic ground and cloudbase, the
-     same on both sides), the sun table, the air-mass frame with and without a model
-     wind, and insolation over a synthetic ridged DEM: **63 of 63 IGC and 75 of 75 KMZ
-     samples identical** (a file one side refuses, the other must refuse too).
-     `tests/test_js_parity.py` does the same on synthetic flights in CI. The harness
-     hands Python's timezonefinder answer to the JS (`positionZone`), so it compares the
-     analysis rather than two boundary datasets. `meteo.js` reads the Open-Meteo answer
-     (identical on 106 readings of the cached responses). The take-off timezone is
-     **tz-lookup** (`js/vendor`, CC0, 73 KB): the same clock as timezonefinder at all 136
-     sample take-offs, the same zone name at 131. **The analysis port is complete.**
-  2. *The per-flight article in JavaScript.* **Done**: `charts.js` (every server-side
-     SVG chart and the client-chart payload), `scene.js` (`view3d.data` and the panel
-     markup), `report.js` (`_flight_body` and all its helpers) and `upload.js`, which
-     reads a dropped file, fetches the ground, the day's profile and `gliders.json` in
-     parallel — each optional, each with a timeout — and places the article where a
-     bundled flight's would be, then runs `__drawCharts` and `initFlight` on it. An upload
-     now gets the same article as a showcase flight: the 3D view, debrief, climbs and
-     glides tables, wind, sounding, polar, sun and the EN chip. A failed fetch costs only
-     what rests on it, and the status line names it. `js_parity --report` compares the
-     article's HTML with `_flight_body`'s (comments stripped, whitespace collapsed, JSON
-     payloads by value): **63 of 63 identical**. `tests/test_upload.py` uploads a track
-     into a page with no network and requires the full article. The CLI writes
-     `gliders.json` beside the page; `public/gliders.json` is committed with it.
-  3. *The showcase flights through the same path.* **Done**: `cli --html` renders every
-     article with `TV.upload.compose` — the function an upload goes through in the page —
-     in Node at build time (`js_build.py`, `js/build_runner.js`), from what the CLI
-     fetched: the ground with its heights, Open-Meteo's answer unparsed
-     (`meteo.payload_for_flight`), the glider table, a sidecar plan, the airspace layer,
-     the archive rank. The page still opens on finished articles: the JavaScript takes
-     5-8 s per showcase flight, which is a spinner nobody should meet on arrival. On the
-     three published flights, with real terrain and weather, the articles and the tab
-     strip are **identical** to the Python renderer's (normalised as `js_parity --report`
-     does); `tests/test_js_build.py` holds that on synthetic flights. Without Node the
-     CLI warns and writes the Python articles; `--python-articles` asks for them.
-     **`quicklook.py` is retired**: the panel is `upload_panel.py`, a failed upload says
-     why instead of falling back to a reduced analysis, and `fetchMeteo` (the in-page
-     weather for an article written without it) moved into `render_html.SCRIPT`.
-     **The Python analysis is not deleted.** It no longer writes the page, but the CLI's
-     console summary, `--json`, `--kmz`, `--map`, `--archive` and `calibrate` all run on
-     it, and it is the reference every JavaScript port is checked against. Deleting it
-     means porting or dropping those — a decision, not a cleanup.
-
-Written up with a plan in `docs/plan.md`:
-
-- ~~**Move some charts to the client.**~~ **Done, for the two that were worth it.** The
-  side view and the top view are drawn in the page by `charts_client.py`; the document
-  carries a payload instead of the SVG. Measured on a real 3 h 39 flight, the whole
-  report goes **618 KB → 482 KB** — and on the published three-flight document it takes
-  out nine profile SVGs (577 KB) and three plan views (153 KB), because the axis toggle
-  used to ship all three modes and hide two.
-
-  | | count | bytes | share of 2.97 MB |
-  |---|---|---|---|
-  | `chart` SVGs, side view (3 modes × 3 flights) | 9 | 577 KB | 19% |
-  | `chart` SVGs, top view | 3 | 153 KB | 5% |
-  | sparklines | 104 | 176 KB | 6% |
-  | L/D bars | 119 | 16 KB | 1% |
-
-  Three rules made it a renderer rather than a second design. **The browser builds the
-  same SVG** — same elements in the same order, same classes, same `data-` attributes —
-  so the linked cursor, the tooltip, the band highlight, "show me" and both themes go on
-  working and the CSS is untouched; a browser test compares the DOM element for element
-  against `charts.altitude_profile`. **One sample, shared**: the trace is drawn through
-  the very indices the cursor is indexed by, which is also why the payload is small —
-  `_cursor_data` was already shipping altitude, climb and time at those indices, so the
-  chart payload adds only distance flown, distance from launch and the plan-view metres.
-  **Nothing is recomputed that Python already knows**: the clock labels for the time
-  axis ship as data, because resolving the flight's timezone in a page is the trap the
-  timezone gap warns about.
-  Two consequences worth knowing. The axis toggle **redraws** instead of unhiding, so
-  `initFlight` had to gain `root.__relinkCharts` — the cursor binds to the SVG that was
-  there when it ran, and a replaced one is a chart the cursor cannot drive, which looks
-  exactly like the cursor being broken. And the hosts reserve their height with
-  `aspect-ratio`, because a chart landing 420 px tall into a 0 px box moves everything
-  under it.
-  `charts.altitude_profile` and `charts.plan_view` are still there, still tested, and
-  are the reference the browser test measures against — but the report calls neither.
-
-- **The sparklines are the remaining case, and they are the opposite one.** 104 little
-  charts at 176 KB: each needs its own slice of the series, so a payload for them is not
-  a payload the document already carries. Not attempted.
-
-Both `docs/ux-review.md` and `docs/analysis-plan.md` are now **implemented** — every phase
-of each. What they describe is what the code does, so read them for the reasoning and this
-section for what is left.
-
-- **The debrief.** A verdict strip above the 3D view and 3–5 finding cards under it, ranked
-  by cost measured against the flight's own budget. Three rules live in code, not in
-  review: no finding is an imperative (a test greps for "should have"), every finding
-  carries a cost in metres or minutes or it does not ship, and a finding whose data is
-  missing returns `None` rather than an empty card. *Show me* drives the linked cursor.
-- **The corrections.** The `other` slice is decomposed three ways and never published as a
-  loss — on the reference flight it nets +385 m. Dolphin flying is measured over all
-  straight flight, cross-country speed over the scored route, glide ratio as a median.
-- **The air-mass frame, the DEM findings, the archive, the flight plan.** All four landed;
-  see the module table. Two of them are deliberately *not* debrief cards — a wind-corrected
-  glide ratio and a lit slope are context, not costs — so they sit beside the sections they
-  describe. That is the "no cost, no card" rule doing its job rather than being worked
-  around.
-
-Still wanted:
-
-- ~~Calibrate `THRESHOLDS` against a real archive.~~ **Done** — see the known gaps below
-  and `docs/analysis-plan.md`. Three thresholds that need a DEM, a sounding or a scored
-  triangle per flight remain uncalibrated and are named as such by the tool.
-- ~~The glider's EN class, beside the glider name.~~ **Done**, from two registers,
-  because neither is complete: the **DHV Geräteportal** (LTF *and* EN, back to the
-  1980s, but its newest Ozone is a 2018 Buzz Z6 — Ozone stopped seeking a German
-  approval) and **Air Turquoise**'s report list (the test house that runs most EN 926-2
-  flight testing, so it has the current wings, but only the ones it tested). 6 240 rows
-  in `gliders.py`, generated with `python -m tracklog_viewer.certification --refresh`,
-  every one carrying the register and the reference it can be checked under.
-  **The matching is built to refuse.** `lookup` answers only when the maker and the
-  model agree and *every certified size of that model carries the same class* — so
-  Advance's Sigma 10, which is D in 21 and C above it, gets no chip at all rather than
-  a class the pilot might not have been flying under. A header that names a maker never
-  falls through to another maker's wing of the same name (Sky and Edel both make an
-  Apollo). There is no fuzzy match: "Rush 6" against "Rush 5" is one character and a
-  whole class of wing. On the 19 distinct wings in the sample archive it answers 13 and
-  says nothing about 6 — two of those are genuinely not in either register, one is a
-  logger writing `NKN`, and one is the Sigma 10 refusing on principle.
-  **LTF and EN are never translated into each other.** LTF 1-2 is *about* EN B and every
-  pilot knows it, but "about" is not a certification, so a wing in the DHV register under
-  1-2 and in Air Turquoise's under B resolves to the EN row, and an LTF-only wing prints
-  "LTF 1-2". The *Klassenzusatz* — a class granted only with a particular harness —
-  travels with the class, because dropping it silently widens someone else's approval.
-- **Convergence as a third climb class.** `insolation.sources` labels ridge and thermal
-  and deliberately stops there; see its docstring for why one tracklog cannot support the
-  third.
-- ~~The model wind profile behind the sounded wind, for a page built without
-  `--meteo`.~~ **Done.** `charts.wind_profile` publishes its axis mapping in
-  `data-wind-frame` and each point carries the speed, altitude and direction it was
-  placed from; `plotModelWind` in `render_html.SCRIPT` draws the profile the view-time
-  fetch returned into the `<g class="model">` Python leaves empty. `__fetchMeteo` takes
-  `{profile: true}` and adds the pressure levels to the same request — off by default,
-  because an uploaded track has no chart to draw them in.
-  **It is a rescale, not a plot, and that is the whole of it.** The measured winds are
-  drift inside thermals and the model is the free air, so the model is routinely two or
-  three times the fastest thing the glider felt: clipping it to the chart's existing
-  axis draws a straight line up the right-hand edge and calls it a profile. So the axis
-  grows and every measured point moves with it, which is what the point-level data
-  attributes are for. An untouched chart is left byte-identical. The legend and the
-  caption are rewritten too — Python wrote both for a report with no model in it, and a
-  caption explaining the absence of a line the reader can see is worse than no caption.
-  A flight older than the 60-day cutoff still gets nothing, because the ERA5 archive
-  returns nulls on every pressure level, and the page leaves the chart and its caption
-  alone rather than drawing an empty axis.
+- **Every feature for an uploaded track, and JavaScript as the one runtime language for
+  the viewer — done** (October 2026; Pyodide was considered and rejected). In four steps,
+  each checked before the next: (1) the analysis ported to `js/` and held to the Python
+  field for field by a parity harness — 63 of 63 IGC, 75 of 75 KMZ, the Open-Meteo reading
+  on 106 cached answers, the glider classes over 35 739 register names; (2) the article
+  ported (`report.js`, `charts.js`, `scene.js`), 63 of 63 identical, so an upload gets the
+  showcase's article; (3) the showcase flights rendered by the same `compose` in Node at
+  build time, identical with real ground and weather; (4) the Python analysis, the parity
+  harness and `quicklook.py` deleted, and the Python test suite moved onto the JavaScript
+  (`tests/js.py`). Two numbers worth knowing: the JavaScript takes 5-8 s on a long
+  flight, which is why the report renders at build time rather than on arrival; and the
+  timezone is tz-lookup, which gives timezonefinder's clock at all 136 sample take-offs.
 
 ## Known gaps
 
 - ~~`debrief.THRESHOLDS` is provisional and has never been calibrated.~~ **Calibrated on
-  2026-08-15 against 63 IGC files**, and re-runnable:
-  `uv run python -m tracklog_viewer.calibrate ~/Downloads` prints how often each finding
-  fires and the distribution behind each threshold. The rule the numbers now follow is
+  2026-08-15 against 63 IGC files** with a calibrator that ran on the Python analysis and
+  went with it (`tracklog_viewer/calibrate.py` at `ada5e5b`); recalibrating means porting
+  it to Node first. The rule the numbers now follow is
   *each threshold is the percentile of its own quantity that puts the card on no more
   than a third of flights*, and both the percentile and the measured rate sit in the
   comment beside every value. `docs/analysis-plan.md` has the before-and-after table.
@@ -1172,8 +996,6 @@ Still wanted:
   **Three are still uncalibrated and are listed as such** rather than reported as fine:
   `low_clearance` and `ground_margin` want a DEM per flight, `ceiling_used` a sounding
   per flight (and ERA5 is surface-only past 60 days), `near_close` a scored triangle.
-  The tracklogs are still not in the repository — `*.igc` is gitignored — so the
-  calibrator reads a directory you point it at and writes nothing.
 - **`public/index.html` is a committed build artifact — the report needs the IGC files
   and flight tracks stay out of this repository.** That is the trade, and it failed in a
   specific way: the renderer changed, nobody rebuilt, and the site sat weeks out of date
@@ -1230,13 +1052,11 @@ Still wanted:
   `--airspace` is where the OpenAir download sits *relative to the report*. Without
   `--terrain` the airspace view silently falls back to the flat SVG map. The current copy
   is 2.51 MB, down from 3.12 MB before the side and top views moved into the page.
-- FAI/flat triangle scoring with multipliers is not implemented; `xc.py` does free
-  distance only.
 - Historical weather is surface-only: the ERA5 archive returns nulls on every pressure
   level, so flights older than ~60 days get no sounding.
 - ~~`quicklook.py` re-implements a subset of the analysis in JavaScript.~~ **Retired**
   (October 2026): an upload gets the full analysis from `js/`, checked against the Python
-  field by field (`js_parity.py`). Two traps it found are kept in `js/igc.js`: B records
+  field by field before the Python went. Two traps it found are kept in `js/igc.js`: B records
   carry only a time of day, so a file with no `HFDTE` is undated and its weather is
   refused rather than fetched for 1 January 1970; and XCTrack's `L`-record timezone blob
   drops its base64 padding, which `atob` refuses in the wrong *amount* where Python's

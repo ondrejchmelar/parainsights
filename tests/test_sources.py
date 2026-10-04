@@ -5,7 +5,9 @@ import zipfile
 
 import pytest
 
-from tracklog_viewer import kml, sources
+from tests import js
+from tests.js import needs_node
+from tracklog_viewer import sources
 
 KML_HEAD = '<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2">'
 
@@ -44,12 +46,19 @@ def write_kmz(path, document: str, inner_name="doc.kml"):
     return path
 
 
+def read(path):
+    """The file through the page's own dispatch, with what the tests ask about."""
+    return js.run("""var f = await load(input.path); f.n = f.time.length;
+                     f.has_baro = TV.igc.hasBaro(f); return f;""", path=path)
+
+
+@needs_node
 class TestKmlReading:
     def test_timed_placemarks(self, tmp_path):
         path = tmp_path / "x.kml"
         path.write_text(timed_placemarks(), encoding="utf-8")
-        flight = kml.parse(path)
-        assert len(flight) == 60
+        flight = read(path)
+        assert flight.n == 60
         assert flight.lat[0] == pytest.approx(49.4)
         assert flight.lon[0] == pytest.approx(14.6)
         assert flight.alt_gps[0] == 500
@@ -58,21 +67,19 @@ class TestKmlReading:
     def test_gx_track(self, tmp_path):
         path = tmp_path / "t.kml"
         path.write_text(gx_track(), encoding="utf-8")
-        flight = kml.parse(path)
-        assert len(flight) == 60
+        flight = read(path)
+        assert flight.n == 60
         assert "gx:Track" in flight.headers.logger_type
 
     def test_kmz_archive(self, tmp_path):
-        path = write_kmz(tmp_path / "x.kmz", timed_placemarks())
-        flight = kml.parse(path)
-        assert len(flight) == 60
+        assert read(write_kmz(tmp_path / "x.kmz", timed_placemarks())).n == 60
 
     def test_kmz_without_kml_is_rejected(self, tmp_path):
         path = tmp_path / "empty.kmz"
         with zipfile.ZipFile(path, "w") as archive:
             archive.writestr("readme.txt", "nothing here")
-        with pytest.raises(kml.NoTrackError, match="no .kml"):
-            kml.parse(path)
+        with pytest.raises(js.JSError, match="no .kml"):
+            read(path)
 
     def test_linestring_only_is_rejected_with_a_reason(self, tmp_path):
         """A KML with geometry but no timestamps cannot support any analysis."""
@@ -82,21 +89,18 @@ class TestKmlReading:
             "14.6,49.4,500 14.7,49.5,600</coordinates></LineString></Placemark></Document></kml>",
             encoding="utf-8",
         )
-        with pytest.raises(kml.NoTrackError, match="no timed positions"):
-            kml.parse(path)
+        with pytest.raises(js.JSError, match="no timed positions"):
+            read(path)
 
     def test_records_the_sampling_interval_as_a_warning(self, tmp_path):
         path = tmp_path / "x.kml"
         path.write_text(timed_placemarks(step=15), encoding="utf-8")
-        flight = kml.parse(path)
-        assert any("15 s" in w for w in flight.warnings)
+        assert any("15 s" in w for w in read(path).warnings)
 
     def test_timezone_resolved_from_position(self, tmp_path):
-        pytest.importorskip("timezonefinder")
         path = tmp_path / "x.kml"
         path.write_text(timed_placemarks(), encoding="utf-8")
-        flight = kml.parse(path)
-        assert flight.timezone_source.startswith("position")
+        assert read(path).timezone_source.startswith("position")
 
     def test_out_of_order_points_are_sorted(self, tmp_path):
         marks = []
@@ -109,44 +113,43 @@ class TestKmlReading:
             )
         path = tmp_path / "x.kml"
         path.write_text(f"{KML_HEAD}<Document>{''.join(marks)}</Document></kml>", encoding="utf-8")
-        flight = kml.parse(path)
+        flight = read(path)
         assert list(flight.time) == sorted(flight.time)
 
 
+IGC = ("AXCT1\nHFDTE010726\nB1200004925977N01437750EA0041000492\n"
+       "B1200014925977N01437750EA0041100493\n")
+
+
+@needs_node
 class TestDispatch:
     def test_igc_by_extension(self, tmp_path):
         path = tmp_path / "f.igc"
-        path.write_text(
-            "AXCT1\nHFDTE010726\nB1200004925977N01437750EA0041000492\n"
-            "B1200014925977N01437750EA0041100493\n",
-            encoding="utf-8",
-        )
-        flight = sources.load(path)
-        assert len(flight) == 2
+        path.write_text(IGC, encoding="utf-8")
+        assert read(path).n == 2
 
     def test_kmz_by_extension(self, tmp_path):
-        path = write_kmz(tmp_path / "f.kmz", timed_placemarks())
-        assert len(sources.load(path)) == 60
+        assert read(write_kmz(tmp_path / "f.kmz", timed_placemarks())).n == 60
 
     def test_unknown_extension_is_sniffed(self, tmp_path):
-        """A download named .bin is still an IGC if it looks like one."""
+        """A download named .bin is still an IGC if it looks like one, and a KML if it
+        says <kml — URLs lie about what they serve."""
         path = tmp_path / "f.bin"
-        path.write_text(
-            "AXCT1\nHFDTE010726\nB1200004925977N01437750EA0041000492\n"
-            "B1200014925977N01437750EA0041100493\n",
-            encoding="utf-8",
-        )
-        assert len(sources.load(path)) == 2
+        path.write_text(IGC, encoding="utf-8")
+        assert read(path).n == 2
+        disguised = tmp_path / "g.bin"
+        disguised.write_text(timed_placemarks(), encoding="utf-8")
+        assert read(disguised).n == 60
 
     def test_missing_file(self, tmp_path):
         with pytest.raises(sources.SourceError, match="does not exist"):
-            sources.load(tmp_path / "nope.igc")
+            sources.local_path(tmp_path / "nope.igc")
 
     def test_unrecognised_content(self, tmp_path):
         path = tmp_path / "f.bin"
         path.write_bytes(b"\x00\x01\x02 not a tracklog")
-        with pytest.raises(sources.SourceError, match="not recognised"):
-            sources.load(path)
+        with pytest.raises(js.JSError, match="no valid B records"):
+            read(path)
 
 
 class TestXContest:

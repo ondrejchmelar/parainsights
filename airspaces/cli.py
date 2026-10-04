@@ -76,8 +76,6 @@ def main(argv=None) -> int:
     parser.add_argument("--flat", action="store_true",
                         help="the old flat SVG map instead of the 3D view. Needs no "
                              "network at build time and carries no imagery")
-    parser.add_argument("--online", action="store_true",
-                        help=argparse.SUPPRESS)   # now the default
     parser.add_argument("--raw", action="store_true",
                         help="reproduce the ATZ publication unchanged, datum error and all")
     parser.add_argument("--no-circuits", action="store_true",
@@ -91,10 +89,6 @@ def main(argv=None) -> int:
                              "A=82 ICAO aerodromes, B=74 SLZ fields, C=222 heliports, "
                              "D=195 landing sites. Default A,B — C and D are mostly "
                              "hospital pads and add 417 small circles.")
-    # Accepted and ignored: the 3D map's ground is fetched by the page now, so a build
-    # can no longer lose it and fall back. It was the pipeline's guard against exactly
-    # that, and the pipeline still passes it.
-    parser.add_argument("--require-terrain", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--refresh", action="store_true",
                         help="re-fetch every source instead of using the cache")
     parser.add_argument("--report", action="store_true",

@@ -1,7 +1,8 @@
-/* The day's vertical profile: `tracklog_viewer/meteo.py`, ported — the request and the
- * reading of the answer. The fetching is the page's (Open-Meteo answers CORS), and
- * `now` is a parameter wherever the Python asks the clock, so the same response reads
- * the same way in a test.
+/* The day's vertical profile — the request and the reading of the answer:
+ * `tracklog_viewer/meteo.py`, ported (the Python is retired; it is in git at `ada5e5b`).
+ * The fetching is the page's for an upload (Open-Meteo answers CORS) and the CLI's for
+ * the report's own flights, and `now` is a parameter wherever the clock matters, so the
+ * same response reads the same way in a test.
  *
  * Metres per second throughout, asked for as `wind_speed_unit=ms`: a modelled wind in
  * km/h mixed into an m/s field was once 3.6 times too strong.

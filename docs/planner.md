@@ -298,12 +298,14 @@ sentence each:
 
 ## Running it
 
+The planner is a section of the airspace page now, built with it:
+
 ```bash
-uv run python -m planner.cli --html public/planner/index.html
-uv run python -m planner.cli --html plan.html --no-airspace   # no airspace, faster
+uv run python -m airspaces.cli --html public/airspace/index.html
+uv run python -m planner.cli --html public/planner/index.html   # the redirect for old links
 ```
 
-There is no `--embed`: the page fetches its own terrain, so it needs a network anyway.
+The page fetches its own terrain and imagery, so it needs a network when opened.
 
 Imagery is fetched at view time by default, and gets sharper as the reader zooms in.
 

@@ -1,14 +1,16 @@
 """Parser tests. Each case is a quirk found in a real file in ~/Downloads."""
 
 import base64
+import calendar
 import datetime as dt
 import json
 
-import numpy as np
 import pytest
 
-from tracklog_viewer import igc
-from tracklog_viewer.geo import bearing, cardinal, distance
+from tests import js
+from tests.js import needs_node
+
+pytestmark = needs_node
 
 HEADER = "AXCT1234\nHFDTEDATE:280726,00\nHFPLTPILOTINCHARGE:Ondřej Chmelař\n"
 FIX = "B1053324925977N01437750EA0041000492\n"
@@ -20,37 +22,61 @@ def write(tmp_path, text, name="flight.igc"):
     return path
 
 
+def parse(tmp_path, text, name="flight.igc"):
+    """`TV.igc.parse` on the text, with the helpers a test asks about alongside."""
+    return js.run("""
+      var f = await load(input.path);
+      f.n = f.time.length;
+      f.has_baro = TV.igc.hasBaro(f);
+      f.baro_offset = TV.igc.baroOffset(f);
+      f.alt_is_baro = TV.igc.altitude(f) === f.alt_baro;
+      // Hours between the flight's own clock and UTC at the first fix.
+      var local = TV.igc.localParts(f.time[0], f.timezone), utc = TV.igc.localParts(f.time[0], null);
+      f.offset_hours = (Date.UTC(local.year, local.month - 1, local.day, local.hour, local.minute) -
+                        Date.UTC(utc.year, utc.month - 1, utc.day, utc.hour, utc.minute)) / 3600000;
+      return f;""", path=write(tmp_path, text, name))
+
+
+def epoch(*args):
+    return calendar.timegm(dt.datetime(*args).timetuple())
+
+
+def date(flight):
+    d = flight.headers.date
+    return dt.date(d.year, d.month, d.day)
+
+
 def test_parses_date_time_position_and_both_altitudes(tmp_path):
-    flight = igc.parse(write(tmp_path, HEADER + FIX + "B1053334925977N01437750EA0041100493\n"))
-    assert len(flight) == 2
-    assert flight.headers.date == dt.date(2026, 7, 28)
-    assert flight.time[0].item() == dt.datetime(2026, 7, 28, 10, 53, 32)
+    flight = parse(tmp_path, HEADER + FIX + "B1053334925977N01437750EA0041100493\n")
+    assert flight.n == 2
+    assert date(flight) == dt.date(2026, 7, 28)
+    assert flight.time[0] == epoch(2026, 7, 28, 10, 53, 32)
     # 49 + 25977/60000 and 14 + 37750/60000 — no LAD/LOD digit in this fix.
     assert flight.lat[0] == pytest.approx(49.43295, abs=1e-6)
     assert flight.lon[0] == pytest.approx(14.629167, abs=1e-6)
     assert flight.alt_baro[0] == 410
     assert flight.alt_gps[0] == 492
-    assert flight.validity.all()
+    assert all(flight.validity)
 
 
 def test_old_style_hfdte_without_colon(tmp_path):
     """SkyDrop writes HFDTE290523; XCTrack writes HFDTEDATE:280918,01."""
-    flight = igc.parse(write(tmp_path, "AXSB1\nHFDTE290523\n" + FIX))
-    assert flight.headers.date == dt.date(2023, 5, 29)
+    flight = parse(tmp_path, "AXSB1\nHFDTE290523\n" + FIX)
+    assert date(flight) == dt.date(2023, 5, 29)
     assert flight.headers.flight_of_day is None
 
 
 def test_flight_of_day_is_read(tmp_path):
-    flight = igc.parse(write(tmp_path, "AXCT1\nHFDTEDATE:280918,02\n" + FIX))
-    assert flight.headers.date == dt.date(2018, 9, 28)
+    flight = parse(tmp_path, "AXCT1\nHFDTEDATE:280918,02\n" + FIX)
+    assert date(flight) == dt.date(2018, 9, 28)
     assert flight.headers.flight_of_day == 2
 
 
 def test_lad_lod_extensions_add_precision(tmp_path):
     """I023636LAD3737LOD appears in 47 of the 60 sample files."""
-    plain = igc.parse(write(tmp_path, HEADER + FIX))
-    text = HEADER + "I023636LAD3737LOD\n" + FIX.rstrip("\n") + "53\n"
-    refined = igc.parse(write(tmp_path, text, "refined.igc"))
+    plain = parse(tmp_path, HEADER + FIX)
+    refined = parse(tmp_path, HEADER + "I023636LAD3737LOD\n" + FIX.rstrip("\n") + "53\n",
+                    "refined.igc")
     assert refined.lat[0] > plain.lat[0]
     assert refined.lat[0] == pytest.approx(plain.lat[0] + 5 / 600000, abs=1e-9)
     assert refined.lon[0] == pytest.approx(plain.lon[0] + 3 / 600000, abs=1e-9)
@@ -58,35 +84,29 @@ def test_lad_lod_extensions_add_precision(tmp_path):
 
 
 def test_southern_and_western_hemispheres(tmp_path):
-    text = "AXCT1\nHFDTE010120\nB1200004925977S01437750WA0041000492\n"
-    flight = igc.parse(write(tmp_path, text))
+    flight = parse(tmp_path, "AXCT1\nHFDTE010120\nB1200004925977S01437750WA0041000492\n")
     assert flight.lat[0] < 0
     assert flight.lon[0] < 0
 
 
 def test_midnight_rollover_advances_the_date(tmp_path):
-    text = (
-        "AXCT1\nHFDTE010120\n"
-        "B2359594925977N01437750EA0041000492\n"
-        "B0000014925977N01437750EA0041000492\n"
-    )
-    flight = igc.parse(write(tmp_path, text))
-    assert flight.time[0].item().day == 1
-    assert flight.time[1].item().day == 2
+    flight = parse(tmp_path, "AXCT1\nHFDTE010120\n"
+                             "B2359594925977N01437750EA0041000492\n"
+                             "B0000014925977N01437750EA0041000492\n")
+    assert flight.time[0] == epoch(2020, 1, 1, 23, 59, 59)
+    assert flight.time[1] == epoch(2020, 1, 2, 0, 0, 1)
 
 
 def test_negative_altitude_form(tmp_path):
     """Below-datum altitudes are written as -0123, not 00123."""
-    text = "AXCT1\nHFDTE010120\nB1200004925977N01437750EA-0050-0012\n"
-    flight = igc.parse(write(tmp_path, text))
+    flight = parse(tmp_path, "AXCT1\nHFDTE010120\nB1200004925977N01437750EA-0050-0012\n")
     assert flight.alt_baro[0] == -50
     assert flight.alt_gps[0] == -12
 
 
 def test_empty_and_placeholder_headers_become_none(tmp_path):
     """SkyDrop leaves these blank; XCTrack sometimes writes '?' for the site."""
-    text = "AXSB1\nHFDTE010120\nHFPLTPILOTINCHARGE:\nHFGTYGLIDERTYPE:\nHOSITSite:?\n" + FIX
-    flight = igc.parse(write(tmp_path, text))
+    flight = parse(tmp_path, "AXSB1\nHFDTE010120\nHFPLTPILOTINCHARGE:\nHFGTYGLIDERTYPE:\nHOSITSite:?\n" + FIX)
     assert flight.headers.pilot is None
     assert flight.headers.glider_type is None
     assert flight.headers.site is None
@@ -94,60 +114,67 @@ def test_empty_and_placeholder_headers_become_none(tmp_path):
 
 def test_non_standard_source_letter_is_accepted(tmp_path):
     """XCTrack emits HSCCL, where the spec allows only F, O or P."""
-    text = "AXCT1\nHFDTE010120\nHSCCLCOMPETITION CLASS:FAI-3\n" + FIX
-    flight = igc.parse(write(tmp_path, text))
+    flight = parse(tmp_path, "AXCT1\nHFDTE010120\nHSCCLCOMPETITION CLASS:FAI-3\n" + FIX)
     assert flight.headers.competition_class == "FAI-3"
 
 
 def test_junk_record_is_a_warning_not_an_exception(tmp_path):
-    flight = igc.parse(write(tmp_path, HEADER + "Bnonsense\n" + FIX))
-    assert len(flight) == 1
+    flight = parse(tmp_path, HEADER + "Bnonsense\n" + FIX)
+    assert flight.n == 1
     assert any("unparseable B record" in w for w in flight.warnings)
 
 
 def test_timezone_from_xctrack_device_json(tmp_path):
-    payload = base64.b64encode(
-        json.dumps({"os": {"timezone": "Europe/Prague"}}).encode()
-    ).decode()
+    payload = base64.b64encode(json.dumps({"os": {"timezone": "Europe/Prague"}}).encode()).decode()
     chunks = "".join(f"LXCTDEVICE {payload[i:i + 20]}\n" for i in range(0, len(payload), 20))
-    flight = igc.parse(write(tmp_path, HEADER + chunks + FIX))
+    flight = parse(tmp_path, HEADER + chunks + FIX)
     assert flight.timezone_source.startswith("LXCTDEVICE")
-    assert flight.local_time(0).utcoffset() == dt.timedelta(hours=2)
+    assert flight.offset_hours == 2
+
+
+def test_the_xctrack_blob_survives_its_missing_padding(tmp_path):
+    """The `L` chunking drops base64 padding, and `atob` refuses the wrong *amount* of it
+    where Python's decoder ignored the excess — a blind `+ '=='` fails silently on any
+    payload already a multiple of four."""
+    for zone in ("Europe/Prague", "Europe/Rome", "Asia/Karachi"):
+        payload = base64.b64encode(json.dumps({"os": {"timezone": zone}}).encode()).decode().rstrip("=")
+        chunks = "".join(f"LXCTDEVICE {payload[i:i + 20]}\n" for i in range(0, len(payload), 20))
+        flight = parse(tmp_path, HEADER + chunks + FIX, f"{zone.replace('/', '-')}.igc")
+        assert flight.timezone_source == f"LXCTDEVICE ({zone})", zone
 
 
 def test_timezone_from_hftzn_header(tmp_path):
-    text = "AXSB1\nHFDTE010120\nHFTZNTIMEZONE:+2.0\n" + FIX
-    flight = igc.parse(write(tmp_path, text))
+    flight = parse(tmp_path, "AXSB1\nHFDTE010120\nHFTZNTIMEZONE:+2.0\n" + FIX)
     assert flight.timezone_source.startswith("HFTZN")
-    assert flight.local_time(0).utcoffset() == dt.timedelta(hours=2)
+    assert flight.offset_hours == 2
 
 
 def test_timezone_falls_back_to_position(tmp_path):
-    """Only XCTrack >= 0.9.12 records a timezone; 47 of 60 samples need this."""
-    pytest.importorskip("timezonefinder")
-    flight = igc.parse(write(tmp_path, HEADER + FIX))
+    """Only XCTrack >= 0.9.12 records a timezone; 47 of 60 samples need this. The
+    take-off's zone comes from tz-lookup (`js/vendor`)."""
+    flight = parse(tmp_path, HEADER + FIX)
     assert flight.timezone_source.startswith("position")
     assert "Prague" in flight.timezone_source
+    assert flight.offset_hours == 2      # CEST on 28 July
 
 
 def test_baro_offset_reports_the_isa_discrepancy(tmp_path):
-    flight = igc.parse(write(tmp_path, HEADER + FIX))
+    flight = parse(tmp_path, HEADER + FIX)
     assert flight.has_baro
     assert flight.baro_offset == pytest.approx(82.0)  # 492 - 410
-    assert flight.alt is flight.alt_baro
+    assert flight.alt_is_baro
 
 
 def test_gps_altitude_is_used_when_there_is_no_baro(tmp_path):
-    text = "AXCT1\nHFDTE010120\nB1200004925977N01437750EA0000000492\n"
-    flight = igc.parse(write(tmp_path, text))
+    flight = parse(tmp_path, "AXCT1\nHFDTE010120\nB1200004925977N01437750EA0000000492\n")
     assert not flight.has_baro
     assert flight.baro_offset is None
-    assert flight.alt is flight.alt_gps
+    assert not flight.alt_is_baro
 
 
 def test_duplicate_timestamps_are_dropped(tmp_path):
-    flight = igc.parse(write(tmp_path, HEADER + FIX + FIX + FIX))
-    assert len(flight) == 1
+    flight = parse(tmp_path, HEADER + FIX + FIX + FIX)
+    assert flight.n == 1
     assert flight.dropped["duplicate or backwards timestamp"] == 2
 
 
@@ -156,35 +183,28 @@ def test_altitude_spike_is_repaired_not_dropped(tmp_path):
     the horizontal fix."""
     text = "AXCT1\nHFDTE010120\n" + "".join(
         f"B1200{second:02d}4925977N01437750EA00000{9500 if second == 5 else 500:05d}\n"
-        for second in range(11)
-    )
-    flight = igc.parse(write(tmp_path, text))
-    assert len(flight) == 11  # nothing dropped
+        for second in range(11))
+    flight = parse(tmp_path, text)
+    assert flight.n == 11  # nothing dropped
     assert flight.dropped["GPS altitude spikes repaired"] == 1
     assert flight.alt_gps[5] == 500  # replaced by the local median
 
 
 def test_teleport_is_dropped(tmp_path):
-    text = (
-        "AXCT1\nHFDTE010120\n"
-        "B1200004925977N01437750EA0041000492\n"
-        "B1200015925977N01437750EA0041000492\n"  # 10 degrees north in one second
-        "B1200024925978N01437750EA0041000492\n"
-    )
-    flight = igc.parse(write(tmp_path, text))
-    assert len(flight) == 2
+    flight = parse(tmp_path, "AXCT1\nHFDTE010120\n"
+                             "B1200004925977N01437750EA0041000492\n"
+                             "B1200015925977N01437750EA0041000492\n"  # 10 degrees north in one second
+                             "B1200024925978N01437750EA0041000492\n")
+    assert flight.n == 2
     assert flight.dropped["implausible ground speed"] == 1
 
 
 def test_task_turnpoints_are_read_and_padding_ignored(tmp_path):
-    text = (
-        "AXCT1\nHFDTE010120\n"
-        "C0000000000000000000000002\n"
-        "C4925977N01437750ETAKEOFF\n"
-        "C0000000N00000000ESTART\n"  # all-zero padding
-        + FIX
-    )
-    flight = igc.parse(write(tmp_path, text))
+    flight = parse(tmp_path, "AXCT1\nHFDTE010120\n"
+                             "C0000000000000000000000002\n"
+                             "C4925977N01437750ETAKEOFF\n"
+                             "C0000000N00000000ESTART\n"  # all-zero padding
+                             + FIX)
     assert [tp.name for tp in flight.task] == ["TAKEOFF"]
     assert flight.task[0].lat == pytest.approx(49.43295, abs=1e-5)
 
@@ -192,43 +212,43 @@ def test_task_turnpoints_are_read_and_padding_ignored(tmp_path):
 def test_crlf_and_utf8_headers(tmp_path):
     path = tmp_path / "crlf.igc"
     path.write_bytes((HEADER + FIX).replace("\n", "\r\n").encode("utf-8"))
-    flight = igc.parse(path)
+    flight = js.run("var f = await load(input.path); f.n = f.time.length; return f;", path=path)
     assert flight.headers.pilot == "Ondřej Chmelař"
-    assert len(flight) == 1
+    assert flight.n == 1
 
 
 def test_impossible_clock_reading_costs_only_that_fix(tmp_path):
     """Six digits always match the regex; 61 seconds is still not a time."""
-    text = HEADER + "B1053614925977N01437750EA0041000492\n" + FIX
-    flight = igc.parse(write(tmp_path, text))
-    assert len(flight) == 1
+    flight = parse(tmp_path, HEADER + "B1053614925977N01437750EA0041000492\n" + FIX)
+    assert flight.n == 1
     assert any("impossible time" in w for w in flight.warnings)
 
 
 def test_no_b_records_is_an_error(tmp_path):
-    with pytest.raises(ValueError, match="no valid B records"):
-        igc.parse(write(tmp_path, HEADER))
+    with pytest.raises(js.JSError, match="no valid B records"):
+        js.run("return await load(input.path);", path=write(tmp_path, HEADER))
+
+
+def test_a_file_without_hfdte_is_on_no_real_day(tmp_path):
+    """B records carry only a time of day: without HFDTE the date is a guess, and the
+    page must refuse the weather for it rather than fetch 1 January 1970's."""
+    flight = parse(tmp_path, "AXCT1\n" + FIX)
+    assert any("before HFDTE" in w for w in flight.warnings)
 
 
 class TestGeo:
+    def geo(self, code):
+        return js.run("var g = TV.geo; return " + code + ";")
+
     def test_distance_matches_known_separation(self):
         # One minute of latitude on the FAI sphere is 1853.2 m.
-        assert distance(49.0, 14.0, 49.0 + 1 / 60, 14.0) == pytest.approx(1853.2, abs=0.5)
+        assert self.geo("g.distance(49.0, 14.0, 49.0 + 1 / 60, 14.0)") == pytest.approx(1853.2, abs=0.5)
 
     def test_distance_is_precise_at_1hz_separations(self):
         """The law-of-cosines formula igc2kmz uses loses precision here."""
-        d = distance(49.0, 14.0, 49.0, 14.0 + 1e-4)
-        assert d == pytest.approx(7.30, abs=0.05)
+        assert self.geo("g.distance(49.0, 14.0, 49.0, 14.0 + 1e-4)") == pytest.approx(7.30, abs=0.05)
 
     def test_bearing_cardinals(self):
-        assert bearing(49.0, 14.0, 50.0, 14.0) == pytest.approx(0.0, abs=1e-6)
-        assert bearing(49.0, 14.0, 49.0, 15.0) == pytest.approx(89.6, abs=0.5)
-        assert cardinal(0) == "N"
-        assert cardinal(90) == "E"
-        assert cardinal(placeholder := 247.5) == "WSW" and placeholder
-        assert cardinal(359) == "N"
-
-    def test_vectorised(self):
-        lat = np.array([49.0, 49.1])
-        lon = np.array([14.0, 14.0])
-        assert distance(lat[:-1], lon[:-1], lat[1:], lon[1:]).shape == (1,)
+        assert self.geo("g.bearing(49.0, 14.0, 50.0, 14.0)") == pytest.approx(0.0, abs=1e-6)
+        assert self.geo("g.bearing(49.0, 14.0, 49.0, 15.0)") == pytest.approx(89.6, abs=0.5)
+        assert self.geo("[0, 90, 247.5, 359].map(g.cardinal)") == ["N", "E", "WSW", "N"]

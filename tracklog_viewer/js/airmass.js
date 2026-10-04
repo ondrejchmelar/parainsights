@@ -1,4 +1,5 @@
 /* The air-mass frame: `tracklog_viewer/airmass.py`, ported.
+ * The Python is retired; it is in git at `ada5e5b`.
  *
  * The flight as the glider flew it rather than as the day carried it: a wind field from
  * the climbs that measured the air, interpolated in time and height, and the glide
@@ -115,30 +116,6 @@
     };
   }
 
-  function circleWander(a, wind) {
-    if (!trusted(wind)) return null;
-    if (A.sampleInterval(a.series) > C.TURN_RESOLUTION_LIMIT) return null;
-    var s = a.series, v = airVelocity(a, wind), step = np.gradient(s.t);
-    var ax = np.cumsum(v.vx.map(function (x, i) { return x * step[i]; }));
-    var ay = np.cumsum(v.vy.map(function (y, i) { return y * step[i]; }));
-    var moves = [];
-    M.thermals(a).forEach(function (seg) {
-      var runs = A.monotoneRuns(s.heading.slice(seg.start, seg.stop)).filter(function (r) { return Math.abs(r[2]) >= 360.0; });
-      var centres = [];
-      runs.forEach(function (r) {
-        var lo = seg.start + r[0], hi = seg.start + r[1];
-        if (hi - lo < 3) return;
-        centres.push([np.mean(ax.slice(lo, hi)), np.mean(ay.slice(lo, hi))]);
-      });
-      for (var k = 0; k + 1 < centres.length; k++) {
-        moves.push(Math.hypot(centres[k + 1][0] - centres[k][0], centres[k + 1][1] - centres[k][1]));
-      }
-    });
-    if (moves.length < 3) return null;
-    return { median: R(np.median(moves)), worst: R(np.max(moves)),
-             climbs: M.thermals(a).filter(function (seg) { return seg.turns; }).length };
-  }
-
   function polar(a, wind, bins, minimum) {
     bins = bins || 6;
     minimum = minimum || 20;
@@ -159,6 +136,13 @@
       counts.push(count);
     }
     if (centres.length < 2) return null;
+    return curve(centres, sinks, counts, wind.confidence);
+  }
+
+  // The binned curve, read: a polar whose sink does not grow with airspeed is measuring
+  // the day rather than the wing, and claims no best glide — the fastest bin would win by
+  // construction (`2020-07-12`: "10.3:1 at 39 km/h" off a curve sinking less when faster).
+  function curve(centres, sinks, counts, confidence) {
     var monotone = true;
     for (var k = 0; k + 1 < sinks.length; k++) if (!(sinks[k + 1] <= sinks[k] + 0.1)) monotone = false;
     var ratios = [];
@@ -166,10 +150,10 @@
     var best = ratios.length && monotone ? M.firstMax(ratios, function (p) { return p[1]; }) : null;
     return { speeds: centres, sink: sinks, counts: counts,
              best_glide: best ? [R(best[0], 1), R(best[1], 1)] : null,
-             confidence: R(wind.confidence, 2), monotone: monotone };
+             confidence: R(confidence, 2), monotone: monotone };
   }
 
   TV.airmass = { MIN_CONFIDENCE: MIN_CONFIDENCE, field: field, trusted: trusted, windAt: windAt,
                  airVelocity: airVelocity, airspeed: airspeed, glidePerformance: glidePerformance,
-                 circleWander: circleWander, polar: polar };
+                 polar: polar, curve: curve, vector: vector };
 })(typeof window !== 'undefined' ? (window.TV = window.TV || {}) : (globalThis.TV = globalThis.TV || {}));

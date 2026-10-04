@@ -2,10 +2,10 @@
  *
  * Not a numpy: only what `igc.py`, `flight.py` and `analysis.py` call, each written to
  * give the *same bits* as numpy where that is achievable — the same interpolation
- * formula, the same pairwise summation order, Python's round-half-to-even. The parity
- * harness (`tracklog_viewer/js_parity.py`) compares this port against the Python on real
- * tracklogs, and a rounded field that disagrees in its last digit is a difference a
- * reader can see, so "close enough" is not the target where exact is cheap.
+ * formula, the same pairwise summation order, Python's round-half-to-even. It was held to
+ * the Python field for field on 63 real tracklogs before the Python was retired, and a
+ * rounded field that disagrees in its last digit is a difference a reader can see, so
+ * "close enough" is not the target where exact is cheap.
  *
  * Every function takes and returns plain arrays (or Float64Arrays); none mutates its
  * input.

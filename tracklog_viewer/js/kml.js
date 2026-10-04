@@ -1,4 +1,5 @@
 /* A flight out of KML or KMZ: `tracklog_viewer/kml.py`, ported.
+ * The Python is retired; it is in git at `ada5e5b`.
  *
  * `gx:Track` first (alternating <when> and <gx:coord>), then timed placemarks — the
  * shapes XContest and igc2kmz write. A KML records one altitude and never says which

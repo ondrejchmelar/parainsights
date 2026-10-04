@@ -101,9 +101,6 @@ _REQUEST_ONLY = re.compile(r"\bO\s*/\s*R\b|\bHO\b|\bon request\b", re.I)
 # keeps both.
 _RANK = {"season": 0, "days": 1, "window": 2}
 
-MINUTES_PER_DAY = 24 * 60
-
-
 @dataclass(frozen=True)
 class Period:
     """One published operating period. Every field is optional and `None` means "all":

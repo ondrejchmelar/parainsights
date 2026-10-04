@@ -29,14 +29,27 @@
     });
   }
 
-  // A File (or {name, bytes}) to a flight. KMZ and KML by content as well as by name.
-  function read(file) {
-    return file.arrayBuffer().then(function (buffer) {
-      var bytes = new Uint8Array(buffer), name = file.name || 'track.igc';
+  // Bytes to a flight: KMZ and KML by content as well as by name, IGC otherwise. The one
+  // dispatch for every way a file arrives — an upload here, the report's own flights in
+  // Node at build time (`build_runner.js`), and the test suite (`tests/js_bridge.js`).
+  // `options` reaches the parsers; Node passes its own `inflateRaw` for a KMZ.
+  // Always a promise, refused rather than thrown: a file the parser rejects has to reach
+  // whoever asked as a failure they can name, not escape the chain as an exception.
+  function readBytes(bytes, name, options) {
+    name = name || 'track.igc';
+    try {
       var head = new TextDecoder('utf-8').decode(bytes.subarray(0, 2000));
       var isZip = bytes[0] === 0x50 && bytes[1] === 0x4b;
-      if (isZip || /\.(kml|kmz)$/i.test(name) || /<kml/i.test(head)) return TV.kml.parseBytes(bytes, name);
-      return TV.igc.parse(new TextDecoder('utf-8').decode(bytes));
+      if (isZip || /\.(kml|kmz)$/i.test(name) || /<kml/i.test(head)) return TV.kml.parseBytes(bytes, name, options);
+      return Promise.resolve(TV.igc.parse(new TextDecoder('utf-8').decode(bytes), options));
+    } catch (error) {
+      return Promise.reject(error);
+    }
+  }
+  // A File to a flight.
+  function read(file) {
+    return file.arrayBuffer().then(function (buffer) {
+      return readBytes(new Uint8Array(buffer), file.name || 'track.igc');
     });
   }
 
@@ -48,7 +61,7 @@
   //
   // inputs:  { terrain, sceneTerrain, meteo (parsed), certificationTable, now }
   // options: { uid, hidden, label ('PILOT|SITE|GLIDER', empty fields keep the file's),
-  //            airspace, kmzUri, plan ({ payload, source } from a sidecar), ranks, format }
+  //            airspace, plan ({ payload, source } from a sidecar), format }
   var SHAPE_NAMES = { fai: 'FAI triangle', flat: 'flat triangle', open: 'open distance' };
   function annotate(summary, label) {
     if (!label) return;
@@ -86,8 +99,7 @@
       meteo: inputs.meteo || null, route: route, terrain: inputs.terrain || null,
       sceneTerrain: inputs.sceneTerrain || null, uid: options.uid, hidden: !!options.hidden,
       flightPlan: done.plan, certificationTable: inputs.certificationTable || null,
-      now: inputs.now, airspace: options.airspace || null, kmzUri: options.kmzUri || null,
-      ranks: options.ranks || null
+      now: inputs.now, airspace: options.airspace || null
     });
     var format = (options.format || '').toUpperCase();
     return {
@@ -187,5 +199,5 @@
     return built.article;
   }
 
-  TV.upload = { read: read, build: build, place: place, paint: paint, compose: compose };
+  TV.upload = { read: read, readBytes: readBytes, build: build, place: place, paint: paint, compose: compose };
 })(typeof window !== 'undefined' ? (window.TV = window.TV || {}) : (globalThis.TV = globalThis.TV || {}));

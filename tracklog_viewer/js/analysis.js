@@ -1,11 +1,11 @@
 /* Flight analysis: `tracklog_viewer/analysis.py`, ported.
+ * The Python is retired; it is in git at `ada5e5b`.
  *
  * Phases, per-thermal and per-glide statistics, wind, the time budget and the "other"
  * decomposition — the same rules with the same constants, and an output shaped exactly
- * like `Analysis.to_dict()` so the two can be compared field for field
- * (`tracklog_viewer/js_parity.py`). The reasoning behind each rule lives in the Python
- * docstrings and is not repeated here; where the two would read differently, the
- * comment says why.
+ * like `Analysis.to_dict()`, which is how the two were compared field for field while both
+ * existed. The reasoning behind each rule is in CLAUDE.md's "Decisions" and, at length, in
+ * the Python docstrings at `ada5e5b`.
  */
 (function (TV) {
   'use strict';

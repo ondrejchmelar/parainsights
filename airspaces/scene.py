@@ -13,14 +13,12 @@ measured on one, and airspace is published against WGS84.
 
 `view3d` is not that. It is a map widget: it takes a payload of a terrain grid, some
 imagery and a list of things to draw, and it knows nothing about flights — a scene with
-no track in it renders perfectly well. The alternatives were to copy 120 KB of JavaScript
-or to move it to a third package, and the second is the right end state; what stops it
-today is that `view3d.data()` and `cursor_track()` in the same module *are* flight code,
-so the split is a refactor rather than a move. Until then this is one import of a widget,
-made lazily so `airspaces` still builds its OpenAir file with the viewer absent.
+no track in it renders perfectly well. Its flight code moved to `js/scene.js`, so moving
+the widget to a package of its own is now a move rather than a refactor; until then this
+is one import, made lazily so `airspaces` still builds its OpenAir file with the viewer
+absent.
 
-The elevations and the imagery are fetched, so building this needs a network; the page it
-produces does not, beyond the tiles it is explicitly told to fetch at view time.
+The page fetches the ground and the imagery when it is opened (`remote`).
 """
 
 from __future__ import annotations
@@ -189,7 +187,7 @@ def remote(airspaces) -> dict:
     build time, which is why the flat fallback is now only ever asked for (`--flat`)."""
     from tracklog_viewer import terrain as viewer_terrain
 
-    payload = build(airspaces, terrain=None, basemaps={}, tiles=True)
+    payload = build(airspaces, terrain=None, tiles=True)
     payload["terrain"] = viewer_terrain.remote(*PLAN_BOX, cols=PLAN_COLUMNS,
                                                max_points=PLAN_NODES)
     # Open on the airspace, not on the whole box: the Alps are there to plan over, and
@@ -199,22 +197,18 @@ def remote(airspaces) -> dict:
     return payload
 
 
-def build(airspaces, *, terrain=None, basemaps=None, tiles: bool = True) -> dict:
-    """A `view3d` payload for these airspaces.
+def build(airspaces, *, terrain=None, tiles: bool = True) -> dict:
+    """A `view3d` payload for these airspaces. The imagery is the page's to fetch
+    (`tiles`); a test without a network passes `tiles=False`.
 
-    `terrain` and `basemaps` are passed in rather than fetched here so that a caller
-    without a network — every test in this suite — can build the payload from fixtures,
-    and so the CLI decides the fetch budget.
+    `terrain` is passed in rather than fetched here so that a caller without a network —
+    every test in this suite — can build the payload from fixtures.
     """
     from tracklog_viewer import view3d
 
     payload = {
         "terrain": terrain.to_dict() if terrain is not None else None,
-        "basemaps": {name: image.to_dict() for name, image in (basemaps or {}).items()},
-        "tiles": (tiles and {
-            name: source for name, source in view3d.TILE_SOURCES.items()
-            if name not in (basemaps or {})
-        }) or None,
+        "tiles": dict(view3d.TILE_SOURCES) if tiles else None,
         "airspaces": rings(airspaces),
         "airspaceColours": {key: colour for key, _, colour in CLASSES},
         # Nearly flat and square to north. The flight view's three-quarter camera is the

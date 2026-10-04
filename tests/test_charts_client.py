@@ -5,13 +5,12 @@ document — 730 KB of 2.97 MB, and nine profiles because the axis toggle shippe
 modes and hid two. They are drawn in the page now, from the payload the hover cursor was
 already carrying.
 
-Two kinds of test here. The Python ones check the payload is what the renderer needs and
-that the document no longer carries the SVGs. The browser ones check the thing that
-actually matters: that the chart the page builds is the same chart `charts.py` builds —
-same elements, same classes, same data attributes — because every feature downstream of
-these charts was written against that DOM, and a renderer that draws a *pretty* chart
-with different innards silently breaks the cursor, the tooltip and the debrief's
-"show me".
+Two kinds of test here. The first checks the payload (`js/charts.js`) is what the
+renderer needs and that the article (`js/report.js`) carries no SVG for these two. The
+browser ones check the DOM the page builds — its groups, classes and data attributes —
+because every feature downstream of these charts was written against that DOM, and a
+renderer that draws a *pretty* chart with different innards silently breaks the cursor,
+the tooltip and the debrief's "show me".
 """
 
 import json
@@ -22,15 +21,20 @@ from pathlib import Path
 
 import pytest
 
+from tests import js
+from tests.js import needs_node
 from tests.test_analysis import build, circling, straight
 from tests.test_view3d_gl import CHROME, CHROME_FLAGS, needs_chrome
-from tracklog_viewer import charts, charts_client, igc, render_html
-from tracklog_viewer.analysis import analyse
+from tracklog_viewer import render_html
+
+pytestmark = needs_node
 
 
 @pytest.fixture(scope="module")
 def flight(tmp_path_factory):
-    """A day with several climbs and glides, so there are bands and marks to draw."""
+    """A day with several climbs and glides, so there are bands and marks to draw. What
+    comes back is everything the tests ask of it, computed once: the chart payload, the
+    cursor's own sample, the segments, and the article the page would carry."""
     folder = tmp_path_factory.mktemp("charts")
     points, t, alt, x = [], 0.0, 1000.0, 0.0
     for rate in (2.4, 1.1, 1.8, 0.9):
@@ -41,12 +45,16 @@ def flight(tmp_path_factory):
                        heading=90.0)
         points += run
         t, alt, x = run[-1][0] + 1, run[-1][3], run[-1][1]
-    return analyse(igc.parse(build(folder / "charts.igc", points)))
+    return js.run("""
+      var a = TV.analysis.analyse(await load(input.path)), sample = TV.report.sampleIndices(a);
+      return { payload: TV.charts.payload(a, null, null, sample, TV.charts.planHeight(a)),
+               cursor: TV.report.cursorData(a), segments: a.segments, ramp: TV.charts.CLIMB_RAMP.length,
+               html: TV.report.flightBody(a, { uid: 'f0', now: Date.now() / 1000 }) };
+    """, path=build(folder / "charts.igc", points))
 
 
 def _payload(flight):
-    sample = render_html._sample_indices(flight)
-    return charts_client.payload(flight, sample=sample, plan_height=charts.plan_height(flight))
+    return flight.payload
 
 
 class TestThePayload:
@@ -55,8 +63,7 @@ class TestThePayload:
         different lengths is a marker that lands on a different moment than the one
         under the pointer, which is the bug `quicklook.py` already has a comment about."""
         data = _payload(flight)
-        cursor = render_html._cursor_data(flight)
-        n = len(cursor["alt"])
+        n = len(flight.cursor["alt"])
         for key in ("s", "d", "x", "y"):
             assert len(data[key]) == n, f"{key} is {len(data[key])} against {n} samples"
 
@@ -68,7 +75,7 @@ class TestThePayload:
 
     def test_distance_flown_never_goes_backwards(self, flight):
         data = _payload(flight)
-        assert data["s"] == sorted(data["s"])
+        assert list(data["s"]) == sorted(data["s"])
 
     def test_bands_and_marks_are_sample_positions(self, flight):
         data = _payload(flight)
@@ -85,9 +92,9 @@ class TestThePayload:
         starts = {segment.start for segment in flight.segments}
         assert {band[3] for band in data["bands"]} <= starts
 
-    def test_the_clock_ticks_come_from_python(self, flight):
-        """The page cannot resolve the flight's timezone — `timezonefinder`'s dataset is
-        not going in a page and `lon / 15` is the documented trap — so the labels ship."""
+    def test_the_clock_ticks_ship_with_the_payload(self, flight):
+        """In the flight's own clock, worked out once where the article is written rather
+        than again by the chart — `lon / 15` is the documented trap."""
         data = _payload(flight)
         assert data["clockTicks"], "the time axis would have no labels"
         for at, label in data["clockTicks"]:
@@ -98,9 +105,8 @@ class TestThePayload:
         """One climb ramp, not a second copy of it in JavaScript. JSON has no infinity,
         so the open end is null and the renderer treats it as the catch-all."""
         data = _payload(flight)
-        assert len(data["ramp"]) == len(charts.CLIMB_RAMP)
+        assert len(data["ramp"]) == flight.ramp
         assert data["ramp"][-1][0] is None
-        assert data["ramp"][0][1] == charts.CLIMB_RAMP[0][1]
 
     def test_the_headroom_rule_is_applied_here_and_not_there(self, flight):
         """`_with_headroom` needs the meteo lines and the 1 000 m cap. The answer ships;
@@ -111,53 +117,25 @@ class TestThePayload:
 
 
 class TestTheDocument:
-    def test_the_report_carries_no_profile_or_plan_svg(self, flight):
-        """The class names still appear — in the stylesheet, which is where the page's
-        own renderer needs them. What must not appear is an `<svg>` wearing one."""
-        page = render_html._page("t", [render_html._flight_body(flight, fetch_tiles=False)])
-        assert 'class="chart chart-profile"' not in page, (
-            "a side view is still baked into the document")
-        assert 'class="chart chart-plan"' not in page, (
-            "a top view is still baked into the document")
+    def test_the_article_carries_no_profile_or_plan_svg(self, flight):
+        """What must not appear is an `<svg>` wearing one of these classes: they are
+        drawn in the page."""
+        assert 'class="chart chart-profile"' not in flight.html, (
+            "a side view is baked into the article")
+        assert 'class="chart chart-plan"' not in flight.html, (
+            "a top view is baked into the article")
 
     def test_it_carries_one_payload_and_two_hosts(self, flight):
-        body = render_html._flight_body(flight, fetch_tiles=False)
-        assert body.count('class="chart-data"') == 1
-        assert body.count('data-chart="profile"') == 1
-        assert body.count('data-chart="plan"') == 1
+        assert flight.html.count('class="chart-data"') == 1
+        assert flight.html.count('data-chart="profile"') == 1
+        assert flight.html.count('data-chart="plan"') == 1
 
     def test_the_hosts_reserve_their_own_height(self, flight):
         """A chart that lands 420 px tall into a 0 px box moves everything under it."""
-        body = render_html._flight_body(flight, fetch_tiles=False)
-        assert body.count("aspect-ratio:") >= 2
+        assert flight.html.count("aspect-ratio:") >= 2
 
     def test_the_page_says_what_it_needs_where_the_chart_would_be(self, flight):
-        body = render_html._flight_body(flight, fetch_tiles=False)
-        assert "needs JavaScript" in body
-
-    def test_the_python_renderers_are_still_there(self, flight):
-        """They are what a KMZ or anything else wanting a self-contained SVG uses, and
-        they are the reference these tests compare the page's output against."""
-        assert charts.altitude_profile(flight, mode="flown").startswith("<svg")
-        assert charts.plan_view(flight).startswith("<svg")
-
-    def test_the_document_is_smaller_for_it(self, flight):
-        """The measurement that justifies the whole exercise, on one flight."""
-        page = render_html._page("t", [render_html._flight_body(flight, fetch_tiles=False)])
-        baked = (charts.altitude_profile(flight, mode="flown")
-                 + charts.altitude_profile(flight, mode="from_start")
-                 + charts.altitude_profile(flight, mode="time")
-                 + charts.plan_view(flight))
-        payload = json.dumps(_payload(flight))
-        # A synthetic flight understates the saving badly: the payload is one integer per
-        # sample whatever the flight does, while a *real* flight's baked SVG is denser
-        # than this one by the amount of shape it has. Measured on a real 3 h 39 flight,
-        # the whole report goes 618 KB → 482 KB. Here the ratio is only asked to be the
-        # right way round.
-        assert len(payload) < len(baked) * 0.75, (
-            f"the payload is {len(payload)} against {len(baked)} of SVG — the saving has "
-            "gone")
-        assert 'class="chart chart-profile"' not in page
+        assert "needs JavaScript" in flight.html
 
 
 _PROBE = """
@@ -174,7 +152,7 @@ window.addEventListener('load', function () { setTimeout(function () {
 
 
 def _probe(flight, body: str) -> dict:
-    page = render_html._page("t", [render_html._flight_body(flight, fetch_tiles=False)])
+    page = render_html._page("t", [flight.html])
     page += _PROBE % body
     with tempfile.TemporaryDirectory() as folder:
         target = Path(folder) / "charts.html"
@@ -202,8 +180,8 @@ class TestThePageDrawsThem:
         assert answer["profiles"] == 1, "three copies of the side view are what this removed"
         assert answer["plans"] == 1
 
-    def test_it_builds_the_same_dom_python_does(self, flight):
-        """Element for element, against the reference renderer. Everything downstream —
+    def test_it_builds_the_dom_the_report_is_written_against(self, flight):
+        """Element for element. Everything downstream —
         the cursor, the tooltip, the band highlight, "show me", the theme's `var()`
         fills — was written against this DOM."""
         answer = _probe(flight, """
@@ -221,12 +199,10 @@ class TestThePageDrawsThem:
             function (n) { return n.getAttribute('data-segment'); })
         };
         """)
-        reference = charts.altitude_profile(
-            flight, mode="flown", sample=render_html._sample_indices(flight))
         assert answer["groups"] == ["bands", "grid", "drops", "references", "track",
                                     "endpoints", "marks", "cursor", "hit", "axes"]
-        assert answer["bands"] == reference.count('class="band band-')
-        assert answer["marks"] == reference.count('class="mark"')
+        assert answer["bands"] == len(flight.segments)
+        assert answer["marks"] == len(flight.payload["marks"])
         assert answer["endpoints"] == 2
         assert answer["hit"] == 1 and answer["crosshair"] == 1 and answer["dot"] == 1
         assert answer["axisTitles"] == 2

@@ -1,15 +1,12 @@
-/* One flight's article, from masthead to footer: `render_html._flight_body` and its
- * helpers, ported, so a track the reader uploads gets the page a bundled flight gets.
- *
- * Same markup, same sentences, same numbers — the parity harness renders both and
- * compares them with whitespace normalised and the JSON payloads compared by value.
- * Nothing here is new; where the Python reads the clock (`_meteo_reason`), `now` is a
- * parameter.
+/* One flight's article, from masthead to footer — for an uploaded track in the page, and
+ * for the report's own flights at build time (`js_build.py`), through `TV.upload.compose`.
+ * Ported from `render_html._flight_body` and its helpers, and held to the same markup,
+ * sentences and numbers until the Python was retired (it is in git at `ada5e5b`).
+ * Where the article reads the clock (the weather archive's reach), `now` is a parameter.
  *
  * `options`: meteo (TV.meteo.parse), route (TV.xc), terrain (a grid with `z`, for the
  * clearance and the faces), sceneTerrain (what the 3D payload carries; the grid itself
- * by default), basemaps, fetchTiles, kmzUri, uid, hidden, flightPlan, airspace,
- * certificationTable, now (epoch seconds).
+ * by default), uid, hidden, flightPlan, airspace, certificationTable, now (epoch seconds).
  */
 (function (TV) {
   'use strict';
@@ -303,17 +300,12 @@
       '        course line, not a radiosonde ascent. Treat the ceilings as ±100&nbsp;m and the winds as\n        indicative.</p>\n    </div>\n  </section>';
   }
 
-  // `ranks` is the pilot's archive placing a figure among their own flights ("among your
-  // best of 12"), keyed like the figures — computed where the archive lives (`baseline.py`)
-  // and handed in, because the archive is a directory on the pilot's machine.
-  function verdictStrip(result, ranks) {
+  function verdictStrip(result) {
     if (!result || !result.verdict) return '';
     var v = result.verdict;
-    ranks = ranks || {};
     var numbers = v.headline.map(function (item) {
-      var rank = ranks[item.key] ? '<span class="verdict-rank">' + esc(ranks[item.key]) + '</span>' : '';
       return '<div class="verdict-figure" data-key="' + esc(item.key || '') + '"><span class="verdict-value">' + esc(item.value) +
-        '</span><span class="verdict-label">' + esc(item.label) + '</span>' + rank + '<span class="verdict-delta" hidden></span></div>';
+        '</span><span class="verdict-label">' + esc(item.label) + '</span><span class="verdict-delta" hidden></span></div>';
     }).join('');
     return '\n  <div class="verdict">\n    <p class="verdict-line">' + esc(v.sentence) + '</p>\n    <div class="verdict-figures">' + numbers + '</div>\n  </div>';
   }
@@ -421,15 +413,14 @@
 
     var view3dSection, clearance = null;
     if (terrain) {
-      var payload = TV.scene.data(a, options.sceneTerrain || terrain, { basemaps: options.basemaps,
-                                    tiles: options.fetchTiles === undefined ? true : options.fetchTiles, airspace: options.airspace });
+      var payload = TV.scene.data(a, options.sceneTerrain || terrain, { airspace: options.airspace });
       clearance = TV.terrain.clearance(terrain, a);
       view3dSection = '\n  <section>\n    <div class="section-head">\n      <h2>The flight over the ground</h2>\n' +
         '      <p>Hovering a moment in the side view marks the same moment on the map above, and in\n         the top view below. Click to keep it there while you look; click again, or press\n' +
         '         <kbd>Esc</kbd>, to let go. A row in the climbs or glides table does the same for\n         where that phase began.' +
         (payload.airspaceToggle ? " <strong>Airspace</strong> draws the zones over this flight's own ground as the boxes they are, floor to ceiling — hover one for its name and limits." : '') +
         '</p>\n    </div>\n    <div class="renderer-host">\n    ' + TV.scene.switchHtml() + '\n    ' +
-        TV.scene.panel(payload, uid, { kmzUri: options.kmzUri, kmzName: summary.date + '-' + (summary.site || 'flight').replace(/ /g, '-') + '.kmz' }) +
+        TV.scene.panel(payload, uid) +
         '\n    </div>\n' + sideView + '\n  </section>';
     } else {
       view3dSection = '\n  <section>\n    <div class="section-head">\n      <h2>The flight from the side</h2>\n' +
@@ -470,7 +461,7 @@
     return '<article class="flight" data-flight-report="' + uid + '"' + compare + ' data-compare-name="' + compareName + '"' + (options.hidden ? ' hidden' : '') + '>\n' +
       '  <header class="masthead">\n    <div>\n      <p class="eyebrow">tracklog viewer</p>\n' +
       '      <h1>' + esc(summary.site || 'Flight') + ' <span>' + esc(summary.date) + '</span></h1>\n    </div>\n' +
-      '    <div class="identity">' + identity + '</div>\n  </header>\n' + verdictStrip(result, options.ranks) + '\n\n' + view3dSection + '\n\n' +
+      '    <div class="identity">' + identity + '</div>\n  </header>\n' + verdictStrip(result) + '\n\n' + view3dSection + '\n\n' +
       '  <section>\n    <div class="section-head">\n      <h2>Top view</h2>\n      <p>The same flight seen from above, on the same cursor as the side view.</p>\n    </div>\n' +
       '    <div class="panel hero">\n      <div class="chart-head">\n        <p class="chart-title">The course line over the ground.' +
       (route ? ' Thin straight legs are the scored free-distance route.' : '') + '</p>\n' +
@@ -543,5 +534,7 @@
   }
 
   TV.report = { flightBody: flightBody, cursorData: cursorData, sampleIndices: sampleIndices, duration: duration,
-                shortDuration: shortDuration };
+                shortDuration: shortDuration,
+                // The pieces of the article a test asks about one at a time.
+                parts: { windShearNote: windShearNote, clearanceNote: clearanceNote, triggerNote: triggerNote } };
 })(typeof window !== 'undefined' ? (window.TV = window.TV || {}) : (globalThis.TV = globalThis.TV || {}));

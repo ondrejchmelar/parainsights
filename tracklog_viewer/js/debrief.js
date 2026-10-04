@@ -1,5 +1,6 @@
 /* The debrief — a verdict, and findings ranked by what they cost:
  * `tracklog_viewer/debrief.py`, ported.
+ * The Python is retired; it is in git at `ada5e5b`.
  *
  * Same rules: a finding is a measurement and a link, never an imperative; every finding
  * carries a cost in minutes or metres; nothing fires on data that cannot support it; and
@@ -344,5 +345,7 @@
     };
   }
 
-  TV.debrief = { THRESHOLDS: THRESHOLDS, build: build, toDict: toDict, costLabel: costLabel, num: num };
+  TV.debrief = { THRESHOLDS: THRESHOLDS, build: build, toDict: toDict, costLabel: costLabel, num: num,
+                 parts: { lowPoint: lowPoint, otherSlice: otherSlice, closeThatWasnt: closeThatWasnt, verdict: verdict,
+                          planDeparture: planDeparture } };
 })(typeof window !== 'undefined' ? (window.TV = window.TV || {}) : (globalThis.TV = globalThis.TV || {}));

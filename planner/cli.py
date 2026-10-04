@@ -46,8 +46,6 @@ def main(argv=None) -> int:
     )
     parser.add_argument("--html", metavar="FILE", type=Path, required=True,
                         help="where the old planner page was")
-    parser.add_argument("--online", action="store_true", help=argparse.SUPPRESS)
-    parser.add_argument("--no-airspace", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     args.html.parent.mkdir(parents=True, exist_ok=True)
     args.html.write_text(page(), encoding="utf-8")

@@ -2,10 +2,10 @@
 
 A report built without ``--meteo`` has no forecast in it, and until now the wind chart
 said so and stopped there — even though the same page fetches the day at view time to
-fill "The air that day". The two halves are now joined: ``charts.wind_profile``
-publishes its axis mapping in ``data-wind-frame``, each point carries the speed and
-altitude it was placed from, and ``plotModelWind`` in the page draws the profile into
-the ``<g class="model">`` Python left empty.
+fill "The air that day". The two halves are now joined: the wind chart (`js/charts.js`,
+`windProfile`) publishes its axis mapping in ``data-wind-frame``, each point carries the
+speed and altitude it was placed from, and ``plotModelWind`` in the page draws the
+profile into the ``<g class="model">`` the article left empty.
 
 The part worth testing is the *rescale*. Measured winds are drift inside thermals, the
 model is the free air, and the model is routinely several times the fastest thing the
@@ -18,18 +18,20 @@ No network: ``fetch`` is stubbed in the page with a canned Open-Meteo answer.
 """
 
 import json
-import math
 import re
 import subprocess
 import tempfile
 from pathlib import Path
 
-import pytest
 
+from tests import js
+from tests.js import needs_node
 from tests.test_analysis import build, circling, straight
 from tests.test_view3d_gl import CHROME, CHROME_FLAGS, needs_chrome
-from tracklog_viewer import charts, igc, meteo, render_html
-from tracklog_viewer.analysis import analyse
+from tracklog_viewer import render_html
+
+pytestmark = needs_node
+PRESSURE_LEVELS = render_html.PRESSURE_LEVELS
 
 # What the stubbed forecast says at each pressure level: fast, and getting faster with
 # height. Deliberately far outside anything the fixture's gentle drift can produce.
@@ -55,7 +57,15 @@ def a_drifting_day(tmp_path):
                        heading=90.0)
         points += run
         t, alt, x = run[-1][0] + 1, run[-1][3], run[-1][1]
-    return analyse(igc.parse(build(tmp_path / "wind.igc", points)))
+    return build(tmp_path / "wind.igc", points)
+
+
+def wind_chart(path, meteo=None):
+    """The wind chart as the article writes it, with the constants it was drawn with."""
+    return js.run("""var a = TV.analysis.analyse(await load(input.path));
+      return { svg: TV.charts.windProfile(a, input.meteo), step: TV.charts.WIND_SPEED_STEP,
+               altStep: TV.charts.WIND_ALT_STEP, band: TV.charts.WIND_MODEL_BAND };""",
+                  path=path, meteo=meteo)
 
 
 def _hourly(levels_have_wind: bool = True) -> dict:
@@ -69,7 +79,7 @@ def _hourly(levels_have_wind: bool = True) -> dict:
         "wind_speed_850hPa": [MODEL_KMH[850]] * 24,
         "wind_direction_850hPa": [270.0] * 24,
     }
-    for pressure in meteo.PRESSURE_LEVELS:
+    for pressure in PRESSURE_LEVELS:
         value = MODEL_KMH[pressure] if levels_have_wind else None
         height = MODEL_HEIGHT[pressure] if levels_have_wind else None
         hourly[f"wind_speed_{pressure}hPa"] = [value] * 24
@@ -153,8 +163,9 @@ window.addEventListener('load', function () {
 """
 
 
-def _render(analysis, *, levels_have_wind: bool = True) -> dict:
-    body = render_html._flight_body(analysis, meteo=None, fetch_tiles=False)
+def _render(path, *, levels_have_wind: bool = True) -> dict:
+    body = js.run("return TV.report.flightBody(TV.analysis.analyse(await load(input.path)),"
+                  " { uid: 'f0', now: Date.now() / 1000 });", path=path)
     page = render_html._page("wind", [body])
     assert 'data-wind-frame' in page, "the chart published no axis mapping"
     page += _PROBE % json.dumps(_hourly(levels_have_wind))
@@ -178,21 +189,21 @@ def _render(analysis, *, levels_have_wind: bool = True) -> dict:
 
 
 class TestTheChartPublishesEnoughToBeFinished:
-    """The Python half, checkable without a browser."""
+    """The article's half, checkable without a browser."""
 
     def test_the_frame_carries_the_axis_and_the_rounding(self, tmp_path):
-        svg = charts.wind_profile(a_drifting_day(tmp_path))
-        frame = json.loads(re.search(r"data-wind-frame='([^']+)'", svg).group(1))
+        chart = wind_chart(a_drifting_day(tmp_path))
+        frame = json.loads(re.search(r"data-wind-frame='([^']+)'", chart.svg).group(1))
         for key in ("left", "top", "plotW", "plotH", "speedMax", "altMin", "altMax",
                     "speedStep", "altStep", "band", "hasModel"):
             assert key in frame, f"the frame does not publish {key}"
-        assert frame["speedStep"] == charts.WIND_SPEED_STEP
-        assert frame["altStep"] == charts.WIND_ALT_STEP
-        assert frame["band"] == charts.WIND_MODEL_BAND
+        assert frame["speedStep"] == chart.step
+        assert frame["altStep"] == chart.altStep
+        assert frame["band"] == chart.band
         assert frame["hasModel"] is False
 
     def test_every_point_carries_what_it_was_placed_from(self, tmp_path):
-        svg = charts.wind_profile(a_drifting_day(tmp_path))
+        svg = wind_chart(a_drifting_day(tmp_path)).svg
         groups = re.findall(r'<g class="wind-point"[^>]*>', svg)
         assert groups, "no measured points in the chart"
         for group in groups:
@@ -202,25 +213,14 @@ class TestTheChartPublishesEnoughToBeFinished:
     def test_the_model_group_exists_even_when_it_is_empty(self, tmp_path):
         """The page has to draw *behind* the measured points, and appending a group of
         its own would put it in front of them."""
-        svg = charts.wind_profile(a_drifting_day(tmp_path))
-        assert '<g class="model"></g>' in svg
+        assert '<g class="model"></g>' in wind_chart(a_drifting_day(tmp_path)).svg
 
-    def test_the_frame_says_so_when_python_already_drew_the_model(self, tmp_path):
+    def test_the_frame_says_so_when_the_article_already_drew_the_model(self, tmp_path):
         """`hasModel` is what stops the page drawing a second line over the first."""
-        analysis = a_drifting_day(tmp_path)
-        levels = [
-            meteo.Level(pressure=p, height=MODEL_HEIGHT[p], temperature=10.0,
-                        dew_point=2.0, wind_speed=MODEL_KMH[p], wind_direction=280.0)
-            for p in meteo.PRESSURE_LEVELS
-        ]
-        day = meteo.Meteo(
-            valid_at="2026-07-01T13:00", source="test", latitude=46.0, longitude=14.0,
-            elevation=400.0, surface_temperature=22.0, surface_dew_point=8.0,
-            surface_wind_speed=12.0, surface_wind_direction=280.0, cape=200.0,
-            boundary_layer_height=1200.0, cloud_cover_low=10.0, cloud_cover_mid=0.0,
-            levels=levels,
-        )
-        svg = charts.wind_profile(analysis, meteo=day)
+        day = {"levels": [{"pressure": p, "height": MODEL_HEIGHT[p], "temperature": 10.0,
+                           "dew_point": 2.0, "wind_speed": MODEL_KMH[p], "wind_direction": 280.0}
+                          for p in PRESSURE_LEVELS]}
+        svg = wind_chart(a_drifting_day(tmp_path), day).svg
         frame = json.loads(re.search(r"data-wind-frame='([^']+)'", svg).group(1))
         assert frame["hasModel"] is True
 

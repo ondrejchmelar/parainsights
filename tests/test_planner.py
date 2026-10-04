@@ -21,9 +21,12 @@ import pytest
 
 from airspaces import cli as airspaces_cli
 from planner import render_html as planner_html
+from tests.js import needs_node
+
+xc = planner_html.xc
 from tests.test_view3d_gl import CHROME, CHROME_FLAGS, needs_chrome
 from tracklog_viewer import terrain as terrain_module
-from tracklog_viewer import view3d, xc
+from tracklog_viewer import view3d
 
 
 def _terrain():
@@ -62,7 +65,7 @@ def _page(spaces=(), terrain=None) -> str:
     from airspaces import scene as airspace_scene
 
     payload = airspace_scene.build(list(spaces), terrain=terrain or _terrain(),
-                                   basemaps={}, tiles=False)
+                                   tiles=False)
     panel = view3d.panel(payload, "planner")
     return airspaces_cli._page(planner_html.body(scene_panel=panel), "Plan a task",
                                three_d=True)
@@ -264,10 +267,16 @@ def test_two_points_are_open_distance_and_not_a_triangle():
     assert answer["legs"].count("leg") == 1
 
 
+@needs_node
 def test_the_planner_scores_with_the_reports_own_constants():
     """A planner that scored a task differently from the report that later measures the
-    flight would be worse than no planner, so the constants are interpolated from
-    `xc.py` rather than typed into the script."""
+    flight would be worse than no planner, so the constants are read from `js/xc.js` —
+    the scorer itself, asked here — rather than typed into the script."""
+    from tests import js
+
+    scorer = js.run("return { fai: TV.xc.FAI_MIN_SIDE, closing: TV.xc.MAX_CLOSING, m: TV.xc.MULTIPLIER };")
+    assert (xc.FAI_MIN_SIDE, xc.MAX_CLOSING) == (scorer.fai, scorer.closing)
+    assert xc.MULTIPLIER == dict(scorer.m)
     source = planner_html.SCRIPT
     assert f"FAI_MIN_SIDE = {xc.FAI_MIN_SIDE}" in source
     assert f"MAX_CLOSING = {xc.MAX_CLOSING}" in source

@@ -15,7 +15,10 @@ import math
 
 import pytest
 
-from tracklog_viewer import sun
+from tests import js
+from tests.js import needs_node
+
+pytestmark = needs_node
 
 # Obliquity of the ecliptic: the sun's declination at the solstices, and the number every
 # "how high does it get" answer is built from.
@@ -26,16 +29,35 @@ def utc(year, month, day, hour=12, minute=0):
     return dt.datetime(year, month, day, hour, minute, tzinfo=dt.timezone.utc)
 
 
-def solar_noon(day: dt.date, lat: float, lon: float) -> sun.Position:
+def _date(day):
+    return {"year": day.year, "month": day.month, "day": day.day}
+
+
+def position(when, lat, lon):
+    return js.run("return TV.sun.position(input.t, input.lat, input.lon);",
+                  t=when.timestamp(), lat=lat, lon=lon)
+
+
+def rise_and_set(day, lat, lon):
+    out = js.run("return TV.sun.riseAndSet(input.date, input.lat, input.lon);",
+                 date=_date(day), lat=lat, lon=lon)
+    return out.rise, out.set
+
+
+def day_track(day, lat, lon, step=None):
+    return js.run("return TV.sun.dayTrack(input.date, input.lat, input.lon, input.step || undefined);",
+                  date=_date(day), lat=lat, lon=lon, step=step)
+
+
+def solar_noon(day: dt.date, lat: float, lon: float):
     """The highest the sun gets that day, found by searching rather than by formula."""
-    best = None
-    for minute in range(0, 24 * 60, 2):
-        when = dt.datetime.combine(day, dt.time(), tzinfo=dt.timezone.utc) + dt.timedelta(
-            minutes=minute)
-        where = sun.position(when, lat, lon)
-        if best is None or where.elevation > best.elevation:
-            best = where
-    return best
+    return js.run("""
+      var base = Date.UTC(input.date.year, input.date.month - 1, input.date.day) / 1000, best = null;
+      for (var minute = 0; minute < 1440; minute += 2) {
+        var p = TV.sun.position(base + minute * 60, input.lat, input.lon);
+        if (!best || p.elevation > best.elevation) best = p;
+      }
+      return best;""", date=_date(day), lat=lat, lon=lon)
 
 
 class TestTheGeometryIsRight:
@@ -61,27 +83,25 @@ class TestTheGeometryIsRight:
 
     def test_it_comes_up_in_the_east_and_goes_down_in_the_west(self):
         day, lat, lon = dt.date(2024, 6, 20), 49.0, 14.0
-        morning = sun.position(utc(2024, 6, 20, 6), lat, lon)
-        evening = sun.position(utc(2024, 6, 20, 17), lat, lon)
-        assert 0 < morning.azimuth < 180, "before noon the sun is in the eastern half"
-        assert 180 < evening.azimuth < 360, "after noon it is in the western half"
-        rise, set_ = sun.rise_and_set(day, lat, lon)
+        assert 0 < position(utc(2024, 6, 20, 6), lat, lon).azimuth < 180, \
+            "before noon the sun is in the eastern half"
+        assert 180 < position(utc(2024, 6, 20, 17), lat, lon).azimuth < 360, \
+            "after noon it is in the western half"
+        rise, set_ = rise_and_set(day, lat, lon)
         assert rise is not None and set_ is not None
-        assert sun.position(
-            dt.datetime.combine(day, dt.time(), tzinfo=dt.timezone.utc)
-            + dt.timedelta(minutes=rise), lat, lon).azimuth < 90, "midsummer: north of east"
+        assert position(utc(2024, 6, 20, 0) + dt.timedelta(minutes=rise), lat, lon).azimuth < 90, \
+            "midsummer: north of east"
 
     def test_the_day_is_longer_in_june_than_in_december(self):
-        lat, lon = 49.0, 14.0
-        june = sun.rise_and_set(dt.date(2024, 6, 20), lat, lon)
-        december = sun.rise_and_set(dt.date(2024, 12, 21), lat, lon)
+        june = rise_and_set(dt.date(2024, 6, 20), 49.0, 14.0)
+        december = rise_and_set(dt.date(2024, 12, 21), 49.0, 14.0)
         assert (june[1] - june[0]) - (december[1] - december[0]) == pytest.approx(
             8 * 60, abs=40), "about eight hours of it at this latitude"
 
     def test_a_polar_day_has_no_sunrise(self):
-        rise, set_ = sun.rise_and_set(dt.date(2024, 6, 20), 78.2, 15.6)  # Svalbard
+        rise, set_ = rise_and_set(dt.date(2024, 6, 20), 78.2, 15.6)  # Svalbard
         assert rise is None and set_ is None
-        assert sun.position(utc(2024, 6, 20, 0), 78.2, 15.6).up, "and the sun is up at midnight"
+        assert position(utc(2024, 6, 20, 0), 78.2, 15.6).elevation > 0, "and the sun is up at midnight"
 
 
 def _almanac(when: dt.datetime, lat: float, lon: float) -> tuple[float, float]:
@@ -126,7 +146,7 @@ def _almanac(when: dt.datetime, lat: float, lon: float) -> tuple[float, float]:
 def test_it_agrees_with_a_different_algorithm(when, lat, lon):
     """Two independent routes to the same sky. Half a degree is far finer than the DEM
     this is lighting, and finer than the difference a slider step makes."""
-    mine = sun.position(when, lat, lon)
+    mine = position(when, lat, lon)
     theirs = _almanac(when, lat, lon)
     assert mine.elevation == pytest.approx(theirs[1], abs=0.5)
     gap = (mine.azimuth - theirs[0] + 180) % 360 - 180
@@ -135,17 +155,17 @@ def test_it_agrees_with_a_different_algorithm(when, lat, lon):
 
 class TestWhatTheViewGets:
     def test_the_vector_points_at_the_sun_in_the_views_own_frame(self):
-        """x east, y north, z up — the frame `view3d` shades in."""
-        east = sun.Position(azimuth=90, elevation=0).vector()
+        """x east, y north, z up — the frame the terrain is shaded in."""
+        east, overhead, south_low = js.run("""var v = TV.insolation.sunVector;
+          return [v({ azimuth: 90, elevation: 0 }), v({ azimuth: 123, elevation: 90 }),
+                  v({ azimuth: 180, elevation: 30 })];""")
         assert east[0] == pytest.approx(1) and east[1] == pytest.approx(0, abs=1e-9)
-        overhead = sun.Position(azimuth=123, elevation=90).vector()
         assert overhead[2] == pytest.approx(1)
-        south_low = sun.Position(azimuth=180, elevation=30).vector()
         assert south_low[1] == pytest.approx(-math.cos(math.radians(30)))
         assert south_low[2] == pytest.approx(0.5)
 
     def test_the_day_track_covers_the_day_at_the_step_asked_for(self):
-        track = sun.day_track(dt.date(2024, 6, 20), 49.0, 14.0, step_minutes=10)
+        track = day_track(dt.date(2024, 6, 20), 49.0, 14.0, step=10)
         assert track["step"] == 10
         assert len(track["az"]) == 144 and len(track["el"]) == 144
         assert max(track["el"]) == pytest.approx(
@@ -154,30 +174,30 @@ class TestWhatTheViewGets:
     def test_the_azimuth_never_jumps_the_long_way_round(self):
         """Unwrapped, so interpolating two samples cannot sweep the light backwards
         through the whole compass — which is what a wrap at 360 looks like on a slider."""
-        track = sun.day_track(dt.date(2024, 6, 20), 49.0, 14.0)
+        track = day_track(dt.date(2024, 6, 20), 49.0, 14.0)
         steps = [b - a for a, b in zip(track["az"], track["az"][1:])]
         assert max(abs(step) for step in steps) < 20
 
     def test_the_track_is_small_enough_to_embed(self):
         import json
 
-        track = sun.day_track(dt.date(2024, 6, 20), 49.0, 14.0)
-        assert len(json.dumps(track, separators=(",", ":"))) < 2000
+        track = day_track(dt.date(2024, 6, 20), 49.0, 14.0)
+        assert len(json.dumps({k: (v.tolist() if hasattr(v, "tolist") else v) for k, v in track.items()},
+                              separators=(",", ":"))) < 2000
 
 
 class TestWhatTheReportGets:
-    """`view3d._sun` turns a flight into the payload the panel reads."""
+    """`TV.sun.forFlight` turns a flight into the payload the panel reads."""
 
-    def _analysis(self, tmp_path):
+    def _payload(self, tmp_path):
         from tests.test_analysis import build, circling
-        from tracklog_viewer import analysis, igc
-
-        return analysis.analyse(igc.parse(build(tmp_path / "s.igc", circling(400))))
+        return js.run("""var f = await load(input.path), p = TV.sun.forFlight(f);
+          var local = TV.igc.localParts(f.time[0], f.timezone);
+          p.launchLocal = local.hour * 60 + local.minute; return p;""",
+                      path=build(tmp_path / "s.igc", circling(400)))
 
     def test_it_opens_on_the_middle_of_the_flight(self, tmp_path):
-        from tracklog_viewer import view3d
-
-        payload = view3d._sun(self._analysis(tmp_path))
+        payload = self._payload(tmp_path)
         assert payload["launch"] <= payload["at"] <= payload["landing"]
         assert payload["track"]["step"] == 10
 
@@ -185,19 +205,5 @@ class TestWhatTheReportGets:
         """The tables in the report are local time; the sun is computed in UTC. This is
         the one number where the two meet, and getting it backwards moves the light by
         a couple of hours without looking wrong."""
-        from tracklog_viewer import view3d
-
-        flight = self._analysis(tmp_path).flight
-        payload = view3d._sun(self._analysis(tmp_path))
-        launch = flight.local_time(0)
-        assert payload["offset"] == int((launch.utcoffset() or dt.timedelta()).total_seconds() // 60)
-        local = (payload["launch"] + payload["offset"]) % 1440
-        assert local // 60 == launch.hour and local % 60 == launch.minute
-
-    def test_the_caption_names_where_the_sun_stood(self, tmp_path):
-        from tracklog_viewer import render_html, view3d
-
-        note = render_html._sun_note(view3d._sun(self._analysis(tmp_path)))
-        assert "The sun was up from" in note
-        assert "at launch it stood" in note
-        assert render_html._sun_note(None) == ""
+        payload = self._payload(tmp_path)
+        assert (payload["launch"] + payload["offset"]) % 1440 == payload["launchLocal"]

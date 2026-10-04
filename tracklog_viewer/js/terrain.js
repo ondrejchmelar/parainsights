@@ -1,4 +1,5 @@
 /* The ground under the flight: `Terrain.at` and `terrain.clearance`, ported.
+ * The Python is retired; it is in git at `ada5e5b`.
  *
  * A grid is the shape the page already uses for every DEM — bounds, `rows`, `cols` and a
  * flat row-major `z`, row 0 at the north edge — whether it came with a showcase flight or

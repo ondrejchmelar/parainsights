@@ -1,168 +1,24 @@
-"""The side view and the top view, drawn in the browser instead of in the document.
+"""The side view and the top view, drawn in the browser instead of baked into the article.
 
-These two are the report's biggest charts and its biggest bytes. Measured on the
-published three-flight report before this existed: **nine profile SVGs at 577 KB and
-three plan views at 153 KB**, 730 KB of a 2.97 MB document — 24% of it, and nine
-profiles because the axis toggle shipped all three modes and hid two.
+These two were the report's biggest charts and its biggest bytes: nine profile SVGs at
+577 KB and three plan views at 153 KB on the published three-flight report, 24% of it,
+nine because the axis toggle shipped all three modes and hid two. What replaces them is
+the payload `js/charts.js` writes into each article (about 20 KB a flight) and the one
+renderer here.
 
-What replaces them is a payload of about 20 KB a flight and one renderer. The trade is
-data against CPU and for these two charts it is close to free, because *the data is
-already in the document*: `render_html._cursor_data` ships altitude, climb rate and time
-at a sampled index for the hover cursor, and the chart's own trace is a second drawing of
-exactly those numbers. This module adds the four series the cursor payload does not
-carry — distance flown, distance from launch, and the plan-view metres — and draws from
-the pair.
+Two rules keep it honest:
 
-Three rules kept this from becoming a second implementation of `charts.py`:
+* **It builds the DOM the report is written against.** Same element order, class names
+  and `data-` attributes as the SVG it replaced, so the linked cursor, the tooltip, the
+  band highlight, "show me" from a debrief card and both themes work on it unchanged.
+* **One sample, shared.** The trace is drawn through the same indices the cursor is
+  indexed by; two independently decimated samples put the marker on a different moment
+  than the one under the pointer.
 
-* **The browser builds the same SVG.** Same element order, same class names, same
-  `data-` attributes. Everything downstream — the linked cursor, the tooltip, the phase
-  band highlight, "show me" from a debrief card, both themes through `var()` fills — goes
-  on working without knowing where the SVG came from, and the report's CSS is unchanged.
-* **One sample, shared.** The trace is drawn through the *same* indices the cursor is
-  indexed by. `quicklook.py` learned this the hard way: two independently decimated
-  samples put the marker on a different moment than the one under the pointer.
-* **Nothing is recomputed that Python already knows.** The clock labels for the time
-  axis, the meteo reference lines, the phase bands and the climb ramp all arrive as data.
-  A JavaScript port of `flight.local_time` would be a timezone bug waiting to happen.
-
-`charts.altitude_profile` and `charts.plan_view` are still here and still tested — they
-are what a KMZ, a test or anything else that needs a self-contained SVG uses — but the
-report calls neither.
+This module is only the stylesheet and the script; the payload is `TV.charts.payload`.
 """
 
 from __future__ import annotations
-
-import math
-
-import numpy as np
-
-from . import charts, geo
-from .analysis import Analysis, Phase
-
-# The two charts' geometry, in one place because the payload and the renderer both need
-# it and a disagreement is a cursor that points somewhere the trace is not.
-PROFILE = {"width": 1080, "height": 420, "left": 56, "right": 20, "top": 20, "bottom": 46}
-PLAN = {"width": 1080, "pad": 26}
-
-
-def _ramp() -> list:
-    """`charts.CLIMB_RAMP` as JSON: the ramp is data, not a second list in JavaScript."""
-    return [
-        [None if math.isinf(threshold) else threshold, colour]
-        for threshold, colour in charts.CLIMB_RAMP
-    ]
-
-
-def _clock_ticks(analysis: Analysis, sample: list[int]) -> list:
-    """Quarter-hour marks for the time axis, already formatted.
-
-    The label is `flight.local_time`, which resolves the flight's own timezone from the
-    logger header or from the take-off coordinates — `timezonefinder`'s dataset is not
-    going in a page, and `lon / 15` is the trap the timezone gap warns about. So the
-    ticks are computed here and shipped: a few dozen pairs, against a whole class of
-    wrong-by-an-hour.
-    """
-    series = analysis.series
-    flight = analysis.flight
-    quarter = 900
-    takeoff = flight.local_time(0)
-    span = float(series.t[-1])
-    first = (-takeoff.minute % 15) * 60 - takeoff.second
-    tick = first if first > 0 else first + quarter
-    out = []
-    while tick <= span:
-        index = int(np.searchsorted(series.t, tick))
-        out.append([round(tick, 1), flight.local_time(index).strftime("%H:%M")])
-        tick += quarter
-    return out
-
-
-def payload(analysis: Analysis, *, meteo=None, route=None, sample: list[int],
-            plan_height: int) -> dict:
-    """Everything the two charts need that the cursor payload does not already carry.
-
-    Positions in `bands` and `marks` are **positions in `sample`**, not fix indices, for
-    the same reason the trace is drawn through the sample: one index space per chart, and
-    the cursor already lives in this one. `data-segment` keeps the fix index, because
-    that is what the tooltip and "show me" address a segment by.
-    """
-    series = analysis.series
-    flight = analysis.flight
-    at = np.asarray(sample, dtype=int)
-
-    from_start = geo.distance(flight.lat[0], flight.lon[0], flight.lat, flight.lon)
-
-    def position(fix: int) -> int:
-        """The sample position nearest a fix index — `render_html._sample_position`'s
-        rule, applied here so the bands land where the trace does."""
-        found = int(np.searchsorted(at, fix))
-        if found >= len(at):
-            return len(at) - 1
-        if found and abs(int(at[found - 1]) - fix) <= abs(int(at[found]) - fix):
-            return found - 1
-        return found
-
-    bands = [
-        [position(segment.start), position(segment.stop - 1), segment.phase.value,
-         int(segment.start)]
-        for segment in analysis.segments
-    ]
-
-    marks, number = [], 0
-    for segment in analysis.segments:
-        if segment.phase not in (Phase.THERMAL, Phase.TOW):
-            continue
-        middle = (segment.start + segment.stop) // 2
-        tow = segment.phase is Phase.TOW
-        if not tow:
-            number += 1
-        marks.append({
-            "at": position(middle),
-            "label": "T" if tow else str(number),
-            "tow": tow,
-            "segment": int(segment.start),
-            # The plan view sizes a climb's disc two ways and colours it by rate; both
-            # are per-climb numbers rather than per-fix ones, so they travel with the
-            # mark rather than being re-derived from the series.
-            "gain": round(float(segment.altitude_change), 1),
-            "rate": round(float(segment.average_climb), 2),
-        })
-
-    references = []
-    if meteo is not None:
-        for value, label in ((getattr(meteo, "boundary_layer_top", None), "boundary layer top"),
-                             (getattr(meteo, "cloudbase", None), "cloudbase")):
-            if value is not None:
-                references.append([round(float(value)), label])
-
-    legs = []
-    if route is not None and len(getattr(route, "points", [])) >= 2:
-        legs = [int(point.index) for point in route.points]
-
-    out = {
-        "profile": dict(PROFILE),
-        "plan": dict(PLAN, height=plan_height),
-        "ramp": _ramp(),
-        "modes": {key: list(value) for key, value in charts.PROFILE_MODES.items()},
-        # One integer per sample per series. Metres and seconds, rounded — the charts
-        # are 1 080 px wide and a decimetre is not visible on any of them.
-        "s": [int(series.s[i]) for i in at],
-        "d": [int(from_start[i]) for i in at],
-        "x": [int(series.x[i]) for i in at],
-        "y": [int(series.y[i]) for i in at],
-        "bands": bands,
-        "marks": marks,
-        "references": references,
-        "route": [position(index) for index in legs],
-        "clockTicks": _clock_ticks(analysis, sample),
-        # The axis is computed from the data in the page, but the headroom rule needs the
-        # meteo lines and the 1 000 m cap, so the answer travels rather than the rule.
-        "floor": int(math.floor(float(series.alt.min()) / 100) * 100),
-        "ceiling": int(charts._with_headroom(
-            math.ceil(float(series.alt.max()) / 100) * 100, float(series.alt.max()), meteo)),
-    }
-    return out
 
 
 STYLE = """

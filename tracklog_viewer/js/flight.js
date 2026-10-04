@@ -1,4 +1,5 @@
 /* Derived series: `tracklog_viewer/flight.py`, ported.
+ * The Python is retired; it is in git at `ada5e5b`.
  *
  * Every series is computed over a sliding time window with interpolated edges rather
  * than snapped to the nearest fix: loggers are not reliably 1 Hz, and snapping makes the

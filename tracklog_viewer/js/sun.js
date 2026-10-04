@@ -1,4 +1,5 @@
-/* Where the sun was: `tracklog_viewer/sun.py` (NOAA's solar position algorithm), ported,
+/* Where the sun was: `tracklog_viewer/sun.py` (NOAA's solar position algorithm),
+ * ported (the Python is retired; it is in git at `ada5e5b`),
  * with `view3d._sun` as `forFlight`.
  *
  * The Python once tabulated the day so the page would not need the algorithm; with the

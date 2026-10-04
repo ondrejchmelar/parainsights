@@ -1,4 +1,5 @@
 /* IGC tracklog parsing: `tracklog_viewer/igc.py`, ported.
+ * The Python is retired; it is in git at `ada5e5b`.
  *
  * Every logger quirk lives here. Times are UTC epoch seconds; the timezone is resolved
  * once and carried as `{ iana: name }` or `{ offsetHours: h }` (or null for UTC), which

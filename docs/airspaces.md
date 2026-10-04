@@ -35,7 +35,7 @@ airspaces/
 ├── build.py        assembles the overlay from all of it
 ├── scene.py        the 3D payload: airspace as boxes, over fetched terrain
 ├── render_html.py  the map: the viewer's 3D panel, or inline SVG; filters, labels
-└── cli.py          airspaces [--openair FILE] [--html FILE] [--flat] [--online] [--report]
+└── cli.py          airspaces [--openair FILE] [--html FILE] [--flat] [--report]
 ```
 
 `build.Overlay` is the boundary: everything upstream produces it, both renderers
@@ -46,7 +46,7 @@ consume only it. Same split as the tracklog viewer's `Analysis`.
 ```bash
 uv run python -m airspaces.cli --openair CZ_airfields.txt   # for XCTrack
 uv run python -m airspaces.cli --html airspace.html         # the map, in 3D
-uv run python -m airspaces.cli --html airspace.html --online  # imagery fetched at view time
+uv run python -m airspaces.cli --html airspace.html          # imagery fetched at view time
 uv run python -m airspaces.cli --html airspace.html --flat  # the old flat SVG map
 uv run python -m airspaces.cli --report                     # what built, what did not
 ```
@@ -68,7 +68,7 @@ the page. The tracklog viewer's `--airspace` builds it, and its argument is wher
 download sits relative to the report:
 
 ```bash
-uv run python -m tracklog_viewer.cli FLIGHT.igc [...] --terrain --meteo --online \
+uv run python -m tracklog_viewer.cli FLIGHT.igc [...] --terrain --meteo \
   --airspace airspace/ --html public/index.html
 ```
 

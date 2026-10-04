@@ -76,7 +76,6 @@ class Aerodrome:
     name: str = ""
     lat: float | None = None
     lon: float | None = None
-    elevation_m: float | None = None
     elevation_ft: float | None = None
     circuit_m: float | None = None
     circuit_ft: float | None = None
@@ -216,7 +215,6 @@ def parse_vfr(icao: str, page: str) -> Aerodrome:
     match = _ELEV.search(text)
     if match:
         field_.elevation_ft = _number(match.group(1))
-        field_.elevation_m = _number(match.group(2))
 
     match = _CIRCUIT.search(text)
     if match:

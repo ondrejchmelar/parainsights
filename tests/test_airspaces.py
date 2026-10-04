@@ -1093,8 +1093,7 @@ def test_the_page_falls_back_to_the_flat_map_without_terrain(zones):
 def test_the_map_fetches_its_ground_in_the_page():
     """The 3D map's ground is fetched by the page (`scene.remote`), over the planner's
     box — Czechia and the Alps. A build therefore cannot lose it and quietly fall back to
-    the flat map, which is what `--require-terrain` used to guard a deploy against; the
-    flag is still accepted, because the pipeline still passes it."""
+    the flat map, which a `--require-terrain` flag once had to guard a deploy against."""
     from airspaces import cli, scene as airspace_scene
 
     terrain = airspace_scene.remote([])["terrain"]
@@ -1106,7 +1105,7 @@ def test_the_map_fetches_its_ground_in_the_page():
     focus = airspace_scene.remote([])["view"]["focus"]
     assert airspace_scene.PLAN_BOX[0] < focus["west"] < focus["east"] < airspace_scene.PLAN_BOX[1]
     source = __import__("pathlib").Path(cli.__file__).read_text(encoding="utf-8")
-    assert "airspace_scene.remote(" in source and "--require-terrain" in source
+    assert "airspace_scene.remote(" in source
 
 
 def test_a_zero_floor_is_the_ground_however_it_is_written():
@@ -1252,7 +1251,7 @@ def test_the_3d_map_gives_the_same_answer_as_the_flat_one():
         elevations=np.full((24, 24), 400.0),
     )
     payload = airspace_scene.build(base + overlay.airspaces, terrain=ground,
-                                   basemaps={}, tiles=False)
+                                   tiles=False)
     page = airspace_cli._page(
         render_html.body(overlay, base, "26-04-01", scene=payload),
         "Czech airspace", three_d=True,
@@ -1292,7 +1291,7 @@ def _box_page():
         elevations=np.full((24, 24), 400.0),
     )
     payload = airspace_scene.build(base + overlay.airspaces, terrain=ground,
-                                   basemaps={}, tiles=False)
+                                   tiles=False)
     return airspace_cli._page(
         render_html.body(overlay, base, "26-04-01", scene=payload),
         "Czech airspace", three_d=True,

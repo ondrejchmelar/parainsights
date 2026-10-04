@@ -1,5 +1,6 @@
 /* The report's server-drawn charts: `tracklog_viewer/charts.py` (the ones the article
  * still bakes in) and `charts_client.payload`, ported.
+ * The Python is retired; it is in git at `ada5e5b`.
  *
  * The output is the Python's SVG, element for element and attribute for attribute, so the
  * page's CSS, the linked cursor and the tooltips go on working whichever side drew it.
@@ -369,6 +370,7 @@
   }
 
   TV.charts = { CLIMB_RAMP: CLIMB_RAMP, PROFILE: PROFILE, PLAN: PLAN, escape: escape, climbColor: climbColor,
+                WIND_SPEED_STEP: WIND_SPEED_STEP, WIND_ALT_STEP: WIND_ALT_STEP, WIND_MODEL_BAND: WIND_MODEL_BAND,
                 ldColor: ldColor, planHeight: planHeight, budgetBar: budgetBar, windProfile: windProfile,
                 sounding: sounding, climbHistogram: climbHistogram, ldBar: ldBar, climbTrend: climbTrend,
                 payload: payload, samplePosition: samplePosition };
