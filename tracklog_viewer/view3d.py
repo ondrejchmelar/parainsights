@@ -3543,6 +3543,7 @@ function initView3d(root, cursorTrack, preset) {
     // The airspace layer's two controls. The page owns the filter UI and the label —
     // this widget only knows how to draw rings and say which one a point is inside.
     setAirspaceFilter: function (fn) { airspaceFilter = fn || null; draw(); },
+    airspaceFilter: function () { return airspaceFilter; },
     scene: function () { return scene; },
     // Exposed for tests: whether the current camera would ask for a sharper mosaic and
     // for what. The fetch itself needs a network and a tile server; the decision does

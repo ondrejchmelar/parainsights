@@ -226,7 +226,18 @@ SCRIPT = r"""
     var duration = hasTime ? tr.t[tr.t.length - 1] : 0;
     var sun = scene.sun && scene.sun.track && scene.sun.track.az ? scene.sun : null;
     var wind = scene.wind || null;
+    // A flight's map offers its airspace behind a switch; the airspace map *is* its
+    // airspace, so a scene with rings and no switch draws them always.
     var hasAirspace = !!(scene.airspaceToggle && scene.airspaces && scene.airspaces.length);
+    var alwaysAirspace = !!(!scene.airspaceToggle && scene.airspaces && scene.airspaces.length);
+    // The exaggerations this panel offers, and the one it opens on, are the canvas
+    // panel's own (`view3d.panel(verticals=…)`): ×1/2/4 under a flight, ×1/5/15 under a
+    // country of airspace, where a traffic circuit at ×1 is a third of a pixel tall.
+    var offered = Array.prototype.map.call(
+      panel.querySelectorAll('[data-view3d-act="exaggerate-set"]'),
+      function (b) { return parseFloat(b.dataset.vertical); }).filter(function (v) { return v > 0; });
+    var pressed = panel.querySelector('[data-view3d-act="exaggerate-set"].is-on');
+    var openVertical = pressed ? parseFloat(pressed.dataset.vertical) : 1;
     var hasPhases = !!(scene.phases && scene.phases.length);
 
     var view = document.createElement('div');
@@ -330,9 +341,15 @@ SCRIPT = r"""
       // A rebuilt view starts on the basemap and exaggeration it was left on, built into
       // its first style rather than set over it: setting them before that style has
       // loaded throws inside this callback, and the rebuild silently never finished.
-      var vertical = restore ? restore.vertical : 1, cursor = null, from = 0, cutoff = duration;
+      var vertical = restore ? restore.vertical : (openVertical > 0 ? openVertical : 1);
+      var cursor = null, from = 0, cutoff = duration;
       if (restore) basemap = restore.basemap;
-      var labels = { climb: false, glide: false }, airspaceOn = false;
+      var labels = { climb: false, glide: false }, airspaceOn = alwaysAirspace;
+      // The canvas handle's airspace filter (class, floor, hours), followed here: the
+      // page's controls set it on that handle, and the two maps must hide the same rings.
+      var airspaceFilter = handle.airspaceFilter ? handle.airspaceFilter() : null;
+      var route = null;       // a planned task: { walk: [[lon, lat]…], points: [[lon, lat]…] }
+      var clickers = [];
       var sunMinute = sun ? sun.at : null;
       var lines = segments(scene);
 
@@ -433,14 +450,22 @@ SCRIPT = r"""
       }
 
       var dem = scene.terrain || {};
-      var west = tr.lon.length ? Math.min.apply(null, tr.lon) : dem.west;
-      var east = tr.lon.length ? Math.max.apply(null, tr.lon) : dem.east;
-      var south = tr.lat.length ? Math.min.apply(null, tr.lat) : dem.south;
-      var north = tr.lat.length ? Math.max.apply(null, tr.lat) : dem.north;
+      // What to open on: the flight; else the part of the ground the scene names
+      // (`view.focus` — the airspace map opens on Czechia, not on the Alps beside it);
+      // else the whole ground.
+      var focus = (scene.view && scene.view.focus) || dem;
+      var west = tr.lon.length ? Math.min.apply(null, tr.lon) : focus.west;
+      var east = tr.lon.length ? Math.max.apply(null, tr.lon) : focus.east;
+      var south = tr.lat.length ? Math.min.apply(null, tr.lat) : focus.south;
+      var north = tr.lat.length ? Math.max.apply(null, tr.lat) : focus.north;
+      // The canvas's opening pitch is the camera's elevation angle; MapLibre's is the tilt
+      // from straight down.
+      var openPitch = scene.view && typeof scene.view.pitch === 'number' && !tr.lon.length
+        ? Math.max(0, 90 - scene.view.pitch * 180 / Math.PI) : 60;
       var styleReady = false;
       map = new maplibregl.Map({
         container: view.querySelector('.ml-map'), style: style(basemap),
-        center: [(west + east) / 2, (south + north) / 2], zoom: 10, pitch: 60, bearing: 0,
+        center: [(west + east) / 2, (south + north) / 2], zoom: 10, pitch: openPitch, bearing: 0,
         maxPitch: 85, attributionControl: false, keyboard: true
       });
       // 'style.load', not 'load': 'load' waits for the first complete frame, every tile
@@ -549,7 +574,7 @@ SCRIPT = r"""
         if (!(west < east || south < north)) return;
         map.fitBounds([[west, south], [east, north]],
                       { padding: { top: 70, bottom: 110, left: 50, right: 90 },
-                        pitch: 60, bearing: 0, duration: animate ? 600 : 0 });
+                        pitch: openPitch, bearing: 0, duration: animate ? 600 : 0 });
       }
       if (!restore) fit(false);
 
@@ -579,7 +604,7 @@ SCRIPT = r"""
                  position: [(p.lon[0] + p.lon[1]) / 2, (p.lat[0] + p.lat[1]) / 2,
                             (p.alt[0] + p.alt[1]) / 2] };
       });
-      var boxes = hasAirspace ? scene.airspaces.map(function (ring) {
+      var boxes = (hasAirspace || alwaysAirspace) ? scene.airspaces.map(function (ring) {
         var low = Infinity, high = -Infinity;
         if (ring.g || ring.fu !== undefined || ring.cu !== undefined) {
           ring.lon.forEach(function (lon, i) {
@@ -589,23 +614,25 @@ SCRIPT = r"""
         }
         var floor = ring.g ? low : (ring.fu !== undefined ? low + ring.fu : ring.f);
         var top = ring.cu !== undefined ? high + ring.cu : ring.c;
-        return { name: ring.n, colour: (scene.airspaceColours || {})[ring.k] || '#888888',
+        return { space: ring, name: ring.n, colour: (scene.airspaceColours || {})[ring.k] || '#888888',
                  ring: ring.lon.map(function (lon, i) { return [lon, ring.lat[i]]; }),
                  floor: floor, top: Math.max(top, floor + 30), capped: !!ring.t };
       }) : [];
 
       function layers() {
         var out = [];
-        if (airspaceOn && boxes.length) {
+        var drawn = airspaceFilter ? boxes.filter(function (d) { return airspaceFilter(d.space); })
+                                   : boxes;
+        if (airspaceOn && drawn.length) {
           out.push(new deck.SolidPolygonLayer({
-            id: 'airspace', data: boxes, extruded: true, wireframe: false, pickable: true,
+            id: 'airspace', data: drawn, extruded: true, wireframe: false, pickable: true,
             getPolygon: function (d) { return d.ring.map(function (p) { return [p[0], p[1], z(d.floor)]; }); },
             getElevation: function (d) { return (d.top - d.floor) * vertical; },
             getFillColor: function (d) { return rgb(d.colour, 46); },
             material: false, updateTriggers: { getPolygon: vertical, getElevation: vertical }
           }));
           out.push(new deck.PathLayer({
-            id: 'airspace-edges', data: boxes.reduce(function (all, d) {
+            id: 'airspace-edges', data: drawn.reduce(function (all, d) {
               var shut = d.ring.concat([d.ring[0]]);
               all.push({ colour: d.colour, path: shut.map(function (p) { return [p[0], p[1], z(d.floor)]; }) });
               all.push({ colour: d.colour, path: shut.map(function (p) { return [p[0], p[1], z(d.top)]; }) });
@@ -613,6 +640,38 @@ SCRIPT = r"""
             }, []),
             getPath: function (d) { return d.path; }, getColor: function (d) { return rgb(d.colour, 200); },
             getWidth: 1.2, widthUnits: 'pixels', updateTriggers: { data: vertical }
+          }));
+        }
+        // A planned task (the planner on the airspace page): the course 60 m over the
+        // ground, as the canvas draws it, and the turnpoints numbered.
+        if (route && route.walk.length > 1) {
+          out.push(new deck.PathLayer({
+            id: 'plan-line', data: [route.walk],
+            getPath: function (d) {
+              return d.map(function (p) { return [p[0], p[1], z(ground(p[0], p[1]) + 60)]; });
+            },
+            getColor: [255, 255, 255, 235], getWidth: 3, widthUnits: 'pixels',
+            capRounded: true, jointRounded: true, billboard: true,
+            updateTriggers: { getPath: vertical }, parameters: ON_TOP
+          }));
+        }
+        if (route && route.points.length) {
+          var tps = route.points.map(function (p, i) {
+            return { label: String(i + 1), position: [p[0], p[1], ground(p[0], p[1]) + 60] };
+          });
+          out.push(new deck.ScatterplotLayer({
+            id: 'plan-points', data: tps,
+            getPosition: function (d) { return [d.position[0], d.position[1], z(d.position[2])]; },
+            getFillColor: [226, 96, 44], getLineColor: [255, 255, 255], stroked: true,
+            lineWidthMinPixels: 1.5, radiusUnits: 'pixels', getRadius: 9, billboard: true,
+            updateTriggers: { getPosition: vertical }, parameters: ON_TOP
+          }));
+          out.push(new deck.TextLayer({
+            id: 'plan-labels', data: tps, getText: function (d) { return d.label; },
+            getPosition: function (d) { return [d.position[0], d.position[1], z(d.position[2])]; },
+            getSize: 11, fontWeight: 700, getColor: [255, 255, 255],
+            fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+            updateTriggers: { getPosition: vertical }, parameters: ON_TOP
           }));
         }
         if (!hasTime) out.push(new deck.PathLayer({
@@ -864,7 +923,8 @@ SCRIPT = r"""
       }
 
       // ---- controls --------------------------------------------------------------------
-      var GROUNDS = styles.concat(['off']), VERTICALS = [1, 2, 4];
+      var GROUNDS = styles.concat(['off']);
+      var VERTICALS = offered.length ? offered : [1, 2, 4];
       function groundName(key) {
         return key === 'off' ? 'relief' : ((tiles[key] || {}).label || key);
       }
@@ -1014,6 +1074,9 @@ SCRIPT = r"""
       api.dispose = function () {
         pause();
         unwrap.forEach(function (w) { if (handle[w.name] === w.wrapper) handle[w.name] = w.original; });
+        handle.__mergedFilterHooks = (handle.__mergedFilterHooks || []).filter(function (h) {
+          return h !== filterHook;
+        });
         try { map.remove(); } catch (error) { /* a dead context can throw on the way out */ }
         view.remove();
       };
@@ -1038,15 +1101,47 @@ SCRIPT = r"""
         setTime(restore.cutoff);
       }
 
-      window.__mergedAll = window.__mergedAll || {};
-      window.__mergedAll[panel.querySelector('canvas.view3d').id] = {
+      // The canvas handle's airspace filter, followed: wrapped like the cursor calls, and
+      // unwrapped by `dispose` with them.
+      if (handle.setAirspaceFilter && !handle.setAirspaceFilter.__merged) {
+        var ownFilter = handle.setAirspaceFilter;
+        handle.setAirspaceFilter = function (fn) {
+          ownFilter.apply(handle, arguments);
+          (handle.__mergedFilterHooks || []).forEach(function (hook) { hook(fn); });
+        };
+        handle.setAirspaceFilter.__merged = true;
+      }
+      function filterHook(fn) { airspaceFilter = fn || null; refresh(); }
+      handle.__mergedFilterHooks = (handle.__mergedFilterHooks || []).concat([filterHook]);
+      // A click that is not a drag, as a place on the ground: what the planner drops a
+      // turnpoint with. MapLibre's own `click` already refuses a pointer that moved.
+      map.on('click', function (event) {
+        var at = [event.lngLat.lng, event.lngLat.lat];
+        clickers.forEach(function (fn) { fn(at, event.originalEvent); });
+      });
+
+      var entry = {
         map: map, setTime: setTime, setFrom: setFrom, cursor: function () { return cursor; },
         setBasemap: setBasemap, setVertical: setVertical,
+        setRoute: function (walk, points) {
+          route = walk || points ? { walk: walk || [], points: points || [] } : null;
+          refresh();
+        },
+        onClick: function (fn) { clickers.push(fn); },
+        airspaceShown: function () {
+          return airspaceOn ? boxes.filter(function (d) {
+            return !airspaceFilter || airspaceFilter(d.space);
+          }).length : 0;
+        },
         state: function () {
           return { basemap: basemap, vertical: vertical, labels: labels, airspace: airspaceOn,
                    bearing: map.getBearing(), sunMinute: sunMinute };
         }
       };
+      window.__mergedAll = window.__mergedAll || {};
+      window.__mergedAll[panel.querySelector('canvas.view3d').id] = entry;
+      // For whatever else draws on this panel — the planner listens for it.
+      panel.dispatchEvent(new CustomEvent('merged-ready', { detail: entry }));
     }, function (error) {
       view.querySelector('.m3-status').textContent =
         'MapLibre could not be loaded (' + error.message + '). It needs a network; the ' +

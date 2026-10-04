@@ -43,6 +43,15 @@ CLASSES = [
 ]
 
 STYLE = """
+/* The renderer switch, for the standalone page — the report styles `.toggle` itself. */
+.airspace-article .renderer-host { position: relative; }
+.airspace-article .toggle { display:inline-flex; margin:0 0 8px; border:1px solid var(--rule);
+  border-radius:3px; overflow:hidden; }
+.airspace-article .toggle-button { font:inherit; font-size:11.5px; text-transform:uppercase;
+  letter-spacing:.08em; padding:5px 12px; background:none; border:0; border-radius:0;
+  color:var(--ink-3); cursor:pointer; }
+.airspace-article .toggle-button + .toggle-button { border-left:1px solid var(--rule); }
+.airspace-article .toggle-button.is-on { background:var(--ink); color:var(--paper); }
 .asp-wrap { margin: 0 0 30px; }
 .asp-map { width: 100%; aspect-ratio: 3 / 2; background: var(--panel);
   border: 1px solid var(--rule); border-radius: 4px; touch-action: none;
@@ -896,6 +905,19 @@ SCRIPT3D = """
   });
 
   refilter();
+
+  // Open on the renderer the host asks for, and fall back to the canvas if MapLibre
+  // cannot be fetched — offline, or blocked — rather than leaving a panel that says so.
+  var host = panel.closest('.renderer-host');
+  var wanted = host && host.dataset.rendererDefault;
+  var button = wanted && host.querySelector('[data-renderer="' + wanted + '"]');
+  if (button && window.__mapLibs) {
+    button.click();
+    window.__mapLibs().catch(function () {
+      var canvasButton = host.querySelector('[data-renderer="canvas"]');
+      if (canvasButton) canvasButton.click();
+    });
+  }
   }
 })();
 """
@@ -1010,4 +1032,12 @@ def _map(airspaces, project, scene: dict | None, uid: str) -> str:
     # box is two coincident rings — the flat map with extra steps. x1 is still one press
     # away and the segmented control says which is on, so nothing here is hidden; what is
     # hidden at true scale is the entire point of the view.
-    return view3d.panel(scene, uid, verticals=(1, 5, 15), vertical=5)
+    from tracklog_viewer import render_map
+
+    # The flights' renderer switch, opening on the merged map (MapLibre's engine under
+    # the canvas's controls), which the planner draws on too. The canvas stays one press
+    # away, and is what the page falls back to when MapLibre cannot be fetched.
+    return ('<div class="renderer-host" data-renderer-default="merged">'
+            + render_map.switch_html()
+            + view3d.panel(scene, uid, verticals=(1, 5, 15), vertical=5)
+            + "</div>")

@@ -963,8 +963,19 @@ the font stays inlined because it is one request for a document's whole appearan
 **Queued, in no particular order (October 2026), not started:**
 
 - ~~**Planner and Airspace in one tab.**~~ **Done** — see "airspaces, in one paragraph".
-- **The planner on the merged 3D map** (`map3d.py`), the one the flights use, instead of
-  the canvas `view3d`.
+- ~~**The planner on the merged 3D map**~~ **Done.** The airspace map sits in the flights'
+  `renderer-host` with the three-way switch and opens on **merged**
+  (`data-renderer-default`), falling back to the canvas by itself when MapLibre cannot be
+  fetched — so the suite, which has no network, still runs the planner on the canvas.
+  `map3d` learned what the page needs: a scene with rings and no `airspaceToggle` draws
+  them always; it follows the canvas handle's airspace filter (`setAirspaceFilter` is
+  wrapped like the cursor calls, `handle.airspaceFilter()` gives the starting one); the
+  exaggerations and the opening one are the canvas panel's own (×1/5/15 here); it opens
+  on `view.focus` at the scene's pitch; and its entry in `__mergedAll` takes a route
+  (`setRoute`) and reports clicks (`onClick`), announced to the panel as `merged-ready`.
+  The planner hands its route to both maps and takes turnpoints from either. Checked by
+  hand over CDP with the network: merged at ×5 over Czechia, 745 boxes and 663 with the
+  aerodrome zones unticked, three clicks a scored triangle.
 - **Only the merged map.** Drop the canvas and plain MapLibre renderers and the switch,
   everywhere — once the merged view covers what the airspace and planner pages need from
   the canvas (their own controls, the flat-map fallback). ~~Fix first: the merged

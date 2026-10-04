@@ -73,7 +73,8 @@ STYLE = """
   border-color:var(--ink); }
 .plan-section { margin:18px 0 0; }
 .plan-section h2 { font-size:17px; margin:0 0 4px; }
-[data-planner][data-drawing="on"] canvas.view3d { cursor:crosshair; }
+[data-planner][data-drawing="on"] canvas.view3d,
+[data-planner][data-drawing="on"] .maplibregl-canvas-container.maplibregl-interactive { cursor:crosshair; }
 """
 
 
@@ -444,8 +445,35 @@ SCRIPT = """
                alt: handle.groundAt(point[0], point[1]) + 60, tow: false };
     });
     handle.redraw();
+    var merged = mergedEntry();
+    if (merged) merged.setRoute(walk, points);
     report();
     reportAirspace();
+  }
+
+  // ---- the merged map ------------------------------------------------------------------
+  //
+  // The page opens on the merged renderer (`map3d.py`), which draws over this same
+  // panel and takes its clicks. It gets the route from `redraw` and hands its clicks back
+  // here, so a turnpoint dropped on either map is one turnpoint, in one list.
+  function mergedEntry() {
+    return window.__mergedAll && window.__mergedAll[canvas.id];
+  }
+  function hookMerged(entry) {
+    if (!entry || entry.__planner) return;
+    entry.__planner = true;
+    entry.onClick(function (at) {
+      if (holder.dataset.drawing !== 'on') return;
+      addPoint(at);
+    });
+    entry.setRoute(course(), points);
+  }
+  panel.addEventListener('merged-ready', function (event) { hookMerged(event.detail); });
+  hookMerged(mergedEntry());
+
+  function addPoint(at) {
+    points.push([Math.round(at[0] * 100000) / 100000, Math.round(at[1] * 100000) / 100000]);
+    redraw();
   }
 
   function report() {
@@ -513,9 +541,7 @@ SCRIPT = """
     if (moved > 6) return;
     var point = handle.groundLonLat(event.clientX, event.clientY);
     if (!point) return;
-    points.push([Math.round(point[0] * 100000) / 100000,
-                 Math.round(point[1] * 100000) / 100000]);
-    redraw();
+    addPoint(point);
   });
 
   var drawButton = document.getElementById('plan-draw');
