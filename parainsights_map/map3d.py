@@ -21,7 +21,8 @@ STYLE = """
 .merged-view .ml-map:focus-visible { outline: 2px solid var(--climb); outline-offset: -2px; }
 .merged-view .m3-rose { position: absolute; top: 12px; right: 12px; z-index: 3;
   pointer-events: none; text-align: right; }
-.merged-view .m3-rose svg { display: block; margin-left: auto; }
+.merged-view .m3-rose svg { display: block; margin-left: auto; pointer-events: auto;
+  cursor: pointer; }
 .merged-view .m3-rose p { margin: 4px 0 0; font-size: 11px; line-height: 1.3; color: #fff;
   text-shadow: 0 0 3px rgba(12,14,18,0.95), 0 0 2px rgba(12,14,18,0.95); }
 .merged-view .m3-bottom { position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 3;
@@ -232,6 +233,8 @@ SCRIPT = r"""
     // A flight's map offers its airspace behind a switch; the airspace map *is* its
     // airspace, so a scene with rings and no switch draws them always.
     var hasAirspace = !!(scene.airspaceToggle && scene.airspaces && scene.airspaces.length);
+    // Offered but empty: the page has airspace, none of it under this flight.
+    var noAirspace = !!(scene.airspaceToggle && !hasAirspace);
     var alwaysAirspace = !!(!scene.airspaceToggle && scene.airspaces && scene.airspaces.length);
     // The exaggerations this panel offers, and the one it opens on, are the canvas
     // panel's own (`view3d.panel(verticals=…)`): ×1/2/4 under a flight, ×1/5/15 under a
@@ -303,7 +306,11 @@ SCRIPT = r"""
         (hasAirspace ?
           '<div class="view3d-seg view3d-airspace" role="group" aria-label="Airspace">' +
           '<button type="button" data-m3="airspace" aria-pressed="false"' +
-          ' aria-label="Draw the airspace over this flight">airspace</button></div>' : '') +
+          ' aria-label="Draw the airspace over this flight">airspace</button></div>' :
+         noAirspace ?
+          '<div class="view3d-seg view3d-airspace" role="group" aria-label="Airspace">' +
+          '<button type="button" data-m3="airspace" aria-pressed="false" disabled' +
+          ' title="No airspace data under this flight — the layer covers Czechia only" aria-label="No airspace data under this flight — the layer covers Czechia only">airspace</button></div>' : '') +
         '<div class="view3d-seg view3d-zoom" role="group" aria-label="Zoom">' +
           '<button type="button" data-m3="zoom-out" title="Zoom out" aria-label="Zoom out">&minus;</button>' +
           '<button type="button" data-m3="zoom-in" title="Zoom in" aria-label="Zoom in">+</button></div>' +
@@ -851,6 +858,13 @@ SCRIPT = r"""
         rose.querySelector('.m3-rose-text').innerHTML = text.join('<br>');
       }
       map.on('rotate', drawRose);
+      // A click on the rose turns the map north, as a compass on any map does; the tilt
+      // stays where it was.
+      rose.querySelector('svg').addEventListener('click', function () {
+        map.easeTo({ bearing: 0, duration: 500 });
+      });
+      rose.querySelector('svg').setAttribute('aria-label', 'Turn the map north');
+      rose.querySelector('svg').setAttribute('role', 'button');
       drawRose();
       var lastLight = null;
       function sunTo(minute) {

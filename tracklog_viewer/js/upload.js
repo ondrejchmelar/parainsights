@@ -61,7 +61,8 @@
   //
   // inputs:  { terrain, sceneTerrain, meteo (parsed), certificationTable, now }
   // options: { uid, hidden, label ('PILOT|SITE|GLIDER', empty fields keep the file's),
-  //            airspace, plan ({ payload, source } from a sidecar), format }
+  //            airspace, airspaceChecked (the page has airspace, so a flight with none
+  //            under it shows the switch disabled), plan ({ payload, source }), format }
   var SHAPE_NAMES = { fai: 'FAI triangle', flat: 'flat triangle', open: 'open distance' };
   function annotate(summary, label) {
     if (!label) return;
@@ -99,7 +100,7 @@
       meteo: inputs.meteo || null, route: route, terrain: inputs.terrain || null,
       sceneTerrain: inputs.sceneTerrain || null, uid: options.uid, hidden: !!options.hidden,
       flightPlan: done.plan, certificationTable: inputs.certificationTable || null,
-      now: inputs.now, airspace: options.airspace || null
+      now: inputs.now, airspace: options.airspace || null, airspaceChecked: !!options.airspaceChecked
     });
     var format = (options.format || '').toUpperCase();
     return {
@@ -176,7 +177,8 @@
       var made = compose(flight, name, {
         terrain: inputs[0], sceneTerrain: inputs[0], meteo: inputs[1],
         certificationTable: inputs[2], now: now
-      }, { uid: 'up' + (++counter), hidden: true, airspace: inputs[0] ? airspaceNear(inputs[0]) : null, format: /\.(kml|kmz)$/i.test(name || '') ? name.split('.').pop() : '' }, done);
+      }, { uid: 'up' + (++counter), hidden: true, airspace: inputs[0] ? airspaceNear(inputs[0]) : null,
+        airspaceChecked: !!pageAirspace(), format: /\.(kml|kmz)$/i.test(name || '') ? name.split('.').pop() : '' }, done);
       var holder = document.createElement('div');
       holder.innerHTML = made.html;
       return {

@@ -120,6 +120,7 @@ def main(argv: list[str] | None = None) -> int:
             "meteo": report["weather"], "when": report["when"],
             "options": {"uid": f"f{index}", "hidden": index > 0, "label": report["label"],
                         "airspace": report.get("airspace") or None,
+                        "airspaceChecked": args.airspace is not None and ground is not None,
                         "format": Path(report["name"]).suffix.lstrip(".").upper(),
                         "plan": report["plan"]},
         })

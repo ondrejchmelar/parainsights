@@ -163,8 +163,11 @@ button, and the report grows by the airspace it can actually draw. It needs `--a
 *and* `--terrain`. **An uploaded flight gets the same switch** from the rings the page
 already carries for its Planner view (`js/upload.js`, `airspaceNear`), cut to the box its
 ground was fetched for. The data is Czech only, so a flight elsewhere — Col Rodella,
-Hunza — has no switch; OpenAIP's free per-country exports now sit in a requester-pays
-bucket and its API needs a key.
+Hunza — gets the switch **disabled**, titled with why (`airspaceChecked` in the job
+options, `noAirspace` in the merged bar): a page that has airspace shows the control on
+every flight, because a button present on one flight and missing on the next reads as a
+fault. OpenAIP's free per-country exports now sit in a requester-pays bucket and its API
+needs a key.
 
 ## A network is assumed
 
@@ -461,7 +464,8 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   every graph in its output is a broken image. Don't reintroduce a network dependency
   into a chart.
 - **Satellite imagery is the default basemap**, composited from Esri World Imagery plus
-  its `World_Boundaries_and_Places` label layer — both keyless. A photograph tells a pilot
+  its `Canvas/World_Dark_Gray_Reference` label layer (place names and no border lines;
+  `World_Boundaries_and_Places` drew every district border over the photo) — both keyless. A photograph tells a pilot
   what the ground under a climb was; a road map does not. Attribution to Esri/Maxar is
   required and is rendered on the map and in the caption.
 - **Every basemap style is fetched at view time.** When stitching from tiles, give each
@@ -595,7 +599,10 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   **The wind arrow points opposite `wind.from`** — the reported bearing is where the air
   comes from, the arrow shows where it is going, and drawing it along the bearing is the
   classic 180° error that still looks like a perfectly good arrow. `handle.rose()` exposes
-  both angles so a test can fail on it instead of a screenshot not doing so.
+  both angles so a test can fail on it instead of a screenshot not doing so. **A click on
+  the rose turns the view north** (`orientNorth`, anchored on the fit like a button zoom),
+  and in the merged view on its SVG (`easeTo({bearing: 0})`); the planner ignores a click
+  there (`handle.overRose`) so it does not also drop a turnpoint.
 - **An uploaded track fetches its own DEM, and CORS is why it can.** `js/upload.js` asks
   for the box the CLI would (`TV.terrain.remoteFor`: 64 tiles, 120 000 nodes over up to
   480 columns) and the page's own `loadTerrain` fills it — mosaicking the terrarium tiles

@@ -17,7 +17,7 @@
     satellite: {
       label: 'Satellite',
       layers: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-               'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}'],
+               'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}'],
       attribution: 'Imagery © Esri, Maxar, Earthstar Geographics',
       max_zoom: 18,
       consistent_from: 12
@@ -97,8 +97,12 @@
       sun: sun.forFlight(f),
       wind: a.wind ? { ms: R(a.wind.speed, 1), from: R(a.wind.direction, 1), cardinal: a.wind.cardinal } : null
     };
-    if (options.airspace && Object.keys(options.airspace).length) {
+    if (options.airspace && (options.airspace.airspaces || []).length) {
       Object.assign(out, options.airspace, { airspaceToggle: true });
+    } else if (options.airspaceChecked) {
+      // The page has airspace, but none under this flight: the switch is still shown,
+      // disabled and saying why, rather than missing — a missing button explains nothing.
+      Object.assign(out, { airspaceToggle: true, airspaces: [] });
     }
     return out;
   }
@@ -130,9 +134,12 @@
         '<button type="button" data-view3d-act="labels-toggle" data-kind="climb" aria-pressed="false" aria-label="Label each climb with its rate and gain">climbs</button>' +
         '<button type="button" data-view3d-act="labels-toggle" data-kind="glide" aria-pressed="false" aria-label="Label each glide with its ratio and distance">glides</button></div>'
       : '';
+    var noAirspace = payload.airspaceToggle && !(payload.airspaces || []).length;
     var airspace = payload.airspaceToggle
       ? '<div class="view3d-seg view3d-airspace" role="group" aria-label="Airspace">' +
-        '<button type="button" data-view3d-act="airspace-toggle" aria-pressed="false" aria-label="Draw the airspace over this flight">airspace</button></div>'
+        (noAirspace
+          ? '<button type="button" data-view3d-act="airspace-toggle" aria-pressed="false" disabled title="No airspace data under this flight — the layer covers Czechia only" aria-label="No airspace data under this flight — the layer covers Czechia only">airspace</button></div>'
+          : '<button type="button" data-view3d-act="airspace-toggle" aria-pressed="false" aria-label="Draw the airspace over this flight">airspace</button></div>')
       : '';
     var airspaceName = payload.airspaceToggle ? '<div class="view3d-asp" hidden></div>' : '';
     return '\n    <div class="panel view3d-panel">\n' +

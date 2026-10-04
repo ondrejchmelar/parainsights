@@ -557,6 +557,8 @@ SCRIPT = """
   canvas.addEventListener('pointerup', function (event) {
     if (!down || down.id !== event.pointerId) { down = null; return; }
     if (holder.dataset.drawing !== 'on') { down = null; return; }
+    // The rose turns the view north; it is not a place on the ground.
+    if (handle.overRose && handle.overRose(event.clientX, event.clientY)) { down = null; return; }
     var moved = Math.hypot(event.clientX - down.x, event.clientY - down.y);
     down = null;
     if (moved > 6) return;

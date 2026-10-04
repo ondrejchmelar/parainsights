@@ -18,8 +18,11 @@ TILE_SOURCES = {
         "layers": [
             "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery"
             "/MapServer/tile/{z}/{y}/{x}",
-            "https://server.arcgisonline.com/ArcGIS/rest/services/Reference"
-            "/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+            # Place names only. `Reference/World_Boundaries_and_Places` carried them with
+            # every country, region and district border drawn in white over the photo;
+            # this one is the names alone, light grey, and no lines.
+            "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas"
+            "/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}",
         ],
         "attribution": "Imagery © Esri, Maxar, Earthstar Geographics",
         "max_zoom": 18,
@@ -240,6 +243,7 @@ canvas.view3d { display: block; width: 100%; aspect-ratio: 21 / 9; cursor: grab;
   color: var(--ink-2); background: color-mix(in srgb, var(--panel) 78%, transparent);
   padding: 3px 7px; border-radius: 2px; max-width: 46%; text-align: right; }
 canvas.view3d.is-dragging { cursor: grabbing; }
+canvas.view3d.is-over-rose { cursor: pointer; }
 /* The airspace label. `pointer-events: none` or it would sit under the cursor, take the
    next pointermove for itself and flicker the label it is showing. Positioned by the
    widget in the panel's own coordinates, which is why the panel is the containing block
@@ -2368,6 +2372,36 @@ function initView3d(root, cursorTrack, preset) {
   // against the convention it inverts: `from` is where the wind comes from, and drawing
   // along it rather than opposite it is the classic 180° error, invisible on any single
   // screenshot because a wrong arrow is still an arrow.
+  function overRose(clientX, clientY) {
+    if (!roseAt) return false;
+    var box = canvas.getBoundingClientRect();
+    var x = (clientX - box.left) / box.width * W, y = (clientY - box.top) / box.height * H;
+    return Math.hypot(x - roseAt.x, y - roseAt.y) <= roseAt.r;
+  }
+  // North up, turning about the ground in the middle of the view so the reader keeps
+  // what they were looking at; the tilt is left as it was.
+  function orientNorth() {
+    var box = canvas.getBoundingClientRect();
+    var mx = box.left + box.width / 2, my = box.top + box.height * 0.58;
+    var ground = groundUnder(mx, my);
+    view.yaw = 0;
+    holdGround(ground, mx, my);
+    draw();
+  }
+  var roseDown = null;
+  canvas.addEventListener('pointerdown', function (event) {
+    roseDown = overRose(event.clientX, event.clientY) ? { x: event.clientX, y: event.clientY } : null;
+  });
+  canvas.addEventListener('pointerup', function (event) {
+    var down = roseDown;
+    roseDown = null;
+    if (!down || Math.hypot(event.clientX - down.x, event.clientY - down.y) > 6) return;
+    if (overRose(event.clientX, event.clientY)) orientNorth();
+  });
+  canvas.addEventListener('pointermove', function (event) {
+    if (!event.buttons) canvas.classList.toggle('is-over-rose', overRose(event.clientX, event.clientY));
+  });
+
   function roseAngles() {
     var wind = scene.wind || null;
     var sunNow = sunTrack ? sunAt(sunMinute) : null;
@@ -2380,9 +2414,13 @@ function initView3d(root, cursorTrack, preset) {
     };
   }
 
+  // Where the rose was last drawn, in backing-store pixels, so a click on it can be
+  // recognised: it turns the view north (`orientNorth`), as a compass on any map does.
+  var roseAt = null;
   function drawRose() {
     var wind = scene.wind || null;
     var sunNow = sunTrack ? sunAt(sunMinute) : null;
+    roseAt = null;
     if (!wind && !sunNow) return;
     // Top right. `render_map.py` already puts navigation top-right by MapLibre's own
     // default, and two viewers of the same flights should not disagree about where north
@@ -2404,6 +2442,7 @@ function initView3d(root, cursorTrack, preset) {
     var textBlock = lines.length * lineHeight;
     var cx = W - (16 * scale + radius);
     var cy = 14 * scale + radius;
+    roseAt = { x: cx, y: cy, r: radius };
 
     ctx.save();
     ctx.font = (11 * scale).toFixed(0) + 'px ui-sans-serif, sans-serif';
@@ -2987,7 +3026,7 @@ function initView3d(root, cursorTrack, preset) {
       // Only where the reader was offered the switch. Without this, `a` on the airspace
       // map — whose subject is the layer, and which has no button — would turn the whole
       // map off with nothing on screen saying it had.
-      if (!scene.airspaceToggle) return;
+      if (!scene.airspaceToggle || !(scene.airspaces || []).length) return;
       airspaceOn = !airspaceOn;
       if (!airspaceOn) hideAirspaceName();
       root.querySelectorAll('[data-view3d-act="airspace-toggle"]').forEach(
@@ -3329,6 +3368,10 @@ function initView3d(root, cursorTrack, preset) {
     // this widget only knows how to draw rings and say which one a point is inside.
     setAirspaceFilter: function (fn) { airspaceFilter = fn || null; draw(); },
     airspaceFilter: function () { return airspaceFilter; },
+    // The rose: whether a point is on it (the planner must not drop a turnpoint there),
+    // and the north-up turn a click on it makes.
+    overRose: function (clientX, clientY) { return overRose(clientX, clientY); },
+    orientNorth: function () { orientNorth(); },
     scene: function () { return scene; },
     // Exposed for tests: whether the current camera would ask for a sharper mosaic and
     // for what. The fetch itself needs a network and a tile server; the decision does

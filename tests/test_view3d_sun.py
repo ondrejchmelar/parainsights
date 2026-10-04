@@ -197,3 +197,36 @@ def test_the_payload_carries_a_day_the_page_can_interpolate():
     assert set(SUN["track"]) == {"step", "az", "el"}
     assert len(SUN["track"]["az"]) == 24 * 60 // SUN["track"]["step"]
     assert len(json.dumps(SUN, separators=(",", ":"))) < 2500
+
+
+_ROSE_CLICK = """
+var h = window.__handle, canvas = document.querySelector('canvas.view3d');
+function click(x, y) {
+  ['pointerdown', 'pointerup'].forEach(function (type) {
+    canvas.dispatchEvent(new PointerEvent(type, { pointerId: 4, clientX: x, clientY: y,
+      bubbles: true, pointerType: 'mouse', isPrimary: true, button: 0,
+      buttons: type === 'pointerup' ? 0 : 1 }));
+  });
+}
+var box = canvas.getBoundingClientRect(), W = canvas.width;
+var scale = Math.max(0.75, Math.min(1.6, W / 1280)), radius = 30 * scale;
+var rx = box.left + (W - (16 * scale + radius)) / W * box.width;
+var ry = box.top + (14 * scale + radius) / canvas.height * box.height;
+h.view.yaw = 1.2; h.redraw();
+click(box.left + box.width / 2, box.top + box.height / 2);   // not on the rose
+var elsewhere = h.view.yaw;
+click(rx, ry);
+return { elsewhere: elsewhere, yaw: h.view.yaw, north: h.rose().north,
+         over: h.overRose(rx, ry) };
+"""
+
+
+@needs_chrome
+def test_a_click_on_the_rose_turns_the_view_north():
+    """As a compass on any map: a click on the rose puts north at the top, and a click
+    anywhere else on the map does not."""
+    answer = _probe(_scene(sun=SUN, wind=WIND, cursor=CURSOR), _ROSE_CLICK)
+    assert answer["over"] is True
+    assert answer["elsewhere"] == pytest.approx(1.2)
+    assert answer["yaw"] == pytest.approx(0.0, abs=1e-9)
+    assert wrapped(answer["north"]) == pytest.approx(-90, abs=0.5)
