@@ -50,10 +50,13 @@ jobs:
       - run: apt-get update && apt-get install -y --no-install-recommends nodejs && node --version
       - run: uv sync --locked --extra dev
       - run: uv run python --version
+      # Node is required here, Chrome is not: the browser tests are the next job's.
       # `-c pyproject.toml` matters: pytest otherwise walks up and adopts an enclosing
       # project's config. -rs so skips are named in the log. A silently skipped test is
       # a test you think you have.
       - run: uv run pytest -c pyproject.toml -rs
+        env:
+          PARAINSIGHTS_REQUIRE: node
 
   # Every test that drives a real browser — the `tests` job above skips them all for want
   # of one. Among them is the entire regression suite for the WebGL renderer: no folded
@@ -67,18 +70,18 @@ jobs:
   # for on PATH. Software rendering is forced in the test flags, so no GPU is needed.
   browser-tests:
     runs-on: ubuntu-latest
-    # Not yet proven on this runner, and a browser job that is flaky on its first day
-    # must not be what stops the site deploying — the first run here failed
-    # `test_zooming_in_fetches_finer_ground_and_stands_on_it`, a fetch timed against
-    # virtual time, which passes locally. Flip this off once it has gone green a few
-    # times — a permanently-allowed-to-fail test job is decoration.
-    continue-on-error: true
+    # Blocking: it ran allowed-to-fail until it had gone green on every one of the last
+    # ten pushes (October 2026), and a permanently-allowed-to-fail job is decoration.
+    # PARAINSIGHTS_REQUIRE makes a missing Chrome or Node an error rather than a run of
+    # skips that looks green.
+    env:
+      PARAINSIGHTS_REQUIRE: node,chrome
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-      - run: google-chrome --version
+      - run: google-chrome --version && node --version
       - run: uv sync --locked --extra dev
       - run: uv run pytest -c pyproject.toml -rs
 
@@ -98,7 +101,7 @@ jobs:
   # them means three quarters of the site can never be stale, and the two that need a
   # network fail the job rather than publishing yesterday's copy if a source is down.
   build:
-    needs: tests
+    needs: [tests, browser-tests]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
