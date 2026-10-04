@@ -6592,10 +6592,13 @@ window.__view3dBackend = function (host) {
           }, function () { return null; });   // a missing child is a hole, not a failure
         })(i, j));
       }
+      // Handed over as an ImageBitmap, which MapLibre takes from a protocol as it is. It
+      // went through `toBlob('image/jpeg')` and back, an encode on the main thread and a
+      // decode after it for every stitched tile: the imagery arrived in five seconds and
+      // took thirty to appear, a patch at a time.
       return Promise.all(jobs).then(function () {
-        return new Promise(function (resolve) { canvas.toBlob(resolve, 'image/jpeg', 0.92); });
-      }).then(function (blob) { return blob.arrayBuffer(); })
-        .then(function (data) { return { data: data }; });
+        return createImageBitmap(canvas);
+      }).then(function (bitmap) { return { data: bitmap }; });
     });
   }
 
