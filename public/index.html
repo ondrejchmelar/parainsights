@@ -7030,9 +7030,41 @@ window.__view3dBackend = function (host) {
       // The canvas view's mouse: a left drag with any modifier — shift, ctrl, alt or meta —
       // rotates and tilts, as a right drag does. MapLibre only knows ctrl and the right
       // button, and gives shift-drag to a box zoom the canvas never had.
+      //
+      // And it turns about the ground that was grabbed, as the canvas does
+      // (`pickAnchor`/`holdGround` in view3d.py), not about the middle of the map: the
+      // point under the pointer is found on the terrain at pointerdown, and after every
+      // step the map is panned so that point is back under where it was grabbed. The
+      // pivot is clamped into the middle half of the canvas for the canvas's reason — a
+      // pivot at the edge puts the whole view on a long lever.
       map.boxZoom.disable();
       (function () {
-        var surface = map.getCanvasContainer(), last = null;
+        var surface = map.getCanvasContainer(), last = null, pivot = null;
+        var ANCHOR_INSET = 0.25;
+        function pickPivot(event) {
+          var box = surface.getBoundingClientRect();
+          var x = Math.min(Math.max(event.clientX - box.left, box.width * ANCHOR_INSET),
+                           box.width * (1 - ANCHOR_INSET));
+          var y = Math.min(Math.max(event.clientY - box.top, box.height * ANCHOR_INSET),
+                           box.height * (1 - ANCHOR_INSET));
+          try {
+            var ground = map.unproject([x, y]);
+            return ground ? { point: [x, y], ground: ground } : null;
+          } catch (e) { return null; }
+        }
+        function holdPivot() {
+          if (!pivot) return;
+          // A few passes: over terrain the centre's own height moves with the pan, so one
+          // correction lands near the point rather than on it.
+          for (var pass = 0; pass < 4; pass++) {
+            var now = map.project(pivot.ground);
+            if (!isFinite(now.x) || !isFinite(now.y)) return;
+            var dx = now.x - pivot.point[0], dy = now.y - pivot.point[1];
+            if (Math.abs(dx) < 0.25 && Math.abs(dy) < 0.25) return;
+            map.panBy([dx, dy], { animate: false });
+          }
+        }
+        api.pivot = function () { return pivot; };
         function modified(event) {
           return event.button === 0 && (event.shiftKey || event.altKey || event.metaKey);
         }
@@ -7042,7 +7074,8 @@ window.__view3dBackend = function (host) {
           event.preventDefault();
           event.stopImmediatePropagation();
           last = { x: event.clientX, y: event.clientY };
-          surface.setPointerCapture(event.pointerId);
+          pivot = pickPivot(event);
+          try { surface.setPointerCapture(event.pointerId); } catch (e) { /* synthetic */ }
         }, true);
         surface.addEventListener('pointermove', function (event) {
           if (!last) return;
@@ -7050,11 +7083,13 @@ window.__view3dBackend = function (host) {
           // MapLibre's own right-drag rates, so the two gestures turn the view alike.
           map.jumpTo({ bearing: map.getBearing() + (event.clientX - last.x) * 0.8,
                        pitch: map.getPitch() - (event.clientY - last.y) * 0.5 });
+          holdPivot();
           last = { x: event.clientX, y: event.clientY };
         }, true);
         function end(event) {
           if (!last) return;
           last = null;
+          pivot = null;
           event.stopImmediatePropagation();
         }
         surface.addEventListener('pointerup', end, true);

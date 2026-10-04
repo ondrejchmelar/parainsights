@@ -967,11 +967,13 @@ the font stays inlined because it is one request for a document's whole appearan
   the canvas `view3d`.
 - **Only the merged map.** Drop the canvas and plain MapLibre renderers and the switch,
   everywhere — once the merged view covers what the airspace and planner pages need from
-  the canvas (their own controls, the flat-map fallback). **Fix first:** on desktop a
-  shift/alt/meta left-drag in the merged view turns about the centre of the map, where
-  the canvas turns about the point grabbed (`pickAnchor`/`holdGround` in `view3d.py`);
-  touch is fine. The merged drag handler (`map3d.py`, the modified-drag block) needs to
-  pivot on the ground under the pointer.
+  the canvas (their own controls, the flat-map fallback). ~~Fix first: the merged
+  view's shift-drag turned about the centre.~~ **Fixed**: the modified-drag block in
+  `map3d.py` unprojects the ground under the pointer (clamped into the middle half, as
+  `pickAnchor` does) and pans it back under the pointer after every step, in up to four
+  passes because over terrain the centre's height moves with the pan. Measured by hand
+  over CDP on the Col Rodella flight, a 64° turn and 15° tilt: the grabbed ground moved
+  **944 px** before, **0.6 px** after. Not in the suite — it needs MapLibre from a CDN.
 - **An airgram on the meteo page**: wind over time and altitude for the chosen takeoff.
 - **Every feature for an uploaded track — in progress.** The bundled flights are a
   showcase; uploads are the product and get a reduced analysis (`quicklook.py`). The
