@@ -137,6 +137,16 @@ class TestTheDocument:
     def test_the_page_says_what_it_needs_where_the_chart_would_be(self, flight):
         assert "needs JavaScript" in flight.html
 
+    def test_the_sparklines_ship_as_data_not_drawings(self, flight):
+        """Each climb row carries its climb-rate series; the bars are drawn in the page."""
+        assert 'class="spark"' not in flight.html
+        cells = re.findall(r'<td class="spark-cell" data-climb="([^"]*)"></td>', flight.html)
+        climbs = [s for s in flight.segments if s.phase == "thermal"]
+        assert len(cells) == len(climbs)
+        for cell, climb in zip(cells, climbs):
+            values = [float(v) for v in cell.split(",")]
+            assert len(values) == climb.stop - climb.start, "one value a fix, not a sample"
+
 
 _PROBE = """
 <pre id="probe-out"></pre>
@@ -268,6 +278,22 @@ class TestThePageDrawsThem:
         assert answer["tip"] is True, "the tooltip did not open on the redrawn chart"
         assert answer["on"] is True
         assert answer["cx"] > 100, "the cursor dot never moved off the left edge"
+
+    def test_every_climb_gets_a_sparkline_drawn_in_the_page(self, flight):
+        answer = _probe(flight, """
+        var cells = document.querySelectorAll('td.spark-cell');
+        return { cells: cells.length,
+                 drawn: document.querySelectorAll('td.spark-cell svg.spark').length,
+                 bars: Array.prototype.map.call(cells, function (c) {
+                   return c.querySelectorAll('rect').length; }),
+                 coloured: Array.prototype.every.call(
+                   document.querySelectorAll('svg.spark rect'),
+                   function (r) { return !!r.getAttribute('fill'); }) };
+        """)
+        assert answer["cells"] >= 1
+        assert answer["drawn"] == answer["cells"]
+        assert all(0 < bars <= 22 for bars in answer["bars"])
+        assert answer["coloured"]
 
     def test_the_top_view_keeps_its_furniture(self, flight):
         answer = _probe(flight, """

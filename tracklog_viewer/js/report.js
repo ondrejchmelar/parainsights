@@ -29,6 +29,12 @@
   function spaced(value) { return fmt(value, 0, { thousands: ' ' }); }
   // str() of a Python float: an integral value keeps its ".0".
   function pyFloat(value) { return Number.isInteger(value) ? value.toFixed(1) : String(value); }
+  // The climb rate through one climb, every fix, to a tenth of a m/s: what the row's
+  // sparkline is drawn from in the page (`charts_client.SCRIPT`, `sparks`). The data, not
+  // the drawing — the bars are bucketed and coloured where they are shown.
+  function sparkSeries(series, start, stop) {
+    return series.climb.slice(start, stop).map(function (v) { return String(Math.round(v * 10) / 10); }).join(',');
+  }
   function thermals(a) { return a.segments.filter(function (s) { return s.phase === 'thermal'; }); }
   function glides(a) { return a.segments.filter(function (s) { return s.phase === 'glide'; }); }
 
@@ -163,7 +169,7 @@
         '<td class="circling-detail">' + turns + '</td><td class="circling-detail">' + perTurn + '</td>' +
         '<td class="circling-detail">' + direction + '</td><td class="circling-detail">' + reversals + '</td>' +
         '<td class="circling-detail">' + circle + '</td><td class="circling-detail">' + radius + '</td>' +
-        '<td class="spark-cell">' + Ch.climbTrend(a.series, seg.start, seg.stop) + '</td></tr>');
+        '<td class="spark-cell" data-climb="' + sparkSeries(a.series, seg.start, seg.stop) + '"></td></tr>');
     });
     return rows.join('');
   }

@@ -977,6 +977,115 @@ the font stays inlined because it is one request for a document's whole appearan
   flight, which is why the report renders at build time rather than on arrival; and the
   timezone is tz-lookup, which gives timezonefinder's clock at all 136 sample take-offs.
 
+Written up with a plan in `docs/plan.md`:
+
+- ~~**Move some charts to the client.**~~ **Done, for the two that were worth it.** The
+  side view and the top view are drawn in the page by `charts_client.py`; the document
+  carries a payload instead of the SVG. Measured on a real 3 h 39 flight, the whole
+  report goes **618 KB → 482 KB** — and on the published three-flight document it takes
+  out nine profile SVGs (577 KB) and three plan views (153 KB), because the axis toggle
+  used to ship all three modes and hide two.
+
+  | | count | bytes | share of 2.97 MB |
+  |---|---|---|---|
+  | `chart` SVGs, side view (3 modes × 3 flights) | 9 | 577 KB | 19% |
+  | `chart` SVGs, top view | 3 | 153 KB | 5% |
+  | sparklines | 104 | 176 KB | 6% |
+  | L/D bars | 119 | 16 KB | 1% |
+
+  Three rules made it a renderer rather than a second design. **The browser builds the
+  same SVG** — same elements in the same order, same classes, same `data-` attributes —
+  so the linked cursor, the tooltip, the band highlight, "show me" and both themes go on
+  working and the CSS is untouched; a browser test holds the DOM to that shape. **One sample, shared**: the trace is drawn through
+  the very indices the cursor is indexed by, which is also why the payload is small —
+  `_cursor_data` was already shipping altitude, climb and time at those indices, so the
+  chart payload adds only distance flown, distance from launch and the plan-view metres.
+  **Nothing is recomputed that the article already knows**: the clock labels for the time
+  axis ship as data, worked out once in the flight's own timezone.
+  Two consequences worth knowing. The axis toggle **redraws** instead of unhiding, so
+  `initFlight` had to gain `root.__relinkCharts` — the cursor binds to the SVG that was
+  there when it ran, and a replaced one is a chart the cursor cannot drive, which looks
+  exactly like the cursor being broken. And the hosts reserve their height with
+  `aspect-ratio`, because a chart landing 420 px tall into a 0 px box moves everything
+  under it.
+
+- ~~**The sparklines.**~~ **Done (October 2026), drawn in the page too.** The climbs
+  table's "over time" column, one per climb: the climb rate from entry to exit in 22
+  bars on the climb ramp. The article carries each climb's series as data
+  (`data-climb`, every fix, to 0.1 m/s, written by `js/report.js`) and `charts_client`
+  draws the bars. Not from the cursor sample, which is what the side view uses: it is a
+  point every 14-45 s on the showcase flights, against 22 bars across a climb of a few
+  minutes. On the published page the data is 122 KB where the drawings were about
+  193 KB, 71 KB smaller in all.
+
+Both `docs/ux-review.md` and `docs/analysis-plan.md` are now **implemented** — every phase
+of each. What they describe is what the code does, so read them for the reasoning and this
+section for what is left.
+
+- **The debrief.** A verdict strip above the 3D view and 3–5 finding cards under it, ranked
+  by cost measured against the flight's own budget. Three rules live in code, not in
+  review: no finding is an imperative (a test greps for "should have"), every finding
+  carries a cost in metres or minutes or it does not ship, and a finding whose data is
+  missing returns `None` rather than an empty card. *Show me* drives the linked cursor.
+- **The corrections.** The `other` slice is decomposed three ways and never published as a
+  loss — on the reference flight it nets +385 m.
+- **The air-mass frame, the DEM findings, the flight plan.** All landed (the archive did
+  too, and went with the Python analysis);
+  see the module table. Two of them are deliberately *not* debrief cards — a wind-corrected
+  glide ratio and a lit slope are context, not costs — so they sit beside the sections they
+  describe. That is the "no cost, no card" rule doing its job rather than being worked
+  around.
+
+Still wanted:
+
+- ~~Calibrate `THRESHOLDS` against a real archive.~~ **Done** — see the known gaps below
+  and `docs/analysis-plan.md`. Three thresholds that need a DEM, a sounding or a scored
+  triangle per flight remain uncalibrated.
+- ~~The glider's EN class, beside the glider name.~~ **Done**, from two registers,
+  because neither is complete: the **DHV Geräteportal** (LTF *and* EN, back to the
+  1980s, but its newest Ozone is a 2018 Buzz Z6 — Ozone stopped seeking a German
+  approval) and **Air Turquoise**'s report list (the test house that runs most EN 926-2
+  flight testing, so it has the current wings, but only the ones it tested). 6 240 rows
+  in `gliders.py`, generated with `python -m tracklog_viewer.certification --refresh`,
+  every one carrying the register and the reference it can be checked under. The page
+  reads `gliders.json`, every answer precomputed from these rules by
+  `certification.compact()`.
+  **The matching is built to refuse.** `lookup` answers only when the maker and the
+  model agree and *every certified size of that model carries the same class* — so
+  Advance's Sigma 10, which is D in 21 and C above it, gets no chip at all rather than
+  a class the pilot might not have been flying under. A header that names a maker never
+  falls through to another maker's wing of the same name (Sky and Edel both make an
+  Apollo). There is no fuzzy match: "Rush 6" against "Rush 5" is one character and a
+  whole class of wing. On the 19 distinct wings in the sample archive it answers 13 and
+  says nothing about 6 — two of those are genuinely not in either register, one is a
+  logger writing `NKN`, and one is the Sigma 10 refusing on principle.
+  **LTF and EN are never translated into each other.** LTF 1-2 is *about* EN B and every
+  pilot knows it, but "about" is not a certification, so a wing in the DHV register under
+  1-2 and in Air Turquoise's under B resolves to the EN row, and an LTF-only wing prints
+  "LTF 1-2". The *Klassenzusatz* — a class granted only with a particular harness —
+  travels with the class, because dropping it silently widens someone else's approval.
+- **Convergence as a third climb class.** `insolation.sources` labels ridge and thermal
+  and deliberately stops there; the Python docstring at `ada5e5b` says why one tracklog
+  cannot support the third.
+- ~~The model wind profile behind the sounded wind, for a page built without
+  `--meteo`.~~ **Done.** The wind chart (`js/charts.js`) publishes its axis mapping in
+  `data-wind-frame` and each point carries the speed, altitude and direction it was
+  placed from; `plotModelWind` in `render_html.SCRIPT` draws the profile the view-time
+  fetch returned into the `<g class="model">` the article leaves empty. `__fetchMeteo` takes
+  `{profile: true}` and adds the pressure levels to the same request — off by default,
+  because an uploaded track has no chart to draw them in.
+  **It is a rescale, not a plot, and that is the whole of it.** The measured winds are
+  drift inside thermals and the model is the free air, so the model is routinely two or
+  three times the fastest thing the glider felt: clipping it to the chart's existing
+  axis draws a straight line up the right-hand edge and calls it a profile. So the axis
+  grows and every measured point moves with it, which is what the point-level data
+  attributes are for. An untouched chart is left byte-identical. The legend and the
+  caption are rewritten too — the article wrote both for a report with no model in it, and a
+  caption explaining the absence of a line the reader can see is worse than no caption.
+  A flight older than the 60-day cutoff still gets nothing, because the ERA5 archive
+  returns nulls on every pressure level, and the page leaves the chart and its caption
+  alone rather than drawing an empty axis.
+
 ## Known gaps
 
 - ~~`debrief.THRESHOLDS` is provisional and has never been calibrated.~~ **Calibrated on

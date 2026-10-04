@@ -20,7 +20,6 @@
   var WIND_SPEED_STEP = 1, WIND_ALT_STEP = 250, WIND_MODEL_BAND = 400;
   var LD_STEPS = [[5.0, 'var(--ld-1)'], [7.0, 'var(--ld-2)'], [9.0, 'var(--ld-3)'], [12.0, 'var(--ld-4)'],
                   [Infinity, 'var(--ld-5)']];
-  var TREND_CEILING = 4.0, TREND_BARS = 22;
   var PROFILE = { width: 1080, height: 420, left: 56, right: 20, top: 20, bottom: 46 };
   var PLAN = { width: 1080, pad: 26 };
   var PROFILE_MODES = {
@@ -286,28 +285,6 @@
       '<rect x="0" y="0" width="' + f1(width * fraction) + '" height="' + height + '" rx="1" fill="' + ldColor(value) + '" /></svg>';
   }
 
-  function climbTrend(series, start, stop, width, height) {
-    width = width || 76; height = height || 18;
-    var values = series.climb.slice(start, stop);
-    if (values.length < 3) return '';
-    function sy(v) {
-      var clipped = Math.max(Math.min(v, TREND_CEILING), -TREND_CEILING);
-      return height / 2 - clipped / TREND_CEILING * (height / 2 - 1);
-    }
-    var buckets = Math.min(TREND_BARS, values.length);
-    var edges = np.linspace(0, values.length, buckets + 1).map(Math.trunc);
-    var gap = 0.8, barW = (width - gap * (buckets - 1)) / buckets, bars = [];
-    for (var p = 0; p < buckets; p++) {
-      var value = np.mean(values.slice(edges[p], Math.max(edges[p + 1], edges[p] + 1)));
-      var y = sy(value), top = Math.min(y, height / 2);
-      bars.push('<rect x="' + fmt(p * (barW + gap), 2) + '" y="' + fmt(top, 2) + '" width="' + fmt(barW, 2) + '" height="' +
-                fmt(Math.max(Math.abs(height / 2 - y), 0.7), 2) + '" fill="' + climbColor(value) + '" />');
-    }
-    return '<svg class="spark" viewBox="0 0 ' + width + ' ' + height + '" width="' + width + '" height="' + height + '" ' +
-      'role="img" aria-label="climb rate through the climb, entry on the left">' + bars.join('') +
-      '<line class="spark-zero" x1="0" y1="' + f1(height / 2) + '" x2="' + width + '" y2="' + f1(height / 2) + '" /></svg>';
-  }
-
   // ---- charts_client.payload ----------------------------------------------------------
   function searchsorted(a, v) {
     var lo = 0, hi = a.length;
@@ -372,6 +349,5 @@
   TV.charts = { CLIMB_RAMP: CLIMB_RAMP, PROFILE: PROFILE, PLAN: PLAN, escape: escape, climbColor: climbColor,
                 WIND_SPEED_STEP: WIND_SPEED_STEP, WIND_ALT_STEP: WIND_ALT_STEP, WIND_MODEL_BAND: WIND_MODEL_BAND,
                 ldColor: ldColor, planHeight: planHeight, budgetBar: budgetBar, windProfile: windProfile,
-                sounding: sounding, climbHistogram: climbHistogram, ldBar: ldBar, climbTrend: climbTrend,
-                payload: payload, samplePosition: samplePosition };
+                sounding: sounding, climbHistogram: climbHistogram, ldBar: ldBar, payload: payload, samplePosition: samplePosition };
 })(typeof window !== 'undefined' ? (window.TV = window.TV || {}) : (globalThis.TV = globalThis.TV || {}));

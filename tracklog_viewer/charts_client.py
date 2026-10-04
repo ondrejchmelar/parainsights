@@ -368,6 +368,47 @@ SCRIPT = r"""
       top.textContent = '';
       top.appendChild(plan(data, cursor));
     }
+    sparks(article, data.ramp);
+  }
+
+  // ---- the climbs table's sparklines -----------------------------------------------
+  //
+  // One per climb: the climb rate from entry (left) to exit, in TREND_BARS bars, each the
+  // mean over its slice, above the line climbing and below it sinking, on the climb ramp.
+  // Drawn here from the row's own series (`data-climb`, every fix, written by
+  // `js/report.js`) rather than shipped as SVG: 104 of them were 176 KB of the published
+  // page. The page's cursor sample is too coarse to draw them from — one point every
+  // 14-45 s on the showcase flights, against 22 bars across a climb of a few minutes.
+  var TREND_CEILING = 4.0, TREND_BARS = 22, SPARK_W = 76, SPARK_H = 18;
+  function spark(values, ramp) {
+    var svg = make('svg', { 'class': 'spark', viewBox: '0 0 ' + SPARK_W + ' ' + SPARK_H,
+      width: SPARK_W, height: SPARK_H, role: 'img',
+      'aria-label': 'climb rate through the climb, entry on the left' });
+    function sy(v) {
+      var clipped = Math.max(Math.min(v, TREND_CEILING), -TREND_CEILING);
+      return SPARK_H / 2 - clipped / TREND_CEILING * (SPARK_H / 2 - 1);
+    }
+    var buckets = Math.min(TREND_BARS, values.length);
+    var gap = 0.8, barW = (SPARK_W - gap * (buckets - 1)) / buckets;
+    for (var p = 0; p < buckets; p++) {
+      var from = Math.trunc(p * values.length / buckets);
+      var to = Math.max(Math.trunc((p + 1) * values.length / buckets), from + 1), sum = 0;
+      for (var k = from; k < to; k++) sum += values[k];
+      var value = sum / (to - from), y = sy(value), top = Math.min(y, SPARK_H / 2);
+      svg.appendChild(make('rect', { x: (p * (barW + gap)).toFixed(2), y: top.toFixed(2),
+        width: barW.toFixed(2), height: Math.max(Math.abs(SPARK_H / 2 - y), 0.7).toFixed(2),
+        fill: climbColour(ramp, value) }));
+    }
+    svg.appendChild(make('line', { 'class': 'spark-zero', x1: 0, y1: SPARK_H / 2,
+      x2: SPARK_W, y2: SPARK_H / 2 }));
+    return svg;
+  }
+  function sparks(article, ramp) {
+    article.querySelectorAll('td.spark-cell[data-climb]').forEach(function (cell) {
+      var values = cell.dataset.climb.split(',').map(Number).filter(function (v) { return isFinite(v); });
+      cell.textContent = '';
+      if (values.length >= 3) cell.appendChild(spark(values, ramp));
+    });
   }
 
   // The axis toggle stays where it was — in the report's own handler, with the button
