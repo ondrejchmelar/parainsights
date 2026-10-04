@@ -20,8 +20,8 @@ from pathlib import Path
 import parainsights_common as common
 
 from . import (airmass, certification, charts, charts_client, debrief, geo, insolation,
-               map3d, metrics, quicklook, render_map, terrain as terrain_module, view3d,
-               view3d_gl)
+               map3d, meteo as meteo_module, metrics, render_map, terrain as terrain_module,
+               upload_panel, view3d, view3d_gl)
 from numpy import asarray as np_asarray, median as np_median
 from .analysis import TURN_RESOLUTION_LIMIT, Analysis, Phase
 
@@ -756,12 +756,99 @@ footer { margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--rule);
 """
 
 SCRIPT = """
-// "The air that day" for bundled flights built without --meteo.
-//
-// Uses quicklook's request, which has fetched this in the browser for uploaded tracks all
-// along. Deferred until the page is idle so it never delays the first paint, and it fails
-// quietly-but-visibly inside a published artifact, where every host is blocked.
+// "The air that day" for a flight whose article was written without the day's weather —
+// a report built without --meteo, or an upload whose fetch failed. Deferred until the
+// page is idle so it never delays the first paint, and it fails quietly-but-visibly where
+// every host is blocked.
 (function () {
+  var PRESSURE_LEVELS = __PRESSURE_LEVELS__;
+  // `want.profile` adds the pressure levels — thirty more fields on the same one
+  // request, so a report can draw the model wind profile behind its own measurements.
+  // Off by default because an uploaded track has no chart to draw it in, and asking for
+  // data nobody displays is a bigger answer for nothing.
+  function fetchMeteo(a, want) {
+    want = want || {};
+    // Without a date there is no day to ask about, and asking anyway returns the weather
+    // of 1 January 1970 rather than an error.
+    if (!a.dated) return Promise.reject(new Error('the file carries no flight date'));
+    var midLat = a.lat[Math.floor(a.lat.length / 2)];
+    var midLon = a.lon[Math.floor(a.lon.length / 2)];
+    var when = new Date(a.epoch * 1000);
+    var day = when.toISOString().slice(0, 10);
+    var ageDays = (Date.now() / 1000 - a.epoch) / 86400;
+    var fields = 'temperature_2m,dew_point_2m,boundary_layer_height,' +
+      'wind_speed_850hPa,wind_direction_850hPa';
+    // m/s from the source. `meteo.py` asks for the same, so a wind is the same number
+    // whether the report baked it in or the page fetched it.
+    var units = '&wind_speed_unit=ms';
+    if (want.profile) {
+      PRESSURE_LEVELS.forEach(function (hpa) {
+        fields += ',wind_speed_' + hpa + 'hPa,wind_direction_' + hpa + 'hPa' +
+                  ',geopotential_height_' + hpa + 'hPa';
+      });
+    }
+    var url;
+    if (ageDays > 60) {
+      url = 'https://archive-api.open-meteo.com/v1/archive?latitude=' + midLat.toFixed(3) +
+        '&longitude=' + midLon.toFixed(3) + '&hourly=' + fields +
+        '&start_date=' + day + '&end_date=' + day + '&timezone=UTC' + units;
+    } else {
+      url = 'https://api.open-meteo.com/v1/forecast?latitude=' + midLat.toFixed(3) +
+        '&longitude=' + midLon.toFixed(3) + '&hourly=' + fields +
+        '&past_days=' + Math.min(Math.ceil(ageDays) + 1, 92) +
+        '&forecast_days=1&timezone=UTC' + units;
+    }
+    return fetch(url).then(function (response) {
+      if (!response.ok) throw new Error('weather service returned ' + response.status);
+      return response.json();
+    }).then(function (payload) {
+      var hourly = payload.hourly || {};
+      var times = hourly.time || [];
+      if (!times.length) throw new Error('no data for that date');
+      var target = when.toISOString().slice(0, 13);
+      var index = times.findIndex(function (stamp) { return stamp.slice(0, 13) === target; });
+      if (index < 0) index = Math.floor(times.length / 2);
+      var temperature = hourly.temperature_2m[index];
+      var dew = hourly.dew_point_2m[index];
+      if (temperature === null || temperature === undefined) {
+        throw new Error('no surface data for that hour');
+      }
+      // The profile, where it was asked for and where the answer has one. The ERA5
+      // archive returns nulls on every pressure level, so a flight older than the
+      // 60-day cutoff comes back with an empty list rather than a line of zeroes —
+      // which is the same distinction the 850 hPa tile makes between "calm" and
+      // "not known", and it is the one that matters on a windy day.
+      var levels = [];
+      if (want.profile) {
+        PRESSURE_LEVELS.forEach(function (hpa) {
+          var height = hourly['geopotential_height_' + hpa + 'hPa'];
+          var speed = hourly['wind_speed_' + hpa + 'hPa'];
+          var from = hourly['wind_direction_' + hpa + 'hPa'];
+          if (!height || !speed || !from) return;
+          if (height[index] == null || speed[index] == null || from[index] == null) return;
+          levels.push({ pressure: hpa, height: height[index],
+                        speed: speed[index], direction: from[index] });
+        });
+        levels.sort(function (p, q) { return p.height - q.height; });
+      }
+      return {
+        temperature: temperature, dew: dew,
+        cloudbase: (payload.elevation || 0) + 125 * Math.max(temperature - dew, 0),
+        blTop: hourly.boundary_layer_height && hourly.boundary_layer_height[index] !== null
+          ? (payload.elevation || 0) + hourly.boundary_layer_height[index] : null,
+        wind: hourly.wind_speed_850hPa ? hourly.wind_speed_850hPa[index] : 0,
+        windFrom: hourly.wind_direction_850hPa ? hourly.wind_direction_850hPa[index] : 0,
+        levels: levels
+      };
+    });
+  }
+
+  // Shared with the bundled flights. `render_html.py` has the same problem — a report
+  // built without --meteo has no sounding — and the fix is the same request, so it is
+  // exposed rather than written twice. One copy also means one place where the endpoint,
+  // the 60-day archive cutoff and the cloudbase formula live.
+  window.__fetchMeteo = fetchMeteo;
+
   function tile(key, value, sub) {
     return '<div class="stat"><span class="key">' + key + '</span>' +
       '<span class="stat-value">' + value + '</span>' +
@@ -981,6 +1068,8 @@ SCRIPT = """
       });
     });
   }
+  // Exposed for an article placed after load — an upload — which `run` has not seen.
+  window.__fetchAir = run;
   if (window.requestIdleCallback) requestIdleCallback(run, { timeout: 3000 });
   else setTimeout(run, 400);
 })();
@@ -1428,6 +1517,7 @@ var flightTabs = (function () {
 })();
 window.__flightTabs = flightTabs;
 """
+SCRIPT = SCRIPT.replace("__PRESSURE_LEVELS__", str(list(meteo_module.PRESSURE_LEVELS)))
 
 
 def _sample_indices(analysis: Analysis) -> list[int]:
@@ -1869,11 +1959,10 @@ def _air_fetch_section(analysis: Analysis, uid: str) -> str:
 
     A report built without `--meteo` used to have no weather at all, which is why the
     published site lost the section the moment it was rebuilt anywhere the API was not
-    reachable. But `quicklook.py` has fetched Open-Meteo in the browser for uploaded
-    tracks all along, so the bundled flights can use the same request: the data is public,
-    keyless and CORS-enabled, and the page already knows how to ask.
+    reachable. The page can make the request itself: the data is public, keyless and
+    CORS-enabled (`fetchMeteo` in `SCRIPT`).
 
-    No opt-in and no capability check, matching quicklook's own reasoning: inside a
+    No opt-in and no capability check: inside a
     published artifact every host is blocked and the request simply fails, and saying
     "unavailable" with the reason is more use to a reader than an unticked box.
     """
@@ -2801,7 +2890,7 @@ def _flights_view(tabs: str, bodies: list[str], extras: "list[Extra]") -> str:
     """The flight report, wrapped in a view section only when there is a view to switch
     to. Every report before extras existed had no wrapper, and adding one unconditionally
     would change the DOM of all of them to no purpose."""
-    inner = f'{tabs}\n{"".join(bodies)}\n{quicklook.panel()}'
+    inner = f'{tabs}\n{"".join(bodies)}\n{upload_panel.panel()}'
     if not extras:
         return inner
     return f'<section data-view="flights">\n{inner}\n</section>'
@@ -2889,7 +2978,7 @@ def _page(title: str, bodies: list[str], tabs: str = "", extras: "list[Extra]" =
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{charts.escape(title)}</title>
 <script>{common.THEME_BOOT}</script>
-<style>{_font_face()}{STYLE}{view3d.STYLE}{view3d_gl.STYLE}{render_map.SWITCH_STYLE}{map3d.STYLE}{quicklook.STYLE}{charts_client.STYLE}
+<style>{_font_face()}{STYLE}{view3d.STYLE}{view3d_gl.STYLE}{render_map.SWITCH_STYLE}{map3d.STYLE}{upload_panel.STYLE}{charts_client.STYLE}
 {VIEW_STYLE if extras else ""}{"".join(e.style for e in extras)}</style>
 <div class="wrap">
 {_view_nav(extras)}
@@ -2904,7 +2993,7 @@ def _page(title: str, bodies: list[str], tabs: str = "", extras: "list[Extra]" =
 {charts_client.SCRIPT}
 {SCRIPT}</script>
 <script>{js_bundle()}</script>
-<script>{quicklook.SCRIPT}</script>
+<script>{upload_panel.SCRIPT}</script>
 <script>{common.THEME_SCRIPT}</script>
 {"".join(f"<script>{e.script}</script>" for e in extras)}
 {f"<script>{VIEW_SCRIPT}</script>" if extras else ""}

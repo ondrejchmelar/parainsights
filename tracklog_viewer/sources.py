@@ -113,6 +113,18 @@ def _parse_bytes(body: bytes, name: str, *, filter_fixes: bool) -> Flight:
     raise SourceError(f"{name}: not recognised as IGC, KML or KMZ")
 
 
+def local_path(source: str | Path) -> Path:
+    """Where the bytes of a source are on disk: the file itself, or a URL's download in
+    the cache (`load` has fetched it by the time anyone asks)."""
+    text = str(source)
+    parsed = urllib.parse.urlparse(text)
+    if parsed.scheme in ("http", "https"):
+        _download(text)
+        key = hashlib.sha256(text.encode()).hexdigest()[:16]
+        return CACHE / f"{key}-{Path(parsed.path).name or 'download'}"
+    return Path(text).expanduser()
+
+
 def load(source: str | Path, *, filter_fixes: bool = True) -> Flight:
     """Load a flight from a path, a track URL, or raise for an XContest page."""
     text = str(source)

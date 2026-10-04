@@ -19,10 +19,14 @@ def test_the_switch_offers_all_three_renderers():
 
 
 def test_every_3d_panel_sits_in_a_renderer_host():
-    page = render_html._page("probe", [])
-    # The upload template is in every report; its panel must be switchable too.
-    template = page[page.index('id="ql-template"'):]
-    assert "renderer-host" in template and 'data-renderer="merged"' in template
+    # An upload's article is written by `js/report.js`, the same markup as a bundled
+    # flight's (`js_parity --report`); its panel must be switchable too.
+    from pathlib import Path
+
+    js = Path(render_html.__file__).parent / "js"
+    assert "renderer-host" in (js / "report.js").read_text()
+    assert 'data-renderer="merged"' in (js / "scene.js").read_text()
+    assert 'data-renderer="merged"' in render_map.switch_html()
 
 
 def test_the_page_carries_both_mounts_and_one_loader():

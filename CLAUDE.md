@@ -59,7 +59,7 @@ as the packages, so there is nothing to line up by hand:
 
 ```bash
 uv sync --extra dev          # creates .venv on the pinned Python, from uv.lock
-uv run pytest -c pyproject.toml     # 725 tests, ~6 min in parallel, no network
+uv run pytest -c pyproject.toml     # ~700 tests, ~6 min in parallel, no network
 ```
 
 `-c pyproject.toml` matters when the repo sits inside another project — pytest otherwise
@@ -286,8 +286,9 @@ geometry in a renderer, no rendering in the analysis.
 | `render_kmz.py` | Google Earth KMZ: LOD folders, balloons, animation, local charts |
 | `render_map.py` | Richer 3D map (MapLibre + deck.gl); needs network at view time. Also the report's renderer switch and the shared MapLibre loader |
 | `map3d.py` | The merged 3D map: MapLibre's engine under the canvas view's controls, rose, labels, airspace and shading |
-| `render_html.py` | The report; `quicklook.py` is its in-browser sibling |
-| `quicklook.py` | The upload panel. Hands a dropped track to `js/upload.js` for the full article; its own reduced analysis is the fallback if that throws |
+| `render_html.py` | The page around the articles, and the Python article renderer — the parity reference, and `--python-articles` |
+| `upload_panel.py` | The `+ your track` panel: hands a dropped file to `js/upload.js` and adds its tab. No analysis of its own |
+| `js_build.py` | Renders the report's articles with `js/upload.js`'s `compose` in Node at build time |
 | `js/` | The analysis and the per-flight article in JavaScript, inlined into the report (`render_html.js_bundle`); checked against the Python by `js_parity.py` |
 | `cli.py` | Argument handling and orchestration |
 
@@ -544,7 +545,7 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   few hundredths of flat-ground illumination and the overlay does nothing, which is how a
   draped road map came out looking like a flat sheet. `litMid`/`litSpread` are measured
   once from the grid and the shading is normalised against them (and skipped entirely when
-  the range is under 0.01, as on quicklook's flat plane).
+  the range is under 0.01, as on a flat plane).
 - **The KMZ is written on demand, not embedded.** `--earth-link` puts it in the report as
   a data URI behind "Open in Earth" (~170 KB, first flight only); by default `--kmz`
   writes a file. The report is for reading; a copy of the same flight in a second format
@@ -552,10 +553,10 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
 - **Uploading your own track is the first tab, not the last.** The bundled flights are a
   showcase. The reader's own file is the product, so the `+ your track` tab leads and a
   note under the tabs says the analysis happens in the page.
-- **Flights accumulate, and any of them can be removed.** An upload clones
-  `<template id="ql-template">` into a new article with its own uid and appends a tab;
-  every tab (bundled ones included) carries a `×` that removes both. Consequences worth
-  knowing: nothing inside that template may use an `id` — two flights would collide — the
+- **Flights accumulate, and any of them can be removed.** An upload becomes a new article
+  with its own uid (`up1`, `up2`…) and appends a tab; every tab (bundled ones included)
+  carries a `×` that removes both. Consequences worth knowing: nothing inside an article
+  may use a bare `id` — two flights would collide, so every id carries the uid — the
   tab strip is driven by **one delegated listener** on the strip rather than a listener per
   tab, because tabs appear at runtime, and removing an article must delete its entries from
   `window.__view3dAll`, each of which holds a DEM grid and a stitched image.
@@ -596,33 +597,19 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   comes from, the arrow shows where it is going, and drawing it along the bearing is the
   classic 180° error that still looks like a perfectly good arrow. `handle.rose()` exposes
   both angles so a test can fail on it instead of a screenshot not doing so.
-- **An uploaded track fetches its own DEM, and CORS is why it can.** `quicklook.py`
-  mosaics the terrarium tiles onto a canvas, reads the pixels back and decodes
-  `R * 256 + G + B / 256 - 32768` — the same formula as `terrain.py`, written twice
-  because there is no shared source between Python and the page. It works because the
-  tiles carry `Access-Control-Allow-Origin: *`; without that the canvas is tainted and
-  `getImageData` throws, which the code treats as *no DEM* rather than as an error, along
-  with every other way a tile can fail. Budgets match the CLI's: 64 tiles and 120 000
-  nodes over up to 480 columns. The 3D track is every fix, not the ~1 400-point sample
-  the charts and the cursor share — the view reads the two separately. Fetched **before** `initView3d`,
-  because re-running it on a live panel binds a second set of pointer handlers and every
-  gesture counts twice.
-- **An uploaded track carries the same linked cursor a built report does.** It carried
-  none: `initView3d` was handed a *null* cursor track, so the 3D map had nothing to
-  follow, and the climb and glide rows had no position on them, so clicking one did
-  nothing. "A lot of features don't work when I upload my own IGC" was mostly that one
-  argument. `linkCharts` in `quicklook.py` now drives the side view, the top view and
-  the map from one index, with the same behaviour as `render_html`: hover previews, a
-  click *pins*, leaving a chart returns to the pin rather than clearing, and a pin uses
-  `revealCursor` so the map pans until the marker is on screen.
-  Two things do not carry over and are not oversights. The tooltip and the band
-  highlight need the SVG charts; quicklook's are **canvas**, which is also why the
-  charts are drawn once into an offscreen canvas and blitted — the cursor repaints on
-  every pointer move, and re-running a five-hour track's segment loop at that rate is
-  what makes a canvas chart feel heavy. And the decimated sample has to be built **once**
-  and shared: `initView3d` indexes its cursor track by position in it while the charts
-  and the table rows point at fixes, so two independently-computed samples put the
-  marker on a different moment than the one under the pointer.
+- **An uploaded track fetches its own DEM, and CORS is why it can.** `js/upload.js` asks
+  for the box the CLI would (`TV.terrain.remoteFor`: 64 tiles, 120 000 nodes over up to
+  480 columns) and the page's own `loadTerrain` fills it — mosaicking the terrarium tiles
+  onto a canvas and decoding `R * 256 + G + B / 256 - 32768`, the formula in
+  `terrain.py`. It works because the tiles carry `Access-Control-Allow-Origin: *`;
+  without that the canvas is tainted, `getImageData` throws, and the upload goes on with
+  no ground — no 3D view and no clearance finding, as a report built without
+  `--terrain`, and the status line says so.
+- **An uploaded track is wired exactly as a built report's flight is**, because it *is*
+  one: the article comes from the same `compose`, and `TV.upload.place` runs
+  `__drawCharts` and `initFlight` on it, which bind the linked cursor, the tables, the 3D
+  view and the renderer switch. (The reduced `quicklook.py` needed its own `linkCharts`
+  for this, and its canvas charts had no tooltip or band highlight; both are gone.)
 - **Full screen is the real Fullscreen API, and the in-page maximise is its fallback.**
   It used to be the fallback only, because `requestFullscreen` fails two ways at once in
   an iframe without the permission — a synchronous throw with no user activation, and a
@@ -992,8 +979,8 @@ the font stays inlined because it is one request for a document's whole appearan
   500 m, the boundary layer over it and the page's hour as a dashed line; the pointer
   reads the wind at the hour and height under it through `sampleProfile`, so the readout
   and the shading interpolate the same way (components, not angles).
-- **Every feature for an uploaded track — in progress.** The bundled flights are a
-  showcase; uploads are the product and get a reduced analysis (`quicklook.py`). The
+- **Every feature for an uploaded track — done (steps 1-3).** The bundled flights are a
+  showcase; uploads are the product. The
   direction is JavaScript as the one runtime language for the viewer (not Pyodide):
   1. *The analysis, in `tracklog_viewer/js/`, checked against the Python.* **Done for the
      core**: `np.js` (numpy's behaviours, exactly: pairwise summation, `interp`,
@@ -1034,9 +1021,24 @@ the font stays inlined because it is one request for a document's whole appearan
      payloads by value): **63 of 63 identical**. `tests/test_upload.py` uploads a track
      into a page with no network and requires the full article. The CLI writes
      `gliders.json` beside the page; `public/gliders.json` is committed with it.
-     `quicklook.py`'s own analysis is now only the fallback for an exception in that path.
-  3. The showcase flights through the same path; then retire the Python analysis and
-     `quicklook.py`.
+  3. *The showcase flights through the same path.* **Done**: `cli --html` renders every
+     article with `TV.upload.compose` — the function an upload goes through in the page —
+     in Node at build time (`js_build.py`, `js/build_runner.js`), from what the CLI
+     fetched: the ground with its heights, Open-Meteo's answer unparsed
+     (`meteo.payload_for_flight`), the glider table, a sidecar plan, the airspace layer,
+     the archive rank. The page still opens on finished articles: the JavaScript takes
+     5-8 s per showcase flight, which is a spinner nobody should meet on arrival. On the
+     three published flights, with real terrain and weather, the articles and the tab
+     strip are **identical** to the Python renderer's (normalised as `js_parity --report`
+     does); `tests/test_js_build.py` holds that on synthetic flights. Without Node the
+     CLI warns and writes the Python articles; `--python-articles` asks for them.
+     **`quicklook.py` is retired**: the panel is `upload_panel.py`, a failed upload says
+     why instead of falling back to a reduced analysis, and `fetchMeteo` (the in-page
+     weather for an article written without it) moved into `render_html.SCRIPT`.
+     **The Python analysis is not deleted.** It no longer writes the page, but the CLI's
+     console summary, `--json`, `--kmz`, `--map`, `--archive` and `calibrate` all run on
+     it, and it is the reference every JavaScript port is checked against. Deleting it
+     means porting or dropping those — a decision, not a cleanup.
 
 Written up with a plan in `docs/plan.md`:
 
@@ -1223,54 +1225,11 @@ Still wanted:
   distance only.
 - Historical weather is surface-only: the ERA5 archive returns nulls on every pressure
   level, so flights older than ~60 days get no sounding.
-- `quicklook.py` re-implements a subset of the analysis in JavaScript, but **it no longer
-  keeps its own copy of the numbers.** `quicklook.constants()` emits one payload — the
-  `analysis.py` constants, `flight.WINDOW` and `debrief.THRESHOLDS` — into the drop panel,
-  and the script reads every threshold out of it. It hangs off the *panel* rather than a
-  flight, so an upload into a report with no bundled flights still gets it, and it fails
-  at load rather than falling back, because a page analysing a flight by rules of its own
-  is the thing this gap is about. `tests/test_quicklook_analysis.py` moves
-  `minThermalGain` in the payload alone and requires the page's answer to change; a page
-  still holding a literal cannot pass it. One rule is knowingly *not* shared and is
-  commented as such: the circling clause, because the page has no smoothed turn rate and
-  `climb > 1` stands in for it.
-  This is not hypothetical: the two had already drifted on *shape* rather than on a
-  number. `analysis.py` condenses runs separated by less than `CONDENSE_THERMAL` before
-  applying the minimum — a thermal briefly left and re-entered is one thermal — and the
-  browser demanded one unbroken run instead. A climb gains height in surges, so an
-  evening spent working a ridge printed "No climbs met the thresholds" in the page while
-  the same file gave three climbs on the command line. `tests/test_quicklook_analysis.py`
-  now uploads a surging climb and checks *both* implementations find it, which is the
-  shape this gap wants: a fixture whose answer is asserted against Python, not a second
-  copy of the rule.
-  It also has to parse `HFDTE` itself: B records carry only a time of day, and treating
-  that as an epoch put every uploaded IGC flight on 1 January 1970 — which the weather
-  lookup then fetched the real 1970 weather for and presented as "the air that day".
-  A file with no `HFDTE` is marked undated and the weather is refused rather than guessed.
-- An uploaded track gets real terrain **where the page can fetch it**, and a flat plane
-  where it cannot. `quicklook.py` fetches and decodes the terrarium DEM itself; inside a
-  published artifact every host is blocked, the tiles fail, and the ground falls back to
-  one plane at the flight's lowest point with the caption saying so. The clearance series
-  now falls out of that grid: `addClearance` samples the ground under every fix
-  (bilinear — nearest-node makes a glide's ground a staircase), the side view gains a
-  ground fill and drops its floor to it, and one stat tile reports the lowest clearance
-  over `metrics.airborne_window`'s window, using the same `ground_margin` from
-  `THRESHOLDS` as the report's low-point card. **No DEM means no tile** rather than a
-  clearance measured against the invented flat plane.
-- Times in the quicklook tables now follow the flight's own clock, so an upload and a
-  built report of the same file agree — they disagreed by the offset, 15:43 against
-  17:43 on a Czech evening, which makes a reader distrust both. Two of the Python side's
-  three sources are available in the browser: `HFTZN`, and the IANA name XCTrack hides
-  in a base64 JSON blob split across dozens of `L` records, which `Intl` can use
-  directly and which beats a fixed offset because it knows the day's daylight saving.
-  **The third is not, and this is the remaining gap:** resolving a zone from the
-  take-off coordinates needs `timezonefinder`'s dataset, which is not going in a page.
-  That is the common case — XCTrack only started writing `os.timezone` in 0.9.12, and
-  three of six sample files predate it. **Closed for the full upload path** by
-  `js/vendor/tz-lookup.js` (see "Wanted next"); the quick-look fallback still reads UTC
-  for those. Do not be tempted by `lon / 15`.
-  One trap worth keeping: the `L` chunking drops base64 padding, and `atob` throws on
-  the wrong *amount* of it where Python's `b64decode(validate=False)` ignores the
-  excess — so a blind `+ '=='` fails on any payload already a multiple of four. It
-  fails *silently*, because the zone lookup catches everything and the table simply goes
-  on printing UTC.
+- ~~`quicklook.py` re-implements a subset of the analysis in JavaScript.~~ **Retired**
+  (October 2026): an upload gets the full analysis from `js/`, checked against the Python
+  field by field (`js_parity.py`). Two traps it found are kept in `js/igc.js`: B records
+  carry only a time of day, so a file with no `HFDTE` is undated and its weather is
+  refused rather than fetched for 1 January 1970; and XCTrack's `L`-record timezone blob
+  drops its base64 padding, which `atob` refuses in the wrong *amount* where Python's
+  `b64decode(validate=False)` ignores it — a blind `+ '=='` fails silently. The take-off
+  timezone comes from `js/vendor/tz-lookup.js`; do not be tempted by `lon / 15`.

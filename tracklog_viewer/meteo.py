@@ -158,6 +158,14 @@ def fetch(lat: float, lon: float, when: dt.datetime, *, use_cache: bool = True) 
     Returns None rather than raising if the network is unavailable or the day is
     out of range — a flight report must still render on a train.
     """
+    payload = fetch_payload(lat, lon, when, use_cache=use_cache)
+    return None if payload is None else _parse(payload, when)
+
+
+def fetch_payload(lat: float, lon: float, when: dt.datetime, *,
+                  use_cache: bool = True) -> dict | None:
+    """Open-Meteo's answer itself, unparsed — what `js/meteo.js` reads when the report's
+    articles are rendered by the JavaScript (`js_build.py`)."""
     hourly = list(SURFACE_FIELDS) + [
         f"{field}_{level}hPa" for level in PRESSURE_LEVELS for field in LEVEL_FIELDS
     ]
@@ -201,8 +209,7 @@ def fetch(lat: float, lon: float, when: dt.datetime, *, use_cache: bool = True) 
         if use_cache:
             CACHE.mkdir(parents=True, exist_ok=True)
             path.write_text(json.dumps(payload))
-
-    return _parse(payload, when)
+    return payload
 
 
 def _parse(payload: dict, when: dt.datetime) -> Meteo | None:
@@ -272,6 +279,18 @@ def _parse(payload: dict, when: dt.datetime) -> Meteo | None:
 
 def _maybe_float(value):
     return None if value is None else float(value)
+
+
+def payload_for_flight(analysis, *, use_cache: bool = True):
+    """`for_flight`'s request, answered raw: (payload, when as UTC seconds), or None."""
+    flight = analysis.flight
+    middle = len(flight) // 2
+    when = flight.time[middle].astype("datetime64[s]").item()
+    payload = fetch_payload(float(flight.lat[middle]), float(flight.lon[middle]), when,
+                            use_cache=use_cache)
+    if payload is None:
+        return None
+    return payload, when.replace(tzinfo=dt.timezone.utc).timestamp()
 
 
 def for_flight(analysis, *, use_cache: bool = True) -> Meteo | None:

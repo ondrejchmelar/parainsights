@@ -165,9 +165,13 @@
     var extensionFields = {}, lRecords = [], task = [], warnings = [];
     var times = [], lats = [], lons = [], baros = [], gpss = [], valids = [], rawExt = {};
     var date = null, previousSeconds = null, dayOffset = 0;
+    // The I record's columns, held as a list rather than walked as an object on every B
+    // record: a five-hour file is 40 000 of them, and the per-fix closures were most of
+    // the parse.
+    var extCodes = [], extRanges = [], ladRange = null, lodRange = null;
 
     for (var n = 0; n < lines.length; n++) {
-      var line = lines[n].replace(/\s+$/, '');
+      var line = lines[n].trimEnd();
       if (!line) continue;
       var record = line[0];
       if (record === 'A') {
@@ -181,7 +185,10 @@
       } else if (record === 'I') {
         extensionFields = parseIRecord(line);
         rawExt = {};
-        Object.keys(extensionFields).forEach(function (code) { rawExt[code] = []; });
+        extCodes = Object.keys(extensionFields);
+        extRanges = extCodes.map(function (code) { rawExt[code] = []; return extensionFields[code]; });
+        ladRange = extensionFields.LAD || null;
+        lodRange = extensionFields.LOD || null;
       } else if (record === 'L') {
         lRecords.push(line);
       } else if (record === 'C') {
@@ -209,15 +216,14 @@
 
         var lat = parseInt(b[4], 10) + parseInt(b[5], 10) / 60000;
         var lon = parseInt(b[7], 10) + parseInt(b[8], 10) / 60000;
-        [['LAD', 'lat'], ['LOD', 'lon']].forEach(function (pair) {
-          var range = extensionFields[pair[0]];
-          if (!range) return;
-          var digits = line.slice(range[0], range[1]);
-          if (DIGITS_RE.test(digits)) {
-            var delta = parseInt(digits, 10) / (60000 * Math.pow(10, digits.length));
-            if (pair[1] === 'lat') lat += delta; else lon += delta;
-          }
-        });
+        if (ladRange) {
+          var ladDigits = line.slice(ladRange[0], ladRange[1]);
+          if (DIGITS_RE.test(ladDigits)) lat += parseInt(ladDigits, 10) / (60000 * Math.pow(10, ladDigits.length));
+        }
+        if (lodRange) {
+          var lodDigits = line.slice(lodRange[0], lodRange[1]);
+          if (DIGITS_RE.test(lodDigits)) lon += parseInt(lodDigits, 10) / (60000 * Math.pow(10, lodDigits.length));
+        }
         if (b[6] === 'S') lat = -lat;
         if (b[9] === 'W') lon = -lon;
 
@@ -232,10 +238,10 @@
         valids.push(b[10] === 'A');
         baros.push(parseInt(b[11], 10));
         gpss.push(parseInt(b[12], 10));
-        Object.keys(extensionFields).forEach(function (code) {
-          var r = extensionFields[code], digits = line.slice(r[0], r[1]);
-          rawExt[code].push(DIGITS_RE.test(digits) ? parseInt(digits, 10) : null);
-        });
+        for (var e = 0; e < extCodes.length; e++) {
+          var extDigits = line.slice(extRanges[e][0], extRanges[e][1]);
+          rawExt[extCodes[e]].push(DIGITS_RE.test(extDigits) ? parseInt(extDigits, 10) : null);
+        }
       }
     }
     if (!times.length) throw new Error('no valid B records');

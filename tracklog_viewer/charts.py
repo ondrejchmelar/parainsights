@@ -31,7 +31,7 @@ CLIMB_RAMP = [
 # may sit and still be about the same air. Named because they are published in
 # `data-wind-frame` and applied again in the browser when the page finishes the chart
 # with a profile fetched at view time — two copies of `250` in two languages is exactly
-# the drift `quicklook.constants()` exists to prevent.
+# the drift a second copy of a constant invites.
 WIND_SPEED_STEP = 1      # m/s between gridlines, and what the speed axis rounds up to
 WIND_ALT_STEP = 250      # m between gridlines, and what the height axis rounds to
 WIND_MODEL_BAND = 400    # m above and below the climbs

@@ -222,7 +222,8 @@ class TestOtherSlice:
 
 class TestSerialisation:
     def test_thresholds_ship_with_the_debrief(self, tmp_path):
-        """So `quicklook.py` reads these numbers rather than holding a second copy."""
+        """The thresholds travel with the debrief, so a reader of it has the numbers it was
+        judged by rather than a second copy."""
         analysis = a_day(tmp_path, "ser.igc",
                          [(300, 2.5), (300, 0.4), (300, 0.4), (300, 0.4), (300, 0.5)],
                          glide=700)

@@ -40,6 +40,66 @@
     });
   }
 
+  // ---- one article, from a flight and what was fetched for it ---------------------------
+  //
+  // Shared by an upload (below, in the page) and by the report's own flights, which are
+  // rendered by this same function at build time in Node (`js_build.py`). One function,
+  // so a showcase flight and an uploaded one cannot come out different.
+  //
+  // inputs:  { terrain, sceneTerrain, meteo (parsed), certificationTable, now }
+  // options: { uid, hidden, label ('PILOT|SITE|GLIDER', empty fields keep the file's),
+  //            airspace, kmzUri, plan ({ payload, source } from a sidecar), ranks, format }
+  var SHAPE_NAMES = { fai: 'FAI triangle', flat: 'flat triangle', open: 'open distance' };
+  function annotate(summary, label) {
+    if (!label) return;
+    var fields = (label.split('|').concat(['', '', ''])).slice(0, 3);
+    ['pilot', 'site', 'glider'].forEach(function (name, i) {
+      if (fields[i].trim()) summary[name] = fields[i].trim();
+    });
+  }
+  function shapeOf(route, analysis) {
+    if (!route) return '';
+    var shape = TV.xc.shape(route);
+    if (shape === 'open' && analysis.summary.straight_distance < 0.5 * analysis.summary.max_distance_from_takeoff) {
+      return 'out and return';
+    }
+    return SHAPE_NAMES[shape] || 'open distance';
+  }
+  function firstName(pilot) { return pilot ? String(pilot).trim().split(' ')[0] : ''; }
+  function planFor(flight, options) {
+    if (options.plan && options.plan.payload) {
+      var found = TV.plan.fromJson(options.plan.payload);
+      if (found) { found.source = options.plan.source || 'sidecar'; return found; }
+    }
+    return TV.plan.fromFlight(flight);
+  }
+  function analyseFor(flight, options) {
+    var analysis = TV.analysis.analyse(flight);
+    annotate(analysis.summary, options.label);
+    return { analysis: analysis, route: TV.xc.best(flight), plan: planFor(flight, options) };
+  }
+  function compose(flight, name, inputs, options, done) {
+    options = options || {};
+    done = done || analyseFor(flight, options);
+    var analysis = done.analysis, route = done.route, summary = analysis.summary;
+    var html = TV.report.flightBody(analysis, {
+      meteo: inputs.meteo || null, route: route, terrain: inputs.terrain || null,
+      sceneTerrain: inputs.sceneTerrain || null, uid: options.uid, hidden: !!options.hidden,
+      flightPlan: done.plan, certificationTable: inputs.certificationTable || null,
+      now: inputs.now, airspace: options.airspace || null, kmzUri: options.kmzUri || null,
+      ranks: options.ranks || null
+    });
+    var format = (options.format || '').toUpperCase();
+    return {
+      html: html, uid: options.uid, label: summary.date,
+      meta: [firstName(summary.pilot), summary.site].filter(Boolean).join(' · ')
+        || (name || '').replace(/\.[^.]+$/, '').slice(0, 22) || '—',
+      stat: [route ? (route.distance / 1000).toFixed(0) + ' km' : '', shapeOf(route, analysis),
+             format && format !== 'IGC' ? 'from ' + format : ''].filter(Boolean).join(' · '),
+      title: summary.date + ' · ' + (summary.site || 'flight') + ' — flight review'
+    };
+  }
+
   // Let the page paint before a long synchronous stretch, so a stage the caller has just
   // announced is on screen while it runs. A timeout and not requestAnimationFrame: a
   // background tab never runs the latter, and the upload must not stall there.
@@ -50,12 +110,10 @@
   // `progress(stage)` hears 'analysing', 'fetching' and 'writing' as each one starts.
   function build(flight, name, progress) {
     progress = progress || function () {};
-    var analysis, route, plan, now = Date.now() / 1000;
+    var done, now = Date.now() / 1000;
     progress('analysing');
     return paint().then(function () {
-      analysis = TV.analysis.analyse(flight);
-      route = TV.xc.best(flight);
-      plan = TV.plan.fromFlight(flight);
+      done = analyseFor(flight, {});
       progress('fetching');
 
       var grid = TV.terrain.remoteFor(flight);
@@ -72,18 +130,15 @@
       progress('writing');
       return paint().then(function () { return inputs; });
     }).then(function (inputs) {
-      var uid = 'up' + (++counter);
-      var html = TV.report.flightBody(analysis, {
-        meteo: inputs[1], route: route, terrain: inputs[0], sceneTerrain: inputs[0], uid: uid, hidden: true,
-        flightPlan: plan, certificationTable: inputs[2], now: now
-      });
+      var made = compose(flight, name, {
+        terrain: inputs[0], sceneTerrain: inputs[0], meteo: inputs[1],
+        certificationTable: inputs[2], now: now
+      }, { uid: 'up' + (++counter), hidden: true, format: /\.(kml|kmz)$/i.test(name || '') ? name.split('.').pop() : '' }, done);
       var holder = document.createElement('div');
-      holder.innerHTML = html;
-      var shape = TV.xc.shape(route);
+      holder.innerHTML = made.html;
       return {
-        article: holder.firstElementChild, uid: uid, label: analysis.summary.date,
-        meta: (name || '').replace(/\.[^.]+$/, '').slice(0, 22),
-        stat: (route.distance / 1000).toFixed(0) + ' km' + (shape !== 'open' ? ' · ' + (shape === 'fai' ? 'FAI' : 'flat') : ''),
+        article: holder.firstElementChild, uid: made.uid, label: made.label, meta: made.meta,
+        stat: made.stat,
         missing: ['ground', 'weather', 'glider table'].filter(function (_, i) { return !inputs[i]; })
       };
     });
@@ -94,9 +149,12 @@
   function place(built, before) {
     before.parentNode.insertBefore(built.article, before);
     if (window.__drawCharts) window.__drawCharts(built.article);
+    // An article written without the day's weather asks for it in the page, as a report
+    // built without --meteo does; `run` saw only the articles there at load.
+    if (window.__fetchAir) window.__fetchAir();
     if (typeof initFlight === 'function') initFlight(built.article);
     return built.article;
   }
 
-  TV.upload = { read: read, build: build, place: place, paint: paint };
+  TV.upload = { read: read, build: build, place: place, paint: paint, compose: compose };
 })(typeof window !== 'undefined' ? (window.TV = window.TV || {}) : (globalThis.TV = globalThis.TV || {}));

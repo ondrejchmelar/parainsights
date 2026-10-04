@@ -303,12 +303,17 @@
       '        course line, not a radiosonde ascent. Treat the ceilings as ±100&nbsp;m and the winds as\n        indicative.</p>\n    </div>\n  </section>';
   }
 
-  function verdictStrip(result) {
+  // `ranks` is the pilot's archive placing a figure among their own flights ("among your
+  // best of 12"), keyed like the figures — computed where the archive lives (`baseline.py`)
+  // and handed in, because the archive is a directory on the pilot's machine.
+  function verdictStrip(result, ranks) {
     if (!result || !result.verdict) return '';
     var v = result.verdict;
+    ranks = ranks || {};
     var numbers = v.headline.map(function (item) {
+      var rank = ranks[item.key] ? '<span class="verdict-rank">' + esc(ranks[item.key]) + '</span>' : '';
       return '<div class="verdict-figure" data-key="' + esc(item.key || '') + '"><span class="verdict-value">' + esc(item.value) +
-        '</span><span class="verdict-label">' + esc(item.label) + '</span><span class="verdict-delta" hidden></span></div>';
+        '</span><span class="verdict-label">' + esc(item.label) + '</span>' + rank + '<span class="verdict-delta" hidden></span></div>';
     }).join('');
     return '\n  <div class="verdict">\n    <p class="verdict-line">' + esc(v.sentence) + '</p>\n    <div class="verdict-figures">' + numbers + '</div>\n  </div>';
   }
@@ -465,7 +470,7 @@
     return '<article class="flight" data-flight-report="' + uid + '"' + compare + ' data-compare-name="' + compareName + '"' + (options.hidden ? ' hidden' : '') + '>\n' +
       '  <header class="masthead">\n    <div>\n      <p class="eyebrow">tracklog viewer</p>\n' +
       '      <h1>' + esc(summary.site || 'Flight') + ' <span>' + esc(summary.date) + '</span></h1>\n    </div>\n' +
-      '    <div class="identity">' + identity + '</div>\n  </header>\n' + verdictStrip(result) + '\n\n' + view3dSection + '\n\n' +
+      '    <div class="identity">' + identity + '</div>\n  </header>\n' + verdictStrip(result, options.ranks) + '\n\n' + view3dSection + '\n\n' +
       '  <section>\n    <div class="section-head">\n      <h2>Top view</h2>\n      <p>The same flight seen from above, on the same cursor as the side view.</p>\n    </div>\n' +
       '    <div class="panel hero">\n      <div class="chart-head">\n        <p class="chart-title">The course line over the ground.' +
       (route ? ' Thin straight legs are the scored free-distance route.' : '') + '</p>\n' +

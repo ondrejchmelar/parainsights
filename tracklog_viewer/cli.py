@@ -17,6 +17,7 @@ from . import (
     render_map,
     sources,
     terrain as terrain_module,
+    js_build,
     xc,
 )
 from .analysis import analyse
@@ -89,6 +90,12 @@ def main(argv: list[str] | None = None) -> int:
              "the network. HREF is where the OpenAir download sits relative to the "
              "report — pass 'airspace/' when the report is at public/index.html and the "
              "file at public/airspace/, or omit it when they are side by side.",
+    )
+    parser.add_argument(
+        "--python-articles", action="store_true",
+        help="write the report's articles with the Python renderer instead of the "
+             "JavaScript an uploaded track goes through (which needs Node at build time; "
+             "without Node this is what happens anyway, with a warning)",
     )
     parser.add_argument(
         "--archive", type=Path, metavar="DIR",
@@ -190,7 +197,16 @@ def main(argv: list[str] | None = None) -> int:
             print(f"airspace over {sum(1 for r in reports if r.get('airspace'))} "
                   f"of {len(reports)} flights, {counted} zones in all")
 
-    if args.html:
+    use_js = args.html and not args.python_articles
+    if use_js and not js_build.available():
+        print("warning: node is not on PATH, so the articles are written by the Python "
+              "renderer rather than by js/ — the page will not match an upload exactly",
+              file=sys.stderr)
+        use_js = False
+    if use_js:
+        _write_js_report(reports, args, held, extras)
+        print(f"wrote {args.html}")
+    elif args.html:
         if len(reports) == 1:
             render_html.write(
                 reports[0]["analysis"], args.html,
@@ -207,6 +223,7 @@ def main(argv: list[str] | None = None) -> int:
                 archive=held if args.archive else None, extras=extras,
             )
         print(f"wrote {args.html}")
+    if args.html:
         # The glider classes an uploaded track is looked up in, beside the page and fetched
         # only when an upload needs one (`js/upload.js`): 50 KB compressed, not 720 KB.
         gliders = args.html.parent / "gliders.json"
@@ -232,11 +249,88 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+def _archive_ranks(analysis, archive) -> dict:
+    """The archive's placing of the mean climb, as `render_html._verdict_strip` words it."""
+    if archive is None or not getattr(archive, "usable", False):
+        return {}
+    held = sum(s.duration for s in analysis.thermals)
+    mean = sum(s.altitude_change for s in analysis.thermals) / held if held else None
+    sentence = archive.rank_sentence("mean_climb", round(mean, 2) if mean else None,
+                                     "climb rate")
+    return {"mean_climb": sentence} if sentence else {}
+
+
+def _write_js_report(reports: list[dict], args, archive, extras) -> None:
+    """The report with every article rendered by `js/upload.js`'s `compose` — the function
+    an uploaded track goes through in the page — run in Node now (`js_build`)."""
+    import base64
+    import time
+
+    jobs = []
+    for index, report in enumerate(reports):
+        ground = report["terrain"]
+        options = {
+            "uid": f"f{index}", "hidden": index > 0,
+            "label": args.label[index] if index < len(args.label) else "",
+            "airspace": report.get("airspace") or None,
+            "format": report["format"],
+            "ranks": _archive_ranks(report["analysis"], archive),
+            "plan": report.get("plan_payload"),
+        }
+        if report["kmz"]:
+            options["kmzUri"] = ("data:application/vnd.google-earth.kmz;base64,"
+                                 + base64.b64encode(report["kmz"]).decode("ascii"))
+        raw = report.get("meteo_payload")
+        jobs.append({
+            "path": str(report["path"]), "name": report["file"],
+            "terrain": js_build.grid(ground) if ground is not None else None,
+            # The page fetches the heights itself, as for every 3D map on this site.
+            "sceneTerrain": ground.to_remote() if ground is not None else None,
+            "meteo": raw[0] if raw else None, "when": raw[1] if raw else None,
+            "options": options,
+        })
+    made = js_build.render(jobs, certification_table=certification.compact(),
+                           now=time.time())
+    tabs = (
+        '<nav class="tabs" id="flight-tabs" role="group" aria-label="Choose a flight">'
+        + render_html.ADD_TAB
+        + "".join(render_html._tab(m["uid"], render_html.charts.escape(m["label"]),
+                                   render_html.charts.escape(m["meta"]),
+                                   render_html.charts.escape(m["stat"]).replace(" · ", " &middot; "),
+                                   on=i == 0)
+                  for i, m in enumerate(made))
+        + "</nav>"
+    )
+    page = render_html._page(made[0]["title"], [m["html"] for m in made], tabs, extras)
+    args.html.parent.mkdir(parents=True, exist_ok=True)
+    args.html.write_text(page, encoding="utf-8")
+
+
 SHAPE_NAMES = {
     "fai": "FAI triangle",
     "flat": "flat triangle",
     "open": "open distance",
 }
+
+
+def _plan_payload(analysis, source, explicit) -> dict | None:
+    """A sidecar or remembered plan as JSON, for `js/plan.js` — found the way
+    `plan.for_flight` finds one. A task in the file's own C records needs nothing here:
+    the JavaScript reads those itself."""
+    candidates = []
+    if explicit:
+        candidates.append((Path(explicit), "sidecar"))
+    found = plan_module.discover(source, date=analysis.summary.date, site=analysis.summary.site)
+    if found:
+        candidates.append((found, "sidecar" if found.parent == Path(source).parent else "remembered"))
+    for path, kind in candidates:
+        if plan_module.load(path) is None:
+            continue
+        try:
+            return {"payload": json.loads(path.read_text(encoding="utf-8")), "source": kind}
+        except (OSError, ValueError):
+            continue
+    return None
 
 
 def _annotate(summary, label: str) -> None:
@@ -309,10 +403,14 @@ def _one(source: str, args, index: int = 0) -> dict:
         earth = render_kmz.to_bytes(analysis, route=route)
 
     weather = None
+    weather_payload = None
     if args.meteo:
         weather = meteo_module.for_flight(analysis)
         if weather is None:
             print(f"warning: no weather data for {label}", file=sys.stderr)
+        else:
+            # The same answer again, unparsed and from the cache, for `js/meteo.js`.
+            weather_payload = meteo_module.payload_for_flight(analysis)
 
     for warning in flight.warnings[:5]:
         print(f"warning: {warning}", file=sys.stderr)
@@ -381,6 +479,9 @@ def _one(source: str, args, index: int = 0) -> dict:
         # Resolved here rather than in main(), because a plan is discovered relative to
         # the tracklog's own path and only this function knows it.
         "plan": plan_module.for_flight(analysis, source, explicit=args.plan_file),
+        "plan_payload": _plan_payload(analysis, source, args.plan_file),
+        "meteo_payload": weather_payload,
+        "path": sources.local_path(source),
         "payload": payload,
         "terrain": ground,
         "basemaps": tiles if args.terrain and not args.no_basemap else None,

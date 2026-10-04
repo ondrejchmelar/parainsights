@@ -83,7 +83,7 @@ _PROBE = """
 <script>
 // Installed during parse, so it is in place before the report's own idle callback runs.
 // Stubbing `fetch` rather than `__fetchMeteo` keeps the level parsing under test: the
-// profile fields are added to the URL by `quicklook.fetchMeteo`, and a stub one layer
+// profile fields are added to the URL by `fetchMeteo` (render_html.SCRIPT), and a stub one layer
 // higher would skip exactly the code that reads them back.
 (function () {
   var answer = %s;

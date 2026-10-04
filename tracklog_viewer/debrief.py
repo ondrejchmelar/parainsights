@@ -37,8 +37,8 @@ from .analysis import Analysis
 
 # Every threshold in the debrief, in one dict, deliberately.
 #
-# It is serialised into the page so `quicklook.py` reads these numbers instead of holding
-# a second copy — a direct hit on the documented known gap, *"if the Python thresholds
+# It is serialised with the debrief so a reader of it has these numbers instead of holding
+# a second copy (it was `quicklook.py`, retired since) — a direct hit on the documented known gap, *"if the Python thresholds
 # change, change them there too; there is no shared source"*. Cheap enough to be worth
 # doing on the first finding rather than the tenth.
 #

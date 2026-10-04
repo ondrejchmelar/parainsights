@@ -315,12 +315,12 @@ class TestPageText:
     def test_the_tab_blurb_is_gone(self, tmp_path):
         """Its only load-bearing sentence — nothing is uploaded — is in the upload panel
         itself, where someone about to hand over a file will actually read it."""
-        from tracklog_viewer import quicklook
+        from tracklog_viewer import upload_panel
 
         assert "tabs-note" not in render_html.render(
             self._analysis(tmp_path), terrain=None
         )
-        assert "Nothing is uploaded" in quicklook.panel()
+        assert "Nothing is uploaded" in upload_panel.panel()
 
     def _analysis(self, tmp_path):
         from tests.test_debrief import a_day
