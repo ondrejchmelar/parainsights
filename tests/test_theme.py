@@ -92,13 +92,13 @@ class TestTheOrderIsTheSameEverywhere:
         round. Which entries are buttons is an implementation detail of one document."""
         from tracklog_viewer import render_html
 
-        extra = render_html.Extra(uid="airspace", label="Airspace", body="", style="",
+        extra = render_html.Extra(uid="airspace", label="Planner", body="", style="",
                                   script="")
         nav = render_html._view_nav([extra])
         labels = [re.sub(r"<[^>]+>", "", chunk).strip()
                   for chunk in re.findall(r"<(?:a|button)[^>]*>[^<]*</(?:a|button)>", nav)]
         labels = [label for label in labels if label]
-        assert labels == ["Meteo", "Airspace", "Flights"]
+        assert labels == ["Meteo", "Planner", "Flights"]
 
 
 @needs_chrome

@@ -145,7 +145,7 @@ def main(argv=None) -> int:
             overlay, base, base_version, openair_name=name, openair_size=len(text),
             scene=payload,
         )
-        args.html.write_text(_page(article, "Airspace and task planner",
+        args.html.write_text(_page(article, "Planner",
                                    three_d=payload is not None), encoding="utf-8")
         print(f"{args.html}: {len(base)} base airspaces + {len(overlay.airspaces)} added")
         print(f"{beside}: linked from the page ({len(text) / 1024:.0f} KB)")

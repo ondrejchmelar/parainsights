@@ -1094,10 +1094,10 @@ class TestEachChartMeansOneThing:
         %s
         """ % body)
 
-    def test_every_takeoff_gets_its_own_meteogram_and_sounding(self):
+    def test_every_takeoff_gets_its_own_airgram_and_sounding(self):
         answer = self._with_three("""
         return { columns: document.querySelectorAll('.met-col').length,
-                 grams: document.querySelectorAll('.met-col-gram').length,
+                 grams: document.querySelectorAll('.met-col-air').length,
                  soundings: document.querySelectorAll('.met-col-sounding').length };
         """)
         assert answer["columns"] == 3
@@ -1178,12 +1178,12 @@ def test_the_sounding_owns_the_vertical_gesture():
 
     `touch-action: none` is what actually stops it: a `preventDefault` on a move the
     browser has already begun scrolling with is too late. Same declaration the 3D view
-    and the airspace map use for their gestures. Deliberately *not* on the meteogram
+    and the airspace map use for their gestures. Deliberately *not* on the airgram
     above it, so every column keeps a full-width strip to scroll the page from.
     """
     style = render_html.STYLE
     assert ".met-col-sounding { touch-action: none; }" in style
-    assert ".met-col-gram { touch-action" not in style
+    assert ".met-col-air { touch-action" not in style
 
 
 @needs_chrome

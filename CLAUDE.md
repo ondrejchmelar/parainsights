@@ -158,7 +158,11 @@ switch that starts off — the flight is the subject there and the airspace is c
 same call the phase labels make. Each flight gets only the zones reaching the box its
 terrain was fetched for (`scene.layer`), so a flight in Pakistan carries no layer and no
 button, and the report grows by the airspace it can actually draw. It needs `--airspace`
-*and* `--terrain`.
+*and* `--terrain`. **An uploaded flight gets the same switch** from the rings the page
+already carries for its Planner view (`js/upload.js`, `airspaceNear`), cut to the box its
+ground was fetched for. The data is Czech only, so a flight elsewhere — Col Rodella,
+Hunza — has no switch; OpenAIP's free per-country exports now sit in a requester-pays
+bucket and its API needs a key.
 
 ## A network is assumed
 
@@ -911,7 +915,7 @@ The numbers are checkable, so check them:
   status, which once hid a `NameError` for two runs.
 
 **One order across the site, and one theme switch.** `parainsights_common.PAGES` is the
-order — meteo, airspace & planner, flights, which is the order a day happens in — and the
+order — meteo, planner, flights, which is the order a day happens in — and the
 report's own view strip follows it too; it used to list its in-document views first and
 its links after, so the report read *Flights, Airspace, Meteo, Planner* while every other
 page read the other way round. Whether an entry is a button or a link is an
@@ -978,7 +982,12 @@ the font stays inlined because it is one request for a document's whole appearan
   the panel (deepest at 15 m/s), direction an arrow pointing downwind every two hours and
   500 m, the boundary layer over it and the page's hour as a dashed line; the pointer
   reads the wind at the hour and height under it through `sampleProfile`, so the readout
-  and the shading interpolate the same way (components, not angles).
+  and the shading interpolate the same way (components, not angles). **The meteogram is
+  folded into it**: cloud cover as grey over the wind, the ground, the boundary layer (on
+  a halo, because the first takeoff's colour is blue over blue shading) and the
+  cloudbase, both named at their evening end. Each column is the airgram and the sounding,
+  side by side on one height scale for a single takeoff. The airgram reads on a tap and
+  does not take vertical drags, so it is the column's strip to scroll the page from.
 - **Every feature for an uploaded track — done (steps 1-3).** The bundled flights are a
   showcase; uploads are the product. The
   direction is JavaScript as the one runtime language for the viewer (not Pyodide):

@@ -170,18 +170,16 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
 .met-columns.is-single .met-col-rose,
 .met-columns.is-single .met-col-top { grid-column:1 / -1; }
 .met-columns.is-single .met-canvas + .met-canvas { margin-top:0; }
-/* Side by side, the meteogram takes the sounding's shape rather than its own shorter one.
+/* Side by side, the airgram takes the sounding's shape rather than its own shorter one.
    Both charts run 0–4 km up the y axis, so equal heights put the two height scales beside
    each other and the reader can read across — boundary layer on the left at the height
    the trace bends on the right. Stacked, they keep their own proportions, because there
    is nothing to read across to. */
-.met-columns.is-single .met-col-gram { aspect-ratio: 380 / 300; }
-/* The airgram spans the row when the two charts above sit side by side: it shares the
-   meteogram's clock, and a full-width chart of the day reads as one. */
-.met-columns.is-single .met-col-air,
-.met-columns.is-single .met-col-airout { grid-column:1 / -1; }
-.met-columns.is-single .met-col-air { aspect-ratio: 780 / 260; margin-top:8px; }
-.met-col-air { touch-action: none; }
+.met-columns.is-single .met-col-air { aspect-ratio: 380 / 300; }
+.met-columns.is-single .met-col-airout { grid-column:1; }
+/* The airgram reads on a tap, not a drag, so it is left to scroll the page: with the
+   sounding taking vertical drags for its own readout, it is the column's strip to scroll
+   from on a phone. */
 .met-col-airout { font-size:11.5px; color:var(--ink-3); margin:3px 0 0; min-height:1.5em;
   font-variant-numeric:tabular-nums; }
 .met-col-head { display:flex; align-items:center; gap:7px; font-size:12.5px;
@@ -206,7 +204,7 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
    scrolls with — so the browser scrolled the page and the chart read nothing. This hands
    the gesture to the chart, and it is the same `touch-action: none` the 3D view and the
    airspace map already use for theirs. The cost is real and bounded: a swipe that starts
-   on a sounding no longer scrolls. The meteogram directly above each one is untouched,
+   on a sounding no longer scrolls. The airgram directly above each one is untouched,
    so every column keeps a full-width strip to scroll from. */
 .met-col-sounding { touch-action: none; }
 /* The hour is in the head, above everything, because it applies to everything: the
@@ -268,7 +266,7 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
 
 </style>
 <div class="wrap">
-<nav class="site-nav" aria-label="The tools here"><span class="is-on">Meteo</span><a href="../airspace/">Airspace & planner</a><a href="../index.html">Flights</a><button type="button" class="theme-toggle" aria-pressed="false" aria-label="Switch between the light and dark theme"><span class="theme-glyph" aria-hidden="true">☽</span></button></nav>
+<nav class="site-nav" aria-label="The tools here"><span class="is-on">Meteo</span><a href="../airspace/">Planner</a><a href="../index.html">Flights</a><button type="button" class="theme-toggle" aria-pressed="false" aria-label="Switch between the light and dark theme"><span class="theme-glyph" aria-hidden="true">☽</span></button></nav>
 <article class="flight meteo-article" id="meteo-article">
   <h1>Meteo</h1>
   <div class="met-head">
@@ -1000,78 +998,13 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
     return have[have.length - 1];
   }
 
-  // ---- one meteogram per takeoff, and one strip that compares them --------------------
+  // ---- one airgram per takeoff, and one strip that compares them ----------------------
   //
-  // This used to be a single chart carrying every chosen takeoff's boundary layer *and*
-  // one takeoff's cloud, ground and cloudbase. Two thirds of it was about three hills
-  // and one third about one, with nothing on the frame saying which was which — so the
-  // cloud a reader was looking at belonged to a takeoff they might not have been
-  // thinking about. That is not a chart that can be read carefully; it is one that can
-  // only be trusted or not.
-  //
-  // Split in two, and each half now means exactly one thing. `drawGram` is one takeoff,
-  // complete: its cloud, its ground, its boundary layer, its cloudbase. `drawStrip` is
-  // every chosen takeoff and *nothing else* — boundary layers alone, which is the only
-  // quantity on this page that compares across hills standing at different heights.
-  function drawGram(canvas, profile, slot) {
-    var frame = fit(canvas);
-    if (!frame || !profile) return;
-    var ctx = frame.ctx, W = frame.w, H = frame.h;
-    var hourly = profile.hourly;
-    var ground = profile.elevation;
-    var left = 38, right = 8, top = 8, bottom = 22;
-    var top_m = ceilingFor(ground);
-    function x(hour) { return left + (hour - 5) / 16 * (W - left - right); }
-    function y(metres) { return top + (1 - metres / top_m) * (H - top - bottom); }
-
-    ctx.clearRect(0, 0, W, H);
-    var heights = levelSeries(hourly, 'geopotential_height');
-    var clouds = levelSeries(hourly, 'cloud_cover');
-
-    // Cloud, as a column per hour per level. Grey rather than white: this is a light and
-    // a dark theme, and white cloud on a white panel is a blank chart.
-    for (var hour = 5; hour <= 21; hour++) {
-      var at = indexFor(hourly.time, state.day, hour);
-      for (var l = 0; l < conf.levels.length; l++) {
-        var cover = clouds[l] ? clouds[l][at] : null;
-        var height = heights[l] ? heights[l][at] : null;
-        if (cover == null || height == null || cover < 5) continue;
-        var band = (l === 0 ? 300 : Math.abs(heights[l][at] - heights[l - 1][at])) || 300;
-        ctx.fillStyle = 'rgba(128,132,140,' + Math.min(cover / 100, 1) * 0.75 + ')';
-        ctx.fillRect(x(hour) - (W - left - right) / 34, y(height + band / 2),
-                     (W - left - right) / 17,
-                     Math.abs(y(height - band / 2) - y(height + band / 2)));
-      }
-    }
-
-    // This takeoff's own ground, under this takeoff's own numbers.
-    ctx.fillStyle = ink('--panel-2');
-    ctx.fillRect(left, y(ground), W - left - right, H - bottom - y(ground));
-
-    var box = { left: left, top: top, W: W, H: H, right: right, bottom: bottom };
-    var layer = hourLine(ctx, profile, x, y, boundaryLayer(profile), false,
-                         seriesColour(slot), 2.4, box);
-    var based = hourLine(ctx, profile, x, y, function (at) {
-      return cloudbase(hourly.temperature_2m[at], hourly.dew_point_2m[at], ground);
-    }, true, ink('--ink-3'), 1.5, box);
-
-    gramAxes(ctx, x, y, top_m, left, right, bottom, W, H, 4);
-
-    // Each line named at its evening end, where it has stopped moving — the one place on
-    // the chart a label will not sit on the part of the curve being read. Pushed apart
-    // when the two end close together, which on a blue day they do.
-    var labels = [];
-    if (layer && layer[1] > top) labels.push({ y: layer[1], text: 'boundary layer', colour: seriesColour(slot) });
-    if (based && based[1] > top) labels.push({ y: based[1], text: 'cloudbase', colour: ink('--ink-3') });
-    labels.sort(function (a, b) { return a.y - b.y; });
-    labels.forEach(function (label, i) {
-      label.y = Math.min(Math.max(label.y - 3, top + 12), H - bottom - 2);
-      if (i && label.y - labels[i - 1].y < 12) label.y = labels[i - 1].y + 12;
-      padded(ctx, label.text, W - right - 3, label.y, label.colour, 'right');
-    });
-    padded(ctx, 'shading: cloud', left + 4, top + 12, ink('--ink-3'), 'left');
-  }
-
+  // The single-takeoff chart is `drawAir` (below the columns): wind, cloud, ground,
+  // boundary layer and cloudbase on one frame of hour against height. `drawStrip` is every
+  // chosen takeoff and *nothing else* — boundary layers alone, the only quantity on this
+  // page that compares across hills standing at different heights. A cloud or a ground
+  // drawn there would be one hill's fact on a chart labelled with three.
   // The comparison, and only the comparison: one line per chosen takeoff, nothing that
   // belongs to a single one of them. Hidden below two takeoffs, because a comparison of
   // one is the chart above it with more steps.
@@ -1213,7 +1146,7 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
     });
   }
 
-  // One column per chosen takeoff: its name, its meteogram, its sounding. Small
+  // One column per chosen takeoff: its name, its airgram, its sounding. Small
   // multiples, and the reason is the same for both charts — three temperature traces and
   // three dew points on one frame is six crossing lines, and three sets of cloud shading
   // is a grey smear. What compares across hills is on the strip above; what belongs to
@@ -1238,10 +1171,10 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
         cell.innerHTML = '<p class="met-col-head"><i></i><span class="name"></span>'
           + '<span class="ground"></span></p>'
           + '<p class="met-col-rose"><span></span> <a rel="noreferrer">on PGE</a></p>'
-          + '<canvas class="met-canvas met-col-gram" width="380" height="230"></canvas>'
+          + '<canvas class="met-canvas met-col-air" width="380" height="270"'
+          + ' aria-label="The day by hour and height: wind, cloud, boundary layer and cloudbase">'
+          + '</canvas>'
           + '<canvas class="met-canvas met-col-sounding" width="380" height="300"></canvas>'
-          + '<canvas class="met-canvas met-col-air" width="380" height="250"'
-          + ' aria-label="Airgram: wind by hour and height"></canvas>'
           + '<p class="met-col-airout"></p>'
           + '<details class="met-col-top" hidden><summary></summary><p></p></details>';
         cell.querySelector('i').style.background = seriesColour(slotOf(index));
@@ -1278,7 +1211,6 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
       // The focused takeoff's sounding keeps the id the pointer readout has always
       // addressed, so nothing has to hunt for "whichever chart happens to be first".
       sounding.id = index === state.site ? 'met-sounding' : '';
-      drawGram(cell.querySelector('.met-col-gram'), profile, slotOf(index));
       drawSounding(sounding, profile);
       drawAir(cell.querySelector('.met-col-air'), profile, slotOf(index));
     });
@@ -1288,9 +1220,10 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
   //
   // The sounding is the air at one hour; this is the wind at every hour of the day and
   // every height up to the chart's ceiling — the question "when does it turn, and does
-  // it get strong up where I will be" that one hour cannot answer. Same clock as the
-  // meteogram above it (05-21) and the same height scale as both charts, so the three
-  // read across.
+  // it get strong up where I will be" that one hour cannot answer. It took over the
+  // meteogram's job too — cloud, ground, boundary layer and cloudbase are drawn on it —
+  // so one chart answers "when, and how high". The same height scale as the sounding
+  // beside it, so the two read across.
   //
   // Speed is the shading, one hue deepening with speed and laid over the panel so both
   // themes work; direction is an arrow pointing *downwind*, the convention of every other
@@ -1334,11 +1267,35 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
         ctx.fillRect(x0, f.y(hi), x1 - x0 + 0.5, f.y(lo) - f.y(hi) + 0.5);
       }
     }
+    // Cloud over the wind, grey, as a column per hour per level — the meteogram's cloud,
+    // which this chart replaced. Grey reads over the blue in both themes, and the deeper
+    // the cover the more of the wind under it is hidden, which is what a cloud does.
+    var heights = levelSeries(hourly, 'geopotential_height');
+    var clouds = levelSeries(hourly, 'cloud_cover');
+    for (var ch = 5; ch <= 21; ch++) {
+      var cat = indexFor(hourly.time, state.day, ch);
+      for (var l = 0; l < conf.levels.length; l++) {
+        var cover = clouds[l] ? clouds[l][cat] : null;
+        var height = heights[l] ? heights[l][cat] : null;
+        if (cover == null || height == null || cover < 5) continue;
+        var band = (l === 0 ? 300 : Math.abs(heights[l][cat] - heights[l - 1][cat])) || 300;
+        ctx.fillStyle = 'rgba(150,154,162,' + (Math.min(cover / 100, 1) * 0.7).toFixed(3) + ')';
+        ctx.fillRect(f.x(ch) - colW / 2, f.y(height + band / 2), colW,
+                     Math.abs(f.y(height - band / 2) - f.y(height + band / 2)));
+      }
+    }
     ctx.fillStyle = ink('--panel-2');
     ctx.fillRect(f.left, f.y(ground), f.W - f.left - f.right, f.H - f.bottom - f.y(ground));
 
     var box = { left: f.left, top: f.top, W: f.W, H: f.H, right: f.right, bottom: f.bottom };
-    hourLine(ctx, profile, f.x, f.y, boundaryLayer(profile), false, seriesColour(slot), 2, box);
+    // Under a halo of the panel's colour: the takeoff's own series colour is blue for the
+    // first takeoff, over a wind shaded in blue.
+    hourLine(ctx, profile, f.x, f.y, boundaryLayer(profile), false, ink('--panel'), 5, box);
+    var layer = hourLine(ctx, profile, f.x, f.y, boundaryLayer(profile), false,
+                         seriesColour(slot), 2.4, box);
+    var based = hourLine(ctx, profile, f.x, f.y, function (at) {
+      return cloudbase(hourly.temperature_2m[at], hourly.dew_point_2m[at], ground);
+    }, true, ink('--ink'), 1.5, box);
 
     // Arrows every two hours, every 500 m above the ground. Dark ink where the shading is
     // light and white where it is deep, so an arrow is never the colour of its cell.
@@ -1371,11 +1328,22 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
     ctx.restore();
 
     gramAxes(ctx, f.x, f.y, f.top_m, f.left, f.right, f.bottom, f.W, f.H, 4);
-    // The key: what the deepest shading means, on the chart rather than in a caption
-    // nobody reads twice.
+    // Each line named at its evening end, where it has stopped moving, pushed apart when
+    // the two end close together — which on a blue day they do.
+    var named = [];
+    if (layer && layer[1] > f.top) named.push({ y: layer[1], text: 'boundary layer', colour: seriesColour(slot) });
+    if (based && based[1] > f.top) named.push({ y: based[1], text: 'cloudbase', colour: ink('--ink') });
+    named.sort(function (a, b) { return a.y - b.y; });
+    named.forEach(function (label, i) {
+      label.y = Math.min(Math.max(label.y - 3, f.top + 26), f.H - f.bottom - 2);
+      if (i && label.y - named[i - 1].y < 12) label.y = named[i - 1].y + 12;
+      padded(ctx, label.text, f.W - f.right - 3, label.y, label.colour, 'right');
+    });
+    // The key: what the shading means, on the chart rather than in a caption nobody reads
+    // twice.
     var kx = f.left + 4, ky = f.top + 4;
     ctx.font = '10px ui-sans-serif, sans-serif';
-    var label = 'wind, shading 0 \u2192 ' + AIR_FULL + '+ m/s';
+    var label = 'wind 0 \u2192 ' + AIR_FULL + '+ m/s \u00b7 grey: cloud';
     var kw = ctx.measureText(label).width;
     ctx.globalAlpha = 0.88; ctx.fillStyle = ink('--panel');
     ctx.fillRect(kx - 2, ky - 1, kw + 52, 14); ctx.globalAlpha = 1;

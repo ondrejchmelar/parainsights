@@ -998,7 +998,7 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
                      "would and checked against every zone it crosses.")
 
     return f"""<article class="flight airspace-article" id="{uid}-article"{plan_attr}>
-  <h1>Airspace and task planner</h1>
+  <h1>Planner</h1>
   <p class="lede">Everything the published airspace carries, plus the airfields it leaves
   out: a zone around each of the {overlay.atz_count} public aerodromes, and the traffic
   circuit at {overlay.circuit_fields} fields and ultralight strips. A paraglider may fly

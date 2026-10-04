@@ -100,6 +100,37 @@
     };
   }
 
+  // The airspace over this flight's ground, from the rings the page already carries for
+  // its Planner view — the same rings `airspaces.scene.layer` gives a bundled flight, cut
+  // to the same box (bounding box against bounding box, so a TMA containing the whole
+  // flight counts). Nothing when the page has no airspace or none reaches the box, and
+  // then the 3D map has no airspace button, as for a flight in Pakistan.
+  var airspaceRings = null;
+  function pageAirspace() {
+    if (airspaceRings !== null) return airspaceRings;
+    airspaceRings = false;
+    if (typeof document === 'undefined') return airspaceRings;
+    var data = document.querySelector('.airspace-article .view3d-data');
+    try {
+      var scene = data && JSON.parse(data.textContent);
+      if (scene && scene.airspaces && scene.airspaces.length) {
+        airspaceRings = { rings: scene.airspaces, colours: scene.airspaceColours || {} };
+      }
+    } catch (error) { /* no airspace, rather than no upload */ }
+    return airspaceRings;
+  }
+  function airspaceNear(grid) {
+    var held = pageAirspace();
+    if (!held || !grid) return null;
+    var found = held.rings.filter(function (ring) {
+      if (!ring.lon || ring.lon.length < 3) return false;
+      var west = Math.min.apply(null, ring.lon), east = Math.max.apply(null, ring.lon);
+      var south = Math.min.apply(null, ring.lat), north = Math.max.apply(null, ring.lat);
+      return !(east < grid.west || west > grid.east || north < grid.south || south > grid.north);
+    });
+    return found.length ? { airspaces: found, airspaceColours: held.colours } : null;
+  }
+
   // Let the page paint before a long synchronous stretch, so a stage the caller has just
   // announced is on screen while it runs. A timeout and not requestAnimationFrame: a
   // background tab never runs the latter, and the upload must not stall there.
@@ -133,7 +164,7 @@
       var made = compose(flight, name, {
         terrain: inputs[0], sceneTerrain: inputs[0], meteo: inputs[1],
         certificationTable: inputs[2], now: now
-      }, { uid: 'up' + (++counter), hidden: true, format: /\.(kml|kmz)$/i.test(name || '') ? name.split('.').pop() : '' }, done);
+      }, { uid: 'up' + (++counter), hidden: true, airspace: inputs[0] ? airspaceNear(inputs[0]) : null, format: /\.(kml|kmz)$/i.test(name || '') ? name.split('.').pop() : '' }, done);
       var holder = document.createElement('div');
       holder.innerHTML = made.html;
       return {

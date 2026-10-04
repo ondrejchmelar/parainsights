@@ -166,7 +166,7 @@ def main(argv: list[str] | None = None) -> int:
             payload = airspace_scene.remote(list(base) + list(overlay.airspaces))
         extras.append(render_html.Extra(
             uid="airspace",
-            label="Airspace & planner",
+            label="Planner",
             meta=f"{overlay.atz_count} zones &middot; {overlay.circuits} okruhy",
             body=airspace_html.body(
                 overlay, base, base_version,

@@ -29,7 +29,7 @@ from __future__ import annotations
 # tabs over the same map were one too many. `public/planner/` only redirects.
 PAGES = [
     ("meteo", "Meteo", "meteo/"),
-    ("airspace", "Airspace & planner", "airspace/"),
+    ("airspace", "Planner", "airspace/"),
     ("flights", "Flights", ""),
 ]
 
