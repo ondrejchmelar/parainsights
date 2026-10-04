@@ -176,6 +176,14 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
    the trace bends on the right. Stacked, they keep their own proportions, because there
    is nothing to read across to. */
 .met-columns.is-single .met-col-gram { aspect-ratio: 380 / 300; }
+/* The airgram spans the row when the two charts above sit side by side: it shares the
+   meteogram's clock, and a full-width chart of the day reads as one. */
+.met-columns.is-single .met-col-air,
+.met-columns.is-single .met-col-airout { grid-column:1 / -1; }
+.met-columns.is-single .met-col-air { aspect-ratio: 780 / 260; margin-top:8px; }
+.met-col-air { touch-action: none; }
+.met-col-airout { font-size:11.5px; color:var(--ink-3); margin:3px 0 0; min-height:1.5em;
+  font-variant-numeric:tabular-nums; }
 .met-col-head { display:flex; align-items:center; gap:7px; font-size:12.5px;
   font-weight:600; margin:0 0 5px; }
 .met-col-head i { width:10px; height:10px; border-radius:50%; flex:none; }
@@ -1232,6 +1240,9 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
           + '<p class="met-col-rose"><span></span> <a rel="noreferrer">on PGE</a></p>'
           + '<canvas class="met-canvas met-col-gram" width="380" height="230"></canvas>'
           + '<canvas class="met-canvas met-col-sounding" width="380" height="300"></canvas>'
+          + '<canvas class="met-canvas met-col-air" width="380" height="250"'
+          + ' aria-label="Airgram: wind by hour and height"></canvas>'
+          + '<p class="met-col-airout"></p>'
           + '<details class="met-col-top" hidden><summary></summary><p></p></details>';
         cell.querySelector('i').style.background = seriesColour(slotOf(index));
         cell.querySelector('.name').textContent = conf.sites[index].name;
@@ -1252,6 +1263,8 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
         cell.querySelector('.met-col-sounding').title =
           box.dataset.soundingHint.replace(/\s+/g, ' ');
         bindProbe(cell.querySelector('.met-col-sounding'));
+        bindAir(cell.querySelector('.met-col-air'), cell.querySelector('.met-col-airout'),
+                index);
         box.appendChild(cell);
       });
     }
@@ -1267,6 +1280,137 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
       sounding.id = index === state.site ? 'met-sounding' : '';
       drawGram(cell.querySelector('.met-col-gram'), profile, slotOf(index));
       drawSounding(sounding, profile);
+      drawAir(cell.querySelector('.met-col-air'), profile, slotOf(index));
+    });
+  }
+
+  // ---- the airgram: wind by hour and height ---------------------------------------------
+  //
+  // The sounding is the air at one hour; this is the wind at every hour of the day and
+  // every height up to the chart's ceiling — the question "when does it turn, and does
+  // it get strong up where I will be" that one hour cannot answer. Same clock as the
+  // meteogram above it (05-21) and the same height scale as both charts, so the three
+  // read across.
+  //
+  // Speed is the shading, one hue deepening with speed and laid over the panel so both
+  // themes work; direction is an arrow pointing *downwind*, the convention of every other
+  // arrow on this site (the 3D view's rose), with the reported direction in the readout.
+  // Heights between pressure levels come from `sampleProfile`, which interpolates the
+  // wind as components — the readout and the shading cannot disagree.
+  var AIR_FULL = 15;      // m/s at which the shading is at its deepest
+  var AIR_STEP = 100;     // metres per shaded row
+  function airFrame(canvas, profile) {
+    var box = canvas.getBoundingClientRect();
+    var W = box.width, H = box.height;
+    var left = 38, right = 8, top = 8, bottom = 22;
+    var top_m = ceilingFor(profile.elevation);
+    return { W: W, H: H, left: left, right: right, top: top, bottom: bottom, top_m: top_m,
+             x: function (hour) { return left + (hour - 5) / 16 * (W - left - right); },
+             y: function (metres) { return top + (1 - metres / top_m) * (H - top - bottom); },
+             hour: function (px) { return 5 + (px - left) / (W - left - right) * 16; },
+             metres: function (py) { return (1 - (py - top) / (H - top - bottom)) * top_m; } };
+  }
+  function airShade(speed) {
+    return 'rgba(37,99,235,' + (0.08 + Math.min(speed / AIR_FULL, 1) * 0.8).toFixed(3) + ')';
+  }
+  function drawAir(canvas, profile, slot) {
+    var frame = fit(canvas);
+    if (!frame || !profile) return;
+    var ctx = frame.ctx, f = airFrame(canvas, profile);
+    var hourly = profile.hourly, ground = profile.elevation;
+    ctx.clearRect(0, 0, f.W, f.H);
+    var colW = (f.W - f.left - f.right) / 16;
+    var cells = [];
+    for (var hour = 5; hour <= 21; hour++) {
+      var at = indexFor(hourly.time, state.day, hour);
+      for (var m = Math.floor(ground / AIR_STEP) * AIR_STEP; m < f.top_m; m += AIR_STEP) {
+        var lo = Math.max(m, ground), hi = Math.min(m + AIR_STEP, f.top_m);
+        if (hi <= lo) continue;
+        var sample = sampleProfile(hourly, at, (lo + hi) / 2, ground);
+        if (!sample || sample.speed == null) continue;
+        cells.push(sample.speed);
+        ctx.fillStyle = airShade(sample.speed);
+        var x0 = Math.max(f.x(hour) - colW / 2, f.left), x1 = Math.min(f.x(hour) + colW / 2, f.W - f.right);
+        ctx.fillRect(x0, f.y(hi), x1 - x0 + 0.5, f.y(lo) - f.y(hi) + 0.5);
+      }
+    }
+    ctx.fillStyle = ink('--panel-2');
+    ctx.fillRect(f.left, f.y(ground), f.W - f.left - f.right, f.H - f.bottom - f.y(ground));
+
+    var box = { left: f.left, top: f.top, W: f.W, H: f.H, right: f.right, bottom: f.bottom };
+    hourLine(ctx, profile, f.x, f.y, boundaryLayer(profile), false, seriesColour(slot), 2, box);
+
+    // Arrows every two hours, every 500 m above the ground. Dark ink where the shading is
+    // light and white where it is deep, so an arrow is never the colour of its cell.
+    for (var h = 6; h <= 20; h += 2) {
+      var idx = indexFor(hourly.time, state.day, h);
+      for (var z = Math.ceil((ground + 150) / 500) * 500; z < f.top_m; z += 500) {
+        var w = sampleProfile(hourly, idx, z, ground);
+        if (!w || w.speed == null || w.dir == null) continue;
+        var to = (w.dir + 180) * Math.PI / 180, len = 8;
+        var cx = f.x(h), cy = f.y(z), dx = Math.sin(to) * len, dy = -Math.cos(to) * len;
+        ctx.strokeStyle = ctx.fillStyle = w.speed / AIR_FULL > 0.45 ? '#fff' : ink('--ink');
+        ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.moveTo(cx - dx, cy - dy); ctx.lineTo(cx + dx, cy + dy); ctx.stroke();
+        var back = Math.atan2(dy, dx);
+        ctx.beginPath();
+        ctx.moveTo(cx + dx, cy + dy);
+        ctx.lineTo(cx + dx - 5 * Math.cos(back - 0.45), cy + dy - 5 * Math.sin(back - 0.45));
+        ctx.lineTo(cx + dx - 5 * Math.cos(back + 0.45), cy + dy - 5 * Math.sin(back + 0.45));
+        ctx.closePath(); ctx.fill();
+      }
+    }
+
+    // The hour the rest of the page is at.
+    ctx.save();
+    ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = ink('--ink-2');
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(f.x(state.hour), f.top); ctx.lineTo(f.x(state.hour), f.H - f.bottom);
+    ctx.stroke();
+    ctx.restore();
+
+    gramAxes(ctx, f.x, f.y, f.top_m, f.left, f.right, f.bottom, f.W, f.H, 4);
+    // The key: what the deepest shading means, on the chart rather than in a caption
+    // nobody reads twice.
+    var kx = f.left + 4, ky = f.top + 4;
+    ctx.font = '10px ui-sans-serif, sans-serif';
+    var label = 'wind, shading 0 \u2192 ' + AIR_FULL + '+ m/s';
+    var kw = ctx.measureText(label).width;
+    ctx.globalAlpha = 0.88; ctx.fillStyle = ink('--panel');
+    ctx.fillRect(kx - 2, ky - 1, kw + 52, 14); ctx.globalAlpha = 1;
+    for (var k = 0; k < 40; k++) {
+      ctx.fillStyle = airShade(k / 40 * AIR_FULL);
+      ctx.fillRect(kx + k, ky + 2, 1.2, 9);
+    }
+    ctx.fillStyle = ink('--ink-3'); ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText(label, kx + 46, ky + 1);
+    canvas.dataset.cells = cells.length;
+  }
+
+  // The readout: the wind at the hour and height under the pointer.
+  function bindAir(canvas, out, index) {
+    function say(event) {
+      var profile = state.profiles[index];
+      if (!profile) return;
+      var f = airFrame(canvas, profile), box = canvas.getBoundingClientRect();
+      var hour = Math.round(f.hour(event.clientX - box.left));
+      var metres = f.metres(event.clientY - box.top);
+      if (hour < 5 || hour > 21 || metres < profile.elevation || metres > f.top_m) {
+        out.textContent = ''; state.airProbe = null; return;
+      }
+      var w = sampleProfile(profile.hourly, indexFor(profile.hourly.time, state.day, hour),
+                            metres, profile.elevation);
+      state.airProbe = { hour: hour, metres: metres, speed: w && w.speed, dir: w && w.dir };
+      out.textContent = ('0' + hour).slice(-2) + ':00 · ' + Math.round(metres / 50) * 50
+        + ' m · ' + (w && w.speed != null
+          ? w.speed.toFixed(1) + ' m/s from ' + compass(w.dir) + ' (' + Math.round(w.dir) + '°)'
+          : 'no wind in the model here');
+    }
+    canvas.addEventListener('pointermove', say);
+    canvas.addEventListener('pointerdown', say);
+    canvas.addEventListener('pointerleave', function () {
+      out.textContent = ''; state.airProbe = null;
     });
   }
 
@@ -1912,6 +2056,7 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
     verdict: verdict,
     cappingLayers: cappingLayers,
     sampleProfile: sampleProfile,
+    drawAir: drawAir,
     cloudbase: cloudbase,
     draw: drawSite,
     // The multi-site controls, so a browser test can drive the page the way a reader

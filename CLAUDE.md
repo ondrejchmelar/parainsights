@@ -974,7 +974,13 @@ the font stays inlined because it is one request for a document's whole appearan
   passes because over terrain the centre's height moves with the pan. Measured by hand
   over CDP on the Col Rodella flight, a 64° turn and 15° tilt: the grabbed ground moved
   **944 px** before, **0.6 px** after. Not in the suite — it needs MapLibre from a CDN.
-- **An airgram on the meteo page**: wind over time and altitude for the chosen takeoff.
+- ~~**An airgram on the meteo page**~~ **Done**: a third chart in each takeoff's column
+  (`drawAir`), wind by hour (05-21, the meteogram's clock) and height (the same ceiling as
+  both charts) from the profile already fetched — no new request. Speed is one hue over
+  the panel (deepest at 15 m/s), direction an arrow pointing downwind every two hours and
+  500 m, the boundary layer over it and the page's hour as a dashed line; the pointer
+  reads the wind at the hour and height under it through `sampleProfile`, so the readout
+  and the shading interpolate the same way (components, not angles).
 - **Every feature for an uploaded track — in progress.** The bundled flights are a
   showcase; uploads are the product and get a reduced analysis (`quicklook.py`). The
   direction is JavaScript as the one runtime language for the viewer (not Pyodide):

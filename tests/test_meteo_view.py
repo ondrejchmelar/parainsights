@@ -1334,3 +1334,33 @@ def test_the_two_thermal_tops_are_named_and_the_difference_explained():
     assert "why two numbers?" in answer["summary"]
     assert answer["open"] is False, "the reason should be folded until asked for"
     assert "ECMWF" in answer["why"] and "parcel" in answer["why"]
+
+
+@needs_chrome
+def test_the_airgram_draws_the_day_and_reads_the_wind_under_the_pointer():
+    """Wind by hour and height for the takeoff. The fixture's 925 hPa level, at 760 m,
+    blows 40 m/s from 010° all day, between 20 m/s levels from 350° and 270° — so the
+    readout at that height has to say 40 from the north, and the shading has to exist."""
+    answer = _probe_page("""
+    var canvas = document.querySelector('.met-col-air');
+    var out = document.querySelector('.met-col-airout');
+    var box = canvas.getBoundingClientRect();
+    var top = 8, bottom = 22, ceiling = 4000;
+    var y = box.top + top + (1 - 760 / ceiling) * (box.height - top - bottom);
+    var x = box.left + 38 + (13 - 5) / 16 * (box.width - 38 - 8);
+    canvas.dispatchEvent(new PointerEvent('pointermove', {
+      clientX: x, clientY: y, bubbles: true, pointerType: 'mouse' }));
+    var probe = window.__meteo.state.airProbe, text = out.textContent;
+    canvas.dispatchEvent(new PointerEvent('pointerleave', {
+      clientX: box.left, clientY: box.top, bubbles: true, pointerType: 'mouse' }));
+    return { cells: Number(canvas.dataset.cells), probe: probe, text: text,
+             after: out.textContent, height: box.height };
+    """)
+    assert answer["cells"] > 17 * 20, answer
+    probe = answer["probe"]
+    assert probe["hour"] == 13
+    assert probe["metres"] == pytest.approx(760, abs=15)
+    assert probe["speed"] == pytest.approx(40, abs=1.5)
+    assert probe["dir"] == pytest.approx(10, abs=3)
+    assert "m/s from N" in answer["text"], answer["text"]
+    assert answer["after"] == "", "the readout stayed up after the pointer left"
