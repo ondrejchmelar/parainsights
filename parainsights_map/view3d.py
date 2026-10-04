@@ -2050,9 +2050,12 @@ function initView3d(root, cursorTrack, preset) {
   // nonzero rule, the union of overlapping quads takes the alpha exactly once. Filling
   // them one at a time doubles the alpha wherever a near wall crosses a far one, and a
   // 70-sided circle then paints itself into an opaque drum.
+  // Vertical edges are drawn where a zone has corners worth marking — a TMA, a CTR, an
+  // okruh's rectangles. A circle published as 70 vertices would be hatched by 70 lines.
+  var AIRSPACE_EDGE_LIMIT = 24;
   function airspaceBox(space) {
     var n = space.lon.length;
-    var floor = new Path2D(), lid = new Path2D(), walls = new Path2D();
+    var floor = new Path2D(), lid = new Path2D(), walls = new Path2D(), edges = new Path2D();
     var fx = new Array(n), fy = new Array(n), tx = new Array(n), ty = new Array(n);
     var flat = true;
     for (var i = 0; i < n; i++) {
@@ -2082,9 +2085,10 @@ function initView3d(root, cursorTrack, preset) {
         walls.lineTo(tx[k], ty[k]);
         walls.lineTo(tx[j], ty[j]);
         walls.closePath();
+        if (n <= AIRSPACE_EDGE_LIMIT) { edges.moveTo(fx[j], fy[j]); edges.lineTo(tx[j], ty[j]); }
       }
     }
-    return { floor: floor, lid: lid, walls: walls, flat: flat };
+    return { floor: floor, lid: lid, walls: walls, edges: edges, flat: flat };
   }
 
   function drawAirspaces() {
@@ -2107,11 +2111,14 @@ function initView3d(root, cursorTrack, preset) {
       ctx.globalAlpha = solid;
       ctx.fill(box.floor);
       if (!box.flat) {
-        // Walls lighter than the floor: a box seen through its own two near walls is
-        // already twice the ink of the ring it replaces, and the layer has to stay
-        // something you can see the country through.
-        ctx.globalAlpha = solid * 0.55;
+        // Walls as solid as the floor, filled once as a union so a near wall over a far
+        // one is not darker. They were half the floor's, and a tilted box read as two
+        // rings with nothing between them — the box was there and could not be seen.
+        ctx.globalAlpha = solid;
         ctx.fill(box.walls);
+        ctx.globalAlpha = 0.45;
+        ctx.lineWidth = 1;
+        ctx.stroke(box.edges);
         // The lid filled only where the box is its own ceiling. A capped box gets an
         // outline and no fill, which is what makes "this goes on up" visible at a glance.
         if (!space.t) {

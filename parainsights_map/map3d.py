@@ -592,6 +592,24 @@ SCRIPT = r"""
         }
         return tr.t[best];
       }
+      // The track from the left handle on. TripsLayer hides what is after `currentTime`
+      // (the right handle) but only cuts the start of the trail when it is *fading* it, and
+      // this one does not fade — so the left handle moved and the track stayed. Cut here
+      // instead, and only when the handle has moved: each run sliced from its first fix at
+      // or after `from`.
+      var clippedFrom = 0, clipped = lines;
+      function linesFrom() {
+        if (from === clippedFrom) return clipped;
+        clippedFrom = from;
+        clipped = [];
+        lines.forEach(function (run) {
+          var times = run.times, lo = 0, hi = times.length;
+          while (lo < hi) { var mid = (lo + hi) >> 1; if (times[mid] < from) lo = mid + 1; else hi = mid; }
+          if (times.length - lo < 2) return;
+          clipped.push(lo ? { path: run.path.slice(lo), times: times.slice(lo), colour: run.colour } : run);
+        });
+        return clipped;
+      }
       function inWindow(t) { return !hasTime || (t >= from - 1 && t <= cutoff + 1); }
       var marks = (scene.climbs || []).map(function (c) {
         return { label: c.label, tow: c.tow, position: [c.lon, c.lat, c.alt], t: flownAt(c.lon, c.lat) };
@@ -641,6 +659,18 @@ SCRIPT = r"""
             getPath: function (d) { return d.path; }, getColor: function (d) { return rgb(d.colour, 200); },
             getWidth: 1.2, widthUnits: 'pixels', updateTriggers: { data: vertical }
           }));
+          // The corners' vertical edges, where a zone has corners (as the canvas view).
+          out.push(new deck.LineLayer({
+            id: 'airspace-corners', data: drawn.reduce(function (all, d) {
+              if (d.ring.length > 24) return all;
+              d.ring.forEach(function (p) { all.push({ colour: d.colour, p: p, floor: d.floor, top: d.top }); });
+              return all;
+            }, []),
+            getSourcePosition: function (d) { return [d.p[0], d.p[1], z(d.floor)]; },
+            getTargetPosition: function (d) { return [d.p[0], d.p[1], z(d.top)]; },
+            getColor: function (d) { return rgb(d.colour, 150); }, getWidth: 1,
+            updateTriggers: { getSourcePosition: vertical, getTargetPosition: vertical }
+          }));
         }
         // A planned task (the planner on the airspace page): the course 60 m over the
         // ground, as the canvas draws it, and the turnpoints numbered.
@@ -684,7 +714,7 @@ SCRIPT = r"""
         // The track between the two handles, in its climb colours: a trip whose "now" is
         // the right handle and whose trail reaches back to the left one, unfaded.
         if (hasTime) out.push(new deck.TripsLayer({
-          id: 'track', data: lines,
+          id: 'track', data: linesFrom(),
           getPath: function (d) { return d.path.map(function (p) { return [p[0], p[1], z(p[2])]; }); },
           getTimestamps: function (d) { return d.times; },
           getColor: function (d) { return d.colour; }, getWidth: TRACK_WIDTH, widthUnits: 'pixels',
@@ -894,8 +924,11 @@ SCRIPT = r"""
         var dt = last ? (now - last) / 1000 : 0;
         last = now;
         var next = cutoff + dt * SPEEDS[speed];
-        // At the end it starts again from the left handle, not from launch.
-        setTime(next > duration ? from : next);
+        // It stops at the end, on the landing, rather than wrapping round: a replay that
+        // starts again by itself throws away the moment the reader was watching for.
+        // Play again from there starts over from the left handle (`togglePlay`).
+        if (next >= duration) { setTime(duration); pause(); return; }
+        setTime(next);
         if (playing) frame = requestAnimationFrame(step);
       }
       function togglePlay() {

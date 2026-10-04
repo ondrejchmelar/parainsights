@@ -319,7 +319,9 @@ SWITCH_SCRIPT = (
         var dt = last ? (now - last) / 1000 : 0;
         last = now;
         var next = cutoff + dt * 120;
-        setTime(next > duration ? 0 : next);
+        // Stops on the landing rather than wrapping round; play again starts over.
+        if (next >= duration) { setTime(duration); pause(); return; }
+        setTime(next);
         if (playing) frame = requestAnimationFrame(step);
       }
       view.addEventListener('click', function (event) {

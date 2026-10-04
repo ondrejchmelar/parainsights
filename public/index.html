@@ -3957,9 +3957,12 @@ function initView3d(root, cursorTrack, preset) {
   // nonzero rule, the union of overlapping quads takes the alpha exactly once. Filling
   // them one at a time doubles the alpha wherever a near wall crosses a far one, and a
   // 70-sided circle then paints itself into an opaque drum.
+  // Vertical edges are drawn where a zone has corners worth marking — a TMA, a CTR, an
+  // okruh's rectangles. A circle published as 70 vertices would be hatched by 70 lines.
+  var AIRSPACE_EDGE_LIMIT = 24;
   function airspaceBox(space) {
     var n = space.lon.length;
-    var floor = new Path2D(), lid = new Path2D(), walls = new Path2D();
+    var floor = new Path2D(), lid = new Path2D(), walls = new Path2D(), edges = new Path2D();
     var fx = new Array(n), fy = new Array(n), tx = new Array(n), ty = new Array(n);
     var flat = true;
     for (var i = 0; i < n; i++) {
@@ -3989,9 +3992,10 @@ function initView3d(root, cursorTrack, preset) {
         walls.lineTo(tx[k], ty[k]);
         walls.lineTo(tx[j], ty[j]);
         walls.closePath();
+        if (n <= AIRSPACE_EDGE_LIMIT) { edges.moveTo(fx[j], fy[j]); edges.lineTo(tx[j], ty[j]); }
       }
     }
-    return { floor: floor, lid: lid, walls: walls, flat: flat };
+    return { floor: floor, lid: lid, walls: walls, edges: edges, flat: flat };
   }
 
   function drawAirspaces() {
@@ -4014,11 +4018,14 @@ function initView3d(root, cursorTrack, preset) {
       ctx.globalAlpha = solid;
       ctx.fill(box.floor);
       if (!box.flat) {
-        // Walls lighter than the floor: a box seen through its own two near walls is
-        // already twice the ink of the ring it replaces, and the layer has to stay
-        // something you can see the country through.
-        ctx.globalAlpha = solid * 0.55;
+        // Walls as solid as the floor, filled once as a union so a near wall over a far
+        // one is not darker. They were half the floor's, and a tilted box read as two
+        // rings with nothing between them — the box was there and could not be seen.
+        ctx.globalAlpha = solid;
         ctx.fill(box.walls);
+        ctx.globalAlpha = 0.45;
+        ctx.lineWidth = 1;
+        ctx.stroke(box.edges);
         // The lid filled only where the box is its own ceiling. A capped box gets an
         // outline and no fill, which is what makes "this goes on up" visible at a glance.
         if (!space.t) {
@@ -6321,7 +6328,9 @@ window.__view3dBackend = function (host) {
         var dt = last ? (now - last) / 1000 : 0;
         last = now;
         var next = cutoff + dt * 120;
-        setTime(next > duration ? 0 : next);
+        // Stops on the landing rather than wrapping round; play again starts over.
+        if (next >= duration) { setTime(duration); pause(); return; }
+        setTime(next);
         if (playing) frame = requestAnimationFrame(step);
       }
       view.addEventListener('click', function (event) {
@@ -6980,6 +6989,24 @@ window.__view3dBackend = function (host) {
         }
         return tr.t[best];
       }
+      // The track from the left handle on. TripsLayer hides what is after `currentTime`
+      // (the right handle) but only cuts the start of the trail when it is *fading* it, and
+      // this one does not fade — so the left handle moved and the track stayed. Cut here
+      // instead, and only when the handle has moved: each run sliced from its first fix at
+      // or after `from`.
+      var clippedFrom = 0, clipped = lines;
+      function linesFrom() {
+        if (from === clippedFrom) return clipped;
+        clippedFrom = from;
+        clipped = [];
+        lines.forEach(function (run) {
+          var times = run.times, lo = 0, hi = times.length;
+          while (lo < hi) { var mid = (lo + hi) >> 1; if (times[mid] < from) lo = mid + 1; else hi = mid; }
+          if (times.length - lo < 2) return;
+          clipped.push(lo ? { path: run.path.slice(lo), times: times.slice(lo), colour: run.colour } : run);
+        });
+        return clipped;
+      }
       function inWindow(t) { return !hasTime || (t >= from - 1 && t <= cutoff + 1); }
       var marks = (scene.climbs || []).map(function (c) {
         return { label: c.label, tow: c.tow, position: [c.lon, c.lat, c.alt], t: flownAt(c.lon, c.lat) };
@@ -7029,6 +7056,18 @@ window.__view3dBackend = function (host) {
             getPath: function (d) { return d.path; }, getColor: function (d) { return rgb(d.colour, 200); },
             getWidth: 1.2, widthUnits: 'pixels', updateTriggers: { data: vertical }
           }));
+          // The corners' vertical edges, where a zone has corners (as the canvas view).
+          out.push(new deck.LineLayer({
+            id: 'airspace-corners', data: drawn.reduce(function (all, d) {
+              if (d.ring.length > 24) return all;
+              d.ring.forEach(function (p) { all.push({ colour: d.colour, p: p, floor: d.floor, top: d.top }); });
+              return all;
+            }, []),
+            getSourcePosition: function (d) { return [d.p[0], d.p[1], z(d.floor)]; },
+            getTargetPosition: function (d) { return [d.p[0], d.p[1], z(d.top)]; },
+            getColor: function (d) { return rgb(d.colour, 150); }, getWidth: 1,
+            updateTriggers: { getSourcePosition: vertical, getTargetPosition: vertical }
+          }));
         }
         // A planned task (the planner on the airspace page): the course 60 m over the
         // ground, as the canvas draws it, and the turnpoints numbered.
@@ -7072,7 +7111,7 @@ window.__view3dBackend = function (host) {
         // The track between the two handles, in its climb colours: a trip whose "now" is
         // the right handle and whose trail reaches back to the left one, unfaded.
         if (hasTime) out.push(new deck.TripsLayer({
-          id: 'track', data: lines,
+          id: 'track', data: linesFrom(),
           getPath: function (d) { return d.path.map(function (p) { return [p[0], p[1], z(p[2])]; }); },
           getTimestamps: function (d) { return d.times; },
           getColor: function (d) { return d.colour; }, getWidth: TRACK_WIDTH, widthUnits: 'pixels',
@@ -7282,8 +7321,11 @@ window.__view3dBackend = function (host) {
         var dt = last ? (now - last) / 1000 : 0;
         last = now;
         var next = cutoff + dt * SPEEDS[speed];
-        // At the end it starts again from the left handle, not from launch.
-        setTime(next > duration ? from : next);
+        // It stops at the end, on the landing, rather than wrapping round: a replay that
+        // starts again by itself throws away the moment the reader was watching for.
+        // Play again from there starts over from the left handle (`togglePlay`).
+        if (next >= duration) { setTime(duration); pause(); return; }
+        setTime(next);
         if (playing) frame = requestAnimationFrame(step);
       }
       function togglePlay() {
