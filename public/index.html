@@ -1006,6 +1006,10 @@ canvas.view3d.is-over-rose { cursor: pointer; }
 @media (pointer: coarse) {
   .merged-view .m3-range input::-webkit-slider-thumb { width: 22px; height: 22px; margin-top: 0; }
 }
+.merged-view .m3-measure { position: absolute; left: 12px; top: 40px; z-index: 3; margin: 0;
+  padding: 4px 9px; font-size: 12px; color: var(--ink); background: var(--panel);
+  border: 1px solid var(--rule); border-radius: 2px; font-variant-numeric: tabular-nums; }
+.merged-view .m3-measure[hidden] { display: none; }
 .merged-view .m3-status { position: absolute; left: 12px; top: 34px; z-index: 3; margin: 0;
   font-size: 12px; color: var(--ink-2); }
 /* MapLibre's own credits, the openable kind: an (i) at the top left that opens to name
@@ -1083,6 +1087,14 @@ a.view-tab { text-decoration: none; display: inline-block; }
   display:grid; place-items:center; line-height:1; }
 .theme-toggle .theme-glyph { display:block; }
 .theme-toggle:hover { color: var(--ink); border-color: var(--rule-strong); }
+/* The source link beside it, and the page's foot: `common.strip_end` and `common.footer`. */
+a.site-source { align-self:center; margin:0 0 0 6px; padding:0; width:30px; height:30px;
+  display:grid; place-items:center; border:1px solid var(--rule); border-radius:999px;
+  background:var(--panel); color:var(--ink-2); }
+a.site-source:hover { color: var(--ink); border-color: var(--rule-strong); }
+.site-foot { margin:48px 0 0; padding:14px 0 0; border-top:1px solid var(--rule);
+  font-size:12.5px; line-height:1.55; color:var(--ink-3); }
+.site-foot a { color: var(--ink-2); }
 .view-tab:focus-visible { outline: 2px solid var(--climb); outline-offset: -2px; }
 
 /* The renderer switch, for the standalone page — the report styles `.toggle` itself. */
@@ -1197,7 +1209,7 @@ a.view-tab { text-decoration: none; display: inline-block; }
 [data-planner][data-drawing="on"] .maplibregl-canvas-container.maplibregl-interactive { cursor:crosshair; }
 </style>
 <div class="wrap">
-<nav class="views" id="views" role="group" aria-label="Choose a view"><a class="view-tab" href="meteo/">Meteo</a><button type="button" class="view-tab" data-view-tab="airspace" aria-pressed="false">Planner</button><button type="button" class="view-tab is-on" data-view-tab="flights" aria-pressed="true">Flights</button><button type="button" class="theme-toggle" aria-pressed="false" aria-label="Switch between the light and dark theme"><span class="theme-glyph" aria-hidden="true">☽</span></button></nav>
+<nav class="views" id="views" role="group" aria-label="Choose a view"><a class="view-tab" href="meteo/">Meteo</a><button type="button" class="view-tab" data-view-tab="airspace" aria-pressed="false">Planner</button><button type="button" class="view-tab is-on" data-view-tab="flights" aria-pressed="true">Flights</button><button type="button" class="theme-toggle" aria-pressed="false" aria-label="Switch between the light and dark theme"><span class="theme-glyph" aria-hidden="true">☽</span></button><a class="site-source" href="https://github.com/ondrejchmelar/parainsights" rel="noreferrer" title="The source, on GitHub" aria-label="The source, on GitHub"><svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg></a></nav>
 <section data-view="flights">
 <nav class="tabs" id="flight-tabs" role="group" aria-label="Choose a flight"><span class="tab tab-add" data-flight-tab="own"><button type="button" class="tab-open" aria-pressed="false" title="Analyse your own track"><span class="tab-date">+ your track</span><span class="tab-meta">igc &middot; kml &middot; kmz</span></button></span><span class="tab is-on" data-flight-tab="f0"><button type="button" class="tab-open" aria-pressed="true"><span class="tab-date">2018-09-28</span><span class="tab-meta">Ondřej · Col Rodella</span><span class="tab-stat">49 km &middot; FAI triangle</span></button><button type="button" class="tab-compare" data-compare-toggle="f0" title="Add this flight to the comparison" aria-pressed="false" aria-label="Add this flight to the comparison">&#8646;</button><button type="button" class="tab-close" title="Remove this flight" aria-label="Remove this flight">&#215;</button></span><span class="tab" data-flight-tab="f1"><button type="button" class="tab-open" aria-pressed="false"><span class="tab-date">2022-05-07</span><span class="tab-meta">Karel · Krupka</span><span class="tab-stat">201 km &middot; FAI triangle</span></button><button type="button" class="tab-compare" data-compare-toggle="f1" title="Add this flight to the comparison" aria-pressed="false" aria-label="Add this flight to the comparison">&#8646;</button><button type="button" class="tab-close" title="Remove this flight" aria-label="Remove this flight">&#215;</button></span><span class="tab" data-flight-tab="f2"><button type="button" class="tab-open" aria-pressed="false"><span class="tab-date">2026-06-16</span><span class="tab-meta">Antoine · PK Hunza</span><span class="tab-stat">401 km &middot; FAI triangle</span></button><button type="button" class="tab-compare" data-compare-toggle="f2" title="Add this flight to the comparison" aria-pressed="false" aria-label="Add this flight to the comparison">&#8646;</button><button type="button" class="tab-close" title="Remove this flight" aria-label="Remove this flight">&#215;</button></span></nav>
 <article class="flight" data-flight-report="f0" data-compare-scored-km="48.64" data-compare-mean-climb="1.04" data-compare-ceiling-used="0.95" data-compare-name="2018-09-28 · Col Rodella">
@@ -2232,7 +2244,7 @@ a.view-tab { text-decoration: none; display: inline-block; }
   instrument draws the circuit.
   Scroll to zoom, drag to pan, hover for the name and limits. Each zone is the box it really is — floor to ceiling — so drag with the right button to tilt and see what sits over what. <strong>The vertical is exaggerated five times</strong>, which the × buttons under the map set: at true scale, across 500 km of country, a 300 m traffic circuit is a third of a pixel tall and every box here is two rings on top of each other. ×1 is one press away, and the limits in each label are the real ones whichever setting you are on. The 37 that run above 4 km are cut off at a dashed lid, which is a cap and not their ceiling; the label says how high they go. <strong>Plan a task on the same map:</strong> press <em>Draw a task</em> and click turnpoints, and the route is scored as XContest would and checked against every zone it crosses.</p>
   <div class="asp-controls"><label><input type="checkbox" data-asp-class="base" checked><span class="asp-swatch" style="background:#c2410c"></span>Controlled (CTR/TMA/CTA)</label><label><input type="checkbox" data-asp-class="restricted" checked><span class="asp-swatch" style="background:#b91c1c"></span>Restricted, danger, prohibited</label><label><input type="checkbox" data-asp-class="gliding" checked><span class="asp-swatch" style="background:#a16207"></span>Gliding, dropzones, PGZ</label><label><input type="checkbox" data-asp-class="atz" checked><span class="asp-swatch" style="background:#15803d"></span>Aerodrome zone</label><label><input type="checkbox" data-asp-class="circuit" checked><span class="asp-swatch" style="background:#ea580c"></span>Traffic circuit (okruh)</label></div><div class="asp-controls"><span class="asp-slider"><label for="asp-floor">Floor at or below</label><input type="range" id="asp-floor" min="0" max="3850" step="50" value="3850" data-top="3850"><span class="asp-readout" id="asp-readout"></span></span><span class="asp-readout" id="asp-count"></span><button type="button" id="asp-reset">Reset</button></div><div class="asp-controls"><label for="asp-when-on"><input type="checkbox" id="asp-when-on">Only fields open at</label><input type="datetime-local" id="asp-when" data-holidays="2025-01-01,2025-04-18,2025-04-21,2025-05-01,2025-05-08,2025-07-05,2025-07-06,2025-09-28,2025-10-28,2025-11-17,2025-12-24,2025-12-25,2025-12-26,2026-01-01,2026-04-03,2026-04-06,2026-05-01,2026-05-08,2026-07-05,2026-07-06,2026-09-28,2026-10-28,2026-11-17,2026-12-24,2026-12-25,2026-12-26,2027-01-01,2027-03-26,2027-03-29,2027-05-01,2027-05-08,2027-07-05,2027-07-06,2027-09-28,2027-10-28,2027-11-17,2027-12-24,2027-12-25,2027-12-26,2028-01-01,2028-04-14,2028-04-17,2028-05-01,2028-05-08,2028-07-05,2028-07-06,2028-09-28,2028-10-28,2028-11-17,2028-12-24,2028-12-25,2028-12-26" aria-label="date and time, Czech local"><button type="button" id="asp-when-now">now</button><span class="asp-readout asp-when-out" id="asp-when-out"></span></div><p class="asp-hint">Czech local time. Aerodrome hours are published for 68 of the 82 aerodromes and for <strong>none</strong> of the 74 ultralight strips, and nothing else on this map carries hours at all — so this hides part of one layer, not the map. <strong>Outside published hours is not “closed”</strong>: almost every field adds “otherwise on request”, and a tow launch needs no published hour.</p>
-  <div class="plan-bar"><button type="button" class="plan-draw" id="plan-draw" aria-pressed="false">Draw a task</button><button type="button" id="plan-undo">Undo point</button><button type="button" id="plan-clear">Clear</button><label><input type="checkbox" id="plan-close"> closed course</label><span class="plan-hint" id="plan-hint">Press <em>Draw a task</em>, then click the map to drop turnpoints. Drag, pinch and twist still move the view — a click that moved is a drag, not a point.</span></div>
+  <div class="plan-bar"><button type="button" class="plan-draw" id="plan-draw" aria-pressed="false">Draw a task</button><button type="button" id="plan-undo">Undo point</button><button type="button" id="plan-clear">Clear</button><label><input type="checkbox" id="plan-close"> closed course</label><label title="XContest world: closing within 20%, flat ×1.2, FAI ×1.4. ČPP (the Czech cup): closing within 5%, and in the Central European zone — V4, Austria, Germany north of 48.5° — flat ×1.8, FAI ×2.2">rules <select id="plan-rules"><option value="world">XContest world</option><option value="cpp">ČPP (Czech)</option></select></label><label title="Where each turnpoint can go for an FAI triangle (every side at least 28% of the perimeter), the other two staying put: turnpoint 1 green, 2 blue, 3 red. Yellow: where a closed course must finish"><input type="checkbox" id="plan-fai" checked> FAI areas</label><span class="plan-hint" id="plan-hint">Press <em>Draw a task</em>, then click the map to drop turnpoints. Drag, pinch and twist still move the view — a click that moved is a drag, not a point.</span></div>
   <div class="asp-holder">
     <div class="renderer-host" data-renderer-default="merged"><div class="toggle renderer-switch" role="group" aria-label="3D renderer"><button type="button" class="toggle-button is-on" data-renderer="canvas" aria-pressed="true">canvas</button><button type="button" class="toggle-button" data-renderer="maplibre" aria-pressed="false">MapLibre</button><button type="button" class="toggle-button" data-renderer="merged" aria-pressed="false">merged</button></div>
     <div class="panel view3d-panel">
@@ -2318,6 +2330,9 @@ a.view-tab { text-decoration: none; display: inline-block; }
     every side at least 28% of the perimeter for FAI, a closing gap under
     20% of it for a closed course, multipliers
     1&thinsp;/&thinsp;1.2&thinsp;/&thinsp;1.4.
+    With <em>ČPP</em> chosen, the Czech cup's: closing under 5%, and in the Central European
+    zone 1&thinsp;/&thinsp;1.8&thinsp;/&thinsp;2.2
+    (<a href="https://www.xcontest.org/cesko/pravidla/" rel="noreferrer">rules</a>).
     Airspace is drawn for Czechia only.
     <strong>This is a plan, not a clearance.</strong> Check the airspace and the NOTAMs.</p>
     <script type="application/json" id="plan-coverage">{"name":"Czechia","lon":[18.832,18.75,18.596,18.416,18.365,18.161,18.11,18.086,18.051,17.913,17.893,17.758,17.625,17.483,17.188,17.136,17.063,16.985,16.953,16.884,16.713,16.544,16.478,16.367,16.057,15.825,15.701,15.403,15.311,15.162,15.14,15.067,14.993,14.972,14.923,14.822,14.786,14.707,14.691,14.489,14.431,14.368,14.19,14.049,13.989,13.815,13.77,13.548,13.441,13.401,13.339,13.289,13.228,13.141,12.917,12.813,12.681,12.5,12.391,12.498,12.512,12.458,12.276,12.208,12.175,12.09,12.09,12.135,12.175,12.277,12.453,12.549,12.706,12.765,12.943,12.967,13.016,13.181,13.238,13.306,13.375,13.436,13.473,13.527,13.557,13.701,13.899,14.202,14.369,14.377,14.299,14.256,14.283,14.32,14.507,14.546,14.595,14.624,14.614,14.723,14.767,14.809,14.896,14.983,14.994,15.259,15.277,15.354,15.731,15.894,15.949,16.007,16.066,16.282,16.36,16.42,16.379,16.283,16.21,16.231,16.334,16.488,16.597,16.639,16.679,16.842,16.99,16.993,16.869,16.88,17.152,17.415,17.555,17.655,17.702,17.72,17.735,17.709,17.589,17.627,17.681,17.831,17.875,17.984,18.028,18.099,18.205,18.305,18.348,18.516,18.562,18.595,18.807,18.832],"lat":[49.511,49.494,49.491,49.391,49.336,49.257,49.18,49.065,49.037,48.999,48.971,48.888,48.842,48.828,48.861,48.841,48.781,48.677,48.599,48.704,48.734,48.796,48.8,48.739,48.755,48.864,48.86,48.957,48.974,48.946,48.969,48.998,49.001,48.984,48.771,48.774,48.747,48.672,48.599,48.626,48.616,48.576,48.579,48.602,48.692,48.767,48.816,48.96,48.956,48.978,49.061,49.097,49.112,49.158,49.33,49.329,49.415,49.64,49.74,49.853,49.896,49.956,50.042,50.098,50.176,50.269,50.302,50.311,50.288,50.181,50.35,50.393,50.409,50.431,50.406,50.416,50.49,50.51,50.577,50.586,50.622,50.601,50.617,50.693,50.705,50.717,50.761,50.861,50.899,50.914,50.953,51.002,51.029,51.038,51.01,50.994,50.919,50.915,50.856,50.815,50.818,50.859,50.861,50.887,51.014,50.959,50.883,50.812,50.74,50.677,50.67,50.612,50.63,50.656,50.621,50.574,50.517,50.483,50.424,50.394,50.367,50.248,50.122,50.102,50.097,50.187,50.237,50.26,50.415,50.427,50.378,50.255,50.264,50.284,50.307,50.299,50.231,50.194,50.157,50.116,50.101,49.983,49.972,49.999,50.035,49.993,49.965,49.914,49.93,49.902,49.879,49.758,49.614,49.511]}</script>
@@ -2325,6 +2340,7 @@ a.view-tab { text-decoration: none; display: inline-block; }
   <div class="asp-get"><a class="asp-download" download="CZ_airfield_zones_20261001.txt" href="airspace/CZ_airfield_zones_20261001.txt"><span class="asp-dl-label">Download the airfield layer</span><span class="asp-dl-note">OpenAir · 82 aerodrome zones, 206 circuits at 157 fields · 208 KB</span></a><p class="asp-get-how"><strong>This file is not a full airspace set.</strong> It holds the green and orange layers only — the aerodrome zones and traffic circuits that XCTrack and XContest leave out — so load it <em>alongside</em> your usual airspace, never instead of it. Nothing in red or amber on the map above is in this file.<br>Import under <em>Preferences → Airspaces and obstacles → Files → Import OpenAir files</em>, or copy it into the <code>XCTrack/Airspaces</code> folder and tick it there.</p><p class="asp-warn">Provided with no guarantee — it may be out of date or wrong. <strong>Pilots are responsible for the airspace they fly in.</strong> Check the AIP and NOTAMs before flying.</p></div>
   <table class="asp-src"><caption>What is on this map, and where it came from</caption><thead><tr><th>Layer</th><th>Source</th><th>Effective</th></tr></thead><tbody><tr><td class='asp-src-key'><span class="asp-swatch" style="background:#c2410c"></span><span class="asp-swatch" style="background:#b91c1c"></span>Controlled, restricted, danger, prohibited</td><td><a href="https://www.openaip.net" rel="noreferrer">openAIP</a> — CC BY-NC 4.0</td><td class='asp-src-when'>openAIP 2026-10-05</td></tr><tr><td class='asp-src-key'><span class="asp-swatch" style="background:#a16207"></span>Gliding areas, dropzones, PGZ</td><td><a href="https://www.openaip.net" rel="noreferrer">openAIP</a> — CC BY-NC 4.0</td><td class='asp-src-when'>openAIP 2026-10-05</td></tr><tr><td class='asp-src-key'><span class="asp-swatch" style="background:#15803d"></span>Aerodrome zones on the map — openAIP's. The download's are this site's own: 82 public aerodromes, 5 500 m radius, ground to 4 000 ft (the AIP calls these ATZ), 15 clipped by an overlying CTR or TMA; positions corrected by 108 m. <strong>An ultralight strip has no zone of its own</strong>, so those 74 fields carry only their traffic circuit</td><td>map: <a href="https://www.openaip.net" rel="noreferrer">openAIP</a> — CC BY-NC 4.0; download: <a href="https://aim.rlp.cz/" rel="noreferrer">ŘLP ČR</a> — UAS zones, <a href="https://aim.rlp.cz/data/uas/2026_10_01/actual/LKR315A.json" rel="noreferrer">LKR315A</a>, <a href="https://aim.rlp.cz/data/uas/2026_10_01/actual/LKR315B.json" rel="noreferrer">LKR315B</a></td><td class='asp-src-when'>openAIP 2026-10-05; 2026-10-01</td></tr><tr><td class='asp-src-key'><span class="asp-swatch" style="background:#ea580c"></span>Traffic circuits (okruhy) — <strong>drawn by this tool, not a published boundary.</strong> Shape scaled off the AIP's VOC charts (±10%); altitude published where stated, otherwise 1 000 ft above the field (measured mean 993 ft over five, spread 820–1 150). At an SLZ strip the runway itself is reconstructed from the reference point and a heading rounded to 10°, so those are marked <code>est</code></td><td>circuit drawn from the <a href="https://aim.rlp.cz/vfrmanual/actual/ad/lkcast_voc.jpg" rel="noreferrer">VOC charts</a>, altitudes and runway tables from the <a href="https://aim.rlp.cz/vfrmanual/actual/lkta_text_en.html" rel="noreferrer">AIP VFR manual</a>, thresholds from <a href="https://ourairports.com/countries/CZ/" rel="noreferrer">OurAirports</a></td><td class='asp-src-when'>—</td></tr></tbody></table>
 </article></section>
+<footer class="site-foot"><a href="https://github.com/ondrejchmelar/parainsights" rel="noreferrer">parainsights on GitHub</a> — the source, the issues, and how every number on these pages is worked out. Airspace © <a href="https://www.openaip.net" rel="noreferrer">openAIP</a> (CC BY-NC 4.0); imagery © Esri, Maxar, Earthstar Geographics; place names © OpenMapTiles, © OpenStreetMap contributors; terrain: AWS Open Data; weather: Open-Meteo.</footer>
 </div>
 <div class="tooltip" id="tip" role="status" aria-live="polite"></div>
 <script>
@@ -6643,12 +6659,19 @@ window.__view3dBackend = function (host) {
   // Markers and labels draw over the track rather than fighting it for depth: a number
   // at the same point as its own circle otherwise loses to it and vanishes.
   var ON_TOP = { depthCompare: 'always', depthWriteEnabled: false };
+  // The airspace is glass: hidden behind a mountain, but it must hide nothing itself.
+  // Writing depth, a translucent box drawn before the track hid every part of the flight
+  // inside or behind it — over Krupka, nearly all of it, the moment airspace was on.
+  var GLASS = { depthWriteEnabled: false };
   // The canvas view strokes its track 2.6 px wide on a backing store of up to twice the
   // screen's density, so on a phone it is 1.3 CSS px and on a desktop 2.6. deck.gl's
   // pixels are CSS pixels, so the same line takes the same arithmetic.
   var TRACK_WIDTH = 2.6 / Math.min(window.devicePixelRatio || 1, 2);
   var PLAY_ICON = '<svg width="11" height="12" viewBox="0 0 11 12" aria-hidden="true">' +
     '<path d="M1 1 L10 6 L1 11 Z" fill="currentColor"/></svg>';
+  var RULER_ICON = '<svg width="14" height="12" viewBox="0 0 14 12" aria-hidden="true" fill="none"' +
+    ' stroke="currentColor" stroke-width="1.3"><path d="M1 8.5 8.5 1l4.5 4.5L5 13z" transform="translate(0 -1.5)"/>' +
+    '<path d="M4 5.5l1.5 1.5M6 3.5l1.5 1.5M8 1.5l1.5 1.5" transform="translate(0 -0.5)"/></svg>';
   var PAUSE_ICON = '<svg width="11" height="12" viewBox="0 0 11 12" aria-hidden="true">' +
     '<path d="M1.5 1h3v10h-3zM6.5 1h3v10h-3z" fill="currentColor"/></svg>';
   function rgb(hex, alpha) {
@@ -6692,6 +6715,7 @@ window.__view3dBackend = function (host) {
       '<dt>1 2 4</dt><dd>exaggeration</dd>' +
       '<dt>s m r</dt><dd>satellite, map, relief</dd>' +
       (airspace ? '<dt>a</dt><dd>airspace</dd>' : '') +
+      '<dt>d</dt><dd>measure: click points; backspace undoes one, esc ends</dd>' +
       '<dt>space</dt><dd>replay: open, play, pause</dd>' +
       '<dt>c</dt><dd>replay: follow the glider</dd>' +
       '<dt>arrows, following</dt><dd>turn and tilt the view</dd>' +
@@ -6803,6 +6827,7 @@ window.__view3dBackend = function (host) {
         'flight. Arrow keys pan and shift with them turns and tilts; press question mark ' +
         'for the key list."></div>' +
       '<p class="m3-status">Loading MapLibre…</p>' +
+      '<p class="m3-measure" hidden aria-live="polite"></p>' +
       '<div class="m3-rose" hidden><svg width="64" height="64" viewBox="-32 -32 64 64">' +
         '<circle r="30" fill="rgba(16,19,24,0.55)" stroke="rgba(255,255,255,0.28)"/>' +
         '<text class="m3-n" text-anchor="middle" dominant-baseline="central" font-size="11"' +
@@ -6868,6 +6893,8 @@ window.__view3dBackend = function (host) {
           '<button type="button" data-m3="zoom-in" title="Zoom in" aria-label="Zoom in">+</button></div>' +
         (hasTime ? '<button type="button" data-m3="replay" class="m3-icon" aria-pressed="false"' +
           ' title="Replay the flight" aria-label="Replay the flight">' + PLAY_ICON + '</button>' : '') +
+        '<button type="button" data-m3="measure" class="m3-icon" aria-pressed="false"' +
+          ' title="Measure a distance (d)" aria-label="Measure a distance">' + RULER_ICON + '</button>' +
         '<button type="button" data-m3="help" title="Controls" aria-label="How to control this view">?</button>' +
         '<button type="button" data-m3="fullscreen" title="Full screen" aria-label="Full screen">' +
           '<svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor"' +
@@ -7008,6 +7035,17 @@ window.__view3dBackend = function (host) {
         // raster label is a picture of text at one scale. Shown where the basemap had
         // labels (the photograph), switched with it.
         sources.places = { type: 'vector', url: PLACES };
+        // Two overlays drawn by MapLibre itself, so they lie on the terrain: shapes a page
+        // hands in (`setShapes` — the planner's FAI area) and the measuring line.
+        var empty = { type: 'FeatureCollection', features: [] };
+        sources.shapes = { type: 'geojson', data: empty };
+        sources.measure = { type: 'geojson', data: empty };
+        above.push(
+          { id: 'shapes-fill', type: 'fill', source: 'shapes',
+            paint: { 'fill-color': ['coalesce', ['get', 'colour'], '#3b4cc0'],
+                     'fill-opacity': ['coalesce', ['get', 'opacity'], 0.4] } },
+          { id: 'shapes-edge', type: 'line', source: 'shapes',
+            paint: { 'line-color': ['coalesce', ['get', 'colour'], '#3b4cc0'], 'line-width': 2 } });
         above.push({
           id: 'place-labels', type: 'symbol', source: 'places', 'source-layer': 'place',
           // Villages only from zoom 11: hidden by opacity they would still take the room
@@ -7031,6 +7069,13 @@ window.__view3dBackend = function (host) {
           paint: { 'text-color': '#ffffff', 'text-halo-color': 'rgba(12,14,18,0.85)',
                    'text-halo-width': 1.4, 'text-halo-blur': 0.4 }
         });
+        above.push(
+          { id: 'measure-line', type: 'line', source: 'measure', filter: ['==', ['geometry-type'], 'LineString'],
+            layout: { 'line-cap': 'round', 'line-join': 'round' },
+            paint: { 'line-color': '#ffffff', 'line-width': 2.5, 'line-dasharray': [2, 1.5] } },
+          { id: 'measure-dots', type: 'circle', source: 'measure', filter: ['==', ['geometry-type'], 'Point'],
+            paint: { 'circle-radius': 4.5, 'circle-color': '#ffffff',
+                     'circle-stroke-color': 'rgba(12,14,18,0.9)', 'circle-stroke-width': 1.5 } });
         return {
           version: 8, sources: sources, glyphs: GLYPHS,
           // No paint transitions: the sun's direction moves in steps with the cursor, and
@@ -7057,7 +7102,7 @@ window.__view3dBackend = function (host) {
       // from straight down.
       var openPitch = scene.view && typeof scene.view.pitch === 'number' && !tr.lon.length
         ? Math.max(0, 90 - scene.view.pitch * 180 / Math.PI) : 60;
-      var styleReady = false;
+      var styleReady = false, pendingShapes = [];
       map = new maplibregl.Map({
         container: view.querySelector('.ml-map'), style: style(basemap),
         center: [(west + east) / 2, (south + north) / 2], zoom: 10, pitch: openPitch, bearing: 0,
@@ -7067,6 +7112,10 @@ window.__view3dBackend = function (host) {
       // included, which on a slow connection is long after a reader has pressed things.
       map.once('style.load', function () {
         styleReady = true;
+        if (pendingShapes.length) {
+          var shapes = map.getSource('shapes');
+          if (shapes) shapes.setData({ type: 'FeatureCollection', features: pendingShapes });
+        }
         if (vertical !== 1) map.setTerrain({ source: 'dem', exaggeration: vertical });
       });
       // Credits from the sources themselves, so switching the basemap changes them.
@@ -7102,7 +7151,10 @@ window.__view3dBackend = function (host) {
         var surface = map.getCanvasContainer(), last = null, pivot = null;
         var ANCHOR_INSET = 0.25;
         function pickPivot(event) {
-          var box = surface.getBoundingClientRect();
+          // The canvas's box, not the canvas container's: that element has no height of
+          // its own, and clamped into it every pivot went to y = 0 — the horizon, 200 km
+          // away at a 60° tilt — and a shift-drag flung the map across the country.
+          var box = map.getCanvas().getBoundingClientRect();
           var x = Math.min(Math.max(event.clientX - box.left, box.width * ANCHOR_INSET),
                            box.width * (1 - ANCHOR_INSET));
           var y = Math.min(Math.max(event.clientY - box.top, box.height * ANCHOR_INSET),
@@ -7242,7 +7294,8 @@ window.__view3dBackend = function (host) {
             getPolygon: function (d) { return d.ring.map(function (p) { return [p[0], p[1], z(d.floor)]; }); },
             getElevation: function (d) { return (d.top - d.floor) * vertical; },
             getFillColor: function (d) { return rgb(d.colour, 46); },
-            material: false, updateTriggers: { getPolygon: vertical, getElevation: vertical }
+            material: false, parameters: GLASS,
+            updateTriggers: { getPolygon: vertical, getElevation: vertical }
           }));
           out.push(new deck.PathLayer({
             id: 'airspace-edges', data: drawn.reduce(function (all, d) {
@@ -7252,7 +7305,7 @@ window.__view3dBackend = function (host) {
               return all;
             }, []),
             getPath: function (d) { return d.path; }, getColor: function (d) { return rgb(d.colour, 200); },
-            getWidth: 1.2, widthUnits: 'pixels', updateTriggers: { data: vertical }
+            getWidth: 1.2, widthUnits: 'pixels', parameters: GLASS, updateTriggers: { data: vertical }
           }));
           // The corners' vertical edges, where a zone has corners (as the canvas view).
           out.push(new deck.LineLayer({
@@ -7263,7 +7316,7 @@ window.__view3dBackend = function (host) {
             }, []),
             getSourcePosition: function (d) { return [d.p[0], d.p[1], z(d.floor)]; },
             getTargetPosition: function (d) { return [d.p[0], d.p[1], z(d.top)]; },
-            getColor: function (d) { return rgb(d.colour, 150); }, getWidth: 1,
+            getColor: function (d) { return rgb(d.colour, 150); }, getWidth: 1, parameters: GLASS,
             updateTriggers: { getSourcePosition: vertical, getTargetPosition: vertical }
           }));
         }
@@ -7632,15 +7685,45 @@ window.__view3dBackend = function (host) {
         return turn(0, course[i] + turn(course[i], course[j]) * (at - i));
       }
 
+      // Where the camera looks: the glider's mean position over ±45 s of flight, not the
+      // glider itself. Locked to the glider the whole view swung round every thermal
+      // circle; a circle takes 20-30 s, so over 90 s it averages to its middle and the
+      // glider circles inside a steady frame instead of the frame circling with it.
+      function steadyAt(t) {
+        var n = 13, lon = 0, lat = 0, alt = 0;
+        for (var i = 0; i < n; i++) {
+          var q = positionAt(t - 45 + 90 * i / (n - 1));
+          lon += q.lon; lat += q.lat; alt += q.alt;
+        }
+        return { lon: lon / n, lat: lat / n, alt: alt / n };
+      }
       var following = false, followFrame = null, followLast = 0;
       // Where the reader has turned the view off the direction of flight, with the arrows.
       var yawOffset = 0;
       var cam = null;          // { bearing, zoom, pitch } the camera is easing towards
+      // The next step on an animation frame or, failing one within 100 ms, a timer: a
+      // browser that stops serving frames to a page it considers hidden or idle (an
+      // occluded window, a headless one) would otherwise freeze the camera mid-turn.
       function kickFollow() {
-        if (following && !followFrame) followFrame = requestAnimationFrame(followTick);
+        if (!following || followFrame) return;
+        var done = false;
+        function go(now) {
+          if (done) return;
+          done = true;
+          cancelAnimationFrame(followFrame.frame);
+          clearTimeout(followFrame.timer);
+          followFrame = null;
+          followTick(typeof now === 'number' ? now : performance.now());
+        }
+        followFrame = { frame: requestAnimationFrame(go), timer: setTimeout(go, 100) };
+      }
+      function stopFollowFrame() {
+        if (!followFrame) return;
+        cancelAnimationFrame(followFrame.frame);
+        clearTimeout(followFrame.timer);
+        followFrame = null;
       }
       function followTick(now) {
-        followFrame = null;
         if (!following || view.hidden) return;
         var dt = followLast ? Math.min((now - followLast) / 1000, 1) : 1 / 60;
         followLast = now;
@@ -7648,7 +7731,7 @@ window.__view3dBackend = function (host) {
         // Heading over 0.7 s, zoom and tilt over 0.3 s: the zoom is the reader's own.
         var kTurn = 1 - Math.exp(-dt / 0.7), kZoom = 1 - Math.exp(-dt / 0.3);
         var bearing = map.getBearing(), zoom = map.getZoom(), pitch = map.getPitch();
-        var p = positionAt(cutoff);
+        var p = steadyAt(cutoff);
         var H = map.getContainer().clientHeight || 500;
         var dTurn = turn(bearing, target), dZoom = cam.zoom - zoom, dPitch = cam.pitch - pitch;
         // And never faster than 90° a second: where the flight really turns back, the
@@ -7657,7 +7740,7 @@ window.__view3dBackend = function (host) {
         var swing = Math.max(-90 * dt, Math.min(90 * dt, dTurn * kTurn));
         bearing += swing; zoom += dZoom * kZoom; pitch += dPitch * kZoom;
         // MapLibre orbits a point on the ground, at the height of the terrain under the
-        // centre, and the glider is kilometres above it. Estimating where on the ground
+        // centre, and the glider is kilometres above it (here its steady position). Estimating where on the ground
         // to look so the glider lands mid-screen worked over Krupka and hunted over the
         // Karakoram, where moving the centre onto a 7 km peak lifts the whole camera. So
         // while following, the orbit height is frozen at the glider's own altitude
@@ -7705,7 +7788,7 @@ window.__view3dBackend = function (host) {
         following = on;
         var b = view.querySelector('[data-m3="follow"]');
         if (b) toggle(b, on);
-        if (followFrame) { cancelAnimationFrame(followFrame); followFrame = null; }
+        stopFollowFrame();
         followLast = 0;
         if (!on) release();
         // Opening on the whole flight, follow comes down to a few kilometres around the
@@ -7829,6 +7912,57 @@ window.__view3dBackend = function (host) {
         }
       }, true);
 
+      // ---- measure ---------------------------------------------------------------------
+      // Click points, read the distance: the total and the last leg, on the FAI sphere —
+      // what a scored distance is measured on (`js/geo.js`). The line is MapLibre's own,
+      // so it lies on the ground. Backspace takes a point back; Esc or the button ends it.
+      var measuring = false, measurePoints = [];
+      var measureText = view.querySelector('.m3-measure');
+      function sphere(a, b) {
+        var r = Math.PI / 180, la1 = a[1] * r, la2 = b[1] * r;
+        var h = Math.pow(Math.sin((la2 - la1) / 2), 2)
+          + Math.cos(la1) * Math.cos(la2) * Math.pow(Math.sin((b[0] - a[0]) * r / 2), 2);
+        return 2 * 6371000 * Math.asin(Math.min(1, Math.sqrt(h)));
+      }
+      function km(metres) { return metres < 10000 ? (metres / 1000).toFixed(2) : (metres / 1000).toFixed(1); }
+      function drawOverlay(id, features) {
+        var source = map.getSource(id);
+        if (source) source.setData({ type: 'FeatureCollection', features: features });
+      }
+      function showMeasure() {
+        var features = measurePoints.map(function (p) {
+          return { type: 'Feature', geometry: { type: 'Point', coordinates: p }, properties: {} };
+        });
+        if (measurePoints.length > 1) {
+          features.unshift({ type: 'Feature', properties: {},
+                             geometry: { type: 'LineString', coordinates: measurePoints } });
+        }
+        drawOverlay('measure', features);
+        var total = 0;
+        for (var i = 1; i < measurePoints.length; i++) total += sphere(measurePoints[i - 1], measurePoints[i]);
+        var last = measurePoints.length > 1
+          ? sphere(measurePoints[measurePoints.length - 2], measurePoints[measurePoints.length - 1]) : 0;
+        measureText.textContent = measurePoints.length < 2 ? 'Measure: click points on the map'
+          : km(total) + ' km' + (measurePoints.length > 2 ? ' · last leg ' + km(last) + ' km' : '');
+      }
+      function setMeasure(on) {
+        measuring = on;
+        measurePoints = [];
+        var b = view.querySelector('[data-m3="measure"]');
+        toggle(b, on);
+        measureText.hidden = !on;
+        map.getCanvas().style.cursor = on ? 'crosshair' : '';
+        showMeasure();
+      }
+      view.addEventListener('keydown', function (event) {
+        if (!measuring || !onMap(event)) return;
+        if (event.key === 'Escape') { setMeasure(false); event.preventDefault(); event.stopImmediatePropagation(); }
+        else if (event.key === 'Backspace') {
+          measurePoints.pop(); showMeasure();
+          event.preventDefault(); event.stopImmediatePropagation();
+        }
+      }, true);
+
       // ---- controls --------------------------------------------------------------------
       var GROUNDS = styles.concat(['off']);
       var VERTICALS = offered.length ? offered : [1, 2, 4];
@@ -7904,6 +8038,7 @@ window.__view3dBackend = function (host) {
         else if (act === 'zoom-in') { if (following) followZoomBy(1); else map.zoomIn(); }
         else if (act === 'zoom-out') { if (following) followZoomBy(-1); else map.zoomOut(); }
         else if (act === 'help') help.hidden = !help.hidden;
+        else if (act === 'measure') setMeasure(!measuring);
         else if (act === 'fullscreen') fullscreen();
         else if (act === 'reset') { setFollow(false); fit(true); }
         else if (act === 'play') togglePlay();
@@ -7929,6 +8064,7 @@ window.__view3dBackend = function (host) {
           setFollow(!following);
         }
         else if (k === '?') help.hidden = !help.hidden;
+        else if (k === 'd' || k === 'D') setMeasure(!measuring);
         else if (k === 'Escape' && !help.hidden) help.hidden = true;
         else if (k === ' ') togglePlay();
         else done = false;
@@ -8031,18 +8167,32 @@ window.__view3dBackend = function (host) {
       // turnpoint with. MapLibre's own `click` already refuses a pointer that moved.
       map.on('click', function (event) {
         var at = [event.lngLat.lng, event.lngLat.lat];
+        // Measuring takes the click: it is not also a turnpoint.
+        if (measuring) { measurePoints.push(at); showMeasure(); return; }
         clickers.forEach(function (fn) { fn(at, event.originalEvent); });
       });
 
       var entry = {
         map: map, setTime: setTime, setFrom: setFrom, cursor: function () { return cursor; },
         setFollow: setFollow, following: function () { return following; }, courseAt: courseAt,
+        followCamera: function () { return following ? { zoom: cam.zoom, pitch: cam.pitch, turn: yawOffset } : null; },
         setBasemap: setBasemap, setVertical: setVertical,
         setRoute: function (walk, points) {
           route = walk || points ? { walk: walk || [], points: points || [] } : null;
           refresh();
         },
         onClick: function (fn) { clickers.push(fn); },
+        // What deck.gl draws now, as ids and depth parameters: for the tests, which cannot
+        // tell a hidden track from a missing one by looking.
+        layers: function () {
+          return layers().map(function (l) { return { id: l.id, parameters: l.props.parameters || null }; });
+        },
+        // GeoJSON polygons drawn on the ground under everything else on the map, each with
+        // optional `colour` and `opacity` properties; null or [] clears them.
+        setShapes: function (features) {
+          pendingShapes = features || [];
+          if (styleReady) drawOverlay('shapes', pendingShapes);
+        },
         airspaceShown: function () {
           return airspaceOn ? boxes.filter(function (d) {
             return !airspaceFilter || airspaceFilter(d.space);
@@ -14175,8 +14325,19 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
   function plan(handle) {
   var canvas = panel.querySelector('canvas.view3d');
 
-  var FAI_MIN_SIDE = 0.28, MAX_CLOSING = 0.2;
-  var MULTIPLIER = {open: 1.0, flat: 1.2, fai: 1.4};
+  var FAI_MIN_SIDE = 0.28;
+  // Two rule sets, chosen under the map. XContest world: the report's own (`js/xc.js`).
+  // ČPP, the Czech cup on XContest (xcontest.org/cesko/pravidla): a closed course must
+  // close within 5 per cent of the perimeter, not 20, and in the Central European zone
+  // (V4, Austria, Germany north of 48.5°) a flat triangle scores 1.8 and an FAI one 2.2.
+  var RULES = {
+    world: { closing: 0.2, multiplier: {open: 1.0, flat: 1.2, fai: 1.4} },
+    cpp: { closing: 0.05, multiplier: { open: 1.0, flat: 1.8, fai: 2.2 } }
+  };
+  function rules() {
+    var pick = document.getElementById('plan-rules');
+    return RULES[pick && pick.value] || RULES.world;
+  }
   var points = [];          // [lon, lat] per turnpoint, in the order dropped
 
   // ---- geodesy -----------------------------------------------------------------------
@@ -14430,13 +14591,13 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
       var perimeter = sides[0] + sides[1] + sides[2];
       var gap = points.length === 4 ? distance(points[3], points[0]) : 0;
       out.closing = gap;
-      if (perimeter > 0 && gap / perimeter < MAX_CLOSING) {
+      if (perimeter > 0 && gap / perimeter < rules().closing) {
         out.total = perimeter;
         out.sides = sides;
         out.shape = Math.min.apply(null, sides) / perimeter >= FAI_MIN_SIDE ? 'fai' : 'flat';
       }
     }
-    out.score = out.total / 1000 * (MULTIPLIER[out.shape] || 1);
+    out.score = out.total / 1000 * (rules().multiplier[out.shape] || 1);
     return out;
   }
 
@@ -14463,9 +14624,104 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
     });
     handle.redraw();
     var merged = mergedEntry();
-    if (merged) merged.setRoute(walk, points);
+    if (merged) {
+      merged.setRoute(walk, points);
+      if (merged.setShapes) merged.setShapes(faiShapes());
+    }
     report();
     reportAirspace();
+  }
+
+  // ---- the FAI area ------------------------------------------------------------------
+  //
+  // Where the third turnpoint can go, given the first two, for the triangle to be FAI:
+  // every side at least FAI_MIN_SIDE of the perimeter. On each side of the first leg it is
+  // a band between two curves — too close to the leg and the other two sides are short,
+  // too far and the leg itself is. Traced along rays from the leg's midpoint, the band
+  // being an interval along each ray, and every edge found by bisection so the outline is
+  // smooth. In a flat plane around the leg: a guide for where to click, at well under a
+  // percent from the sphere the score is measured on.
+  // `towards`: only the side of the leg this point is on. `colour`: the fill.
+  function faiArea(a, b, colour, towards) {
+    var lat0 = (a[1] + b[1]) / 2, lon0 = (a[0] + b[0]) / 2;
+    var kx = 111320 * Math.cos(lat0 * Math.PI / 180), ky = 111320;
+    var ax = (a[0] - lon0) * kx, ay = (a[1] - lat0) * ky, bx = (b[0] - lon0) * kx, by = (b[1] - lat0) * ky;
+    var c = Math.hypot(bx - ax, by - ay);
+    if (c < 200) return [];
+    var ux = (bx - ax) / c, uy = (by - ay) / c;
+    function fai(x, y) {
+      var sa = Math.hypot(x - bx, y - by), sb = Math.hypot(x - ax, y - ay);
+      return Math.min(sa, sb, c) >= FAI_MIN_SIDE * (sa + sb + c);
+    }
+    function lonlat(x, y) { return [lon0 + x / kx, lat0 + y / ky]; }
+    var shapes = [], sides = [1, -1];
+    if (towards) {
+      var tx = (towards[0] - lon0) * kx, ty = (towards[1] - lat0) * ky;
+      sides = [(-uy * tx + ux * ty) >= 0 ? 1 : -1];
+    }
+    sides.forEach(function (side) {
+      var vx = -uy * side, vy = ux * side, outer = [], inner = [];
+      for (var deg = -85; deg <= 85; deg += 1) {
+        var t = deg * Math.PI / 180;
+        var dx = Math.cos(t) * vx + Math.sin(t) * ux, dy = Math.cos(t) * vy + Math.sin(t) * uy;
+        var steps = 240, top = 4 * c, first = -1, last = -1;
+        for (var i = 1; i <= steps; i++) {
+          var r = top * i / steps;
+          if (fai(dx * r, dy * r)) { if (first < 0) first = i; last = i; }
+        }
+        if (first < 0) continue;
+        function edge(lo, hi) {      // lo inside, hi outside, or the other way round
+          var inLo = fai(dx * lo, dy * lo);
+          for (var k = 0; k < 16; k++) {
+            var mid = (lo + hi) / 2;
+            if (fai(dx * mid, dy * mid) === inLo) lo = mid; else hi = mid;
+          }
+          return (lo + hi) / 2;
+        }
+        var near = edge(top * first / steps, top * (first - 1) / steps);
+        var far = edge(top * last / steps, top * (last + 1) / steps);
+        inner.push(lonlat(dx * near, dy * near));
+        outer.push(lonlat(dx * far, dy * far));
+      }
+      if (outer.length < 3) return;
+      var ring = outer.concat(inner.reverse());
+      ring.push(ring[0]);
+      shapes.push({ type: 'Feature', properties: { colour: colour, opacity: 0.45 },
+                    geometry: { type: 'Polygon', coordinates: [ring] } });
+    });
+    return shapes;
+  }
+  // xcplanner's convention (dkm/xcplanner, `faiSector`), which pilots know: turnpoint 1
+  // green, 2 blue, 3 red, and each colour is the area where *that* turnpoint can be with
+  // the other two where they are — drawn on the side of the opposite leg the turnpoint
+  // is on. With two turnpoints placed, the third's area on both sides of the leg. With a
+  // closed course, the yellow circle: where the flight must finish, a fifth of the
+  // triangle's perimeter around the first turnpoint.
+  var CORNER_COLOURS = ['#22c55e', '#3b82f6', '#ef4444'];
+  function closingCircle(centre, radius) {
+    var kx = 111320 * Math.cos(centre[1] * Math.PI / 180), ring = [];
+    for (var i = 0; i <= 64; i++) {
+      var t = 2 * Math.PI * i / 64;
+      ring.push([centre[0] + radius * Math.sin(t) / kx, centre[1] + radius * Math.cos(t) / 111320]);
+    }
+    return { type: 'Feature', properties: { colour: '#eab308', opacity: 0.3 },
+             geometry: { type: 'Polygon', coordinates: [ring] } };
+  }
+  function faiShapes() {
+    var box = document.getElementById('plan-fai');
+    if (!box || !box.checked || points.length < 2) return [];
+    if (points.length === 2) return faiArea(points[0], points[1], CORNER_COLOURS[2]);
+    var corners = points.slice(0, 3), shapes = [];
+    corners.forEach(function (corner, i) {
+      shapes = shapes.concat(faiArea(corners[(i + 1) % 3], corners[(i + 2) % 3],
+                                     CORNER_COLOURS[i], corner));
+    });
+    if (document.getElementById('plan-close').checked) {
+      var perimeter = distance(corners[0], corners[1]) + distance(corners[1], corners[2])
+        + distance(corners[2], corners[0]);
+      shapes.push(closingCircle(corners[0], rules().closing * perimeter));
+    }
+    return shapes;
   }
 
   // ---- the merged map ------------------------------------------------------------------
@@ -14484,6 +14740,7 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
       addPoint(at);
     });
     entry.setRoute(course(), points);
+    if (entry.setShapes) entry.setShapes(faiShapes());
   }
   panel.addEventListener('merged-ready', function (event) { hookMerged(event.detail); });
   hookMerged(mergedEntry());
@@ -14507,7 +14764,7 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
     var cells = [
       ['distance', (answer.total / 1000).toFixed(2) + ' km'],
       ['score', answer.score.toFixed(2) + ' pts'],
-      ['multiplier', '\u00d7' + (MULTIPLIER[answer.shape] || 1).toFixed(1)],
+      ['multiplier', '\u00d7' + (rules().multiplier[answer.shape] || 1).toFixed(1)],
       ['turnpoints', String(points.length)]
     ];
     cells.forEach(function (pair) {
@@ -14585,6 +14842,8 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
     redraw();
   });
   document.getElementById('plan-close').addEventListener('change', redraw);
+  document.getElementById('plan-rules').addEventListener('change', redraw);
+  document.getElementById('plan-fai').addEventListener('change', redraw);
 
   // The time control belongs to the airspace map, which takes the shut fields off it;
   // here it only re-marks the list, which keeps every crossing either way.

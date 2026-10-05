@@ -840,7 +840,17 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   so these are taken from it — and only a drag (4 px of mouse, 8 px of one finger) ends
   following, not a press; and the arrows turn the view off the
   direction of flight (← →, 15°, kept as the flight turns) and tilt it (↑ ↓, 10°) without
-  ending it; a drag on the map, the rose or reset hands the camera back. Checked by hand over CDP, not in the suite. Climbs are dots, not
+  ending it; a drag on the map, the rose or reset hands the camera back. **The camera looks at the glider's mean
+  position over ±45 s** (`steadyAt`), not the glider: locked to it the view swung round
+  every thermal circle. Each step runs on an animation frame or, within 100 ms, a timer —
+  a browser that stops serving frames to a page it thinks hidden froze the camera.
+  **Measure** (ruler button, `d`): clicks are points, the readout the total and the last
+  leg on the FAI sphere, Backspace and Esc; while measuring a click is nothing else.
+  **The airspace is glass** (`GLASS`, no depth write): drawn before the track and writing
+  depth, the boxes hid every part of a flight inside them — over Krupka nearly all of it.
+  **The shift-drag pivot is clamped into the canvas's box**, not the canvas container's,
+  which has no height: every grab went to y = 0, the horizon, and an 80 px turn moved
+  the map from Krupka to Leipzig. Climbs are dots, not
   numbers, and the track is the canvas's width (2.6 px over the device ratio, capped at
   2). **Ground and exaggeration are one cycling button each**, against the canvas's
   segmented groups, because the merged bar has to fit one row on a phone.
@@ -933,6 +943,16 @@ The numbers are checkable, so check them:
   on it; and **timing is not asserted there**, because `--virtual-time-budget` does not
   advance the clock during synchronous work and every duration comes back zero. Frame
   costs were measured over the DevTools protocol instead and written into `docs/plan.md`.
+- **The merged map is tested with real input** (`tests/test_merged_controls.py`): MapLibre
+  and deck.gl, the pinned versions the page loads from its CDN, are cached once by
+  `python -m tests.vendor` (a network step CI runs first) and served from localhost; the
+  test drives Chrome over the DevTools protocol — mouse with modifiers, keys, wheel — and
+  checks the shift-drag pivot, a plain pan, measuring, the glass airspace, follow and its
+  hand-back. `PARAINSIGHTS_REQUIRE=…,maplibre` makes a missing cache an error, not a skip.
+  Two headless facts it needs: Chrome counts the window as hidden unless told otherwise
+  (`--disable-renderer-backgrounding`, `--disable-backgrounding-occluded-windows`), and
+  even then serves animation frames only while something repaints, so its waits nudge
+  `map.triggerRepaint()`.
 - **No test reaches the internet, and that is enforced.** `tests/conftest.py` refuses
   any socket to a non-loopback address, and `CHROME_FLAGS` carries a resolver rule that
   resolves nothing but localhost. A page under test that points at a real tile server,
@@ -999,7 +1019,16 @@ the font stays inlined because it is one request for a document's whole appearan
   exaggerations and the opening one are the canvas panel's own (×1/5/15 here); it opens
   on `view.focus` at the scene's pitch; and its entry in `__mergedAll` takes a route
   (`setRoute`) and reports clicks (`onClick`), announced to the panel as `merged-ready`.
-  The planner hands its route to both maps and takes turnpoints from either. Checked by
+  The planner hands its route to both maps and takes turnpoints from either.
+  **FAI areas** (`faiArea`, on by default, merged map only — drawn by MapLibre as
+  GeoJSON so they lie on the terrain, through `entry.setShapes`): xcplanner's convention
+  (dkm/xcplanner `faiSector`), which pilots know — turnpoint 1 green, 2 blue, 3 red, each
+  the area where *that* turnpoint can be with the other two where they are, on the side
+  of the opposite leg it is on; with two turnpoints, the third's area on both sides. A
+  closed course adds the yellow circle where the flight must finish. **The rules switch**
+  — XContest world (20% closing, the report's) or ČPP, the Czech cup on XContest (5%
+  closing; in the Central European zone flat ×1.8, FAI ×2.2, which is the zone assumed)
+  — sets the closing test, the circle and the multipliers. Checked by
   hand over CDP with the network: merged at ×5 over Czechia, 745 boxes and 663 with the
   aerodrome zones unticked, three clicks a scored triangle.
 - **Only the merged map.** Drop the canvas and plain MapLibre renderers and the switch,

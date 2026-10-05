@@ -279,7 +279,9 @@ def test_the_planner_scores_with_the_reports_own_constants():
     assert xc.MULTIPLIER == dict(scorer.m)
     source = planner_html.SCRIPT
     assert f"FAI_MIN_SIDE = {xc.FAI_MIN_SIDE}" in source
-    assert f"MAX_CLOSING = {xc.MAX_CLOSING}" in source
+    # The world rules are the report's; ČPP's are the Czech cup's own (5%, 1.8/2.2).
+    assert f"world: {{ closing: {xc.MAX_CLOSING}," in source
+    assert "cpp: { closing: 0.05, multiplier: { open: 1.0, flat: 1.8, fai: 2.2 } }" in source
     for name, value in xc.MULTIPLIER.items():
         assert f"{name}: {value}" in source
 

@@ -13,7 +13,7 @@ dependencies = [
 # a page built without --terrain needs none, and the tests that decode tiles need it too.
 # Node is the other build requirement and is not a Python package: the analysis and the
 # articles are the JavaScript in tracklog_viewer/js/ (`js_build.py`).
-dev = ["pytest>=8", "pytest-xdist>=3", "pillow>=10"]
+dev = ["pytest>=8", "pytest-xdist>=3", "pillow>=10", "websocket-client>=1.7"]
 terrain = ["pillow>=10"]
 
 [project.scripts]

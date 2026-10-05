@@ -42,15 +42,19 @@ def _no_network(monkeypatch):
 # What a CI job says it tests, it must have. A test that needs Chrome or Node skips
 # without it, which is right on a laptop and wrong in CI: a browser job on a runner that
 # lost its Chrome would go green having tested none of the 3D view. `PARAINSIGHTS_REQUIRE`
-# names what must be present ("node", "chrome", or both, comma-separated); the run stops
+# names what must be present ("node", "chrome", "maplibre", comma-separated); the run stops
 # before collecting anything if one is missing.
 def pytest_sessionstart(session):
     import os
     import shutil
 
     wanted = {w.strip() for w in os.environ.get("PARAINSIGHTS_REQUIRE", "").split(",") if w.strip()}
+    from tests import vendor
+
     found = {"node": shutil.which("node"),
-             "chrome": shutil.which("google-chrome") or shutil.which("chromium")}
+             "chrome": shutil.which("google-chrome") or shutil.which("chromium"),
+             # The merged map's libraries, cached by `python -m tests.vendor`.
+             "maplibre": vendor.folder()}
     missing = sorted(w for w in wanted if not found.get(w))
     if missing:
         raise pytest.UsageError(f"PARAINSIGHTS_REQUIRE asks for {', '.join(missing)}, "

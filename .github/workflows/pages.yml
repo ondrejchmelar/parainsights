@@ -44,7 +44,7 @@ jobs:
     # first deploy.
     container: ghcr.io/astral-sh/uv:bookworm-slim
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Node, because the flight analysis is JavaScript and its tests run it (`tests/js.py`).
       # Without it they skip, and this job would pass having tested none of the analysis.
       - run: apt-get update && apt-get install -y --no-install-recommends nodejs && node --version
@@ -75,14 +75,19 @@ jobs:
     # PARAINSIGHTS_REQUIRE makes a missing Chrome or Node an error rather than a run of
     # skips that looks green.
     env:
-      PARAINSIGHTS_REQUIRE: node,chrome
+      # maplibre: the merged map's libraries, fetched below, so its control tests run
+      # rather than skip (`tests/test_merged_controls.py`).
+      PARAINSIGHTS_REQUIRE: node,chrome,maplibre
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
         with:
           enable-cache: true
       - run: google-chrome --version && node --version
       - run: uv sync --locked --extra dev
+      # MapLibre and deck.gl, the pinned versions the page loads from its CDN, cached for
+      # the merged map's tests: the suite itself has no network.
+      - run: uv run python -m tests.vendor
       - run: uv run pytest -c pyproject.toml -rs
 
   # What this job can and cannot build, and why the difference matters.
@@ -102,16 +107,17 @@ jobs:
   # network fail the job rather than publishing yesterday's copy if a source is down.
   build:
     needs: [tests, browser-tests]
+    timeout-minutes: 20
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # `stale.sh` reads the history. The default clone is one commit deep, and in a
           # one-commit window the page's last change is usually not there at all — the
           # check would fail every deploy that did not itself rebuild the report.
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v10
         with:
           enable-cache: true
       # `--extra terrain` is Pillow, and the terrain is why. A bare `uv sync` builds an
@@ -148,7 +154,7 @@ jobs:
       # page that is there.
       - run: for page in airspace meteo planner; do test -f "public/$page/index.html" || (echo "no public/$page/index.html — the nav strip on every other page links to it" && exit 1); done
       - run: echo "publishing $(du -sh public | cut -f1)"
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: public
 
@@ -157,6 +163,10 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    # deploy-pages occasionally waits on GitHub's deployment status for much longer than a
+    # deploy takes (October 2026: one run hung until cancelled, the retry took a minute).
+    # Fail fast instead; a re-run is the fix.
+    timeout-minutes: 10
     permissions:
       pages: write
       id-token: write
@@ -168,4 +178,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

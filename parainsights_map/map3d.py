@@ -72,6 +72,10 @@ STYLE = """
 @media (pointer: coarse) {
   .merged-view .m3-range input::-webkit-slider-thumb { width: 22px; height: 22px; margin-top: 0; }
 }
+.merged-view .m3-measure { position: absolute; left: 12px; top: 40px; z-index: 3; margin: 0;
+  padding: 4px 9px; font-size: 12px; color: var(--ink); background: var(--panel);
+  border: 1px solid var(--rule); border-radius: 2px; font-variant-numeric: tabular-nums; }
+.merged-view .m3-measure[hidden] { display: none; }
 .merged-view .m3-status { position: absolute; left: 12px; top: 34px; z-index: 3; margin: 0;
   font-size: 12px; color: var(--ink-2); }
 /* MapLibre's own credits, the openable kind: an (i) at the top left that opens to name
@@ -98,12 +102,19 @@ SCRIPT = r"""
   // Markers and labels draw over the track rather than fighting it for depth: a number
   // at the same point as its own circle otherwise loses to it and vanishes.
   var ON_TOP = { depthCompare: 'always', depthWriteEnabled: false };
+  // The airspace is glass: hidden behind a mountain, but it must hide nothing itself.
+  // Writing depth, a translucent box drawn before the track hid every part of the flight
+  // inside or behind it — over Krupka, nearly all of it, the moment airspace was on.
+  var GLASS = { depthWriteEnabled: false };
   // The canvas view strokes its track 2.6 px wide on a backing store of up to twice the
   // screen's density, so on a phone it is 1.3 CSS px and on a desktop 2.6. deck.gl's
   // pixels are CSS pixels, so the same line takes the same arithmetic.
   var TRACK_WIDTH = 2.6 / Math.min(window.devicePixelRatio || 1, 2);
   var PLAY_ICON = '<svg width="11" height="12" viewBox="0 0 11 12" aria-hidden="true">' +
     '<path d="M1 1 L10 6 L1 11 Z" fill="currentColor"/></svg>';
+  var RULER_ICON = '<svg width="14" height="12" viewBox="0 0 14 12" aria-hidden="true" fill="none"' +
+    ' stroke="currentColor" stroke-width="1.3"><path d="M1 8.5 8.5 1l4.5 4.5L5 13z" transform="translate(0 -1.5)"/>' +
+    '<path d="M4 5.5l1.5 1.5M6 3.5l1.5 1.5M8 1.5l1.5 1.5" transform="translate(0 -0.5)"/></svg>';
   var PAUSE_ICON = '<svg width="11" height="12" viewBox="0 0 11 12" aria-hidden="true">' +
     '<path d="M1.5 1h3v10h-3zM6.5 1h3v10h-3z" fill="currentColor"/></svg>';
   function rgb(hex, alpha) {
@@ -147,6 +158,7 @@ SCRIPT = r"""
       '<dt>1 2 4</dt><dd>exaggeration</dd>' +
       '<dt>s m r</dt><dd>satellite, map, relief</dd>' +
       (airspace ? '<dt>a</dt><dd>airspace</dd>' : '') +
+      '<dt>d</dt><dd>measure: click points; backspace undoes one, esc ends</dd>' +
       '<dt>space</dt><dd>replay: open, play, pause</dd>' +
       '<dt>c</dt><dd>replay: follow the glider</dd>' +
       '<dt>arrows, following</dt><dd>turn and tilt the view</dd>' +
@@ -258,6 +270,7 @@ SCRIPT = r"""
         'flight. Arrow keys pan and shift with them turns and tilts; press question mark ' +
         'for the key list."></div>' +
       '<p class="m3-status">Loading MapLibre…</p>' +
+      '<p class="m3-measure" hidden aria-live="polite"></p>' +
       '<div class="m3-rose" hidden><svg width="64" height="64" viewBox="-32 -32 64 64">' +
         '<circle r="30" fill="rgba(16,19,24,0.55)" stroke="rgba(255,255,255,0.28)"/>' +
         '<text class="m3-n" text-anchor="middle" dominant-baseline="central" font-size="11"' +
@@ -323,6 +336,8 @@ SCRIPT = r"""
           '<button type="button" data-m3="zoom-in" title="Zoom in" aria-label="Zoom in">+</button></div>' +
         (hasTime ? '<button type="button" data-m3="replay" class="m3-icon" aria-pressed="false"' +
           ' title="Replay the flight" aria-label="Replay the flight">' + PLAY_ICON + '</button>' : '') +
+        '<button type="button" data-m3="measure" class="m3-icon" aria-pressed="false"' +
+          ' title="Measure a distance (d)" aria-label="Measure a distance">' + RULER_ICON + '</button>' +
         '<button type="button" data-m3="help" title="Controls" aria-label="How to control this view">?</button>' +
         '<button type="button" data-m3="fullscreen" title="Full screen" aria-label="Full screen">' +
           '<svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor"' +
@@ -463,6 +478,17 @@ SCRIPT = r"""
         // raster label is a picture of text at one scale. Shown where the basemap had
         // labels (the photograph), switched with it.
         sources.places = { type: 'vector', url: PLACES };
+        // Two overlays drawn by MapLibre itself, so they lie on the terrain: shapes a page
+        // hands in (`setShapes` — the planner's FAI area) and the measuring line.
+        var empty = { type: 'FeatureCollection', features: [] };
+        sources.shapes = { type: 'geojson', data: empty };
+        sources.measure = { type: 'geojson', data: empty };
+        above.push(
+          { id: 'shapes-fill', type: 'fill', source: 'shapes',
+            paint: { 'fill-color': ['coalesce', ['get', 'colour'], '#3b4cc0'],
+                     'fill-opacity': ['coalesce', ['get', 'opacity'], 0.4] } },
+          { id: 'shapes-edge', type: 'line', source: 'shapes',
+            paint: { 'line-color': ['coalesce', ['get', 'colour'], '#3b4cc0'], 'line-width': 2 } });
         above.push({
           id: 'place-labels', type: 'symbol', source: 'places', 'source-layer': 'place',
           // Villages only from zoom 11: hidden by opacity they would still take the room
@@ -486,6 +512,13 @@ SCRIPT = r"""
           paint: { 'text-color': '#ffffff', 'text-halo-color': 'rgba(12,14,18,0.85)',
                    'text-halo-width': 1.4, 'text-halo-blur': 0.4 }
         });
+        above.push(
+          { id: 'measure-line', type: 'line', source: 'measure', filter: ['==', ['geometry-type'], 'LineString'],
+            layout: { 'line-cap': 'round', 'line-join': 'round' },
+            paint: { 'line-color': '#ffffff', 'line-width': 2.5, 'line-dasharray': [2, 1.5] } },
+          { id: 'measure-dots', type: 'circle', source: 'measure', filter: ['==', ['geometry-type'], 'Point'],
+            paint: { 'circle-radius': 4.5, 'circle-color': '#ffffff',
+                     'circle-stroke-color': 'rgba(12,14,18,0.9)', 'circle-stroke-width': 1.5 } });
         return {
           version: 8, sources: sources, glyphs: GLYPHS,
           // No paint transitions: the sun's direction moves in steps with the cursor, and
@@ -512,7 +545,7 @@ SCRIPT = r"""
       // from straight down.
       var openPitch = scene.view && typeof scene.view.pitch === 'number' && !tr.lon.length
         ? Math.max(0, 90 - scene.view.pitch * 180 / Math.PI) : 60;
-      var styleReady = false;
+      var styleReady = false, pendingShapes = [];
       map = new maplibregl.Map({
         container: view.querySelector('.ml-map'), style: style(basemap),
         center: [(west + east) / 2, (south + north) / 2], zoom: 10, pitch: openPitch, bearing: 0,
@@ -522,6 +555,10 @@ SCRIPT = r"""
       // included, which on a slow connection is long after a reader has pressed things.
       map.once('style.load', function () {
         styleReady = true;
+        if (pendingShapes.length) {
+          var shapes = map.getSource('shapes');
+          if (shapes) shapes.setData({ type: 'FeatureCollection', features: pendingShapes });
+        }
         if (vertical !== 1) map.setTerrain({ source: 'dem', exaggeration: vertical });
       });
       // Credits from the sources themselves, so switching the basemap changes them.
@@ -557,7 +594,10 @@ SCRIPT = r"""
         var surface = map.getCanvasContainer(), last = null, pivot = null;
         var ANCHOR_INSET = 0.25;
         function pickPivot(event) {
-          var box = surface.getBoundingClientRect();
+          // The canvas's box, not the canvas container's: that element has no height of
+          // its own, and clamped into it every pivot went to y = 0 — the horizon, 200 km
+          // away at a 60° tilt — and a shift-drag flung the map across the country.
+          var box = map.getCanvas().getBoundingClientRect();
           var x = Math.min(Math.max(event.clientX - box.left, box.width * ANCHOR_INSET),
                            box.width * (1 - ANCHOR_INSET));
           var y = Math.min(Math.max(event.clientY - box.top, box.height * ANCHOR_INSET),
@@ -697,7 +737,8 @@ SCRIPT = r"""
             getPolygon: function (d) { return d.ring.map(function (p) { return [p[0], p[1], z(d.floor)]; }); },
             getElevation: function (d) { return (d.top - d.floor) * vertical; },
             getFillColor: function (d) { return rgb(d.colour, 46); },
-            material: false, updateTriggers: { getPolygon: vertical, getElevation: vertical }
+            material: false, parameters: GLASS,
+            updateTriggers: { getPolygon: vertical, getElevation: vertical }
           }));
           out.push(new deck.PathLayer({
             id: 'airspace-edges', data: drawn.reduce(function (all, d) {
@@ -707,7 +748,7 @@ SCRIPT = r"""
               return all;
             }, []),
             getPath: function (d) { return d.path; }, getColor: function (d) { return rgb(d.colour, 200); },
-            getWidth: 1.2, widthUnits: 'pixels', updateTriggers: { data: vertical }
+            getWidth: 1.2, widthUnits: 'pixels', parameters: GLASS, updateTriggers: { data: vertical }
           }));
           // The corners' vertical edges, where a zone has corners (as the canvas view).
           out.push(new deck.LineLayer({
@@ -718,7 +759,7 @@ SCRIPT = r"""
             }, []),
             getSourcePosition: function (d) { return [d.p[0], d.p[1], z(d.floor)]; },
             getTargetPosition: function (d) { return [d.p[0], d.p[1], z(d.top)]; },
-            getColor: function (d) { return rgb(d.colour, 150); }, getWidth: 1,
+            getColor: function (d) { return rgb(d.colour, 150); }, getWidth: 1, parameters: GLASS,
             updateTriggers: { getSourcePosition: vertical, getTargetPosition: vertical }
           }));
         }
@@ -1087,15 +1128,45 @@ SCRIPT = r"""
         return turn(0, course[i] + turn(course[i], course[j]) * (at - i));
       }
 
+      // Where the camera looks: the glider's mean position over ±45 s of flight, not the
+      // glider itself. Locked to the glider the whole view swung round every thermal
+      // circle; a circle takes 20-30 s, so over 90 s it averages to its middle and the
+      // glider circles inside a steady frame instead of the frame circling with it.
+      function steadyAt(t) {
+        var n = 13, lon = 0, lat = 0, alt = 0;
+        for (var i = 0; i < n; i++) {
+          var q = positionAt(t - 45 + 90 * i / (n - 1));
+          lon += q.lon; lat += q.lat; alt += q.alt;
+        }
+        return { lon: lon / n, lat: lat / n, alt: alt / n };
+      }
       var following = false, followFrame = null, followLast = 0;
       // Where the reader has turned the view off the direction of flight, with the arrows.
       var yawOffset = 0;
       var cam = null;          // { bearing, zoom, pitch } the camera is easing towards
+      // The next step on an animation frame or, failing one within 100 ms, a timer: a
+      // browser that stops serving frames to a page it considers hidden or idle (an
+      // occluded window, a headless one) would otherwise freeze the camera mid-turn.
       function kickFollow() {
-        if (following && !followFrame) followFrame = requestAnimationFrame(followTick);
+        if (!following || followFrame) return;
+        var done = false;
+        function go(now) {
+          if (done) return;
+          done = true;
+          cancelAnimationFrame(followFrame.frame);
+          clearTimeout(followFrame.timer);
+          followFrame = null;
+          followTick(typeof now === 'number' ? now : performance.now());
+        }
+        followFrame = { frame: requestAnimationFrame(go), timer: setTimeout(go, 100) };
+      }
+      function stopFollowFrame() {
+        if (!followFrame) return;
+        cancelAnimationFrame(followFrame.frame);
+        clearTimeout(followFrame.timer);
+        followFrame = null;
       }
       function followTick(now) {
-        followFrame = null;
         if (!following || view.hidden) return;
         var dt = followLast ? Math.min((now - followLast) / 1000, 1) : 1 / 60;
         followLast = now;
@@ -1103,7 +1174,7 @@ SCRIPT = r"""
         // Heading over 0.7 s, zoom and tilt over 0.3 s: the zoom is the reader's own.
         var kTurn = 1 - Math.exp(-dt / 0.7), kZoom = 1 - Math.exp(-dt / 0.3);
         var bearing = map.getBearing(), zoom = map.getZoom(), pitch = map.getPitch();
-        var p = positionAt(cutoff);
+        var p = steadyAt(cutoff);
         var H = map.getContainer().clientHeight || 500;
         var dTurn = turn(bearing, target), dZoom = cam.zoom - zoom, dPitch = cam.pitch - pitch;
         // And never faster than 90° a second: where the flight really turns back, the
@@ -1112,7 +1183,7 @@ SCRIPT = r"""
         var swing = Math.max(-90 * dt, Math.min(90 * dt, dTurn * kTurn));
         bearing += swing; zoom += dZoom * kZoom; pitch += dPitch * kZoom;
         // MapLibre orbits a point on the ground, at the height of the terrain under the
-        // centre, and the glider is kilometres above it. Estimating where on the ground
+        // centre, and the glider is kilometres above it (here its steady position). Estimating where on the ground
         // to look so the glider lands mid-screen worked over Krupka and hunted over the
         // Karakoram, where moving the centre onto a 7 km peak lifts the whole camera. So
         // while following, the orbit height is frozen at the glider's own altitude
@@ -1160,7 +1231,7 @@ SCRIPT = r"""
         following = on;
         var b = view.querySelector('[data-m3="follow"]');
         if (b) toggle(b, on);
-        if (followFrame) { cancelAnimationFrame(followFrame); followFrame = null; }
+        stopFollowFrame();
         followLast = 0;
         if (!on) release();
         // Opening on the whole flight, follow comes down to a few kilometres around the
@@ -1284,6 +1355,57 @@ SCRIPT = r"""
         }
       }, true);
 
+      // ---- measure ---------------------------------------------------------------------
+      // Click points, read the distance: the total and the last leg, on the FAI sphere —
+      // what a scored distance is measured on (`js/geo.js`). The line is MapLibre's own,
+      // so it lies on the ground. Backspace takes a point back; Esc or the button ends it.
+      var measuring = false, measurePoints = [];
+      var measureText = view.querySelector('.m3-measure');
+      function sphere(a, b) {
+        var r = Math.PI / 180, la1 = a[1] * r, la2 = b[1] * r;
+        var h = Math.pow(Math.sin((la2 - la1) / 2), 2)
+          + Math.cos(la1) * Math.cos(la2) * Math.pow(Math.sin((b[0] - a[0]) * r / 2), 2);
+        return 2 * 6371000 * Math.asin(Math.min(1, Math.sqrt(h)));
+      }
+      function km(metres) { return metres < 10000 ? (metres / 1000).toFixed(2) : (metres / 1000).toFixed(1); }
+      function drawOverlay(id, features) {
+        var source = map.getSource(id);
+        if (source) source.setData({ type: 'FeatureCollection', features: features });
+      }
+      function showMeasure() {
+        var features = measurePoints.map(function (p) {
+          return { type: 'Feature', geometry: { type: 'Point', coordinates: p }, properties: {} };
+        });
+        if (measurePoints.length > 1) {
+          features.unshift({ type: 'Feature', properties: {},
+                             geometry: { type: 'LineString', coordinates: measurePoints } });
+        }
+        drawOverlay('measure', features);
+        var total = 0;
+        for (var i = 1; i < measurePoints.length; i++) total += sphere(measurePoints[i - 1], measurePoints[i]);
+        var last = measurePoints.length > 1
+          ? sphere(measurePoints[measurePoints.length - 2], measurePoints[measurePoints.length - 1]) : 0;
+        measureText.textContent = measurePoints.length < 2 ? 'Measure: click points on the map'
+          : km(total) + ' km' + (measurePoints.length > 2 ? ' · last leg ' + km(last) + ' km' : '');
+      }
+      function setMeasure(on) {
+        measuring = on;
+        measurePoints = [];
+        var b = view.querySelector('[data-m3="measure"]');
+        toggle(b, on);
+        measureText.hidden = !on;
+        map.getCanvas().style.cursor = on ? 'crosshair' : '';
+        showMeasure();
+      }
+      view.addEventListener('keydown', function (event) {
+        if (!measuring || !onMap(event)) return;
+        if (event.key === 'Escape') { setMeasure(false); event.preventDefault(); event.stopImmediatePropagation(); }
+        else if (event.key === 'Backspace') {
+          measurePoints.pop(); showMeasure();
+          event.preventDefault(); event.stopImmediatePropagation();
+        }
+      }, true);
+
       // ---- controls --------------------------------------------------------------------
       var GROUNDS = styles.concat(['off']);
       var VERTICALS = offered.length ? offered : [1, 2, 4];
@@ -1359,6 +1481,7 @@ SCRIPT = r"""
         else if (act === 'zoom-in') { if (following) followZoomBy(1); else map.zoomIn(); }
         else if (act === 'zoom-out') { if (following) followZoomBy(-1); else map.zoomOut(); }
         else if (act === 'help') help.hidden = !help.hidden;
+        else if (act === 'measure') setMeasure(!measuring);
         else if (act === 'fullscreen') fullscreen();
         else if (act === 'reset') { setFollow(false); fit(true); }
         else if (act === 'play') togglePlay();
@@ -1384,6 +1507,7 @@ SCRIPT = r"""
           setFollow(!following);
         }
         else if (k === '?') help.hidden = !help.hidden;
+        else if (k === 'd' || k === 'D') setMeasure(!measuring);
         else if (k === 'Escape' && !help.hidden) help.hidden = true;
         else if (k === ' ') togglePlay();
         else done = false;
@@ -1486,18 +1610,32 @@ SCRIPT = r"""
       // turnpoint with. MapLibre's own `click` already refuses a pointer that moved.
       map.on('click', function (event) {
         var at = [event.lngLat.lng, event.lngLat.lat];
+        // Measuring takes the click: it is not also a turnpoint.
+        if (measuring) { measurePoints.push(at); showMeasure(); return; }
         clickers.forEach(function (fn) { fn(at, event.originalEvent); });
       });
 
       var entry = {
         map: map, setTime: setTime, setFrom: setFrom, cursor: function () { return cursor; },
         setFollow: setFollow, following: function () { return following; }, courseAt: courseAt,
+        followCamera: function () { return following ? { zoom: cam.zoom, pitch: cam.pitch, turn: yawOffset } : null; },
         setBasemap: setBasemap, setVertical: setVertical,
         setRoute: function (walk, points) {
           route = walk || points ? { walk: walk || [], points: points || [] } : null;
           refresh();
         },
         onClick: function (fn) { clickers.push(fn); },
+        // What deck.gl draws now, as ids and depth parameters: for the tests, which cannot
+        // tell a hidden track from a missing one by looking.
+        layers: function () {
+          return layers().map(function (l) { return { id: l.id, parameters: l.props.parameters || null }; });
+        },
+        // GeoJSON polygons drawn on the ground under everything else on the map, each with
+        // optional `colour` and `opacity` properties; null or [] clears them.
+        setShapes: function (features) {
+          pendingShapes = features || [];
+          if (styleReady) drawOverlay('shapes', pendingShapes);
+        },
         airspaceShown: function () {
           return airspaceOn ? boxes.filter(function (d) {
             return !airspaceFilter || airspaceFilter(d.space);

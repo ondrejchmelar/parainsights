@@ -1595,6 +1595,14 @@ a.view-tab { text-decoration: none; display: inline-block; }
   display:grid; place-items:center; line-height:1; }
 .theme-toggle .theme-glyph { display:block; }
 .theme-toggle:hover { color: var(--ink); border-color: var(--rule-strong); }
+/* The source link beside it, and the page's foot: `common.strip_end` and `common.footer`. */
+a.site-source { align-self:center; margin:0 0 0 6px; padding:0; width:30px; height:30px;
+  display:grid; place-items:center; border:1px solid var(--rule); border-radius:999px;
+  background:var(--panel); color:var(--ink-2); }
+a.site-source:hover { color: var(--ink); border-color: var(--rule-strong); }
+.site-foot { margin:48px 0 0; padding:14px 0 0; border-top:1px solid var(--rule);
+  font-size:12.5px; line-height:1.55; color:var(--ink-3); }
+.site-foot a { color: var(--ink-2); }
 .view-tab:focus-visible { outline: 2px solid var(--climb); outline-offset: -2px; }
 """
 
@@ -1629,7 +1637,7 @@ def _view_nav(extras: "list[Extra]") -> str:
         # _switch` is right that a switch between one thing is noise — and a strip that
         # merely *looks* like one is the same noise.
         return ('<nav class="views page-tools" aria-label="Theme">'
-                f'{common.theme_button()}</nav>')
+                f'{common.strip_end()}</nav>')
 
     # **One order across the whole site**, and it is `common.PAGES`: what is the weather,
     # where shall I go, what will I fly, what did I actually do. This strip used to list
@@ -1670,7 +1678,7 @@ def _view_nav(extras: "list[Extra]") -> str:
         'aria-pressed="true">', 1)
     return (
         '<nav class="views" id="views" role="group" aria-label="Choose a view">'
-        f'{marked}{common.theme_button()}</nav>'
+        f'{marked}{common.strip_end()}</nav>'
     )
 
 
@@ -1697,6 +1705,7 @@ def _page(title: str, bodies: list[str], tabs: str = "", extras: "list[Extra]" =
 {_view_nav(extras)}
 {_flights_view(tabs, bodies, extras)}
 {"".join(f'<section data-view="{e.uid}" hidden>{e.body}</section>' for e in extras)}
+{common.footer()}
 </div>
 <div class="tooltip" id="tip" role="status" aria-live="polite"></div>
 <script>{view3d.SCRIPT}

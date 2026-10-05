@@ -57,6 +57,7 @@ button {{ font:inherit; padding:3px 10px; background:var(--panel);
 <div class="wrap">
 {common.nav("airspace", depth=1)}
 {article}
+{common.footer()}
 </div>
 <script>{render_html.SCRIPT}</script>
 <script>{common.THEME_SCRIPT}</script>

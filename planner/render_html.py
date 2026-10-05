@@ -110,6 +110,15 @@ def controls() -> str:
         '<button type="button" id="plan-undo">Undo point</button>'
         '<button type="button" id="plan-clear">Clear</button>'
         '<label><input type="checkbox" id="plan-close"> closed course</label>'
+        '<label title="XContest world: closing within 20%, flat ×1.2, FAI ×1.4. ČPP (the Czech '
+        'cup): closing within 5%, and in the Central European zone — V4, Austria, Germany '
+        'north of 48.5° — flat ×1.8, FAI ×2.2">rules <select id="plan-rules">'
+        '<option value="world">XContest world</option>'
+        '<option value="cpp">ČPP (Czech)</option></select></label>'
+        '<label title="Where each turnpoint can go for an FAI triangle (every side at least '
+        '28% of the perimeter), the other two staying put: turnpoint 1 green, 2 blue, 3 red. '
+        'Yellow: where a closed course must finish"><input type="checkbox" id="plan-fai" '
+        'checked> FAI areas</label>'
         '<span class="plan-hint" id="plan-hint">Press <em>Draw a task</em>, then click the '
         "map to drop turnpoints. Drag, pinch and twist still move the view — a click that "
         "moved is a drag, not a point.</span>"
@@ -127,6 +136,9 @@ def results() -> str:
     every side at least {xc.FAI_MIN_SIDE:.0%} of the perimeter for FAI, a closing gap under
     {xc.MAX_CLOSING:.0%} of it for a closed course, multipliers
     {xc.MULTIPLIER['open']:g}&thinsp;/&thinsp;{xc.MULTIPLIER['flat']:g}&thinsp;/&thinsp;{xc.MULTIPLIER['fai']:g}.
+    With <em>ČPP</em> chosen, the Czech cup's: closing under 5%, and in the Central European
+    zone 1&thinsp;/&thinsp;1.8&thinsp;/&thinsp;2.2
+    (<a href="https://www.xcontest.org/cesko/pravidla/" rel="noreferrer">rules</a>).
     Airspace is drawn for Czechia only.
     <strong>This is a plan, not a clearance.</strong> Check the airspace and the NOTAMs.</p>
     <script type="application/json" id="plan-coverage">{_coverage()}</script>
@@ -179,8 +191,19 @@ SCRIPT = """
   function plan(handle) {
   var canvas = panel.querySelector('canvas.view3d');
 
-  var FAI_MIN_SIDE = %(fai)s, MAX_CLOSING = %(closing)s;
-  var MULTIPLIER = %(multiplier)s;
+  var FAI_MIN_SIDE = %(fai)s;
+  // Two rule sets, chosen under the map. XContest world: the report's own (`js/xc.js`).
+  // ČPP, the Czech cup on XContest (xcontest.org/cesko/pravidla): a closed course must
+  // close within 5 per cent of the perimeter, not 20, and in the Central European zone
+  // (V4, Austria, Germany north of 48.5°) a flat triangle scores 1.8 and an FAI one 2.2.
+  var RULES = {
+    world: { closing: %(closing)s, multiplier: %(multiplier)s },
+    cpp: { closing: 0.05, multiplier: { open: 1.0, flat: 1.8, fai: 2.2 } }
+  };
+  function rules() {
+    var pick = document.getElementById('plan-rules');
+    return RULES[pick && pick.value] || RULES.world;
+  }
   var points = [];          // [lon, lat] per turnpoint, in the order dropped
 
   // ---- geodesy -----------------------------------------------------------------------
@@ -434,13 +457,13 @@ SCRIPT = """
       var perimeter = sides[0] + sides[1] + sides[2];
       var gap = points.length === 4 ? distance(points[3], points[0]) : 0;
       out.closing = gap;
-      if (perimeter > 0 && gap / perimeter < MAX_CLOSING) {
+      if (perimeter > 0 && gap / perimeter < rules().closing) {
         out.total = perimeter;
         out.sides = sides;
         out.shape = Math.min.apply(null, sides) / perimeter >= FAI_MIN_SIDE ? 'fai' : 'flat';
       }
     }
-    out.score = out.total / 1000 * (MULTIPLIER[out.shape] || 1);
+    out.score = out.total / 1000 * (rules().multiplier[out.shape] || 1);
     return out;
   }
 
@@ -467,9 +490,104 @@ SCRIPT = """
     });
     handle.redraw();
     var merged = mergedEntry();
-    if (merged) merged.setRoute(walk, points);
+    if (merged) {
+      merged.setRoute(walk, points);
+      if (merged.setShapes) merged.setShapes(faiShapes());
+    }
     report();
     reportAirspace();
+  }
+
+  // ---- the FAI area ------------------------------------------------------------------
+  //
+  // Where the third turnpoint can go, given the first two, for the triangle to be FAI:
+  // every side at least FAI_MIN_SIDE of the perimeter. On each side of the first leg it is
+  // a band between two curves — too close to the leg and the other two sides are short,
+  // too far and the leg itself is. Traced along rays from the leg's midpoint, the band
+  // being an interval along each ray, and every edge found by bisection so the outline is
+  // smooth. In a flat plane around the leg: a guide for where to click, at well under a
+  // percent from the sphere the score is measured on.
+  // `towards`: only the side of the leg this point is on. `colour`: the fill.
+  function faiArea(a, b, colour, towards) {
+    var lat0 = (a[1] + b[1]) / 2, lon0 = (a[0] + b[0]) / 2;
+    var kx = 111320 * Math.cos(lat0 * Math.PI / 180), ky = 111320;
+    var ax = (a[0] - lon0) * kx, ay = (a[1] - lat0) * ky, bx = (b[0] - lon0) * kx, by = (b[1] - lat0) * ky;
+    var c = Math.hypot(bx - ax, by - ay);
+    if (c < 200) return [];
+    var ux = (bx - ax) / c, uy = (by - ay) / c;
+    function fai(x, y) {
+      var sa = Math.hypot(x - bx, y - by), sb = Math.hypot(x - ax, y - ay);
+      return Math.min(sa, sb, c) >= FAI_MIN_SIDE * (sa + sb + c);
+    }
+    function lonlat(x, y) { return [lon0 + x / kx, lat0 + y / ky]; }
+    var shapes = [], sides = [1, -1];
+    if (towards) {
+      var tx = (towards[0] - lon0) * kx, ty = (towards[1] - lat0) * ky;
+      sides = [(-uy * tx + ux * ty) >= 0 ? 1 : -1];
+    }
+    sides.forEach(function (side) {
+      var vx = -uy * side, vy = ux * side, outer = [], inner = [];
+      for (var deg = -85; deg <= 85; deg += 1) {
+        var t = deg * Math.PI / 180;
+        var dx = Math.cos(t) * vx + Math.sin(t) * ux, dy = Math.cos(t) * vy + Math.sin(t) * uy;
+        var steps = 240, top = 4 * c, first = -1, last = -1;
+        for (var i = 1; i <= steps; i++) {
+          var r = top * i / steps;
+          if (fai(dx * r, dy * r)) { if (first < 0) first = i; last = i; }
+        }
+        if (first < 0) continue;
+        function edge(lo, hi) {      // lo inside, hi outside, or the other way round
+          var inLo = fai(dx * lo, dy * lo);
+          for (var k = 0; k < 16; k++) {
+            var mid = (lo + hi) / 2;
+            if (fai(dx * mid, dy * mid) === inLo) lo = mid; else hi = mid;
+          }
+          return (lo + hi) / 2;
+        }
+        var near = edge(top * first / steps, top * (first - 1) / steps);
+        var far = edge(top * last / steps, top * (last + 1) / steps);
+        inner.push(lonlat(dx * near, dy * near));
+        outer.push(lonlat(dx * far, dy * far));
+      }
+      if (outer.length < 3) return;
+      var ring = outer.concat(inner.reverse());
+      ring.push(ring[0]);
+      shapes.push({ type: 'Feature', properties: { colour: colour, opacity: 0.45 },
+                    geometry: { type: 'Polygon', coordinates: [ring] } });
+    });
+    return shapes;
+  }
+  // xcplanner's convention (dkm/xcplanner, `faiSector`), which pilots know: turnpoint 1
+  // green, 2 blue, 3 red, and each colour is the area where *that* turnpoint can be with
+  // the other two where they are — drawn on the side of the opposite leg the turnpoint
+  // is on. With two turnpoints placed, the third's area on both sides of the leg. With a
+  // closed course, the yellow circle: where the flight must finish, a fifth of the
+  // triangle's perimeter around the first turnpoint.
+  var CORNER_COLOURS = ['#22c55e', '#3b82f6', '#ef4444'];
+  function closingCircle(centre, radius) {
+    var kx = 111320 * Math.cos(centre[1] * Math.PI / 180), ring = [];
+    for (var i = 0; i <= 64; i++) {
+      var t = 2 * Math.PI * i / 64;
+      ring.push([centre[0] + radius * Math.sin(t) / kx, centre[1] + radius * Math.cos(t) / 111320]);
+    }
+    return { type: 'Feature', properties: { colour: '#eab308', opacity: 0.3 },
+             geometry: { type: 'Polygon', coordinates: [ring] } };
+  }
+  function faiShapes() {
+    var box = document.getElementById('plan-fai');
+    if (!box || !box.checked || points.length < 2) return [];
+    if (points.length === 2) return faiArea(points[0], points[1], CORNER_COLOURS[2]);
+    var corners = points.slice(0, 3), shapes = [];
+    corners.forEach(function (corner, i) {
+      shapes = shapes.concat(faiArea(corners[(i + 1) %% 3], corners[(i + 2) %% 3],
+                                     CORNER_COLOURS[i], corner));
+    });
+    if (document.getElementById('plan-close').checked) {
+      var perimeter = distance(corners[0], corners[1]) + distance(corners[1], corners[2])
+        + distance(corners[2], corners[0]);
+      shapes.push(closingCircle(corners[0], rules().closing * perimeter));
+    }
+    return shapes;
   }
 
   // ---- the merged map ------------------------------------------------------------------
@@ -488,6 +606,7 @@ SCRIPT = """
       addPoint(at);
     });
     entry.setRoute(course(), points);
+    if (entry.setShapes) entry.setShapes(faiShapes());
   }
   panel.addEventListener('merged-ready', function (event) { hookMerged(event.detail); });
   hookMerged(mergedEntry());
@@ -511,7 +630,7 @@ SCRIPT = """
     var cells = [
       ['distance', (answer.total / 1000).toFixed(2) + ' km'],
       ['score', answer.score.toFixed(2) + ' pts'],
-      ['multiplier', '\\u00d7' + (MULTIPLIER[answer.shape] || 1).toFixed(1)],
+      ['multiplier', '\\u00d7' + (rules().multiplier[answer.shape] || 1).toFixed(1)],
       ['turnpoints', String(points.length)]
     ];
     cells.forEach(function (pair) {
@@ -589,6 +708,8 @@ SCRIPT = """
     redraw();
   });
   document.getElementById('plan-close').addEventListener('change', redraw);
+  document.getElementById('plan-rules').addEventListener('change', redraw);
+  document.getElementById('plan-fai').addEventListener('change', redraw);
 
   // The time control belongs to the airspace map, which takes the shut fields off it;
   // here it only re-marks the list, which keeps every crossing either way.
