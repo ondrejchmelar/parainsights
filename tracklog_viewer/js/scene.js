@@ -97,6 +97,13 @@
       sun: sun.forFlight(f),
       wind: a.wind ? { ms: R(a.wind.speed, 1), from: R(a.wind.direction, 1), cardinal: a.wind.cardinal } : null
     };
+    // The scored route's turnpoints, as fix indices: the replay's follow mode points the
+    // camera along the leg being flown. A triangle closes back to its first corner.
+    var route = options.route;
+    if (route && route.points && route.points.length > 1) {
+      out.course = { at: route.points.map(function (p) { return p.index; }),
+                     closed: /triangle/.test(route.kind || '') };
+    }
     if (options.airspace && (options.airspace.airspaces || []).length) {
       Object.assign(out, options.airspace, { airspaceToggle: true });
     } else if (options.airspaceChecked) {

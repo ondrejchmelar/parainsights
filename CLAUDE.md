@@ -791,7 +791,18 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   replay's "now" — by a `TripsLayer` per colour run with `trailLength = to − from` and no
   fade; climbs, phase labels and the landing follow the same window (each given the time
   of its nearest fix). Both handles at the ends is the whole track, a double click puts
-  them there, and closing the replay does too. Climbs are dots, not
+  them there, and closing the replay does too. **Follow** (a button in the replay row,
+  `c`) rides with the replay's "now", facing the *general* direction of flight, never the
+  nose — turning with every thermal circle is unwatchable. The direction is the scored
+  route's leg being flown (`scene.course`: the turnpoints as fix indices, and whether it
+  closes), so a triangle turns three times, each turn spread over up to ten minutes of
+  flight either side of the corner (a third of the shorter leg at most); without a route,
+  where the glider got to over ±10 minutes. The camera then eases to it in real time
+  (0.7 s), so a fast replay cannot snap it round. The centre is put on the ground behind
+  the glider on the line of sight (height × tan tilt), since MapLibre's centre is on the
+  ground. While following, the wheel and `+`/`−` zoom the follow camera — any MapLibre
+  gesture would be stopped by its next frame — and a press on the map, an arrow key, the
+  rose or reset hands the camera back. Checked by hand over CDP, not in the suite. Climbs are dots, not
   numbers, and the track is the canvas's width (2.6 px over the device ratio, capped at
   2). **Ground and exaggeration are one cycling button each**, against the canvas's
   segmented groups, because the merged bar has to fit one row on a phone.

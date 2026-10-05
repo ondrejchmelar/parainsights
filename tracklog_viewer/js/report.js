@@ -420,7 +420,8 @@
     var view3dSection, clearance = null;
     if (terrain) {
       var payload = TV.scene.data(a, options.sceneTerrain || terrain, { airspace: options.airspace,
-                                                                         airspaceChecked: options.airspaceChecked });
+                                                                         airspaceChecked: options.airspaceChecked,
+                                                                         route: route });
       clearance = TV.terrain.clearance(terrain, a);
       view3dSection = '\n  <section>\n    <div class="section-head">\n      <h2>The flight over the ground</h2>\n' +
         '      <p>Hovering a moment in the side view marks the same moment on the map above, and in\n         the top view below. Click to keep it there while you look; click again, or press\n' +

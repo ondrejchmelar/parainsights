@@ -148,6 +148,7 @@ SCRIPT = r"""
       '<dt>s m r</dt><dd>satellite, map, relief</dd>' +
       (airspace ? '<dt>a</dt><dd>airspace</dd>' : '') +
       '<dt>space</dt><dd>replay: open, play, pause</dd>' +
+      '<dt>c</dt><dd>replay: follow the glider</dd>' +
       '<dt>f</dt><dd>full screen</dd>' +
       '<dt>0</dt><dd>reset view</dd></dl>' +
       '<p class="view3d-keys-foot">Hovering the charts moves the marker here too. ' +
@@ -291,6 +292,8 @@ SCRIPT = r"""
             '<span class="m3-rate" aria-live="polite"></span>' +
             '<button type="button" data-m3="faster" title="Faster" aria-label="Faster">+</button>' +
           '</div>' +
+          '<button type="button" data-m3="follow" aria-pressed="false" title="Follow the glider, ' +
+          'facing the way the flight was going (c)">follow</button>' +
         '</div>' : '') +
       '<div class="view3d-controls" hidden>' +
         // One button each, naming what is on and stepping to the next: two segmented
@@ -861,6 +864,7 @@ SCRIPT = r"""
       // A click on the rose turns the map north, as a compass on any map does; the tilt
       // stays where it was.
       rose.querySelector('svg').addEventListener('click', function () {
+        setFollow(false);
         map.easeTo({ bearing: 0, duration: 500 });
       });
       rose.querySelector('svg').setAttribute('aria-label', 'Turn the map north');
@@ -909,6 +913,7 @@ SCRIPT = r"""
         showRange();
         if (sun && sun.launch !== undefined) sunTo(sun.launch + cutoff / 60);
         refresh();
+        if (following) kickFollow();
       }
       function setFrom(seconds) {
         from = Math.min(Math.max(seconds, 0), cutoff);
@@ -967,10 +972,198 @@ SCRIPT = r"""
         toggle.setAttribute('aria-pressed', String(on));
         replay.hidden = timeRow.hidden = !on;
         if (on) { from = 0; setTime(0); togglePlay(); return; }
+        setFollow(false);
         pause();
         from = 0;
         setTime(duration);
       }
+
+
+      // ---- follow ----------------------------------------------------------------------
+      // The camera rides with the replay's "now", facing the general direction of the
+      // flight rather than the glider's nose: turning with every circle of a thermal is
+      // unwatchable. With a scored route, that direction is the leg being flown — start to
+      // first turnpoint and on, and on a triangle back to its first corner — and the
+      // camera swings to the next leg across a window around each turnpoint, so a
+      // triangle turns three times, each one smoothly. Without a route, it is where the
+      // glider got to over ten minutes. On top of that, the camera eases towards the
+      // heading in real time, so a fast replay cannot snap it round either.
+      function bearingDeg(lon1, lat1, lon2, lat2) {
+        var k = Math.cos((lat1 + lat2) / 2 * Math.PI / 180);
+        return Math.atan2((lon2 - lon1) * k, lat2 - lat1) * 180 / Math.PI;
+      }
+      function metres(lon1, lat1, lon2, lat2) {
+        var k = Math.cos((lat1 + lat2) / 2 * Math.PI / 180);
+        return Math.hypot((lon2 - lon1) * k, lat2 - lat1) * 111320;
+      }
+      function turn(from, to) { return ((to - from) % 360 + 540) % 360 - 180; }
+      // The fix at or before a time, and where the glider was at that time.
+      function indexAt(t) {
+        var lo = 0, hi = tr.t.length - 1;
+        if (t <= tr.t[0]) return 0;
+        if (t >= tr.t[hi]) return hi;
+        while (hi - lo > 1) { var mid = (lo + hi) >> 1; if (tr.t[mid] <= t) lo = mid; else hi = mid; }
+        return lo;
+      }
+      function positionAt(t) {
+        var i = indexAt(t), j = Math.min(i + 1, tr.t.length - 1);
+        var span = tr.t[j] - tr.t[i], f = span > 0 ? Math.min(Math.max((t - tr.t[i]) / span, 0), 1) : 0;
+        return { lon: tr.lon[i] + (tr.lon[j] - tr.lon[i]) * f, lat: tr.lat[i] + (tr.lat[j] - tr.lat[i]) * f,
+                 alt: tr.alt[i] + (tr.alt[j] - tr.alt[i]) * f };
+      }
+      // The legs of the scored route as [start, end, bearing], in flight time. A route
+      // point that is not later than the one before is dropped: a triangle lists its
+      // first corner again as the finish, and its closing leg is added explicitly.
+      var legs = (function () {
+        var c = scene.course;
+        if (!c || !hasTime) return null;
+        var at = [];
+        (c.at || []).forEach(function (i) {
+          if (i >= 0 && i < tr.lon.length && (!at.length || tr.t[i] > tr.t[at[at.length - 1]])) at.push(i);
+        });
+        var out = [];
+        function leg(i, j, t0, t1) {
+          if (metres(tr.lon[i], tr.lat[i], tr.lon[j], tr.lat[j]) < 500) return;
+          out.push([t0, t1, bearingDeg(tr.lon[i], tr.lat[i], tr.lon[j], tr.lat[j])]);
+        }
+        for (var k = 0; k + 1 < at.length; k++) leg(at[k], at[k + 1], tr.t[at[k]], tr.t[at[k + 1]]);
+        if (c.closed && at.length > 1) leg(at[at.length - 1], at[0], tr.t[at[at.length - 1]], duration);
+        // Legs that lost a short neighbour above meet end to start again.
+        for (var m = 0; m + 1 < out.length; m++) out[m + 1][0] = out[m][1];
+        return out.length ? out : null;
+      })();
+      function smoothstep(x) { x = Math.min(Math.max(x, 0), 1); return x * x * (3 - 2 * x); }
+      // Half the window a turn between two legs is spread over: up to ten minutes of
+      // flight either side of the turnpoint, never more than a third of either leg.
+      function blend(a, b) { return Math.min(600, (a[1] - a[0]) / 3, (b[1] - b[0]) / 3); }
+      // Without a route: the direction from ten minutes before to ten after, every 30 s,
+      // held where the glider went nowhere (a long climb) and then averaged.
+      var drift = (function () {
+        if (legs || !hasTime) return null;
+        var STEP = 30, HALF = 600, out = [], last = null;
+        for (var t = 0; t <= duration; t += STEP) {
+          var a = positionAt(t - HALF), b = positionAt(t + HALF);
+          if (metres(a.lon, a.lat, b.lon, b.lat) > 800) last = bearingDeg(a.lon, a.lat, b.lon, b.lat);
+          out.push(last);
+        }
+        // Before the first move, the first direction there was; north if it never moved.
+        var first = null;
+        for (var f = 0; f < out.length && first === null; f++) first = out[f];
+        out = out.map(function (v) { return v === null ? (first === null ? 0 : first) : v; });
+        return out.map(function (_, i) {
+          var x = 0, y = 0;
+          for (var d = -6; d <= 6; d++) {
+            var v = out[Math.min(Math.max(i + d, 0), out.length - 1)] * Math.PI / 180;
+            x += Math.cos(v); y += Math.sin(v);
+          }
+          return Math.atan2(y, x) * 180 / Math.PI;
+        });
+      })();
+      function courseAt(t) { return turn(0, heading(t)); }
+      function heading(t) {
+        if (legs) {
+          var k = 0;
+          while (k + 1 < legs.length && t >= legs[k][1]) k++;
+          var b = legs[k][2];
+          if (k > 0) {
+            var w = blend(legs[k - 1], legs[k]);
+            if (w > 0 && t < legs[k][0] + w) {
+              var p = legs[k - 1][2];
+              return p + turn(p, b) * smoothstep((t - legs[k][0] + w) / (2 * w));
+            }
+          }
+          if (k + 1 < legs.length) {
+            var w2 = blend(legs[k], legs[k + 1]);
+            if (w2 > 0 && t > legs[k][1] - w2) {
+              return b + turn(b, legs[k + 1][2]) * smoothstep((t - legs[k][1] + w2) / (2 * w2));
+            }
+          }
+          return b;
+        }
+        if (drift && drift.length) {
+          var at = Math.min(Math.max(t / 30, 0), drift.length - 1), i = Math.floor(at);
+          var j = Math.min(i + 1, drift.length - 1);
+          return drift[i] + turn(drift[i], drift[j]) * (at - i);
+        }
+        return map.getBearing();
+      }
+
+      var following = false, followFrame = null, followLast = 0;
+      var cam = null;          // { bearing, zoom, pitch } the camera is easing towards
+      function kickFollow() {
+        if (following && !followFrame) followFrame = requestAnimationFrame(followTick);
+      }
+      function followTick(now) {
+        followFrame = null;
+        if (!following || view.hidden) return;
+        var dt = followLast ? Math.min((now - followLast) / 1000, 1) : 1 / 60;
+        followLast = now;
+        var target = courseAt(cutoff);
+        // Heading over 0.7 s, zoom and tilt over 0.3 s: the zoom is the reader's own.
+        var kTurn = 1 - Math.exp(-dt / 0.7), kZoom = 1 - Math.exp(-dt / 0.3);
+        var bearing = map.getBearing(), zoom = map.getZoom(), pitch = map.getPitch();
+        var dTurn = turn(bearing, target), dZoom = cam.zoom - zoom, dPitch = cam.pitch - pitch;
+        bearing += dTurn * kTurn; zoom += dZoom * kZoom; pitch += dPitch * kZoom;
+        var p = positionAt(cutoff);
+        // MapLibre's centre is on the ground, and the glider is above it: look at the
+        // ground point behind the glider on the line of sight, which is ahead of it by
+        // its height times the tangent of the tilt, so the glider itself sits on screen
+        // where the centre does — a little below the middle, to show where it is going.
+        var above = Math.max(0, (p.alt - ground(p.lon, p.lat)) * vertical);
+        var ahead = above * Math.tan(Math.min(pitch, 80) * Math.PI / 180);
+        var b = bearing * Math.PI / 180;
+        var centre = [p.lon + ahead * Math.sin(b) / (111320 * Math.cos(p.lat * Math.PI / 180)),
+                      p.lat + ahead * Math.cos(b) / 111320];
+        map.easeTo({ center: centre, bearing: bearing, zoom: zoom, pitch: pitch,
+                     offset: [0, map.getContainer().clientHeight * 0.2], duration: 0 });
+        if (playing || Math.abs(dTurn) > 0.05 || Math.abs(dZoom) > 0.01 || Math.abs(dPitch) > 0.05) {
+          kickFollow();
+        } else followLast = 0;
+      }
+      function setFollow(on) {
+        if (!hasTime || on === following) return;
+        following = on;
+        var b = view.querySelector('[data-m3="follow"]');
+        if (b) toggle(b, on);
+        if (followFrame) { cancelAnimationFrame(followFrame); followFrame = null; }
+        followLast = 0;
+        // Opening on the whole flight, follow comes down to a few kilometres around the
+        // glider and a view along the ground; a reader already closer keeps their zoom.
+        if (on) {
+          cam = { zoom: Math.max(map.getZoom(), 12.5), pitch: Math.max(map.getPitch(), 60) };
+          kickFollow();
+        }
+      }
+      function followZoomBy(delta) {
+        cam.zoom = Math.min(Math.max(cam.zoom + delta, 3), 18);
+        kickFollow();
+      }
+      // While following, every camera move is this loop's, and any of MapLibre's
+      // gestures would be stopped by the next frame of it. So the wheel zooms the
+      // follow camera instead, and a drag, a turn, a pinch or an arrow key hands the
+      // camera back to the reader.
+      // On the view, in the capture phase, so they run before MapLibre's own listeners
+      // on the elements inside it.
+      function onMap(event) { return map.getContainer().contains(event.target); }
+      view.addEventListener('wheel', function (event) {
+        if (!following || !onMap(event)) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        var lines = event.deltaMode === 1 ? 40 : event.deltaMode === 2 ? 800 : 1;
+        followZoomBy(-event.deltaY * lines / 450);
+      }, { capture: true, passive: false });
+      view.addEventListener('pointerdown', function (event) {
+        if (following && map.getCanvasContainer().contains(event.target)) setFollow(false);
+      }, true);
+      view.addEventListener('keydown', function (event) {
+        if (!following || !onMap(event)) return;
+        var k = event.key;
+        if (k === '+' || k === '=' || k === '-' || k === '_') {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          followZoomBy(k === '+' || k === '=' ? 1 : -1);
+        } else if (/^Arrow/.test(k)) setFollow(false);
+      }, true);
 
       // ---- controls --------------------------------------------------------------------
       var GROUNDS = styles.concat(['off']);
@@ -1045,13 +1238,14 @@ SCRIPT = r"""
           toggle(b, labels[b.dataset.m3Label]);
           refresh();
         } else if (act === 'airspace') { airspaceOn = !airspaceOn; toggle(b, airspaceOn); refresh(); }
-        else if (act === 'zoom-in') map.zoomIn();
-        else if (act === 'zoom-out') map.zoomOut();
+        else if (act === 'zoom-in') { if (following) followZoomBy(1); else map.zoomIn(); }
+        else if (act === 'zoom-out') { if (following) followZoomBy(-1); else map.zoomOut(); }
         else if (act === 'help') help.hidden = !help.hidden;
         else if (act === 'fullscreen') fullscreen();
-        else if (act === 'reset') fit(true);
+        else if (act === 'reset') { setFollow(false); fit(true); }
         else if (act === 'play') togglePlay();
         else if (act === 'replay') openReplay(replay.hidden);
+        else if (act === 'follow') setFollow(!following);
         else if (act === 'slower' && speed > 0) { speed--; showSpeed(); }
         else if (act === 'faster' && speed < SPEEDS.length - 1) { speed++; showSpeed(); }
       });
@@ -1066,7 +1260,11 @@ SCRIPT = r"""
         else if (k === '1' || k === '2' || k === '4') setVertical(Number(k));
         else if ((k === 'a' || k === 'A') && hasAirspace) view.querySelector('[data-m3="airspace"]').click();
         else if (k === 'f' || k === 'F') fullscreen();
-        else if (k === '0') fit(true);
+        else if (k === '0') { setFollow(false); fit(true); }
+        else if ((k === 'c' || k === 'C') && hasTime) {
+          if (replay.hidden) openReplay(true);
+          setFollow(!following);
+        }
         else if (k === '?') help.hidden = !help.hidden;
         else if (k === 'Escape' && !help.hidden) help.hidden = true;
         else if (k === ' ') togglePlay();
@@ -1119,10 +1317,12 @@ SCRIPT = r"""
         return { center: [c.lng, c.lat], zoom: map.getZoom(), bearing: map.getBearing(),
                  pitch: map.getPitch(), basemap: basemap, vertical: vertical,
                  labels: { climb: labels.climb, glide: labels.glide }, airspace: airspaceOn,
-                 replay: !!(replay && !replay.hidden), from: from, cutoff: cutoff, speed: speed };
+                 replay: !!(replay && !replay.hidden), from: from, cutoff: cutoff, speed: speed,
+                 follow: following };
       };
       api.dispose = function () {
         pause();
+        setFollow(false);
         unwrap.forEach(function (w) { if (handle[w.name] === w.wrapper) handle[w.name] = w.original; });
         handle.__mergedFilterHooks = (handle.__mergedFilterHooks || []).filter(function (h) {
           return h !== filterHook;
@@ -1149,6 +1349,7 @@ SCRIPT = r"""
         if (restore.replay) { openReplay(true); pause(); }
         from = restore.from;
         setTime(restore.cutoff);
+        if (restore.follow) setFollow(true);
       }
 
       // The canvas handle's airspace filter, followed: wrapped like the cursor calls, and
@@ -1172,6 +1373,7 @@ SCRIPT = r"""
 
       var entry = {
         map: map, setTime: setTime, setFrom: setFrom, cursor: function () { return cursor; },
+        setFollow: setFollow, following: function () { return following; }, courseAt: courseAt,
         setBasemap: setBasemap, setVertical: setVertical,
         setRoute: function (walk, points) {
           route = walk || points ? { walk: walk || [], points: points || [] } : null;
