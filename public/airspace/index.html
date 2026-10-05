@@ -443,6 +443,13 @@ canvas.view3d.is-over-rose { cursor: pointer; }
   padding: 4px 9px; font-size: 12px; color: var(--ink); background: var(--panel);
   border: 1px solid var(--rule); border-radius: 2px; font-variant-numeric: tabular-nums; }
 .merged-view .m3-measure[hidden] { display: none; }
+.merged-view .m3-others { position: absolute; left: 12px; bottom: 96px; z-index: 3; margin: 0;
+  padding: 5px 9px; list-style: none; font-size: 12px; line-height: 1.6; color: var(--ink);
+  background: var(--panel); border: 1px solid var(--rule); border-radius: 2px; }
+.merged-view .m3-others[hidden] { display: none; }
+.merged-view .m3-others i { display: inline-block; width: 14px; height: 3px; margin: 0 7px 3px 0;
+  vertical-align: middle; border-radius: 2px; }
+.merged-view .m3-others .is-far { color: var(--ink-3); }
 .merged-view .m3-status { position: absolute; left: 12px; top: 34px; z-index: 3; margin: 0;
   font-size: 12px; color: var(--ink-2); }
 /* MapLibre's own credits, the openable kind: an (i) at the top left that opens to name
@@ -5498,6 +5505,7 @@ window.__view3dBackend = function (host) {
         'for the key list."></div>' +
       '<p class="m3-status">Loading MapLibre…</p>' +
       '<p class="m3-measure" hidden aria-live="polite"></p>' +
+      '<ul class="m3-others" hidden aria-label="Flights compared with this one"></ul>' +
       '<div class="m3-rose" hidden><svg width="64" height="64" viewBox="-32 -32 64 64">' +
         '<circle r="30" fill="rgba(16,19,24,0.55)" stroke="rgba(255,255,255,0.28)"/>' +
         '<text class="m3-n" text-anchor="middle" dominant-baseline="central" font-size="11"' +
@@ -5957,6 +5965,68 @@ window.__view3dBackend = function (host) {
                  floor: floor, top: Math.max(top, floor + 30), capped: !!ring.t };
       }) : [];
 
+      // ---- compared flights ----------------------------------------------------------
+      // Handed in by the page's comparison (`setOthers`, from `render_html`): the other
+      // flights the reader marked. On one clock when they were flown the same day — a
+      // replay at 13:20 shows every glider where it was at 13:20 — and otherwise from each
+      // one's own launch. The map streams its ground for anywhere, so the only guard is
+      // against the absurd: a flight more than 150 km from this one's ground is listed as
+      // too far rather than drawn, and the view is not stretched across a continent. When
+      // the set changes the view is framed on all of them, keeping its tilt and heading.
+      var others = [];
+      var othersList = view.querySelector('.m3-others');
+      function firstAt(times, t) {
+        var lo = 0, hi = times.length;
+        while (lo < hi) { var mid = (lo + hi) >> 1; if (times[mid] < t) lo = mid + 1; else hi = mid; }
+        return lo;
+      }
+      function positionOf(o, t) {
+        var j = Math.min(Math.max(firstAt(o.t, t), 1), o.t.length - 1), i = j - 1;
+        var span = o.t[j] - o.t[i], f = span > 0 ? Math.min(Math.max((t - o.t[i]) / span, 0), 1) : 0;
+        return [o.lon[i] + (o.lon[j] - o.lon[i]) * f, o.lat[i] + (o.lat[j] - o.lat[i]) * f,
+                o.alt[i] + (o.alt[j] - o.alt[i]) * f];
+      }
+      function setOthers(list) {
+        var box = scene.terrain || {}, margin = 150000;
+        var mx = margin / (111320 * Math.cos(((box.south || 0) + (box.north || 0)) / 2 * Math.PI / 180));
+        var my = margin / 111320;
+        others = (list || []).filter(function (o) { return o.track && o.track.lon && o.track.lon.length > 1; })
+          .map(function (o) {
+            var tr2 = o.track;
+            var w = Math.min.apply(null, tr2.lon), e = Math.max.apply(null, tr2.lon);
+            var s2 = Math.min.apply(null, tr2.lat), n2 = Math.max.apply(null, tr2.lat);
+            var far = box.west === undefined ? false
+              : (e < box.west - mx || w > box.east + mx || n2 < box.south - my || s2 > box.north + my);
+            var sameDay = scene.start && o.start && Math.abs(o.start - scene.start) < 12 * 3600;
+            return { name: o.name, colour: o.colour, lon: tr2.lon, lat: tr2.lat, alt: tr2.alt,
+                     t: tr2.t || tr2.lon.map(function (_, i) { return i; }), far: far,
+                     offset: sameDay ? o.start - scene.start : 0, sameDay: !!sameDay };
+          });
+        othersList.innerHTML = others.map(function (o) {
+          return '<li' + (o.far ? ' class="is-far"' : '') + '><i style="background:' + o.colour + '"></i>' +
+            o.name.replace(/[<&]/g, '') + (o.far ? ' — too far to show' : o.sameDay ? '' : ' — by time since launch') +
+            '</li>';
+        }).join('');
+        othersList.hidden = !others.length;
+        var shown = others.filter(function (o) { return !o.far; });
+        var key = shown.map(function (o) { return o.name; }).join('|');
+        if (key && key !== framedFor) {
+          var w = Infinity, e = -Infinity, s = Infinity, n = -Infinity;
+          [tr].concat(shown).forEach(function (o) {
+            for (var i = 0; i < o.lon.length; i++) {
+              w = Math.min(w, o.lon[i]); e = Math.max(e, o.lon[i]);
+              s = Math.min(s, o.lat[i]); n = Math.max(n, o.lat[i]);
+            }
+          });
+          map.fitBounds([[w, s], [e, n]],
+                        { padding: { top: 70, bottom: 110, left: 50, right: 90 },
+                          pitch: map.getPitch(), bearing: map.getBearing(), duration: 600 });
+        }
+        framedFor = key;
+        refresh();
+      }
+      var framedFor = '';
+
       function layers() {
         var out = [];
         var drawn = airspaceFilter ? boxes.filter(function (d) { return airspaceFilter(d.space); })
@@ -6102,6 +6172,40 @@ window.__view3dBackend = function (host) {
             updateTriggers: { getPosition: vertical }, parameters: ON_TOP
           }));
         }
+        // The flights compared with this one (`setOthers`), each in its own colour: the
+        // whole track; or, while the replay is open, the part flown inside the same window
+        // of the shared clock and a dot where the glider was at its "now".
+        others.forEach(function (o, k) {
+          if (o.far) return;
+          var a = 0, b = o.t.length - 1;
+          if (hasTime && replay && !replay.hidden) {
+            var lo = from - o.offset, hi = cutoff - o.offset;
+            a = firstAt(o.t, lo); b = firstAt(o.t, hi + 1e-6) - 1;
+            if (b >= 0 && b < o.t.length && hi >= o.t[0] && hi <= o.t[o.t.length - 1]) {
+              var now = positionOf(o, hi);
+              out.push(new deck.ScatterplotLayer({
+                id: 'other-now-' + k, data: [now],
+                getPosition: function (d) { return [d[0], d[1], z(d[2])]; },
+                getFillColor: rgb(o.colour, 255), getLineColor: [255, 255, 255, 255],
+                stroked: true, lineWidthMinPixels: 2, radiusUnits: 'pixels', getRadius: 6,
+                billboard: true, parameters: ON_TOP,
+                updateTriggers: { getPosition: vertical }
+              }));
+            }
+          }
+          if (b - a < 1) return;
+          out.push(new deck.PathLayer({
+            id: 'other-' + k, data: [{ a: a, b: b }],
+            getPath: function (d) {
+              var path = [];
+              for (var i = d.a; i <= d.b; i++) path.push([o.lon[i], o.lat[i], z(o.alt[i])]);
+              return path;
+            },
+            getColor: rgb(o.colour, 235), getWidth: TRACK_WIDTH, widthUnits: 'pixels',
+            capRounded: true, jointRounded: true, billboard: true,
+            updateTriggers: { getPath: [a, b, vertical] }
+          }));
+        });
         if (cursor) {
           var g = ground(cursor[0], cursor[1]);
           out.push(new deck.LineLayer({
@@ -6882,7 +6986,12 @@ window.__view3dBackend = function (host) {
         clickers.forEach(function (fn) { fn(at, event.originalEvent); });
       });
 
+      // A comparison chosen before this view was built.
+      var myUid = (panel.querySelector('canvas.view3d') || { id: '' }).id.replace(/^view3d-/, '');
+      if (window.__compareFor) setOthers(window.__compareFor(myUid));
+
       var entry = {
+        setOthers: setOthers,
         map: map, setTime: setTime, setFrom: setFrom, cursor: function () { return cursor; },
         setFollow: setFollow, following: function () { return following; }, courseAt: courseAt,
         followCamera: function () { return following ? { zoom: cam.zoom, pitch: cam.pitch, turn: yawOffset } : null; },

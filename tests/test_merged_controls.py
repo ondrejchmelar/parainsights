@@ -395,5 +395,37 @@ def test_handing_the_follow_camera_back_leaves_it_where_it_was(browser):
     assert after[2] == pytest.approx(before[2], rel=0.05)
 
 
+def test_compared_flights_are_drawn_on_one_clock_and_far_ones_are_listed(browser):
+    """The flights marked for comparison are drawn on each other's maps. Flown the same
+    day, the replay shows each where it was at the same moment; one far away is listed,
+    not drawn, rather than stretching the view across a continent."""
+    _reset(browser)
+    browser.js(f"""(() => {{
+      var tr = __handle.built.scene.track, start = __handle.built.scene.start || 1700000000;
+      var near = {{ lon: tr.lon.map(x => x + 0.01), lat: tr.lat.slice(), alt: tr.alt.slice(), t: tr.t.slice() }};
+      var far = {{ lon: tr.lon.map(x => x + 20), lat: tr.lat.slice(), alt: tr.alt.slice(), t: tr.t.slice() }};
+      __handle.built.scene.start = start;
+      ({ENTRY}).setOthers([
+        {{ name: 'NEAR', colour: '#ff4fd8', track: near, start: start + 600 }},
+        {{ name: 'FAR', colour: '#29d3ff', track: far, start: start }}]);
+      return 1; }})()""")
+    time.sleep(0.5)
+    ids = [d["id"] for d in browser.js(f"({ENTRY}).layers()")]
+    legend = browser.js("document.querySelector('.merged-view .m3-others').textContent")
+    assert "other-0" in ids and "other-1" not in ids, ids
+    assert "NEAR" in legend and "FAR — too far to show" in legend
+    assert "time since launch" not in legend, "same day: one clock"
+    # The replay at 30 min: NEAR launched 10 min later, so it is 20 min into its flight.
+    browser.js("""(() => { var v = document.querySelector('.merged-view');
+      if (v.querySelector('.m3-replay').hidden) v.querySelector('[data-m3=replay]').click();
+      var play = v.querySelector('[data-m3=play]'); if (play.classList.contains('is-on')) play.click();
+      (%s).setTime(1800); return 1; })()""" % ENTRY)
+    time.sleep(0.5)
+    ids = [d["id"] for d in browser.js(f"({ENTRY}).layers()")]
+    assert "other-now-0" in ids, ids
+    browser.js(f"({ENTRY}).setOthers([]); 1")
+    assert browser.js("document.querySelector('.merged-view .m3-others').hidden")
+
+
 def test_no_errors_along_the_way(browser):
     assert browser.js("window.__errors") == []

@@ -594,7 +594,15 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   ones, recounted when a flight is added or removed. On touch the ×'s 44 px tap area grows
   inward over the ⇆, so the ⇆ sits above it (`z-index`): a tap meant to compare removed
   the flight, which is what "comparing does not work" was. Uploaded tabs had no ⇆ at
-  all. `tests/test_compare.py` taps them in the touch layout.
+  all. `tests/test_compare.py` taps them in the touch layout. **Each compared flight's
+  merged map draws the others** (`entry.setOthers`, fed by `window.__compareFor`, which a
+  map built later asks itself): each in its own colour from outside the climb ramp, with
+  a legend, and the view framed on all of them. Flown the same day (starts within 12 h,
+  `scene.start` is the first fix in UTC seconds) the replay runs on one clock — a dot
+  where each glider was at the same moment, its trail inside the same window; otherwise
+  by time since launch, and the legend says so. A flight more than 150 km from this map's
+  ground is listed as too far, not drawn: the merged map streams ground for anywhere, so
+  that is the only guard needed.
 - **Flights accumulate, and any of them can be removed.** An upload becomes a new article
   with its own uid (`up1`, `up2`…) and appends a tab; every tab (bundled ones included)
   carries a `×` that removes both. Consequences worth knowing: nothing inside an article

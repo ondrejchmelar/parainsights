@@ -96,6 +96,8 @@
       tiles: Object.assign({}, TILE_SOURCES),
       landing: { lon: R(f.lon[n - 1], 5), lat: R(f.lat[n - 1], 5), alt: Math.trunc(alt[n - 1]) },
       sun: sun.forFlight(f),
+      // The first fix, UTC seconds: compared flights' replays run on one clock from it.
+      start: Math.round(f.time[0]),
       wind: a.wind ? { ms: R(a.wind.speed, 1), from: R(a.wind.direction, 1), cardinal: a.wind.cardinal } : null
     };
     if (options.airspaceRemote) {

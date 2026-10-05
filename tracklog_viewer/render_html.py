@@ -1117,6 +1117,50 @@ SCRIPT = """
     }).length;
     document.documentElement.classList.toggle('is-comparing', count >= 2);
     refresh();
+    showOthers();
+  }
+
+  // Each compared flight's 3D map draws the others too (`setOthers` in `map3d`): usually
+  // the same area, often the same day. Colours from outside the climb-rate ramp the
+  // flight's own track uses, so a compared track never reads as a climb. Scenes are read
+  // once per flight; a map built later asks `__compareFor` itself.
+  var OTHER_COLOURS = ['#ff4fd8', '#29d3ff', '#ffe14d', '#9b7bff', '#ffffff'];
+  var scenes = {};
+  function sceneOf(article) {
+    var uid = article.getAttribute('data-flight-report');
+    if (scenes[uid] !== undefined) return scenes[uid];
+    var node = article.querySelector('.view3d-data');
+    scenes[uid] = null;
+    if (node && typeof readScene === 'function') {
+      try {
+        var scene = readScene(node);
+        scenes[uid] = { track: scene.track, start: scene.start,
+                        name: article.getAttribute('data-compare-name') || uid };
+      } catch (error) { /* a flight without a scene is compared by its figures only */ }
+    }
+    return scenes[uid];
+  }
+  function picked() {
+    return articles().filter(function (a) { return chosen[a.getAttribute('data-flight-report')]; });
+  }
+  window.__compareFor = function (uid) {
+    var all = picked();
+    if (all.length < 2 || !chosen[uid]) return [];
+    var out = [];
+    all.forEach(function (article, i) {
+      if (article.getAttribute('data-flight-report') === uid) return;
+      var scene = sceneOf(article);
+      if (scene) out.push({ name: scene.name, track: scene.track, start: scene.start,
+                            colour: OTHER_COLOURS[i % OTHER_COLOURS.length] });
+    });
+    return out;
+  };
+  function showOthers() {
+    articles().forEach(function (article) {
+      var canvas = article.querySelector('canvas.view3d');
+      var entry = canvas && window.__mergedAll && window.__mergedAll[canvas.id];
+      if (entry && entry.setOthers) entry.setOthers(window.__compareFor(article.getAttribute('data-flight-report')));
+    });
   }
   // Flights come and go (uploads, the × on a tab); re-settle when they do.
   var holder = document.querySelector('[data-flight-report]');
