@@ -184,6 +184,15 @@ do. The scene carries `airspaceRemote` (where the layers are; the report names i
 the airspace…" — then is enabled with the credit as its title, or says why not (Hunza:
 "the layers cover Europe"). Fetching means **airspace needs the page served over
 http(s)**; opened from `file://` the switch says it could not load.
+**A flight's map draws only the airspace the flight had to do with** (`relevantAirspace`,
+after the terrain is in, since a limit above ground needs the ground — the pilot's rule,
+October 2026): zones the track came within 5 km of sideways and 1 km vertically; not the
+kinds that bind nobody (danger and firing areas, sport/aerobatic, alert, warning, gliding
+sectors — protected areas and parks *are* binding and stay); and not zones openAIP marks
+as active only by NOTAM (`nt`, 376 across Europe). NOTAMs are not fetched, for the
+flight's time or now, so a zone activated during a flight is missing too, and the caption
+says so. Over the Dolomites flight 2 of 11 loaded zones remain, over Krupka 28 of 138.
+The Planner map still draws everything.
 
 ## A network is assumed
 
@@ -846,6 +855,17 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   a browser that stops serving frames to a page it thinks hidden froze the camera.
   **Measure** (ruler button, `d`): clicks are points, the readout the total and the last
   leg on the FAI sphere, Backspace and Esc; while measuring a click is nothing else.
+  **deck.gl is interleaved** (`MapboxOverlay({interleaved: true})`), drawn in MapLibre's
+  own pass against the terrain's depth: on a canvas of its own over the map, the track,
+  the airspace walls and the route all showed through the mountains in front of them.
+  Markers and labels keep `ON_TOP`. **Keys go to the follow camera from anywhere in the
+  view** — the reader has just pressed the follow button, so that is where focus is.
+  **The glider is held below the middle by looking ahead of it, never by padding**:
+  MapLibre places the sky by the unpadded horizon, and with padding a band between the
+  sky and the far terrain was drawn as nothing; and dropping the padding on hand-back
+  shifted the whole picture down. The distance ahead is the pinhole solution
+  `lift·C·m / (C·cos t + lift·sin t)` (C the camera-to-centre distance in pixels), since
+  the glider is nearer the camera than the point looked at.
   **The airspace is glass** (`GLASS`, no depth write): drawn before the track and writing
   depth, the boxes hid every part of a flight inside them — over Krupka nearly all of it.
   **The shift-drag pivot is clamped into the canvas's box**, not the canvas container's,
@@ -949,6 +969,7 @@ The numbers are checkable, so check them:
   test drives Chrome over the DevTools protocol — mouse with modifiers, keys, wheel — and
   checks the shift-drag pivot, a plain pan, measuring, the glass airspace, follow and its
   hand-back. `PARAINSIGHTS_REQUIRE=…,maplibre` makes a missing cache an error, not a skip.
+  It runs flat, without terrain (no network), so occlusion by ridges is not in it.
   Two headless facts it needs: Chrome counts the window as hidden unless told otherwise
   (`--disable-renderer-backgrounding`, `--disable-backgrounding-occluded-windows`), and
   even then serves animation frames only while something repaints, so its waits nudge

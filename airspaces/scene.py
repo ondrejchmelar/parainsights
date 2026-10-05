@@ -180,6 +180,8 @@ def rings(airspaces, *, source: bool = False) -> list[dict]:
         # fields publish no hours at all.
         if airspace.meta.get("hours"):
             ring["w"] = airspace.meta["hours"]
+        if airspace.meta.get("notam"):
+            ring["nt"] = True        # active only by NOTAM (openAIP)
         if source:
             ring.update(nm=airspace.name, ac=airspace.airspace_class,
                         lo=airspace.floor, hi=airspace.ceiling)

@@ -424,7 +424,7 @@
       view3dSection = '\n  <section>\n    <div class="section-head">\n      <h2>The flight over the ground</h2>\n' +
         '      <p>Hovering a moment in the side view marks the same moment on the map above, and in\n         the top view below. Click to keep it there while you look; click again, or press\n' +
         '         <kbd>Esc</kbd>, to let go. A row in the climbs or glides table does the same for\n         where that phase began.' +
-        (payload.airspaceRemote ? " <strong>Airspace</strong> draws the zones over this flight's own ground as the boxes they are, floor to ceiling — hover one for its name and limits. Airspace &copy; <a href=\"https://www.openaip.net\" rel=\"noreferrer\">openAIP</a>, CC BY-NC 4.0, refreshed monthly; in Czechia the traffic circuits are this site's own, from ŘLP publications." : '') +
+        (payload.airspaceRemote ? " <strong>Airspace</strong> draws the zones this flight came within 5 km and 1 km (height) of, as the boxes they are, floor to ceiling — hover one for its name and limits. Zones that bind nobody (danger and firing areas, sport and alert areas, gliding sectors) are left out, and so are those active only by NOTAM: NOTAMs are not fetched, so one activated during the flight is missing too. Airspace &copy; <a href=\"https://www.openaip.net\" rel=\"noreferrer\">openAIP</a>, CC BY-NC 4.0, refreshed monthly; in Czechia the traffic circuits are this site's own, from ŘLP publications." : '') +
         '</p>\n    </div>\n    <div class="renderer-host" data-renderer-default="merged">\n    ' + TV.scene.switchHtml() + '\n    ' +
         TV.scene.panel(payload, uid) +
         '\n    </div>\n' + sideView + '\n  </section>';

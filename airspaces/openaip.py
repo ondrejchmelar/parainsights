@@ -164,9 +164,13 @@ def to_airspace(item: dict) -> Airspace | None:
     if metres is not None and metres >= TOP_FLOOR_M:
         return None
     points = [(lat, lon) for lon, lat in geometry["coordinates"][0]]
+    # Active only when a NOTAM says so, by openAIP's own flags: a flight's map leaves
+    # these out (`relevantAirspace`), since the file cannot know whether one was issued.
+    hours = (item.get("hoursOfOperation") or {}).get("operatingHours") or []
+    notam = bool(item.get("byNotam") or any(h.get("byNotam") for h in hours))
     return Airspace(name=item.get("name") or label, airspace_class=label, floor=floor,
                     ceiling=ceiling, points=points,
-                    meta={"group": group, "type": item.get("type")})
+                    meta={"group": group, "type": item.get("type"), "notam": notam})
 
 
 def drawn(code: str, items: list[dict]) -> list[Airspace]:

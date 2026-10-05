@@ -644,17 +644,80 @@ function loadAirspace(root, scene) {
     scene.airspaces = [].concat.apply([], parts).sort(function (a, b) { return size(b) - size(a); });
     scene.airspaceCredit = credits.join(' · ');
   }, function () { scene.airspaces = []; scene.airspaceFailed = true; });
-  return found.then(function () {
-    var button = root.querySelector('[data-view3d-act="airspace-toggle"]');
-    if (!button) return;
-    var any = scene.airspaces.length > 0;
-    var why = any ? 'Draw the airspace over this flight' + (scene.airspaceCredit ? ' (' + scene.airspaceCredit + ')' : '')
-      : scene.airspaceFailed ? 'The airspace could not be loaded'
-      : 'No airspace data under this flight — the layers cover Europe';
-    button.disabled = !any;
-    button.title = why;
-    button.setAttribute('aria-label', why);
+  return found;
+}
+
+// What a flight's map draws of the airspace it loaded: only what the flight had to do
+// with. Two cuts, both the pilot's (October 2026), and zones openAIP marks as active only
+// by NOTAM go too. Kinds that bind nobody — danger and
+// firing areas, sport and aerobatic boxes, alert and warning areas, gliding sectors — are
+// not drawn; protected areas and parks are, because they do bind. And of the rest, only
+// zones the track came within 5 km of sideways and 1 km of vertically: the ground box a
+// flight's map covers holds a hundred zones in the Alps, and an aerobatic box or a firing
+// range the flight never went near is clutter on a map about this flight. Run after the
+// terrain is in, because a limit measured from the ground needs the ground.
+var NON_BINDING = /^(D|Sport|Alert|Warning|Gliding)$/;
+var NEAR_SIDEWAYS = 5000, NEAR_VERTICALLY = 1000;
+function relevantAirspace(scene) {
+  var tr = scene.track, dem = scene.terrain || {};
+  var all = scene.airspaces || [];
+  scene.airspaceLoaded = all.length;
+  if (!tr || !tr.lon || tr.lon.length < 2 || !all.length) return;
+  var step = Math.max(1, Math.floor(tr.lon.length / 2000)), fixes = [];
+  for (var i = 0; i < tr.lon.length; i += step) fixes.push([tr.lon[i], tr.lat[i], tr.alt[i]]);
+  function ground(lon, lat) {
+    if (!dem.z || !dem.rows) return dem.min || 0;
+    var gx = Math.max(0, Math.min(dem.cols - 1, (lon - dem.west) / (dem.east - dem.west) * (dem.cols - 1)));
+    var gy = Math.max(0, Math.min(dem.rows - 1, (dem.north - lat) / (dem.north - dem.south) * (dem.rows - 1)));
+    return dem.z[Math.round(gy) * dem.cols + Math.round(gx)];
+  }
+  function sideways(ring, p) {
+    // Metres from the fix to the ring: 0 inside, else to the nearest edge.
+    var kx = 111320 * Math.cos(p[1] * Math.PI / 180), ky = 111320, inside = false, best = Infinity;
+    var n = ring.lon.length;
+    for (var a = 0, b = n - 1; a < n; b = a++) {
+      var ax = (ring.lon[a] - p[0]) * kx, ay = (ring.lat[a] - p[1]) * ky;
+      var bx = (ring.lon[b] - p[0]) * kx, by = (ring.lat[b] - p[1]) * ky;
+      if ((ay > 0) !== (by > 0) && 0 < (bx - ax) * (0 - ay) / (by - ay) + ax) inside = !inside;
+      var dx = bx - ax, dy = by - ay, len = dx * dx + dy * dy;
+      var t = len ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len)) : 0;
+      best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
+    }
+    return inside ? 0 : best;
+  }
+  scene.airspaces = all.filter(function (ring) {
+    if (ring.ac && NON_BINDING.test(ring.ac)) return false;
+    if (ring.nt) return false;     // active only by NOTAM: the file cannot know if it is
+    var mx = NEAR_SIDEWAYS / (111320 * Math.cos(ring.lat[0] * Math.PI / 180)), my = NEAR_SIDEWAYS / 111320;
+    var w = Math.min.apply(null, ring.lon) - mx, e = Math.max.apply(null, ring.lon) + mx;
+    var s = Math.min.apply(null, ring.lat) - my, n = Math.max.apply(null, ring.lat) + my;
+    for (var k = 0; k < fixes.length; k++) {
+      var p = fixes[k];
+      if (p[0] < w || p[0] > e || p[1] < s || p[1] > n) continue;
+      if (sideways(ring, p) > NEAR_SIDEWAYS) continue;
+      var g = ground(p[0], p[1]);
+      var floor = ring.g ? g : (ring.fu !== undefined ? g + ring.fu : ring.f);
+      var top = ring.t ? Infinity : (ring.cu !== undefined ? g + ring.cu : ring.c);
+      if (p[2] >= floor - NEAR_VERTICALLY && p[2] <= top + NEAR_VERTICALLY) return true;
+    }
+    return false;
   });
+}
+
+// The switch, once the airspace is settled: enabled with the credit, or saying why not.
+function settleAirspace(root, scene) {
+  if (!scene.airspaceRemote) return;
+  relevantAirspace(scene);
+  var button = root.querySelector('[data-view3d-act="airspace-toggle"]');
+  if (!button) return;
+  var any = scene.airspaces.length > 0;
+  var why = any ? 'Draw the airspace this flight came near' + (scene.airspaceCredit ? ' (' + scene.airspaceCredit + ')' : '')
+    : scene.airspaceFailed ? 'The airspace could not be loaded'
+    : scene.airspaceLoaded ? 'No binding airspace within 5 km and 1 km of this flight'
+    : 'No airspace data under this flight — the layers cover Europe';
+  button.disabled = !any;
+  button.title = why;
+  button.setAttribute('aria-label', why);
 }
 
 function initView3dWhenReady(root, cursorTrack) {
@@ -664,7 +727,10 @@ function initView3dWhenReady(root, cursorTrack) {
   var dem = scene.terrain;
   var airspace = loadAirspace(root, scene);
   if (!dem || !dem.remote || dem.z) {
-    return airspace.then(function () { return initView3d(root, cursorTrack, scene); });
+    return airspace.then(function () {
+      settleAirspace(root, scene);
+      return initView3d(root, cursorTrack, scene);
+    });
   }
   var box = root.querySelector('.view3d-loading');
   if (box) {
@@ -673,6 +739,7 @@ function initView3dWhenReady(root, cursorTrack) {
   }
   return Promise.all([loadTerrain(dem), airspace]).then(function () {
     if (box) box.hidden = true;
+    settleAirspace(root, scene);
     return initView3d(root, cursorTrack, scene);
   }, function (error) {
     if (box) {

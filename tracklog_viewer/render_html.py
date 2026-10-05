@@ -1600,7 +1600,9 @@ a.site-source { align-self:center; margin:0 0 0 6px; padding:0; width:30px; heig
   display:grid; place-items:center; border:1px solid var(--rule); border-radius:999px;
   background:var(--panel); color:var(--ink-2); }
 a.site-source:hover { color: var(--ink); border-color: var(--rule-strong); }
-.site-foot { margin:48px 0 0; padding:14px 0 0; border-top:1px solid var(--rule);
+/* `display: block`: the report lays every <footer> out as a flex row (each flight's own
+   fixes-and-timezone line), and the site footer's sentence was spread across it. */
+.site-foot { display:block; margin:28px 0 0; padding:14px 0 0; border-top:1px solid var(--rule);
   font-size:12.5px; line-height:1.55; color:var(--ink-3); }
 .site-foot a { color: var(--ink-2); }
 .view-tab:focus-visible { outline: 2px solid var(--climb); outline-offset: -2px; }

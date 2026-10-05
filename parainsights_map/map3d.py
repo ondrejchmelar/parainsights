@@ -893,7 +893,10 @@ SCRIPT = r"""
 
       var asp = view.querySelector('.view3d-asp');
       var overlay = new deck.MapboxOverlay({
-        interleaved: false, layers: layers(),
+        // Interleaved: drawn in MapLibre's own pass against the terrain's depth, so a ridge
+        // hides the track, the airspace and the route behind it. On a canvas of its own
+        // over the map, everything showed through the mountains.
+        interleaved: true, layers: layers(),
         onHover: function (info) {
           var box = info && info.layer && info.layer.id === 'airspace' && info.object;
           if (!box) { asp.hidden = true; return; }
@@ -1190,13 +1193,27 @@ SCRIPT = r"""
         // (`_elevationFreeze`, which MapLibre's own animations use for the same purpose;
         // 4.7.1 is pinned) and the camera turns about the glider itself. The top padding
         // puts it a little below the middle, to show where it is going.
+        // The glider a little below the middle, to show where it is going: the camera
+        // looks at a point ahead of it, on the plane at its height. The glider is then
+        // nearer the camera than that point, so it is a pinhole projection, not a scale:
+        // with C the camera's distance to the centre in pixels, a point d metres before
+        // the centre shows at d·cos(t)·C / (C·m − d·sin(t)) px below it (m metres a pixel,
+        // t the tilt), and solving that for `lift` gives the distance. Not padding:
+        // MapLibre puts the sky by the unpadded horizon, and with padding a band between
+        // the sky and the far terrain was drawn as nothing at all.
         var lift = H * 0.2;
         if (map.terrain) {
           map._elevationFreeze = true;
           map.transform.elevation = p.alt * vertical;
         }
-        map.jumpTo({ center: [p.lon, p.lat], bearing: bearing, zoom: zoom, pitch: pitch,
-                     padding: { top: 2 * lift, bottom: 0, left: 0, right: 0 } });
+        var metresPerPixel = 40075016.686 * Math.cos(p.lat * Math.PI / 180) / (512 * Math.pow(2, zoom));
+        var tilt = Math.min(pitch, 85) * Math.PI / 180;
+        var C = map.transform.cameraToCenterDistance || (H / 2 / Math.tan(36.87 / 2 * Math.PI / 180));
+        var ahead = lift * C * metresPerPixel / (C * Math.cos(tilt) + lift * Math.sin(tilt));
+        var heading = bearing * Math.PI / 180;
+        map.jumpTo({ center: [p.lon + ahead * Math.sin(heading) / (111320 * Math.cos(p.lat * Math.PI / 180)),
+                              p.lat + ahead * Math.cos(heading) / 111320],
+                     bearing: bearing, zoom: zoom, pitch: pitch });
         if (playing || Math.abs(dTurn) > 0.05 || Math.abs(dZoom) > 0.01 || Math.abs(dPitch) > 0.05) {
           kickFollow();
         } else followLast = 0;
@@ -1334,8 +1351,13 @@ SCRIPT = r"""
           if (!event.touches.length) touch = null;
         } else if (!event.touches.length) touch = null;
       }, { capture: true, passive: false });
+      // Keys anywhere in the view, not only on the map: the reader has just pressed the
+      // follow button, so that is where focus is, and arrows sent there did nothing.
+      function inView(event) {
+        return view.contains(event.target) && !/^(INPUT|SELECT|TEXTAREA)$/.test(event.target.tagName);
+      }
       view.addEventListener('keydown', function (event) {
-        if (!following || !onMap(event)) return;
+        if (!following || !inView(event)) return;
         var k = event.key;
         if (k === '+' || k === '=' || k === '-' || k === '_') {
           event.preventDefault();
@@ -1398,7 +1420,7 @@ SCRIPT = r"""
         showMeasure();
       }
       view.addEventListener('keydown', function (event) {
-        if (!measuring || !onMap(event)) return;
+        if (!measuring || !inView(event)) return;
         if (event.key === 'Escape') { setMeasure(false); event.preventDefault(); event.stopImmediatePropagation(); }
         else if (event.key === 'Backspace') {
           measurePoints.pop(); showMeasure();
