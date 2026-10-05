@@ -109,6 +109,30 @@ def test_large_track_is_sampled_not_exhausted():
     assert len(lat) > js.run("return TV.xc.MAX_SAMPLES;")  # the sampling path was exercised
 
 
+def test_a_turnpoint_between_samples_is_found_on_the_full_track():
+    """The optimum is searched on a sample, ~1 fix in 50 on a long flight, then each
+    turnpoint slides over the full-resolution fixes. Without the slide two real flights
+    scored 39.87 and 70.97 km where XContest says 40.25 and 71.17 — the furthest fix sat
+    between samples. Here it is the peak of a 300 m bump off a straight line: the best
+    route goes through it exactly."""
+    points = [(0.0, 0.0)] + leg(90, 60, steps=20000)
+    # A bump 300 m high peaking at one fix, gradual enough that sampling by distance
+    # flown lands on its slopes rather than on the peak.
+    spike = 10007
+    for i in range(spike - 40, spike + 41):
+        x, y = points[i]
+        points[i] = (x, y + 300.0 * (1 - abs(i - spike) / 41))
+    lat, lon = to_arrays(points)
+    # One turnpoint, so the best route is start, spike, finish and nothing else.
+    route = optimise(lat, lon, 1)
+    assert spike in [p["index"] for p in route.points]
+    exact = js.run("""var d = TV.geo.distance;
+      return d(input.lat[0], input.lon[0], input.lat[input.k], input.lon[input.k]) +
+             d(input.lat[input.k], input.lon[input.k], input.lat[input.n], input.lon[input.n]);""",
+                   lat=lat, lon=lon, k=spike, n=len(lat) - 1)
+    assert route.distance == pytest.approx(exact, abs=1.0)
+
+
 class TestShape:
     """XContest's categories: closure under the 20% rule, then FAI's 28% shortest side."""
 

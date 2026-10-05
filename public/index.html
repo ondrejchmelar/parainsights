@@ -10508,12 +10508,40 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
     var total = best[end], chain = [end];
     for (var l = legs - 1; l >= 0; l--) chain.push(cameFrom[l][chain[chain.length - 1]]);
     chain.reverse();
-    var points = chain.map(function (i) { return turnpoint(smp[i], lat, lon, times); });
+    // The sample is ~1 fix in every 50 on a long flight, so a turnpoint it picks is up to
+    // half a spacing from the fix that is really furthest out: 380 m short of XContest on
+    // a 40 km flight, 200 m on 71 km. So, as `triangle` does, each point slides over the
+    // full-resolution fixes around it — between its neighbours, never past them — while a
+    // slide still adds distance. Two spacings either way: the sampled optimum is in the
+    // right basin, and the fix it missed is next to it.
+    var picks = chain.map(function (i) { return smp[i]; });
+    var spacing = Math.max(Math.trunc(lat.length / Math.max(n, 1)), 1) * 2;
+    function span(a, b) { return geo.distance(lat[a], lon[a], lat[b], lon[b]); }
+    for (var pass = 0; pass < 5; pass++) {
+      var moved = false;
+      for (var slot = 0; slot < picks.length; slot++) {
+        var before = slot > 0 ? picks[slot - 1] : -1, after = slot + 1 < picks.length ? picks[slot + 1] : -1;
+        var low = Math.max(picks[slot] - spacing, before < 0 ? 0 : before);
+        var high = Math.min(picks[slot] + spacing, after < 0 ? lat.length - 1 : after);
+        var value = function (w) {
+          return (before < 0 ? 0 : span(before, w)) + (after < 0 ? 0 : span(w, after));
+        };
+        var spot = picks[slot], spotValue = value(spot);
+        for (var w = low; w <= high; w++) {
+          var v = value(w);
+          if (v > spotValue + 1e-6) { spotValue = v; spot = w; }
+        }
+        if (spot !== picks[slot]) { picks[slot] = spot; moved = true; }
+      }
+      if (!moved) break;
+    }
+    var points = picks.map(function (k) { return turnpoint(k, lat, lon, times); });
     var legDistances = [];
     for (var p = 0; p + 1 < points.length; p++) {
       legDistances.push(geo.distance(points[p].lat, points[p].lon, points[p + 1].lat, points[p + 1].lon));
     }
     var closing = geo.distance(points[0].lat, points[0].lon, points[points.length - 1].lat, points[points.length - 1].lon);
+    total = legDistances.reduce(function (sum, d) { return sum + d; }, 0);
     return { kind: 'free_' + turnpoints + 'tp', distance: total, points: points, legs: legDistances,
              closed: total > 0 && closing / total < 0.2 };
   }
