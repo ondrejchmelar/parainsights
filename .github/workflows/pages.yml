@@ -80,7 +80,7 @@ jobs:
       PARAINSIGHTS_REQUIRE: node,chrome,maplibre
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: true
       - run: google-chrome --version && node --version
@@ -117,7 +117,7 @@ jobs:
           # one-commit window the page's last change is usually not there at all — the
           # check would fail every deploy that did not itself rebuild the report.
           fetch-depth: 0
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: true
       # `--extra terrain` is Pillow, and the terrain is why. A bare `uv sync` builds an
