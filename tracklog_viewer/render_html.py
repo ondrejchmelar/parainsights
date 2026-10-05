@@ -1124,7 +1124,11 @@ SCRIPT = """
   // the same area, often the same day. Colours from outside the climb-rate ramp the
   // flight's own track uses, so a compared track never reads as a climb. Scenes are read
   // once per flight; a map built later asks `__compareFor` itself.
-  var OTHER_COLOURS = ['#ff4fd8', '#29d3ff', '#ffe14d', '#9b7bff', '#ffffff'];
+  // XContest's own way of telling tracks apart: thin lines, one muted colour each — orange,
+  // sky blue, brick red, indigo, olive. Bright ones shouted over the ground; the climb ramp
+  // is dropped while comparing, because five climb colours a track times several tracks
+  // is no way to tell them apart. A flight keeps its colour on every map.
+  var OTHER_COLOURS = ['#e0893a', '#3aa8d0', '#c9483c', '#5a5fc0', '#8a9a3a'];
   var scenes = {};
   function sceneOf(article) {
     var uid = article.getAttribute('data-flight-report');
@@ -1145,13 +1149,17 @@ SCRIPT = """
   }
   window.__compareFor = function (uid) {
     var all = picked();
-    if (all.length < 2 || !chosen[uid]) return [];
-    var out = [];
+    if (all.length < 2 || !chosen[uid]) return null;
+    var out = { own: null, others: [] };
     all.forEach(function (article, i) {
-      if (article.getAttribute('data-flight-report') === uid) return;
+      var colour = OTHER_COLOURS[i % OTHER_COLOURS.length];
+      var name = article.getAttribute('data-compare-name') || '';
+      if (article.getAttribute('data-flight-report') === uid) {
+        out.own = { name: name, colour: colour };
+        return;
+      }
       var scene = sceneOf(article);
-      if (scene) out.push({ name: scene.name, track: scene.track, start: scene.start,
-                            colour: OTHER_COLOURS[i % OTHER_COLOURS.length] });
+      if (scene) out.others.push({ name: scene.name, track: scene.track, start: scene.start, colour: colour });
     });
     return out;
   };

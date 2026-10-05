@@ -5973,7 +5973,7 @@ window.__view3dBackend = function (host) {
       // against the absurd: a flight more than 150 km from this one's ground is listed as
       // too far rather than drawn, and the view is not stretched across a continent. When
       // the set changes the view is framed on all of them, keeping its tilt and heading.
-      var others = [];
+      var others = [], ownColour = null, ownName = '';
       var othersList = view.querySelector('.m3-others');
       function firstAt(times, t) {
         var lo = 0, hi = times.length;
@@ -5986,7 +5986,19 @@ window.__view3dBackend = function (host) {
         return [o.lon[i] + (o.lon[j] - o.lon[i]) * f, o.lat[i] + (o.lat[j] - o.lat[i]) * f,
                 o.alt[i] + (o.alt[j] - o.alt[i]) * f];
       }
-      function setOthers(list) {
+      // `compared`: { own: { name, colour }, others: [{ name, colour, track, start }] }, or
+      // nothing — what `window.__compareFor` gives (`render_html`).
+      // A compared glider's position over ±45 s, as `steadyAt` is for this one.
+      function steadyOf(o, t) {
+        var n = 9, q = { lon: 0, lat: 0, alt: 0 };
+        for (var i = 0; i < n; i++) {
+          var at = positionOf(o, t - 45 + 90 * i / (n - 1));
+          q.lon += at[0] / n; q.lat += at[1] / n; q.alt += at[2] / n;
+        }
+        return q;
+      }
+      function setOthers(compared) {
+        var list = (compared && compared.others) || [];
         var box = scene.terrain || {}, margin = 150000;
         var mx = margin / (111320 * Math.cos(((box.south || 0) + (box.north || 0)) / 2 * Math.PI / 180));
         var my = margin / 111320;
@@ -6002,7 +6014,10 @@ window.__view3dBackend = function (host) {
                      t: tr2.t || tr2.lon.map(function (_, i) { return i; }), far: far,
                      offset: sameDay ? o.start - scene.start : 0, sameDay: !!sameDay };
           });
-        othersList.innerHTML = others.map(function (o) {
+        ownColour = others.length && compared.own ? compared.own.colour : null;
+        ownName = others.length && compared.own ? compared.own.name : '';
+        othersList.innerHTML = (ownColour ? '<li><i style="background:' + ownColour + '"></i>' +
+            ownName.replace(/[<&]/g, '') + ' — this flight</li>' : '') + others.map(function (o) {
           return '<li' + (o.far ? ' class="is-far"' : '') + '><i style="background:' + o.colour + '"></i>' +
             o.name.replace(/[<&]/g, '') + (o.far ? ' — too far to show' : o.sameDay ? '' : ' — by time since launch') +
             '</li>';
@@ -6108,9 +6123,13 @@ window.__view3dBackend = function (host) {
           id: 'track', data: linesFrom(),
           getPath: function (d) { return d.path.map(function (p) { return [p[0], p[1], z(p[2])]; }); },
           getTimestamps: function (d) { return d.times; },
-          getColor: function (d) { return d.colour; }, getWidth: TRACK_WIDTH, widthUnits: 'pixels',
+          // While comparing, one colour per flight instead of the climb ramp: several
+          // tracks each in five climb colours were five times too many colours to read.
+          getColor: function (d) { return ownColour ? rgb(ownColour, 235) : d.colour; },
+          getWidth: TRACK_WIDTH, widthUnits: 'pixels',
           currentTime: cutoff, trailLength: Math.max(cutoff - from, 0) + 0.5, fadeTrail: false,
-          capRounded: true, jointRounded: true, updateTriggers: { getPath: vertical }
+          capRounded: true, jointRounded: true,
+          updateTriggers: { getPath: vertical, getColor: ownColour }
         }));
         // While the replay runs, its leading edge: the last seven minutes in white.
         if (hasTime && replay && !replay.hidden) out.push(new deck.TripsLayer({
@@ -6512,8 +6531,47 @@ window.__view3dBackend = function (host) {
         var kTurn = 1 - Math.exp(-dt / 0.7), kZoom = 1 - Math.exp(-dt / 0.3);
         var bearing = map.getBearing(), zoom = map.getZoom(), pitch = map.getPitch();
         var p = steadyAt(cutoff);
-        var H = map.getContainer().clientHeight || 500;
-        var dTurn = turn(bearing, target), dZoom = cam.zoom - zoom, dPitch = cam.pitch - pitch;
+        var H = map.getContainer().clientHeight || 500, W = map.getContainer().clientWidth || 800;
+        // Comparing: every glider in the picture. The camera looks at the middle of the
+        // group (each one's steady position at the shared "now") and pulls back just far
+        // enough to hold them all with a margin — never closer than the reader's own zoom.
+        // Across the view a metre is a metre; along it, the tilt foreshortens it.
+        var fitZoom = Infinity, group = [p];
+        others.forEach(function (o) {
+          if (o.far) return;
+          var at = cutoff - o.offset;
+          if (at < o.t[0] || at > o.t[o.t.length - 1]) return;
+          group.push(steadyOf(o, at));
+        });
+        if (group.length > 1) {
+          var c = { lon: 0, lat: 0, alt: 0 };
+          group.forEach(function (q) { c.lon += q.lon / group.length; c.lat += q.lat / group.length; c.alt += q.alt / group.length; });
+          var kx = 111320 * Math.cos(c.lat * Math.PI / 180), ky = 111320, rb = target * Math.PI / 180;
+          var across = 0, along = 0;
+          group.forEach(function (q) {
+            var dx = (q.lon - c.lon) * kx, dy = (q.lat - c.lat) * ky;
+            across = Math.max(across, Math.abs(dx * Math.cos(rb) - dy * Math.sin(rb)));
+            along = Math.max(along, Math.abs(dx * Math.sin(rb) + dy * Math.cos(rb)));
+          });
+          // Metres a pixel that hold them. Across: half the width, with a margin. Along the
+          // view it is a pinhole, not a scale — a glider nearer the camera than the centre
+          // is magnified, and the centre sits `lift` px below the middle (the look-ahead),
+          // so the near side has less room: d·cos t·C / (C·m − d·sin t) ≤ room, solved for m.
+          var tiltNow = Math.min(pitch, 80) * Math.PI / 180;
+          var Cpx = map.transform.cameraToCenterDistance || (H / 2 / Math.tan(36.87 / 2 * Math.PI / 180));
+          // Measured from the point the camera looks at, which is the look-ahead's distance
+          // beyond the group's middle — itself proportional to the answer, so a few rounds.
+          var room = H / 2 * 0.8, liftPx = H * 0.2, need = across / (W / 2 * 0.8);
+          for (var round = 0; round < 4; round++) {
+            var aheadM = liftPx * Cpx * need / (Cpx * Math.cos(tiltNow) + liftPx * Math.sin(tiltNow));
+            var near = along + aheadM;
+            need = Math.max(across / (W / 2 * 0.8),
+                            near * (Math.sin(tiltNow) / Cpx + Math.cos(tiltNow) / room));
+          }
+          if (need > 0) fitZoom = Math.log2(40075016.686 * Math.cos(c.lat * Math.PI / 180) / (512 * need));
+          p = c;
+        }
+        var dTurn = turn(bearing, target), dZoom = Math.min(cam.zoom, fitZoom) - zoom, dPitch = cam.pitch - pitch;
         // And never faster than 90° a second: where the flight really turns back, the
         // smoothed heading still swings half round in a few minutes of flight, which at
         // 5 min/s is under a second on screen.

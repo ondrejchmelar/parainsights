@@ -596,8 +596,15 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   the flight, which is what "comparing does not work" was. Uploaded tabs had no ⇆ at
   all. `tests/test_compare.py` taps them in the touch layout. **Each compared flight's
   merged map draws the others** (`entry.setOthers`, fed by `window.__compareFor`, which a
-  map built later asks itself): each in its own colour from outside the climb ramp, with
-  a legend, and the view framed on all of them. Flown the same day (starts within 12 h,
+  map built later asks itself): **one thin line in one muted colour per flight, this
+  map's own flight included — the climb ramp is dropped while comparing**, XContest's way
+  (orange, sky blue, brick red, indigo, olive; the first try's bright magenta and cyan over
+  every track's five climb colours was unreadable), a flight keeping its colour on every
+  map, with a legend, and the view framed on all of them. **Following, the camera frames
+  the whole group** at the shared "now": it looks at the middle of the gliders' steady
+  positions and pulls back just enough to hold them, never closer than the reader's zoom —
+  a pinhole fit, because a glider nearer the camera is magnified and the look-ahead puts
+  the middle below the screen's. Flown the same day (starts within 12 h,
   `scene.start` is the first fix in UTC seconds) the replay runs on one clock — a dot
   where each glider was at the same moment, its trail inside the same window; otherwise
   by time since launch, and the legend says so. A flight more than 150 km from this map's

@@ -405,9 +405,9 @@ def test_compared_flights_are_drawn_on_one_clock_and_far_ones_are_listed(browser
       var near = {{ lon: tr.lon.map(x => x + 0.01), lat: tr.lat.slice(), alt: tr.alt.slice(), t: tr.t.slice() }};
       var far = {{ lon: tr.lon.map(x => x + 20), lat: tr.lat.slice(), alt: tr.alt.slice(), t: tr.t.slice() }};
       __handle.built.scene.start = start;
-      ({ENTRY}).setOthers([
-        {{ name: 'NEAR', colour: '#ff4fd8', track: near, start: start + 600 }},
-        {{ name: 'FAR', colour: '#29d3ff', track: far, start: start }}]);
+      ({ENTRY}).setOthers({{ own: {{ name: 'THIS', colour: '#e0893a' }}, others: [
+        {{ name: 'NEAR', colour: '#3aa8d0', track: near, start: start + 600 }},
+        {{ name: 'FAR', colour: '#c9483c', track: far, start: start }}] }});
       return 1; }})()""")
     time.sleep(0.5)
     ids = [d["id"] for d in browser.js(f"({ENTRY}).layers()")]
@@ -423,8 +423,48 @@ def test_compared_flights_are_drawn_on_one_clock_and_far_ones_are_listed(browser
     time.sleep(0.5)
     ids = [d["id"] for d in browser.js(f"({ENTRY}).layers()")]
     assert "other-now-0" in ids, ids
-    browser.js(f"({ENTRY}).setOthers([]); 1")
+    browser.js(f"({ENTRY}).setOthers(null); 1")
     assert browser.js("document.querySelector('.merged-view .m3-others').hidden")
+
+
+def test_follow_keeps_every_compared_glider_in_the_picture(browser):
+    """Comparing, the follow camera frames the whole group at the shared "now": a glider
+    11 km to the side stays on screen, the view pulled back from 12.5 to hold it.
+
+    Both tracks fly at ground level here: this map has no terrain (no network), and
+    without terrain MapLibre keeps its orbit at 0 m, so a glider 1-2 km up would sit
+    nearer the camera than the plane it orbits — which the real map, always over
+    terrain, avoids by orbiting at the gliders' height."""
+    _reset(browser)
+    browser.js(f"""(() => {{
+      var tr = __handle.built.scene.track, start = __handle.built.scene.start || 1700000000;
+      window.__altBefore = tr.alt.slice();
+      for (var k = 0; k < tr.alt.length; k++) tr.alt[k] = 10;
+      __handle.built.scene.start = start;
+      var beside = {{ lon: tr.lon.map(x => x + 0.15), lat: tr.lat.slice(), alt: tr.alt.slice(), t: tr.t.slice() }};
+      window.__beside = beside;
+      ({ENTRY}).setOthers({{ own: {{ name: 'THIS', colour: '#e0893a' }},
+                             others: [{{ name: 'BESIDE', colour: '#3aa8d0', track: beside, start: start }}] }});
+      return 1; }})()""")
+    browser.js("""(() => { var v = document.querySelector('.merged-view');
+      if (v.querySelector('.m3-replay').hidden) v.querySelector('[data-m3=replay]').click();
+      var play = v.querySelector('[data-m3=play]'); if (play.classList.contains('is-on')) play.click();
+      (%s).setTime(1800); (%s).setFollow(true); return 1; })()""" % (ENTRY, ENTRY))
+    browser.wait(f"({MAP}).getZoom() < 12.3 && ({ENTRY}).following()", timeout=30)
+    time.sleep(2)
+    left, top, width, height = _box(browser)
+    spots = browser.js(f"""(() => {{
+      var m = {MAP}, tr = __handle.built.scene.track, i = tr.t.indexOf(1800);
+      // Where each glider is drawn: at its altitude, not on the ground under it.
+      function at(lon, lat, alt) {{
+        return m.transform.coordinatePoint(maplibregl.MercatorCoordinate.fromLngLat([lon, lat]), alt);
+      }}
+      return [at(tr.lon[i], tr.lat[i], tr.alt[i]), at(__beside.lon[i], __beside.lat[i], __beside.alt[i])]
+        .map(p => [p.x, p.y]); }})()""")
+    for x, y in spots:
+        assert 0 < x < width and 0 < y < height, (spots, width, height)
+    browser.js(f"""({ENTRY}).setFollow(false); ({ENTRY}).setOthers(null);
+      var tr = __handle.built.scene.track; __altBefore.forEach((a, k) => tr.alt[k] = a); 1""")
 
 
 def test_no_errors_along_the_way(browser):
