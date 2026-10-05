@@ -1135,8 +1135,11 @@ SCRIPT = r"""
           kickFollow();
         }
       }
-      function followZoomBy(delta) {
-        cam.zoom = Math.min(Math.max(Math.min(cam.zoom, map.getZoom() + 0.5) + delta, 3), 18);
+      // A press steps from where the camera is, never more than half a level ahead of it;
+      // a pinch (`direct`) moves the target with the fingers.
+      function followZoomBy(delta, direct) {
+        var from = direct ? cam.zoom : Math.min(cam.zoom, map.getZoom() + 0.5);
+        cam.zoom = Math.min(Math.max(from + delta, 3), 18);
         kickFollow();
       }
       // While following, every camera move is this loop's, and any of MapLibre's
@@ -1153,9 +1156,77 @@ SCRIPT = r"""
         var lines = event.deltaMode === 1 ? 40 : event.deltaMode === 2 ? 800 : 1;
         followZoomBy(-event.deltaY * lines / 450);
       }, { capture: true, passive: false });
+      // A press alone does not end following, a drag does: a click, a double-click and a
+      // pinch are zooms, or nothing. With the mouse, the drag is 4 px of movement with a
+      // button down; with fingers, 8 px of one finger. Two fingers are a pinch, taken
+      // here from MapLibre — whose own pinch the next follow frame would stop — and
+      // turned into the follow camera's zoom.
+      function onCanvas(event) { return map.getCanvasContainer().contains(event.target); }
+      var pressed = null;
       view.addEventListener('pointerdown', function (event) {
-        if (following && map.getCanvasContainer().contains(event.target)) setFollow(false);
+        if (following && onCanvas(event) && event.pointerType === 'mouse') {
+          pressed = { x: event.clientX, y: event.clientY };
+        }
       }, true);
+      view.addEventListener('pointermove', function (event) {
+        if (!pressed || !following || event.pointerType !== 'mouse') return;
+        if (Math.hypot(event.clientX - pressed.x, event.clientY - pressed.y) > 4) {
+          pressed = null;
+          setFollow(false);
+        }
+      }, true);
+      window.addEventListener('pointerup', function () { pressed = null; }, true);
+      view.addEventListener('dblclick', function (event) {
+        if (!following || !onCanvas(event)) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        followZoomBy(event.shiftKey ? -1 : 1);
+      }, true);
+      var touch = null;   // { x, y } of one finger, or { spread } of two
+      var lastTap = 0;
+      function spread(touches) {
+        return Math.hypot(touches[0].clientX - touches[1].clientX,
+                          touches[0].clientY - touches[1].clientY);
+      }
+      function takeTouch(event) {
+        if (event.cancelable) event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+      view.addEventListener('touchstart', function (event) {
+        if (!following || !onCanvas(event)) return;
+        if (event.touches.length >= 2) {
+          touch = { spread: spread(event.touches) };
+          takeTouch(event);
+        } else {
+          touch = { x: event.touches[0].clientX, y: event.touches[0].clientY, at: Date.now() };
+          // A double tap zooms in, as MapLibre's own does.
+          if (touch.at - lastTap < 300) { followZoomBy(1); takeTouch(event); }
+          lastTap = touch.at;
+        }
+      }, { capture: true, passive: false });
+      view.addEventListener('touchmove', function (event) {
+        if (!following || !touch) return;
+        if (event.touches.length >= 2) {
+          var now = spread(event.touches);
+          if (touch.spread && now > 0) followZoomBy(Math.log2(now / touch.spread), true);
+          touch = { spread: now };
+          takeTouch(event);
+        } else if (touch.x !== undefined && Math.hypot(event.touches[0].clientX - touch.x,
+                                                      event.touches[0].clientY - touch.y) > 8) {
+          touch = null;
+          setFollow(false);
+        } else if (touch.spread) {
+          // One finger left of a pinch: still the pinch, not a drag.
+          takeTouch(event);
+        }
+      }, { capture: true, passive: false });
+      view.addEventListener('touchend', function (event) {
+        if (!touch) return;
+        if (touch.spread) {
+          takeTouch(event);
+          if (!event.touches.length) touch = null;
+        } else if (!event.touches.length) touch = null;
+      }, { capture: true, passive: false });
       view.addEventListener('keydown', function (event) {
         if (!following || !onMap(event)) return;
         var k = event.key;

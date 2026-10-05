@@ -814,10 +814,12 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   handing back re-anchors on the ground under the middle of the view and corrects the
   centre by however far the camera slid, so the view does not jump. Measuring the glider
   with `transform.coordinatePoint` was a dead end: it disagrees with where deck.gl draws
-  it by ~190 px. While following, the wheel and `+`/`−` zoom the follow camera — any MapLibre
-  gesture would be stopped by its next frame — and the arrows turn the view off the
+  it by ~190 px. While following, the wheel, a pinch, a double-click or double-tap and `+`/`−` zoom
+  the follow camera — MapLibre's own zoom gestures would be stopped by its next frame,
+  so these are taken from it — and only a drag (4 px of mouse, 8 px of one finger) ends
+  following, not a press; and the arrows turn the view off the
   direction of flight (← →, 15°, kept as the flight turns) and tilt it (↑ ↓, 10°) without
-  ending it; a press on the map, the rose or reset hands the camera back. Checked by hand over CDP, not in the suite. Climbs are dots, not
+  ending it; a drag on the map, the rose or reset hands the camera back. Checked by hand over CDP, not in the suite. Climbs are dots, not
   numbers, and the track is the canvas's width (2.6 px over the device ratio, capped at
   2). **Ground and exaggeration are one cycling button each**, against the canvas's
   segmented groups, because the merged bar has to fit one row on a phone.
