@@ -597,6 +597,10 @@ footer { margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--rule);
 @media (hover: none) {
   .tab-compare { opacity: 0.7; }
   .tab:not(.is-on) .tab-compare { pointer-events: none; opacity: 0.3; }
+  /* Above the close button's 44 px touch area, which grows inward over this one: a tap
+     meant to add a flight to the comparison removed the flight instead. */
+  .tab-compare { z-index: 2; }
+  .tab-close { z-index: 1; }
 }
 .verdict-figure { display: flex; flex-direction: column; gap: 1px; }
 .verdict-value {
@@ -1102,10 +1106,23 @@ SCRIPT = """
     chosen[uid] = !chosen[uid];
     button.setAttribute('aria-pressed', chosen[uid] ? 'true' : 'false');
     button.classList.toggle('is-on', chosen[uid]);
-    var count = Object.keys(chosen).filter(function (k) { return chosen[k]; }).length;
+    settle();
+  }, true);
+
+  // Counted from the flights still in the document: a removed flight leaves the
+  // comparison, and the others' lines say "of 2" again rather than "of 3".
+  function settle() {
+    var count = articles().filter(function (a) {
+      return chosen[a.getAttribute('data-flight-report')];
+    }).length;
     document.documentElement.classList.toggle('is-comparing', count >= 2);
     refresh();
-  }, true);
+  }
+  // Flights come and go (uploads, the × on a tab); re-settle when they do.
+  var holder = document.querySelector('[data-flight-report]');
+  if (holder && window.MutationObserver) {
+    new MutationObserver(settle).observe(holder.parentNode, { childList: true });
+  }
 })();
 
 // Resolves when `element` is first on screen: now if it already is, else on the first

@@ -111,6 +111,16 @@ SCRIPT = r"""
       span.textContent = part[1];
       open.appendChild(span);
     });
+    // The compare control, as a bundled flight's tab has (`render_html._tab`): an uploaded
+    // flight is the one a reader most wants to set against the others.
+    var compare = document.createElement('button');
+    compare.type = 'button';
+    compare.className = 'tab-compare';
+    compare.setAttribute('data-compare-toggle', uid);
+    compare.title = 'Add this flight to the comparison';
+    compare.setAttribute('aria-pressed', 'false');
+    compare.setAttribute('aria-label', 'Add this flight to the comparison');
+    compare.innerHTML = '&#8646;';
     var close = document.createElement('button');
     close.type = 'button';
     close.className = 'tab-close';
@@ -118,6 +128,7 @@ SCRIPT = r"""
     close.setAttribute('aria-label', 'Remove this flight');
     close.innerHTML = '&#215;';
     tab.appendChild(open);
+    tab.appendChild(compare);
     tab.appendChild(close);
     strip.appendChild(tab);
   }

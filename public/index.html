@@ -578,6 +578,10 @@ footer { margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--rule);
 @media (hover: none) {
   .tab-compare { opacity: 0.7; }
   .tab:not(.is-on) .tab-compare { pointer-events: none; opacity: 0.3; }
+  /* Above the close button's 44 px touch area, which grows inward over this one: a tap
+     meant to add a flight to the comparison removed the flight instead. */
+  .tab-compare { z-index: 2; }
+  .tab-close { z-index: 1; }
 }
 .verdict-figure { display: flex; flex-direction: column; gap: 1px; }
 .verdict-value {
@@ -1235,7 +1239,7 @@ a.site-source:hover { color: var(--ink); border-color: var(--rule-strong); }
       <p>Hovering a moment in the side view marks the same moment on the map above, and in
          the top view below. Click to keep it there while you look; click again, or press
          <kbd>Esc</kbd>, to let go. A row in the climbs or glides table does the same for
-         where that phase began. <strong>Airspace</strong> draws the zones this flight came within 5 km and 1 km (height) of, as the boxes they are, floor to ceiling — hover one for its name and limits. Zones that bind nobody (danger and firing areas, sport and alert areas, gliding sectors) are left out, and so are those active only by NOTAM: NOTAMs are not fetched, so one activated during the flight is missing too. Airspace &copy; <a href="https://www.openaip.net" rel="noreferrer">openAIP</a>, CC BY-NC 4.0, refreshed monthly; in Czechia the traffic circuits are this site's own, from ŘLP publications.</p>
+         where that phase began. <strong>Airspace</strong> draws the zones this flight came within 5 km and 200 m (height) of, as the boxes they are, floor to ceiling — hover one for its name and limits. Zones that bind nobody (danger and firing areas, sport and alert areas, gliding sectors) are left out, and so are those active only by NOTAM: NOTAMs are not fetched, so one activated during the flight is missing too. Airspace &copy; <a href="https://www.openaip.net" rel="noreferrer">openAIP</a>, CC BY-NC 4.0, refreshed monthly; in Czechia the traffic circuits are this site's own, from ŘLP publications.</p>
     </div>
     <div class="renderer-host" data-renderer-default="merged">
     <div class="toggle renderer-switch" role="group" aria-label="3D renderer"><button type="button" class="toggle-button is-on" data-renderer="canvas" aria-pressed="true">canvas</button><button type="button" class="toggle-button" data-renderer="maplibre" aria-pressed="false">MapLibre</button><button type="button" class="toggle-button" data-renderer="merged" aria-pressed="false">merged</button></div>
@@ -1567,7 +1571,7 @@ a.site-source:hover { color: var(--ink); border-color: var(--rule-strong); }
       <p>Hovering a moment in the side view marks the same moment on the map above, and in
          the top view below. Click to keep it there while you look; click again, or press
          <kbd>Esc</kbd>, to let go. A row in the climbs or glides table does the same for
-         where that phase began. <strong>Airspace</strong> draws the zones this flight came within 5 km and 1 km (height) of, as the boxes they are, floor to ceiling — hover one for its name and limits. Zones that bind nobody (danger and firing areas, sport and alert areas, gliding sectors) are left out, and so are those active only by NOTAM: NOTAMs are not fetched, so one activated during the flight is missing too. Airspace &copy; <a href="https://www.openaip.net" rel="noreferrer">openAIP</a>, CC BY-NC 4.0, refreshed monthly; in Czechia the traffic circuits are this site's own, from ŘLP publications.</p>
+         where that phase began. <strong>Airspace</strong> draws the zones this flight came within 5 km and 200 m (height) of, as the boxes they are, floor to ceiling — hover one for its name and limits. Zones that bind nobody (danger and firing areas, sport and alert areas, gliding sectors) are left out, and so are those active only by NOTAM: NOTAMs are not fetched, so one activated during the flight is missing too. Airspace &copy; <a href="https://www.openaip.net" rel="noreferrer">openAIP</a>, CC BY-NC 4.0, refreshed monthly; in Czechia the traffic circuits are this site's own, from ŘLP publications.</p>
     </div>
     <div class="renderer-host" data-renderer-default="merged">
     <div class="toggle renderer-switch" role="group" aria-label="3D renderer"><button type="button" class="toggle-button is-on" data-renderer="canvas" aria-pressed="true">canvas</button><button type="button" class="toggle-button" data-renderer="maplibre" aria-pressed="false">MapLibre</button><button type="button" class="toggle-button" data-renderer="merged" aria-pressed="false">merged</button></div>
@@ -1899,7 +1903,7 @@ a.site-source:hover { color: var(--ink); border-color: var(--rule-strong); }
       <p>Hovering a moment in the side view marks the same moment on the map above, and in
          the top view below. Click to keep it there while you look; click again, or press
          <kbd>Esc</kbd>, to let go. A row in the climbs or glides table does the same for
-         where that phase began. <strong>Airspace</strong> draws the zones this flight came within 5 km and 1 km (height) of, as the boxes they are, floor to ceiling — hover one for its name and limits. Zones that bind nobody (danger and firing areas, sport and alert areas, gliding sectors) are left out, and so are those active only by NOTAM: NOTAMs are not fetched, so one activated during the flight is missing too. Airspace &copy; <a href="https://www.openaip.net" rel="noreferrer">openAIP</a>, CC BY-NC 4.0, refreshed monthly; in Czechia the traffic circuits are this site's own, from ŘLP publications.</p>
+         where that phase began. <strong>Airspace</strong> draws the zones this flight came within 5 km and 200 m (height) of, as the boxes they are, floor to ceiling — hover one for its name and limits. Zones that bind nobody (danger and firing areas, sport and alert areas, gliding sectors) are left out, and so are those active only by NOTAM: NOTAMs are not fetched, so one activated during the flight is missing too. Airspace &copy; <a href="https://www.openaip.net" rel="noreferrer">openAIP</a>, CC BY-NC 4.0, refreshed monthly; in Czechia the traffic circuits are this site's own, from ŘLP publications.</p>
     </div>
     <div class="renderer-host" data-renderer-default="merged">
     <div class="toggle renderer-switch" role="group" aria-label="3D renderer"><button type="button" class="toggle-button is-on" data-renderer="canvas" aria-pressed="true">canvas</button><button type="button" class="toggle-button" data-renderer="maplibre" aria-pressed="false">MapLibre</button><button type="button" class="toggle-button" data-renderer="merged" aria-pressed="false">merged</button></div>
@@ -2571,12 +2575,12 @@ function loadAirspace(root, scene) {
 // by NOTAM go too. Kinds that bind nobody — danger and
 // firing areas, sport and aerobatic boxes, alert and warning areas, gliding sectors — are
 // not drawn; protected areas and parks are, because they do bind. And of the rest, only
-// zones the track came within 5 km of sideways and 1 km of vertically: the ground box a
+// zones the track came within 5 km of sideways and 200 m of vertically: the ground box a
 // flight's map covers holds a hundred zones in the Alps, and an aerobatic box or a firing
 // range the flight never went near is clutter on a map about this flight. Run after the
 // terrain is in, because a limit measured from the ground needs the ground.
 var NON_BINDING = /^(D|Sport|Alert|Warning|Gliding)$/;
-var NEAR_SIDEWAYS = 5000, NEAR_VERTICALLY = 1000;
+var NEAR_SIDEWAYS = 5000, NEAR_VERTICALLY = 200;
 function relevantAirspace(scene) {
   var tr = scene.track, dem = scene.terrain || {};
   var all = scene.airspaces || [];
@@ -2632,7 +2636,7 @@ function settleAirspace(root, scene) {
   var any = scene.airspaces.length > 0;
   var why = any ? 'Draw the airspace this flight came near' + (scene.airspaceCredit ? ' (' + scene.airspaceCredit + ')' : '')
     : scene.airspaceFailed ? 'The airspace could not be loaded'
-    : scene.airspaceLoaded ? 'No binding airspace within 5 km and 1 km of this flight'
+    : scene.airspaceLoaded ? 'No binding airspace within 5 km and 200 m of this flight'
     : 'No airspace data under this flight — the layers cover Europe';
   button.disabled = !any;
   button.title = why;
@@ -7066,7 +7070,10 @@ window.__view3dBackend = function (host) {
           shade: { type: 'raster-dem', tiles: [window.__mapTerrarium], tileSize: 128, maxzoom: 15,
                    encoding: 'terrarium' }
         };
-        var below = [{ id: 'bg', type: 'background', paint: { 'background-color': '#d6d2c4' } }];
+        // Under the imagery: what shows where a tile has not arrived yet. A pale beige
+        // here flashed against the dark ground every time the follow camera moved into
+        // new tiles; a dark muted green, near the photograph's own average, barely shows.
+        var below = [{ id: 'bg', type: 'background', paint: { 'background-color': '#3d4436' } }];
         var above = [];
         styles.forEach(function (name) {
           var source = tiles[name];
@@ -7091,8 +7098,8 @@ window.__view3dBackend = function (host) {
             (i ? above : below).push({
               id: id, type: 'raster', source: id,
               layout: { visibility: name === key ? 'visible' : 'none' },
-              paint: i ? { 'raster-fade-duration': 150 }
-                       : { 'raster-fade-duration': 150, 'raster-brightness-min': 0.06,
+              paint: i ? { 'raster-fade-duration': 300 }
+                       : { 'raster-fade-duration': 300, 'raster-brightness-min': 0.06,
                            'raster-contrast': 0.05 }
             });
           });
@@ -9120,10 +9127,23 @@ window.__view3dBackend = function (host) {
     chosen[uid] = !chosen[uid];
     button.setAttribute('aria-pressed', chosen[uid] ? 'true' : 'false');
     button.classList.toggle('is-on', chosen[uid]);
-    var count = Object.keys(chosen).filter(function (k) { return chosen[k]; }).length;
+    settle();
+  }, true);
+
+  // Counted from the flights still in the document: a removed flight leaves the
+  // comparison, and the others' lines say "of 2" again rather than "of 3".
+  function settle() {
+    var count = articles().filter(function (a) {
+      return chosen[a.getAttribute('data-flight-report')];
+    }).length;
     document.documentElement.classList.toggle('is-comparing', count >= 2);
     refresh();
-  }, true);
+  }
+  // Flights come and go (uploads, the × on a tab); re-settle when they do.
+  var holder = document.querySelector('[data-flight-report]');
+  if (holder && window.MutationObserver) {
+    new MutationObserver(settle).observe(holder.parentNode, { childList: true });
+  }
 })();
 
 // Resolves when `element` is first on screen: now if it already is, else on the first
@@ -13534,7 +13554,7 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
       view3dSection = '\n  <section>\n    <div class="section-head">\n      <h2>The flight over the ground</h2>\n' +
         '      <p>Hovering a moment in the side view marks the same moment on the map above, and in\n         the top view below. Click to keep it there while you look; click again, or press\n' +
         '         <kbd>Esc</kbd>, to let go. A row in the climbs or glides table does the same for\n         where that phase began.' +
-        (payload.airspaceRemote ? " <strong>Airspace</strong> draws the zones this flight came within 5 km and 1 km (height) of, as the boxes they are, floor to ceiling — hover one for its name and limits. Zones that bind nobody (danger and firing areas, sport and alert areas, gliding sectors) are left out, and so are those active only by NOTAM: NOTAMs are not fetched, so one activated during the flight is missing too. Airspace &copy; <a href=\"https://www.openaip.net\" rel=\"noreferrer\">openAIP</a>, CC BY-NC 4.0, refreshed monthly; in Czechia the traffic circuits are this site's own, from ŘLP publications." : '') +
+        (payload.airspaceRemote ? " <strong>Airspace</strong> draws the zones this flight came within 5 km and 200 m (height) of, as the boxes they are, floor to ceiling — hover one for its name and limits. Zones that bind nobody (danger and firing areas, sport and alert areas, gliding sectors) are left out, and so are those active only by NOTAM: NOTAMs are not fetched, so one activated during the flight is missing too. Airspace &copy; <a href=\"https://www.openaip.net\" rel=\"noreferrer\">openAIP</a>, CC BY-NC 4.0, refreshed monthly; in Czechia the traffic circuits are this site's own, from ŘLP publications." : '') +
         '</p>\n    </div>\n    <div class="renderer-host" data-renderer-default="merged">\n    ' + TV.scene.switchHtml() + '\n    ' +
         TV.scene.panel(payload, uid) +
         '\n    </div>\n' + sideView + '\n  </section>';
@@ -13876,6 +13896,16 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
       span.textContent = part[1];
       open.appendChild(span);
     });
+    // The compare control, as a bundled flight's tab has (`render_html._tab`): an uploaded
+    // flight is the one a reader most wants to set against the others.
+    var compare = document.createElement('button');
+    compare.type = 'button';
+    compare.className = 'tab-compare';
+    compare.setAttribute('data-compare-toggle', uid);
+    compare.title = 'Add this flight to the comparison';
+    compare.setAttribute('aria-pressed', 'false');
+    compare.setAttribute('aria-label', 'Add this flight to the comparison');
+    compare.innerHTML = '&#8646;';
     var close = document.createElement('button');
     close.type = 'button';
     close.className = 'tab-close';
@@ -13883,6 +13913,7 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
     close.setAttribute('aria-label', 'Remove this flight');
     close.innerHTML = '&#215;';
     tab.appendChild(open);
+    tab.appendChild(compare);
     tab.appendChild(close);
     strip.appendChild(tab);
   }

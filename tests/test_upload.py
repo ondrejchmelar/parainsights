@@ -131,6 +131,7 @@ window.addEventListener('load', function () {
         out.button = !!button;
         out.enabled = !!button && !button.disabled;
         out.title = button && button.title;
+        out.compare = !!document.querySelector('[data-flight-tab="up1"] [data-compare-toggle="up1"]');
       }
       document.getElementById('probe-out').textContent = JSON.stringify(out);
     })();
@@ -160,7 +161,9 @@ def test_an_upload_loads_the_airspace_under_its_ground(tmp_path):
                   "XX.json": {"bbox": near["bbox"], "credit": near["credit"]},
                   "YY.json": {"bbox": [LON0 + 40, LON0 + 41, LAT0, LAT0 + 1], "credit": "never"}}},
               "layers/XX.json": near}
-    page = render_html._page("probe", []) + _AIRSPACE_PROBE % (igc, json.dumps(layers))
+    strip = ('<nav class="tabs" id="flight-tabs" role="group" aria-label="Choose a flight">'
+             + render_html.ADD_TAB + "</nav>")
+    page = render_html._page("probe", [], strip) + _AIRSPACE_PROBE % (igc, json.dumps(layers))
     with tempfile.TemporaryDirectory() as folder:
         target = Path(folder) / "upload.html"
         target.write_text(page, encoding="utf-8")
@@ -174,3 +177,4 @@ def test_an_upload_loads_the_airspace_under_its_ground(tmp_path):
     assert out["rings"] == ["OVER THE FLIGHT"], out
     assert out["button"] and out["enabled"], out
     assert "openAIP" in out["title"], out
+    assert out["compare"], "an uploaded flight's tab can join the comparison too"

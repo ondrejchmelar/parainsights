@@ -186,7 +186,7 @@ the airspace…" — then is enabled with the credit as its title, or says why n
 http(s)**; opened from `file://` the switch says it could not load.
 **A flight's map draws only the airspace the flight had to do with** (`relevantAirspace`,
 after the terrain is in, since a limit above ground needs the ground — the pilot's rule,
-October 2026): zones the track came within 5 km of sideways and 1 km vertically; not the
+October 2026): zones the track came within 5 km of sideways and 200 m vertically (1 km at first: it kept zones floored far above the flight); not the
 kinds that bind nobody (danger and firing areas, sport/aerobatic, alert, warning, gliding
 sectors — protected areas and parks *are* binding and stay); and not zones openAIP marks
 as active only by NOTAM (`nt`, 376 across Europe). NOTAMs are not fetched, for the
@@ -589,6 +589,12 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
 - **Uploading your own track is the first tab, not the last.** The bundled flights are a
   showcase. The reader's own file is the product, so the `+ your track` tab leads and a
   note under the tabs says the analysis happens in the page.
+- **Comparing is opt-in, per tab** (the ⇆ beside the ×), bundled and uploaded flights
+  alike: each picked flight's headline figures say where they stand among the picked
+  ones, recounted when a flight is added or removed. On touch the ×'s 44 px tap area grows
+  inward over the ⇆, so the ⇆ sits above it (`z-index`): a tap meant to compare removed
+  the flight, which is what "comparing does not work" was. Uploaded tabs had no ⇆ at
+  all. `tests/test_compare.py` taps them in the touch layout.
 - **Flights accumulate, and any of them can be removed.** An upload becomes a new article
   with its own uid (`up1`, `up2`…) and appends a tab; every tab (bundled ones included)
   carries a `×` that removes both. Consequences worth knowing: nothing inside an article
@@ -867,6 +873,9 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   shifted the whole picture down. The distance ahead is the pinhole solution
   `lift·C·m / (C·cos t + lift·sin t)` (C the camera-to-centre distance in pixels), since
   the glider is nearer the camera than the point looked at.
+  **Missing tiles show a dark muted green** (`bg`, near the photograph's average) and
+  fade in over 300 ms: the beige it was flashed against the dark ground every time the
+  follow camera moved into tiles not yet fetched.
   **The airspace is glass** (`GLASS`, no depth write): drawn before the track and writing
   depth, the boxes hid every part of a flight inside them — over Krupka nearly all of it.
   **The shift-drag pivot is clamped into the canvas's box**, not the canvas container's,

@@ -1166,12 +1166,12 @@ function loadAirspace(root, scene) {
 // by NOTAM go too. Kinds that bind nobody — danger and
 // firing areas, sport and aerobatic boxes, alert and warning areas, gliding sectors — are
 // not drawn; protected areas and parks are, because they do bind. And of the rest, only
-// zones the track came within 5 km of sideways and 1 km of vertically: the ground box a
+// zones the track came within 5 km of sideways and 200 m of vertically: the ground box a
 // flight's map covers holds a hundred zones in the Alps, and an aerobatic box or a firing
 // range the flight never went near is clutter on a map about this flight. Run after the
 // terrain is in, because a limit measured from the ground needs the ground.
 var NON_BINDING = /^(D|Sport|Alert|Warning|Gliding)$/;
-var NEAR_SIDEWAYS = 5000, NEAR_VERTICALLY = 1000;
+var NEAR_SIDEWAYS = 5000, NEAR_VERTICALLY = 200;
 function relevantAirspace(scene) {
   var tr = scene.track, dem = scene.terrain || {};
   var all = scene.airspaces || [];
@@ -1227,7 +1227,7 @@ function settleAirspace(root, scene) {
   var any = scene.airspaces.length > 0;
   var why = any ? 'Draw the airspace this flight came near' + (scene.airspaceCredit ? ' (' + scene.airspaceCredit + ')' : '')
     : scene.airspaceFailed ? 'The airspace could not be loaded'
-    : scene.airspaceLoaded ? 'No binding airspace within 5 km and 1 km of this flight'
+    : scene.airspaceLoaded ? 'No binding airspace within 5 km and 200 m of this flight'
     : 'No airspace data under this flight — the layers cover Europe';
   button.disabled = !any;
   button.title = why;
@@ -5661,7 +5661,10 @@ window.__view3dBackend = function (host) {
           shade: { type: 'raster-dem', tiles: [window.__mapTerrarium], tileSize: 128, maxzoom: 15,
                    encoding: 'terrarium' }
         };
-        var below = [{ id: 'bg', type: 'background', paint: { 'background-color': '#d6d2c4' } }];
+        // Under the imagery: what shows where a tile has not arrived yet. A pale beige
+        // here flashed against the dark ground every time the follow camera moved into
+        // new tiles; a dark muted green, near the photograph's own average, barely shows.
+        var below = [{ id: 'bg', type: 'background', paint: { 'background-color': '#3d4436' } }];
         var above = [];
         styles.forEach(function (name) {
           var source = tiles[name];
@@ -5686,8 +5689,8 @@ window.__view3dBackend = function (host) {
             (i ? above : below).push({
               id: id, type: 'raster', source: id,
               layout: { visibility: name === key ? 'visible' : 'none' },
-              paint: i ? { 'raster-fade-duration': 150 }
-                       : { 'raster-fade-duration': 150, 'raster-brightness-min': 0.06,
+              paint: i ? { 'raster-fade-duration': 300 }
+                       : { 'raster-fade-duration': 300, 'raster-brightness-min': 0.06,
                            'raster-contrast': 0.05 }
             });
           });

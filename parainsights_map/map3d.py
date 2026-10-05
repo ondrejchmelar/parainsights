@@ -440,7 +440,10 @@ SCRIPT = r"""
           shade: { type: 'raster-dem', tiles: [window.__mapTerrarium], tileSize: 128, maxzoom: 15,
                    encoding: 'terrarium' }
         };
-        var below = [{ id: 'bg', type: 'background', paint: { 'background-color': '#d6d2c4' } }];
+        // Under the imagery: what shows where a tile has not arrived yet. A pale beige
+        // here flashed against the dark ground every time the follow camera moved into
+        // new tiles; a dark muted green, near the photograph's own average, barely shows.
+        var below = [{ id: 'bg', type: 'background', paint: { 'background-color': '#3d4436' } }];
         var above = [];
         styles.forEach(function (name) {
           var source = tiles[name];
@@ -465,8 +468,8 @@ SCRIPT = r"""
             (i ? above : below).push({
               id: id, type: 'raster', source: id,
               layout: { visibility: name === key ? 'visible' : 'none' },
-              paint: i ? { 'raster-fade-duration': 150 }
-                       : { 'raster-fade-duration': 150, 'raster-brightness-min': 0.06,
+              paint: i ? { 'raster-fade-duration': 300 }
+                       : { 'raster-fade-duration': 300, 'raster-brightness-min': 0.06,
                            'raster-contrast': 0.05 }
             });
           });
