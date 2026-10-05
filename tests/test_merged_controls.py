@@ -342,6 +342,44 @@ def test_follow_survives_zooming_and_turning_and_ends_on_a_drag(browser):
     assert not browser.js(following), "a drag hands the camera back"
 
 
+def test_two_fingers_tilt_and_turn_the_follow_camera(browser):
+    """A phone has no arrows: moving two fingers up tilts the follow camera, a twist turns
+    it off the direction of flight, and neither ends following. Taken as a pinch alone,
+    a two-finger drag did nothing at all."""
+    _reset(browser)
+    _follow(browser)
+    left, top, width, height = _box(browser)
+    x, y = left + width / 2, top + height / 2
+    browser.call("Emulation.setTouchEmulationEnabled", enabled=True, maxTouchPoints=2)
+    try:
+        def touch(kind, points):
+            browser.call("Input.dispatchTouchEvent", type=kind,
+                         touchPoints=[{"x": px, "y": py, "id": i} for i, (px, py) in enumerate(points)])
+
+        before = browser.js(f"({ENTRY}).followCamera()")
+        touch("touchStart", [(x - 60, y), (x + 60, y)])
+        for k in range(1, 9):                          # both fingers 40 px up
+            touch("touchMove", [(x - 60, y - 5 * k), (x + 60, y - 5 * k)])
+            time.sleep(0.03)
+        touch("touchEnd", [])
+        after = browser.js(f"({ENTRY}).followCamera()")
+        assert after["pitch"] == pytest.approx(min(85, before["pitch"] + 20), abs=2)
+        assert after["zoom"] == pytest.approx(before["zoom"], abs=0.05), "not a pinch"
+
+        touch("touchStart", [(x - 60, y), (x + 60, y)])
+        for k in range(1, 9):                          # a twist, 30° clockwise on screen
+            a = math.radians(30 * k / 8)
+            touch("touchMove", [(x - 60 * math.cos(a), y - 60 * math.sin(a)),
+                                (x + 60 * math.cos(a), y + 60 * math.sin(a))])
+            time.sleep(0.03)
+        touch("touchEnd", [])
+        turned = browser.js(f"({ENTRY}).followCamera()")
+        assert turned["turn"] == pytest.approx(after["turn"] - 30, abs=2)
+        assert browser.js(f"({ENTRY}).following()")
+    finally:
+        browser.call("Emulation.setTouchEmulationEnabled", enabled=False)
+
+
 def test_handing_the_follow_camera_back_leaves_it_where_it_was(browser):
     _reset(browser)
     _follow(browser)

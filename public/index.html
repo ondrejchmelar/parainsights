@@ -6787,9 +6787,15 @@ window.__view3dBackend = function (host) {
       '<dt>d</dt><dd>measure: click points; backspace undoes one, esc ends</dd>' +
       '<dt>space</dt><dd>replay: open, play, pause</dd>' +
       '<dt>c</dt><dd>replay: follow the glider</dd>' +
-      '<dt>arrows, following</dt><dd>turn and tilt the view</dd>' +
       '<dt>f</dt><dd>full screen</dd>' +
       '<dt>0</dt><dd>reset view</dd></dl>' +
+      // What still works once the camera rides with the glider (`setFollow`), and what
+      // hands it back: the keys and gestures above mean something else there.
+      '<p class="view3d-keys-head">While following the replay</p><dl>' +
+      '<dt>scroll, pinch, + &minus;, double-click</dt><dd>zoom</dd>' +
+      '<dt>&uarr; &darr;, two fingers up / down</dt><dd>tilt</dd>' +
+      '<dt>&larr; &rarr;, two-finger twist</dt><dd>turn the view off the direction of flight</dd>' +
+      '<dt>drag, the compass, reset</dt><dd>stop following</dd></dl>' +
       '<p class="view3d-keys-foot">Hovering the charts moves the marker here too. ' +
       'Click this list to close it.</p>';
   }
@@ -7932,11 +7938,21 @@ window.__view3dBackend = function (host) {
         event.stopImmediatePropagation();
         followZoomBy(event.shiftKey ? -1 : 1);
       }, true);
-      var touch = null;   // { x, y } of one finger, or { spread } of two
+      var touch = null;   // { x, y } of one finger, or two: { spread, y, angle }
       var lastTap = 0;
       function spread(touches) {
         return Math.hypot(touches[0].clientX - touches[1].clientX,
                           touches[0].clientY - touches[1].clientY);
+      }
+      // Two fingers as MapLibre reads them, onto the follow camera: their spread zooms,
+      // moving both up or down tilts (half a degree a pixel, MapLibre's own rate), and a
+      // twist turns the view off the direction of flight as ← → do. A phone has no
+      // arrows, and taking two fingers as a pinch alone left it no way to tilt or turn.
+      function fingers(touches) {
+        return { spread: spread(touches),
+                 y: (touches[0].clientY + touches[1].clientY) / 2,
+                 angle: Math.atan2(touches[1].clientY - touches[0].clientY,
+                                   touches[1].clientX - touches[0].clientX) * 180 / Math.PI };
       }
       function takeTouch(event) {
         if (event.cancelable) event.preventDefault();
@@ -7945,7 +7961,7 @@ window.__view3dBackend = function (host) {
       view.addEventListener('touchstart', function (event) {
         if (!following || !onCanvas(event)) return;
         if (event.touches.length >= 2) {
-          touch = { spread: spread(event.touches) };
+          touch = fingers(event.touches);
           takeTouch(event);
         } else {
           touch = { x: event.touches[0].clientX, y: event.touches[0].clientY, at: Date.now() };
@@ -7957,9 +7973,14 @@ window.__view3dBackend = function (host) {
       view.addEventListener('touchmove', function (event) {
         if (!following || !touch) return;
         if (event.touches.length >= 2) {
-          var now = spread(event.touches);
-          if (touch.spread && now > 0) followZoomBy(Math.log2(now / touch.spread), true);
-          touch = { spread: now };
+          var now = fingers(event.touches);
+          if (touch.spread && now.spread > 0) {
+            followZoomBy(Math.log2(now.spread / touch.spread), true);
+            cam.pitch = Math.min(85, Math.max(0, cam.pitch - (now.y - touch.y) * 0.5));
+            yawOffset -= turn(touch.angle, now.angle);
+            kickFollow();
+          }
+          touch = now;
           takeTouch(event);
         } else if (touch.x !== undefined && Math.hypot(event.touches[0].clientX - touch.x,
                                                       event.touches[0].clientY - touch.y) > 8) {

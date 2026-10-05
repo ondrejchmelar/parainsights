@@ -849,7 +849,8 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   so these are taken from it — and only a drag (4 px of mouse, 8 px of one finger) ends
   following, not a press; and the arrows turn the view off the
   direction of flight (← →, 15°, kept as the flight turns) and tilt it (↑ ↓, 10°) without
-  ending it; a drag on the map, the rose or reset hands the camera back. **The camera looks at the glider's mean
+  ending it, and on a phone two fingers do the same: spread zooms, moving both up or down
+  tilts (MapLibre's half a degree a pixel), a twist turns; a drag on the map, the rose or reset hands the camera back. **The camera looks at the glider's mean
   position over ±45 s** (`steadyAt`), not the glider: locked to it the view swung round
   every thermal circle. Each step runs on an animation frame or, within 100 ms, a timer —
   a browser that stops serving frames to a page it thinks hidden froze the camera.
