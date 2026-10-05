@@ -760,7 +760,12 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   slider, which is why `scene.track` carries `t` (seconds since the first fix). MapLibre
   and deck.gl are loaded from unpkg on the first switch, never before.
   **The switch is three-way now — `canvas | MapLibre | merged` — and the merged view is
-  where this is heading** (it is to replace both, everywhere, once compared).
+  where this is heading** (it is to replace both, everywhere, once compared). **Every
+  3D map opens on merged** (October 2026): the host carries `data-renderer-default`,
+  and `window.__openDefaultRenderer` (in `render_map`'s switch script) clicks it once a
+  flight's canvas view is built — merged draws from that canvas handle — and clicks
+  back to the canvas if MapLibre cannot be fetched. The suite has no network, so it
+  runs every flight on the fallback.
   `map3d.py` keeps from MapLibre the whole planet, streamed tiles and the replay; and
   from the canvas the control bar and its keys, the sun and wind rose, the climb and
   glide labels, the airspace boxes and the imagery treatment. That last one is the
@@ -810,8 +815,9 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   centre by however far the camera slid, so the view does not jump. Measuring the glider
   with `transform.coordinatePoint` was a dead end: it disagrees with where deck.gl draws
   it by ~190 px. While following, the wheel and `+`/`−` zoom the follow camera — any MapLibre
-  gesture would be stopped by its next frame — and a press on the map, an arrow key, the
-  rose or reset hands the camera back. Checked by hand over CDP, not in the suite. Climbs are dots, not
+  gesture would be stopped by its next frame — and the arrows turn the view off the
+  direction of flight (← →, 15°, kept as the flight turns) and tilt it (↑ ↓, 10°) without
+  ending it; a press on the map, the rose or reset hands the camera back. Checked by hand over CDP, not in the suite. Climbs are dots, not
   numbers, and the track is the canvas's width (2.6 px over the device ratio, capped at
   2). **Ground and exaggeration are one cycling button each**, against the canvas's
   segmented groups, because the merged bar has to fit one row on a phone.

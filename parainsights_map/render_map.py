@@ -421,6 +421,20 @@ SWITCH_SCRIPT = (
   // phone takes the contexts of a page it locks or backgrounds and often never returns
   // them; the map then stays black while its buttons still answer. Checked when the page
   // comes back into view, and shortly after MapLibre reports a loss.
+  // Open a host on the renderer it asks for (`data-renderer-default`), once its canvas
+  // view is built, and fall back to the canvas if MapLibre cannot be fetched — offline,
+  // or blocked — rather than leaving a panel that says so.
+  window.__openDefaultRenderer = function (host) {
+    var wanted = host && host.dataset.rendererDefault;
+    var button = wanted && host.querySelector('[data-renderer="' + wanted + '"]');
+    if (!button || !window.__mapLibs) return;
+    button.click();
+    window.__mapLibs().catch(function () {
+      var canvasButton = host.querySelector('[data-renderer="canvas"]');
+      if (canvasButton) canvasButton.click();
+    });
+  };
+
   window.__reviveMaps = function () {
     document.querySelectorAll('.renderer-host').forEach(function (host) {
       var all = host.__renderers || {};

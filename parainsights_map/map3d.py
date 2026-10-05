@@ -149,6 +149,7 @@ SCRIPT = r"""
       (airspace ? '<dt>a</dt><dd>airspace</dd>' : '') +
       '<dt>space</dt><dd>replay: open, play, pause</dd>' +
       '<dt>c</dt><dd>replay: follow the glider</dd>' +
+      '<dt>arrows, following</dt><dd>turn and tilt the view</dd>' +
       '<dt>f</dt><dd>full screen</dd>' +
       '<dt>0</dt><dd>reset view</dd></dl>' +
       '<p class="view3d-keys-foot">Hovering the charts moves the marker here too. ' +
@@ -1051,6 +1052,8 @@ SCRIPT = r"""
       }
 
       var following = false, followFrame = null, followLast = 0;
+      // Where the reader has turned the view off the direction of flight, with the arrows.
+      var yawOffset = 0;
       var cam = null;          // { bearing, zoom, pitch } the camera is easing towards
       function kickFollow() {
         if (following && !followFrame) followFrame = requestAnimationFrame(followTick);
@@ -1060,7 +1063,7 @@ SCRIPT = r"""
         if (!following || view.hidden) return;
         var dt = followLast ? Math.min((now - followLast) / 1000, 1) : 1 / 60;
         followLast = now;
-        var target = courseAt(cutoff);
+        var target = courseAt(cutoff) + yawOffset;
         // Heading over 0.7 s, zoom and tilt over 0.3 s: the zoom is the reader's own.
         var kTurn = 1 - Math.exp(-dt / 0.7), kZoom = 1 - Math.exp(-dt / 0.3);
         var bearing = map.getBearing(), zoom = map.getZoom(), pitch = map.getPitch();
@@ -1127,6 +1130,7 @@ SCRIPT = r"""
         // Opening on the whole flight, follow comes down to a few kilometres around the
         // glider and a view along the ground; a reader already closer keeps their zoom.
         if (on) {
+          yawOffset = 0;
           cam = { zoom: Math.max(map.getZoom(), 12.5), pitch: Math.max(map.getPitch(), 60) };
           kickFollow();
         }
@@ -1159,7 +1163,18 @@ SCRIPT = r"""
           event.preventDefault();
           event.stopImmediatePropagation();
           followZoomBy(k === '+' || k === '=' ? 1 : -1);
-        } else if (/^Arrow/.test(k)) setFollow(false);
+        } else if (/^Arrow/.test(k)) {
+          // The arrows turn and tilt the following camera rather than ending it: ← → put
+          // the view 15° off the direction of flight and keep it there as the flight
+          // turns, ↑ ↓ tilt by 10° — MapLibre's own shift+arrow steps and senses. A pan
+          // means nothing while the camera rides with the glider, so shift is not needed.
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          if (k === 'ArrowLeft') yawOffset -= 15;
+          else if (k === 'ArrowRight') yawOffset += 15;
+          else cam.pitch = Math.min(85, Math.max(0, cam.pitch + (k === 'ArrowUp' ? 10 : -10)));
+          kickFollow();
+        }
       }, true);
 
       // ---- controls --------------------------------------------------------------------

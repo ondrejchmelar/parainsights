@@ -908,16 +908,7 @@ SCRIPT3D = """
 
   // Open on the renderer the host asks for, and fall back to the canvas if MapLibre
   // cannot be fetched — offline, or blocked — rather than leaving a panel that says so.
-  var host = panel.closest('.renderer-host');
-  var wanted = host && host.dataset.rendererDefault;
-  var button = wanted && host.querySelector('[data-renderer="' + wanted + '"]');
-  if (button && window.__mapLibs) {
-    button.click();
-    window.__mapLibs().catch(function () {
-      var canvasButton = host.querySelector('[data-renderer="canvas"]');
-      if (canvasButton) canvasButton.click();
-    });
-  }
+  if (window.__openDefaultRenderer) window.__openDefaultRenderer(panel.closest('.renderer-host'));
   }
 })();
 """

@@ -1138,6 +1138,10 @@ function initFlight(root) {
       return initView3dWhenReady(root, data.cursor3d || null);
     }).then(function (handle) {
       terrainView = handle;
+      // The merged map is the default view; the canvas built underneath it is what it
+      // draws from, and what is left if MapLibre cannot be fetched.
+      var host = root.querySelector('.renderer-host');
+      if (handle && host && window.__openDefaultRenderer) window.__openDefaultRenderer(host);
     }, function () {});
   }
 

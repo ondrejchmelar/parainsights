@@ -426,7 +426,7 @@
         '      <p>Hovering a moment in the side view marks the same moment on the map above, and in\n         the top view below. Click to keep it there while you look; click again, or press\n' +
         '         <kbd>Esc</kbd>, to let go. A row in the climbs or glides table does the same for\n         where that phase began.' +
         ((payload.airspaces || []).length && payload.airspaceToggle ? " <strong>Airspace</strong> draws the zones over this flight's own ground as the boxes they are, floor to ceiling — hover one for its name and limits." : '') +
-        '</p>\n    </div>\n    <div class="renderer-host">\n    ' + TV.scene.switchHtml() + '\n    ' +
+        '</p>\n    </div>\n    <div class="renderer-host" data-renderer-default="merged">\n    ' + TV.scene.switchHtml() + '\n    ' +
         TV.scene.panel(payload, uid) +
         '\n    </div>\n' + sideView + '\n  </section>';
     } else {
