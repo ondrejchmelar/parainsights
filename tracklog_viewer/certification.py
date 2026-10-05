@@ -49,6 +49,7 @@ import re
 import sys
 import time
 import urllib.request
+import dataclasses
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -110,6 +111,8 @@ class Certification:
     weight: str         # the certified take-off weight range, as published
     certificate: str    # the Musterprüfnummer, or the Air Turquoise report reference
     date: str
+    # Set on an answer, not a row: "most sizes; EN C in S" where the sizes disagree.
+    note: str = ""
 
     @property
     def en(self) -> str | None:
@@ -168,6 +171,15 @@ def _model(name: str) -> str:
     return " ".join(tokens)
 
 
+def _size(name: str) -> str:
+    """The size a register row names at the end of its type name ("ms", "23"), or ""."""
+    tokens = normalise(name).split()
+    size = []
+    while len(tokens) > 1 and _is_size(tokens[-1]):
+        size.insert(0, tokens.pop())
+    return " ".join(size)
+
+
 def _split_brand(name: str, brands: set, company: set = COMPANY_WORDS) -> tuple:
     """(brand, model) — the wing's maker and what is left once it and its size are gone.
 
@@ -201,29 +213,61 @@ def _split_brand(name: str, brands: set, company: set = COMPANY_WORDS) -> tuple:
 
 
 def _pick(candidates: list) -> "Certification | None":
-    """One answer from several rows, or none — where the honesty lives.
+    """One answer from several rows, or none.
 
     The rows are every certified size of one model, from both registers. They can
-    legitimately disagree in three ways, and only one of them has an answer:
+    disagree in three ways:
 
     * **EN against LTF.** The same wing is often in the DHV register under LTF 1-2 and
       in Air Turquoise's under EN B. The EN class is what a reader means by "the class",
       so it wins — and the LTF row is not translated into it, it is simply not used.
-    * **Size against size.** A model certified B in every size but C in the smallest has
-      no single class, and answering B for a pilot who might be on the small one is the
-      error this module exists to avoid. No answer.
-    * **Condition against condition.** Same rule for the *Klassenzusatz*: a class granted
-      only with a particular harness is not the same claim as one granted outright.
+    * **Size against size.** A header names the wing and not the size, so a model
+      certified B in three sizes and C in the smallest gets **the class most of its
+      sizes carry** (October 2026; it used to get nothing at all, which left the UP
+      Summit XC4 and Advance's Sigma 10 bare). Most pilots fly the middle of a range,
+      not its smallest end. A tie goes to the class the M and L sizes share, and a tie
+      they do not settle is still no answer. The answer says it is a majority (`note`),
+      and the chip's title names the sizes that differ.
+    * **Condition against condition.** A class granted only with a particular harness
+      is not the same claim as one granted outright: among the rows of the chosen class
+      the *Klassenzusatz* must agree, or there is no answer.
     """
     en = [entry for entry in candidates if entry.en]
     pool = en or candidates
-    if len({entry.klass for entry in pool}) != 1:
-        return None
-    if len({entry.addendum for entry in pool}) != 1:
+    # One class per size: the newest row for it, since a recertification supersedes.
+    newest = lambda entry: entry.date.split(".")[::-1]
+    by_size: dict[str, "Certification"] = {}
+    for entry in pool:
+        size = _size(entry.name)
+        if size not in by_size or newest(entry) > newest(by_size[size]):
+            by_size[size] = entry
+    counts: dict[str, int] = {}
+    for entry in by_size.values():
+        counts[entry.klass] = counts.get(entry.klass, 0) + 1
+    top = max(counts.values())
+    leaders = [klass for klass, n in counts.items() if n == top]
+    if len(leaders) > 1:
+        middle = {entry.klass for size, entry in by_size.items()
+                  if size in ("m", "ml", "l", "medium", "large")}
+        if len(middle) != 1 or next(iter(middle)) not in leaders:
+            return None
+        leaders = list(middle)
+    klass = leaders[0]
+    chosen = [entry for entry in pool if entry.klass == klass]
+    if len({entry.addendum for entry in chosen}) != 1:
         return None
     # The newest row of the winning class, because a wing recertified after a change is
     # better cited by the later certificate.
-    return max(pool, key=lambda entry: entry.date.split(".")[::-1])
+    # Among rows of one date, an M or L: the sizes a sizeless header is taken to mean.
+    best = max(chosen, key=lambda entry: (newest(entry),
+                                          _size(entry.name) in ("m", "ml", "l", "medium", "large")))
+    others = sorted((size.upper() or "?", entry.klass) for size, entry in by_size.items()
+                    if entry.klass != klass)
+    if not others:
+        return best
+    scale = "EN" if best.en else "LTF"
+    note = "most sizes; " + ", ".join(f"{scale} {k} in {size}" for size, k in others)
+    return dataclasses.replace(best, note=note)
 
 
 def lookup(header: str, table=None) -> "Certification | None":
@@ -264,6 +308,22 @@ def lookup(header: str, table=None) -> "Certification | None":
 
 _CACHE: dict | None = None
 
+# Wings no public register lists, kept by hand and cited to what was read. `--refresh`
+# rewrites `gliders.py` and leaves this alone. The Summit XC4 is not in the DHV portal,
+# not in Air Turquoise's list, and EAPR — the other house that issues LTF — closed its
+# database to the public; UP's manual gives LTF09/EN B, the S "pending" there and EN C
+# in UP's published specification.
+SUPPLEMENT = [
+    ('UP Summit XC4 S', 'UP International GmbH', "UP's manual", 'C', '', '65 - 85 kg',
+     'UP Summit XC4 specification (manual V1.1: B pending)', '01.03.2017'),
+    ('UP Summit XC4 SM', 'UP International GmbH', "UP's manual", 'B', '', '75 - 100 kg',
+     'UP Summit XC4 owner\'s manual V1.1', '01.03.2017'),
+    ('UP Summit XC4 M', 'UP International GmbH', "UP's manual", 'B', '', '90 - 115 kg',
+     'UP Summit XC4 owner\'s manual V1.1', '01.03.2017'),
+    ('UP Summit XC4 L', 'UP International GmbH', "UP's manual", 'B', '', '100 - 130 kg',
+     'UP Summit XC4 owner\'s manual V1.1', '01.03.2017'),
+]
+
 
 def compact(table=None) -> dict:
     """Every answer `lookup` can give, precomputed, for the page.
@@ -273,7 +333,7 @@ def compact(table=None) -> dict:
     The answer for a key depends only on the rows under that key, so it is decided here,
     once, and the page keeps only what turns a header into a key — `normalise` and
     `_split_brand`, which `js/certification.js` ports and the parity harness compares.
-    An answer is [label, register name, certificate, register]; -1 is a refusal.
+    An answer is [label, register name, certificate, register, note]; -1 is a refusal.
     """
     table = _table() if table is None else table
     answers: list[list[str]] = []
@@ -282,7 +342,7 @@ def compact(table=None) -> dict:
     def keep(entry) -> int:
         if entry is None:
             return -1
-        row = (entry.label, entry.name, entry.certificate, entry.source)
+        row = (entry.label, entry.name, entry.certificate, entry.source, entry.note)
         if row not in seen:
             seen[row] = len(answers)
             answers.append(list(row))
@@ -350,7 +410,7 @@ def _table() -> dict:
     if _CACHE is None:
         from .gliders import GLIDERS
 
-        _CACHE = index([Certification(*row) for row in GLIDERS])
+        _CACHE = index([Certification(*row) for row in GLIDERS + SUPPLEMENT])
     return _CACHE
 
 

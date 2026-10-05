@@ -56,18 +56,61 @@ class TestSizes:
         assert cert._model("Base2 Lite M") != cert._model("Base2 M")
 
 
-class TestWhatItRefusesToAnswer:
-    def test_sizes_certified_differently_have_no_single_class(self):
-        """Advance's Sigma 10 is D in 21 and C in the larger sizes. A header with no
-        size in it cannot be answered, and answering C for a pilot who might be on the
-        21 is the error this module exists to avoid."""
+class TestSizesCertifiedDifferently:
+    """A header names the wing, not the size: the class most sizes carry, and said so."""
+
+    def test_the_class_most_sizes_carry(self):
+        """Advance's Sigma 10 is D in 21 and C in the larger sizes: C, noting the 21."""
         found = cert.lookup("Advance Sigma 10", table(
-            entry("Advance Thun AG Sigma 10 21", "D"),
-            entry("Advance Thun AG Sigma 10 23", "C"),
-            entry("Advance Thun AG Sigma 10 25", "C"),
+            entry("Advance Thun AG Sigma 10 21", "D", maker="Advance Thun AG"),
+            entry("Advance Thun AG Sigma 10 23", "C", maker="Advance Thun AG"),
+            entry("Advance Thun AG Sigma 10 25", "C", maker="Advance Thun AG"),
+        ))
+        assert found.klass == "C"
+        assert found.note == "most sizes; EN D in 21"
+
+    def test_a_tie_goes_to_the_m_and_l_sizes(self):
+        found = cert.lookup("UP Summit XC9", table(
+            entry("UP Summit XC9 S", "C", maker="UP International GmbH"),
+            entry("UP Summit XC9 SM", "C", maker="UP International GmbH"),
+            entry("UP Summit XC9 M", "B", maker="UP International GmbH"),
+            entry("UP Summit XC9 L", "B", maker="UP International GmbH"),
+        ))
+        assert found.klass == "B"
+
+    def test_a_tie_the_m_and_l_sizes_do_not_settle_is_no_answer(self):
+        found = cert.lookup("UP Summit XC9", table(
+            entry("UP Summit XC9 S", "C", maker="UP International GmbH"),
+            entry("UP Summit XC9 M", "C", maker="UP International GmbH"),
+            entry("UP Summit XC9 L", "B", maker="UP International GmbH"),
+            entry("UP Summit XC9 XL", "B", maker="UP International GmbH"),
         ))
         assert found is None
 
+    def test_one_size_recertified_counts_once(self):
+        """Two rows for the 23 are one size, not two votes."""
+        found = cert.lookup("Advance Sigma 10", table(
+            entry("Advance Thun AG Sigma 10 21", "D", maker="Advance Thun AG"),
+            entry("Advance Thun AG Sigma 10 21", "D", maker="Advance Thun AG"),
+            entry("Advance Thun AG Sigma 10 23", "C", maker="Advance Thun AG"),
+        ))
+        assert found is None, "one size each way, and no M or L to settle it"
+
+    def test_the_page_gets_the_note_too(self):
+        """The page reads the precomputed table; the note reaches its chip."""
+        from tests import js
+        out = js.run("return TV.certification.lookup('UP Summit XC4', input.table);",
+                     table=cert.compact())
+        assert out["label"] == "EN B" and out["note"] == "most sizes; EN C in S"
+
+    def test_the_summit_xc4_is_in_the_supplement(self):
+        """In no public register (EAPR's is closed); from UP's manual, the S EN C."""
+        found = cert.lookup("UP Summit XC4")
+        assert found.label == "EN B" and found.note == "most sizes; EN C in S"
+        assert found.source == "UP's manual"
+
+
+class TestWhatItRefusesToAnswer:
     def test_a_named_maker_never_falls_through_to_another_maker(self):
         """Sky Paragliders make an Apollo and so does Edel. A header naming Sky must not
         be answered with Edel's row — the class would be from the wrong wing and the

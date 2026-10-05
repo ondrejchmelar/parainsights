@@ -69,7 +69,7 @@
     return table.__sets;
   }
 
-  // { label, name, certificate, source } or null.
+  // { label, name, certificate, source, note } or null; `note` names sizes certified otherwise.
   function lookup(header, table) {
     if (!table) return null;
     var sets = prepared(table), split = splitBrand(header, sets.brands, sets.company);
@@ -83,7 +83,7 @@
       if (at === undefined || at < 0) return null;
     }
     var a = table.answers[at];
-    return { label: a[0], name: a[1], certificate: a[2], source: a[3] };
+    return { label: a[0], name: a[1], certificate: a[2], source: a[3], note: a[4] || '' };
   }
 
   TV.certification = { normalise: normalise, model: model, splitBrand: splitBrand, lookup: lookup };

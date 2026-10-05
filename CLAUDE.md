@@ -793,14 +793,23 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   of its nearest fix). Both handles at the ends is the whole track, a double click puts
   them there, and closing the replay does too. **Follow** (a button in the replay row,
   `c`) rides with the replay's "now", facing the *general* direction of flight, never the
-  nose — turning with every thermal circle is unwatchable. The direction is the scored
-  route's leg being flown (`scene.course`: the turnpoints as fix indices, and whether it
-  closes), so a triangle turns three times, each turn spread over up to ten minutes of
-  flight either side of the corner (a third of the shorter leg at most); without a route,
-  where the glider got to over ±10 minutes. The camera then eases to it in real time
-  (0.7 s), so a fast replay cannot snap it round. The centre is put on the ground behind
-  the glider on the line of sight (height × tan tilt), since MapLibre's centre is on the
-  ground. While following, the wheel and `+`/`−` zoom the follow camera — any MapLibre
+  nose — turning with every thermal circle is unwatchable. The direction is the
+  track smoothed out (`courseAt`): every 10 s, the bearing from 2.5 minutes before to 2.5
+  after, which cancels the circles, *held* where under half the path over that window
+  went anywhere — a climb drifting downwind would otherwise swing the view round and back —
+  then averaged over ±2 minutes as vectors. The scored route's legs were tried first and
+  were too coarse: an hour of flying in one fixed direction. The camera then eases to it in real time
+  (0.7 s, and at most 90° a second), so a fast replay cannot snap it round. **The camera orbits the glider itself**:
+  MapLibre orbits a point at the height of the terrain under its centre, and estimating
+  where on the ground to look so a glider kilometres above lands mid-screen worked over
+  Krupka and hunted over the Karakoram, where moving the centre onto a 7 km peak lifts the
+  whole camera. So follow freezes the orbit height at the glider's altitude
+  (`map._elevationFreeze` and `transform.elevation`, what MapLibre's own animations do —
+  private, and 4.7.1 is pinned) and puts the glider below the middle with top padding;
+  handing back re-anchors on the ground under the middle of the view and corrects the
+  centre by however far the camera slid, so the view does not jump. Measuring the glider
+  with `transform.coordinatePoint` was a dead end: it disagrees with where deck.gl draws
+  it by ~190 px. While following, the wheel and `+`/`−` zoom the follow camera — any MapLibre
   gesture would be stopped by its next frame — and a press on the map, an arrow key, the
   rose or reset hands the camera back. Checked by hand over CDP, not in the suite. Climbs are dots, not
   numbers, and the track is the canvas's width (2.6 px over the device ratio, capped at
@@ -1071,15 +1080,19 @@ Still wanted:
   every one carrying the register and the reference it can be checked under. The page
   reads `gliders.json`, every answer precomputed from these rules by
   `certification.compact()`.
-  **The matching is built to refuse.** `lookup` answers only when the maker and the
-  model agree and *every certified size of that model carries the same class* — so
-  Advance's Sigma 10, which is D in 21 and C above it, gets no chip at all rather than
-  a class the pilot might not have been flying under. A header that names a maker never
-  falls through to another maker's wing of the same name (Sky and Edel both make an
-  Apollo). There is no fuzzy match: "Rush 6" against "Rush 5" is one character and a
-  whole class of wing. On the 19 distinct wings in the sample archive it answers 13 and
-  says nothing about 6 — two of those are genuinely not in either register, one is a
-  logger writing `NKN`, and one is the Sigma 10 refusing on principle.
+  **The matching is built to refuse — except across sizes.** `lookup` answers only when
+  the maker and the model agree. A header names the wing and never its size, so where a
+  model's sizes are certified differently it gives **the class most sizes carry**, a tie
+  going to the class the M and L sizes share (October 2026, the pilot's call: it used to
+  refuse, which left their UP Summit XC4 bare). The answer carries a `note` ("most
+  sizes; EN C in S") that the chip's title and the report's paragraph print, so the
+  reader is told which size it does not cover. A header that names a maker never falls
+  through to another maker's wing of the same name (Sky and Edel both make an Apollo).
+  There is no fuzzy match: "Rush 6" against "Rush 5" is one character and a whole class
+  of wing. **`certification.SUPPLEMENT`** holds wings no public register lists, cited to
+  what was read, and survives `--refresh`: the Summit XC4 is in neither register, and
+  EAPR — the other house that issues LTF — closed its database, so its rows come from
+  UP's manual and specification (S EN C, SM/M/L EN B).
   **LTF and EN are never translated into each other.** LTF 1-2 is *about* EN B and every
   pilot knows it, but "about" is not a certification, so a wing in the DHV register under
   1-2 and in Air Turquoise's under B resolves to the EN row, and an LTF-only wing prints

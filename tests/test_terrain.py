@@ -140,21 +140,6 @@ class TestView3dPayload:
         # Mostly one or two characters a step at 1 Hz, which is the whole saving.
         assert max(abs(v) for v in track["lon"][1:]) < 100
 
-    def test_the_scene_carries_the_scored_route_for_follow(self, ramp, tmp_path):
-        """The replay's follow mode faces along the leg being flown, so the scene names
-        the route's turnpoints as fix indices — the track's own — and whether it closes."""
-        from tests.test_analysis import build, circling
-        out = js.run("""var f = await load(input.path), a = TV.analysis.analyse(f);
-          var route = TV.xc.best(f);
-          var scene = TV.scene.data(a, input.grid, { route: route });
-          return { course: scene.course, points: route.points.map(function (p) { return p.index; }),
-                   kind: route.kind, fixes: f.lon.length, bare: 'course' in TV.scene.data(a, input.grid, {}) };""",
-                     path=build(tmp_path / "t.igc", circling(200)), grid=_grid(ramp))
-        assert list(out.course["at"]) == list(out.points)
-        assert all(0 <= i < out.fixes for i in out.course["at"])
-        assert out.course["closed"] == ("triangle" in out.kind)
-        assert out.bare is False, "no route, no course"
-
     def test_the_airspace_switch_is_disabled_where_there_is_none(self, ramp, tmp_path):
         """A page with airspace offers the switch on every flight; under a flight with
         none it is there, disabled, and says why — a missing button explains nothing."""

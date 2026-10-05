@@ -370,7 +370,7 @@
     var climbRate = th.length ? gain / held : 0.0;
 
     var wing = TV.certification && options.certificationTable ? TV.certification.lookup(summary.glider || '', options.certificationTable) : null;
-    var chip = wing ? '<span class="cert" title="' + esc(wing.name + ' — ' + wing.certificate + ', ' + wing.source) + '">' + esc(wing.label) + '</span>' : '';
+    var chip = wing ? '<span class="cert" title="' + esc(wing.name + ' — ' + wing.certificate + ', ' + wing.source + (wing.note ? ' (' + wing.note + ')' : '')) + '">' + esc(wing.label) + '</span>' : '';
     var identity = [['pilot', summary.pilot || '—', ''], ['glider', summary.glider || '—', chip], ['site', summary.site || '—', '']]
       .map(function (r) { return '<div><span class="key">' + r[0] + '</span><span class="val">' + esc(r[1]) + r[2] + '</span></div>'; }).join('');
 
@@ -420,8 +420,7 @@
     var view3dSection, clearance = null;
     if (terrain) {
       var payload = TV.scene.data(a, options.sceneTerrain || terrain, { airspace: options.airspace,
-                                                                         airspaceChecked: options.airspaceChecked,
-                                                                         route: route });
+                                                                         airspaceChecked: options.airspaceChecked });
       clearance = TV.terrain.clearance(terrain, a);
       view3dSection = '\n  <section>\n    <div class="section-head">\n      <h2>The flight over the ground</h2>\n' +
         '      <p>Hovering a moment in the side view marks the same moment on the map above, and in\n         the top view below. Click to keep it there while you look; click again, or press\n' +
@@ -531,8 +530,9 @@
       '        rather than closing circles — hover a label to see all three for that climb.\n        Convergence is deliberately not a label: its honest signature is a climb drifting\n' +
       '        differently from the air around it, and one tracklog cannot tell that from a ridge\n        climb holding station or a badly sounded wind. Without terrain there is nothing to\n' +
       '        check and the column shows a dash rather than guessing.</p>\n      ' +
-      (wing ? "<p><strong>The class beside the glider is the register's, not ours.</strong> It is " + esc(wing.label) + ' in the ' + esc(wing.source) +
-              " register, under " + esc(wing.certificate) + "; hover the chip for the reference. A class is looked up on the wing's name and is only shown when every certified size of that model carries the same one — a model certified differently in its smallest size shows nothing at all, rather than a class that might not be the one this pilot was flying under. LTF and EN are never translated into each other. Certification describes the wing's behaviour in a test, and says nothing about this flight.</p>" : '') + '\n' +
+      (wing ? "<p><strong>The class beside the glider is the certifier's, not ours.</strong> It is " + esc(wing.label) + ' according to ' + esc(wing.source) +
+              ", under " + esc(wing.certificate) + "; hover the chip for the reference. A class is looked up on the wing's name, and a header names the wing but not its size, so where a model's sizes are certified differently the chip shows the class most of them carry" +
+              (wing.note ? ' — here ' + esc(wing.note.replace(/^most sizes; /, '')) : '') + ". LTF and EN are never translated into each other. Certification describes the wing's behaviour in a test, and says nothing about this flight.</p>" : '') + '\n' +
       '      <p>The ' + glideCount + ' glides and ' + th.length + ' climbs account for\n        ' + fmt((1 - otherFraction) * 100, 0) +
       '% of airtime. The rest is transitions too\n        short or too ambiguous to call, which is honest rather than tidy.</p>\n    </div>\n  </section>\n\n' +
       '  <footer>\n    <span>' + summary.fixes.toLocaleString('en-US') + ' fixes at ' + fmt(summary.duration / summary.fixes, 1) +
