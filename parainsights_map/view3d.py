@@ -32,6 +32,10 @@ TILE_SOURCES = {
         # between them jumps colour on every zoom, so the merged view never shows the
         # imagery below this level — it builds those tiles from this level's (`map3d`).
         "consistent_from": 12,
+        # The label layer's last level: past it Esri answers empty tiles, and every name
+        # vanished as the reader zoomed in. The canvas draws that level's tile enlarged;
+        # the merged view draws OpenFreeMap's place names as text instead (`map3d`).
+        "label_max_zoom": 12,
     },
     "map": {
         "label": "Map",
@@ -1397,9 +1401,19 @@ function initView3d(root, cursorTrack, preset) {
           (function (tx, ty, index) {
             var image = new Image();
             image.crossOrigin = 'anonymous';   // needed to read the mosaic back out
+            // A label layer past its last level: that level's tile, the part of it over
+            // this one, enlarged (`label_max_zoom`).
+            var up = index && source.label_max_zoom ? Math.max(0, zoom - source.label_max_zoom) : 0;
+            var part = 256 / Math.pow(2, up);
             image.onload = function () {
-              layers[index].getContext('2d').drawImage(
-                image, (tx - x0) * size, (ty - y0) * size, size, size);
+              var ctx = layers[index].getContext('2d');
+              if (up) {
+                var each = Math.pow(2, up);
+                ctx.drawImage(image, (tx % each) * part, (ty % each) * part, part, part,
+                              (tx - x0) * size, (ty - y0) * size, size, size);
+              } else {
+                ctx.drawImage(image, (tx - x0) * size, (ty - y0) * size, size, size);
+              }
               done++;
               progress();
               if (--pending === 0) finish();
@@ -1409,7 +1423,8 @@ function initView3d(root, cursorTrack, preset) {
               progress();
               if (--pending === 0) finish();
             };
-            image.src = template.replace('{z}', zoom).replace('{x}', tx).replace('{y}', ty);
+            image.src = template.replace('{z}', zoom - up).replace('{x}', tx >> up)
+                                .replace('{y}', ty >> up);
           })(tx, ty, index);
         }
       }

@@ -165,8 +165,10 @@ SWITCH_SCRIPT = (
     var source = tiles[basemap];
     if (source) {
       source.layers.forEach(function (template, index) {
+        // A label layer stops at its last level (`label_max_zoom`); past it MapLibre
+        // stretches that level rather than drawing the empty tiles Esri answers with.
         sources['b' + index] = { type: 'raster', tiles: [template], tileSize: 256,
-                                 maxzoom: source.max_zoom || 18 };
+                                 maxzoom: (index && source.label_max_zoom) || source.max_zoom || 18 };
         // One credit per style, not per layer — and MapLibre rejects the whole style
         // over an `attribution: undefined`, so the key is only set where there is one.
         if (!index && source.attribution) sources.b0.attribution = source.attribution;

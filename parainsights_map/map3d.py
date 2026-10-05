@@ -162,6 +162,9 @@ SCRIPT = r"""
   // view always sits on them. One level down costs 4 requests, two levels 16; deeper
   // than that (64+) the native tile is used, which only the far horizon ever asks for.
   var STITCH_LEVELS = 2;
+  // Place names (`style`): OpenFreeMap's planet tiles and their fonts, no key.
+  var PLACES = 'https://tiles.openfreemap.org/planet';
+  var GLYPHS = 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf';
   function registerStitching() {
     if (window.__m3Stitching) return;
     window.__m3Stitching = true;
@@ -397,6 +400,7 @@ SCRIPT = r"""
         };
       }
       var SHADES = ['hillshade-over', 'hillshade-relief'];
+      var labelled = {};      // basemaps that carried a label layer: the place names show over them
       function shadeFor(key) { return key === 'off' ? 'hillshade-relief' : 'hillshade-over'; }
       // Every basemap in one style, and a switch shows one and hides the rest. Swapping
       // whole styles with `setStyle` was the first version, and three quick presses left
@@ -421,6 +425,10 @@ SCRIPT = r"""
           var source = tiles[name];
           source.layers.forEach(function (template, i) {
             var id = name + '-' + i;
+            // A raster label layer is replaced by the place names below: Esri's stops at
+            // level 12 and answers empty tiles past it, so every name vanished as the
+            // reader zoomed in to the ground they were about.
+            if (i) { labelled[name] = true; return; }
             // The photograph at half size (sharper), a label layer at full size — halved,
             // its lettering would be too small to read.
             var consistent = !i && source.consistent_from;
@@ -450,8 +458,36 @@ SCRIPT = r"""
           return { id: id, type: 'hillshade', source: 'shade', paint: shading(id === 'hillshade-over'),
                    layout: { visibility: id === shadeFor(key) ? 'visible' : 'none' } };
         });
+        // Place names as text, from OpenFreeMap's OpenStreetMap tiles (keyless, CORS-open):
+        // crisp at every zoom and placed by MapLibre so they never collide, where a
+        // raster label is a picture of text at one scale. Shown where the basemap had
+        // labels (the photograph), switched with it.
+        sources.places = { type: 'vector', url: PLACES };
+        above.push({
+          id: 'place-labels', type: 'symbol', source: 'places', 'source-layer': 'place',
+          // Villages only from zoom 11: hidden by opacity they would still take the room
+          // the towns' names need.
+          filter: ['any', ['match', ['get', 'class'], ['city', 'town'], true, false],
+                   ['all', ['==', ['get', 'class'], 'village'], ['>=', ['zoom'], 11]]],
+          minzoom: 6,
+          layout: {
+            visibility: labelled[key] ? 'visible' : 'none',
+            'text-field': ['coalesce', ['get', 'name'], ['get', 'name:latin']],
+            'text-font': ['match', ['get', 'class'], 'city', ['literal', ['Noto Sans Bold']],
+                          ['literal', ['Noto Sans Regular']]],
+            'text-size': ['interpolate', ['linear'], ['zoom'],
+                          6, ['match', ['get', 'class'], 'city', 13, 'town', 10, 9],
+                          12, ['match', ['get', 'class'], 'city', 18, 'town', 15, 12],
+                          16, ['match', ['get', 'class'], 'city', 22, 'town', 18, 15]],
+            // Cities win the room first, then towns, then villages.
+            'symbol-sort-key': ['match', ['get', 'class'], 'city', 0, 'town', 1, 2],
+            'text-padding': 4
+          },
+          paint: { 'text-color': '#ffffff', 'text-halo-color': 'rgba(12,14,18,0.85)',
+                   'text-halo-width': 1.4, 'text-halo-blur': 0.4 }
+        });
         return {
-          version: 8, sources: sources,
+          version: 8, sources: sources, glyphs: GLYPHS,
           // No paint transitions: the sun's direction moves in steps with the cursor, and
           // a half-finished transition is one more way for tiles to disagree.
           transition: { duration: 0, delay: 0 },
@@ -1270,13 +1306,12 @@ SCRIPT = r"""
         basemap = key;
         label();
         styles.forEach(function (name) {
-          tiles[name].layers.forEach(function (_, i) {
-            map.setLayoutProperty(name + '-' + i, 'visibility', name === key ? 'visible' : 'none');
-          });
+          map.setLayoutProperty(name + '-0', 'visibility', name === key ? 'visible' : 'none');
         });
         SHADES.forEach(function (id) {
           map.setLayoutProperty(id, 'visibility', id === shadeFor(key) ? 'visible' : 'none');
         });
+        map.setLayoutProperty('place-labels', 'visibility', labelled[key] ? 'visible' : 'none');
       }
       function setVertical(v) {
         vertical = v;

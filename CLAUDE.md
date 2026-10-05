@@ -484,7 +484,12 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   `World_Boundaries_and_Places`, without the region and district borders it drew over the
   photo; only the national border stays. Esri's caches are one fused raster, so a layer
   cannot be switched off, and `Canvas/World_Dark_Gray_Reference` (no lines at all) draws
-  its names faint grey with no halo. Both keyless. A photograph tells a pilot
+  its names faint grey with no halo. Both keyless. **That label raster stops at level 12**
+  (`label_max_zoom`) and answers empty tiles past it, so every name vanished as the reader
+  zoomed in. **The merged view draws place names as text instead**: OpenFreeMap's
+  OpenStreetMap vector tiles and fonts (keyless, CORS-open), cities bold, villages from
+  zoom 11, white on a dark halo, placed by MapLibre so they never collide, over the
+  photograph only. The canvas and plain MapLibre views enlarge the level-12 tile. A photograph tells a pilot
   what the ground under a climb was; a road map does not. Attribution to Esri/Maxar is
   required and is rendered on the map and in the caption.
 - **Every basemap style is fetched at view time.** When stitching from tiles, give each

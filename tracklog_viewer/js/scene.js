@@ -20,7 +20,8 @@
                'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places_Alternate/MapServer/tile/{z}/{y}/{x}'],
       attribution: 'Imagery © Esri, Maxar, Earthstar Geographics',
       max_zoom: 18,
-      consistent_from: 12
+      consistent_from: 12,
+      label_max_zoom: 12
     },
     map: {
       label: 'Map',
