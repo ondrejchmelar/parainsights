@@ -93,10 +93,17 @@ def test_an_upload_gets_the_full_article_even_offline(tmp_path):
 
 
 _AIRSPACE_PROBE = """
-<div class="airspace-article" hidden><script type="application/json" class="view3d-data">%s</script></div>
+<meta name="airspace-layers" content="layers/">
 <pre id="probe-out"></pre>
 <script id="igc-source" type="text/plain">%s</script>
 <script>
+// The layer files, served from here: Chrome will not fetch() a file:// URL.
+var LAYERS = %s;
+window.fetch = function (url) {
+  var body = LAYERS[url];
+  return Promise.resolve({ ok: !!body, status: body ? 200 : 404,
+                           json: function () { return Promise.resolve(JSON.parse(JSON.stringify(body))); } });
+};
 // Ground for the upload without a network: every node at 300 m.
 window.loadTerrain = function (grid) {
   grid.z = new Array(grid.rows * grid.cols).fill(300);
@@ -111,15 +118,19 @@ window.addEventListener('load', function () {
     input.dispatchEvent(new Event('change'));
     var waited = 0;
     (function poll() {
+      var a = document.querySelector('[data-flight-report="up1"]');
+      var canvas = a && a.querySelector('canvas.view3d');
+      var handle = canvas && window.__view3dAll && window.__view3dAll[canvas.id];
       var st = document.getElementById('ql-status');
-      if (!document.querySelector('[data-flight-report="up1"]') && !st.classList.contains('is-error')
-          && (waited += 500) < 55000) return setTimeout(poll, 500);
-      var a = document.querySelector('[data-flight-report="up1"]'), out = { article: !!a };
-      if (a) {
-        var scene = JSON.parse(a.querySelector('.view3d-data').textContent);
+      if (!handle && !st.classList.contains('is-error') && (waited += 500) < 55000) return setTimeout(poll, 500);
+      var out = { article: !!a, view: !!handle };
+      if (handle) {
+        var scene = handle.built.scene, button = a.querySelector('[data-view3d-act="airspace-toggle"]');
+        out.remote = scene.airspaceRemote;
         out.rings = (scene.airspaces || []).map(function (r) { return r.n; });
-        out.toggle = !!scene.airspaceToggle;
-        out.button = !!a.querySelector('[data-view3d-act="airspace-toggle"]');
+        out.button = !!button;
+        out.enabled = !!button && !button.disabled;
+        out.title = button && button.title;
       }
       document.getElementById('probe-out').textContent = JSON.stringify(out);
     })();
@@ -135,16 +146,21 @@ def _ring(name, west, east, south, north):
 
 
 @needs_chrome
-def test_an_upload_gets_the_airspace_the_page_carries(tmp_path):
-    """The Planner view carries every Czech ring; an uploaded flight takes the ones over its
-    own ground, and its 3D map gains the same airspace button a bundled flight has."""
+def test_an_upload_loads_the_airspace_under_its_ground(tmp_path):
+    """An uploaded flight's map loads the layer files under its own ground, as a bundled
+    flight's does (`loadAirspace`): the index, then only the files whose box reaches it,
+    and only the rings that do; then the switch is enabled and names the credit."""
     from tests.test_analysis import LAT0, LON0
 
     igc = build(tmp_path / "mine.igc", FLIGHTS["thermal-glide-thermal"]()).read_text()
-    rings = {"airspaces": [_ring("OVER THE FLIGHT", LON0 - 0.05, LON0 + 0.05, LAT0 - 0.05, LAT0 + 0.05),
-                           _ring("FAR AWAY", LON0 + 5, LON0 + 6, LAT0 + 5, LAT0 + 6)],
-             "airspaceColours": {"base": "#d33"}}
-    page = render_html._page("probe", []) + _AIRSPACE_PROBE % (json.dumps(rings), igc)
+    near = {"credit": "Airspace © openAIP", "bbox": [LON0 - 0.05, LON0 + 6, LAT0 - 0.05, LAT0 + 6],
+            "airspaces": [_ring("OVER THE FLIGHT", LON0 - 0.05, LON0 + 0.05, LAT0 - 0.05, LAT0 + 0.05),
+                          _ring("FAR AWAY", LON0 + 5, LON0 + 6, LAT0 + 5, LAT0 + 6)]}
+    layers = {"layers/index.json": {"colours": {"base": "#d33"}, "files": {
+                  "XX.json": {"bbox": near["bbox"], "credit": near["credit"]},
+                  "YY.json": {"bbox": [LON0 + 40, LON0 + 41, LAT0, LAT0 + 1], "credit": "never"}}},
+              "layers/XX.json": near}
+    page = render_html._page("probe", []) + _AIRSPACE_PROBE % (igc, json.dumps(layers))
     with tempfile.TemporaryDirectory() as folder:
         target = Path(folder) / "upload.html"
         target.write_text(page, encoding="utf-8")
@@ -153,6 +169,8 @@ def test_an_upload_gets_the_airspace_the_page_carries(tmp_path):
     found = re.search(r'<pre id="probe-out">(.*?)</pre>', result.stdout, re.S)
     assert found and found.group(1).strip(), result.stderr[-2000:]
     out = json.loads(found.group(1))
-    assert out["article"], out
+    assert out["article"] and out["view"], out
+    assert out["remote"] == "layers/"
     assert out["rings"] == ["OVER THE FLIGHT"], out
-    assert out["toggle"] and out["button"], out
+    assert out["button"] and out["enabled"], out
+    assert "openAIP" in out["title"], out

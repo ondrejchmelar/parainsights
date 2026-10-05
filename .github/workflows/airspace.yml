@@ -1,0 +1,56 @@
+# The airspace every 3D map draws, refreshed from openAIP once a month (`airspaces/openaip.py`).
+#
+# The pages never ask openAIP for anything: its API needs a key, and a key in a published
+# page is a key anyone can copy. So the key lives here, as the repository secret
+# OPENAIP_API_KEY, and this job writes one file per European country into
+# `public/airspace/layers/` and commits them. The maps load the files under a flight when
+# it is opened, so a refresh reaches every flight, bundled or uploaded, without a rebuild
+# of the report — which cannot be rebuilt here anyway (no tracklogs in the repository).
+#
+# Airspace changes every 28-day AIRAC cycle; monthly keeps a map at most one cycle behind.
+# A country that fails keeps its committed file, and the run says which.
+#
+# A push made with this workflow's own token does not start other workflows, so the Pages
+# deploy is asked for explicitly at the end.
+
+name: airspace
+
+on:
+  schedule:
+    - cron: "17 4 3 * *"      # 04:17 UTC on the 3rd of every month
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: airspace
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - run: test -n "$OPENAIP_API_KEY" || (echo "::error::no OPENAIP_API_KEY secret — Settings → Secrets and variables → Actions" && exit 1)
+        env:
+          OPENAIP_API_KEY: ${{ secrets.OPENAIP_API_KEY }}
+      - run: uv run python -m airspaces.openaip --out public/airspace/layers
+        env:
+          OPENAIP_API_KEY: ${{ secrets.OPENAIP_API_KEY }}
+      - name: Commit and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/airspace/layers
+          if git diff --cached --quiet; then echo "nothing changed"; exit 0; fi
+          git commit -m "Airspace: openAIP refresh $(date -u +%F)"
+          git push
+          gh workflow run pages.yml --ref main

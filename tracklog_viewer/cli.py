@@ -119,8 +119,11 @@ def main(argv: list[str] | None = None) -> int:
             "sceneTerrain": ground.to_remote() if ground is not None else None,
             "meteo": report["weather"], "when": report["when"],
             "options": {"uid": f"f{index}", "hidden": index > 0, "label": report["label"],
-                        "airspace": report.get("airspace") or None,
-                        "airspaceChecked": args.airspace is not None and ground is not None,
+                        # The flight's map loads the airspace under its ground when it is
+                        # opened, from the layer files beside the Planner (`openaip.py`).
+                        "airspaceRemote": (args.airspace + "layers/")
+                                          if args.airspace is not None and ground is not None
+                                          else None,
                         "format": Path(report["name"]).suffix.lstrip(".").upper(),
                         "plan": report["plan"]},
         })
@@ -143,6 +146,10 @@ def main(argv: list[str] | None = None) -> int:
         + "</nav>"
     )
     page = render_html._page(made[0]["title"], [m["html"] for m in made], tabs, extras)
+    if args.airspace is not None:
+        # Where an uploaded flight's map finds the airspace layers (`js/upload.js`).
+        page = page.replace("<meta charset=\"utf-8\">", "<meta charset=\"utf-8\">\n"
+                            f"<meta name=\"airspace-layers\" content=\"{args.airspace}layers/\">", 1)
     args.html.parent.mkdir(parents=True, exist_ok=True)
     args.html.write_text(page, encoding="utf-8")
     print(f"wrote {args.html}")
@@ -205,14 +212,15 @@ def _planner_view(args, reports) -> "render_html.Extra":
     """The Planner view (`airspaces` and `planner`), and the airspace over each flight's
     map. Imported here: the viewer must build with the airspace package absent."""
     from airspaces import build as airspace_build
-    from airspaces import openair as airspace_openair
+    from airspaces import openaip
     from airspaces import render_html as airspace_html
     from airspaces import scene as airspace_scene
-    from airspaces import sources as airspace_sources
     from planner import render_html as planner_html
 
     overlay = airspace_build.build()
-    base_text, base_version = airspace_sources.base_airspace()
+    layers = args.html.parent / args.airspace / "layers"
+    base, base_version = openaip.base(layers)
+    openaip.write_circuits(layers, overlay)
     name = overlay.filename
     text = airspace_build.to_openair(overlay, base_version=base_version)
     # The download has to exist where the page points, which is `--airspace`'s argument
@@ -221,19 +229,9 @@ def _planner_view(args, reports) -> "render_html.Extra":
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text, encoding="utf-8", newline="")
     print(f"wrote {target}")
-    base = airspace_openair.read(base_text)
-    spaces = list(base) + list(overlay.airspaces)
+    spaces = list(base) + overlay.circuit_airspaces
     # The view's ground is fetched in the page; without --terrain, the flat SVG map.
     payload = airspace_scene.remote(spaces) if args.terrain else None
-    # Each flight gets only the zones reaching the box its ground was fetched for, so a
-    # flight in Pakistan carries no layer and no button.
-    for report in reports:
-        if report["ground"] is not None:
-            report["airspace"] = airspace_scene.layer(spaces, report["ground"])
-    counted = sum(len((r.get("airspace") or {}).get("airspaces", [])) for r in reports)
-    if counted:
-        print(f"airspace over {sum(1 for r in reports if r.get('airspace'))} "
-              f"of {len(reports)} flights, {counted} zones in all")
     return render_html.Extra(
         uid="airspace",
         label="Planner",

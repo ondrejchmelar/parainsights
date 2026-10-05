@@ -41,8 +41,8 @@
   }
 
   // `terrain` is the grid object as the page carries it (`Terrain.to_remote()` for a
-  // bundled flight, the fetched grid for an upload); `options`: airspace (a layer dict,
-  // merged in). The imagery is always fetched in the page (`tiles`).
+  // bundled flight, the fetched grid for an upload); `options`: airspaceRemote (where
+  // the airspace layer files are; the map loads them when opened). The imagery is always fetched in the page (`tiles`).
   function data(a, terrain, options) {
     options = options || {};
     var f = a.flight, s = a.series;
@@ -97,12 +97,10 @@
       sun: sun.forFlight(f),
       wind: a.wind ? { ms: R(a.wind.speed, 1), from: R(a.wind.direction, 1), cardinal: a.wind.cardinal } : null
     };
-    if (options.airspace && (options.airspace.airspaces || []).length) {
-      Object.assign(out, options.airspace, { airspaceToggle: true });
-    } else if (options.airspaceChecked) {
-      // The page has airspace, but none under this flight: the switch is still shown,
-      // disabled and saying why, rather than missing — a missing button explains nothing.
-      Object.assign(out, { airspaceToggle: true, airspaces: [] });
+    if (options.airspaceRemote) {
+      // Loaded when the map is opened (`loadAirspace` in `parainsights_map.view3d`): the
+      // switch is there from the start, waiting, and says why if nothing reaches here.
+      Object.assign(out, { airspaceToggle: true, airspaceRemote: options.airspaceRemote, airspaces: [] });
     }
     return out;
   }
@@ -134,12 +132,10 @@
         '<button type="button" data-view3d-act="labels-toggle" data-kind="climb" aria-pressed="false" aria-label="Label each climb with its rate and gain">climbs</button>' +
         '<button type="button" data-view3d-act="labels-toggle" data-kind="glide" aria-pressed="false" aria-label="Label each glide with its ratio and distance">glides</button></div>'
       : '';
-    var noAirspace = payload.airspaceToggle && !(payload.airspaces || []).length;
+    // Disabled until the map has loaded the airspace under it (`loadAirspace`).
     var airspace = payload.airspaceToggle
       ? '<div class="view3d-seg view3d-airspace" role="group" aria-label="Airspace">' +
-        (noAirspace
-          ? '<button type="button" data-view3d-act="airspace-toggle" aria-pressed="false" disabled title="No airspace data under this flight — the layer covers Czechia only" aria-label="No airspace data under this flight — the layer covers Czechia only">airspace</button></div>'
-          : '<button type="button" data-view3d-act="airspace-toggle" aria-pressed="false" aria-label="Draw the airspace over this flight">airspace</button></div>')
+        '<button type="button" data-view3d-act="airspace-toggle" aria-pressed="false" disabled title="Loading the airspace…" aria-label="Loading the airspace…">airspace</button></div>'
       : '';
     var airspaceName = payload.airspaceToggle ? '<div class="view3d-asp" hidden></div>' : '';
     return '\n    <div class="panel view3d-panel">\n' +

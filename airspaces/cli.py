@@ -8,7 +8,7 @@ from pathlib import Path
 
 import parainsights_common as common
 
-from . import build, openair, render_html, sources
+from . import build, openaip, render_html, sources
 
 
 def _page(article: str, title: str, *, three_d: bool = False) -> str:
@@ -109,9 +109,11 @@ def main(argv=None) -> int:
         slz_zones=args.slz_zones,
     )
 
-    # Fetched once. The version goes in the OpenAir header's currency warning, so it is
-    # needed even when only the file is being written; the text itself only when a map is.
-    base_text, base_version = sources.base_airspace(refresh=args.refresh)
+    # The base airspace is openAIP's, from the committed layer file the monthly refresh
+    # writes (`openaip.py`) — no key and no network here. Its version goes in the OpenAir
+    # header's currency warning, so it is needed even when only the file is written.
+    layers = (args.html.parent if args.html else Path("public/airspace")) / "layers"
+    base, base_version = openaip.base(layers)
     text = build.to_openair(overlay, corrected=not args.raw, base_version=base_version)
     name = overlay.filename
 
@@ -121,14 +123,14 @@ def main(argv=None) -> int:
               f"{len(text) / 1024:.0f} KB")
 
     if args.html:
-        base = openair.read(base_text)
+        openaip.write_circuits(layers, overlay)
         # The ground is the page's to fetch (`scene.remote`), so the 3D map cannot fail
         # here; the flat SVG map is only drawn when asked for.
         payload = None
         if not args.flat:
             from . import scene as airspace_scene
 
-            payload = airspace_scene.remote(list(base) + list(overlay.airspaces))
+            payload = airspace_scene.remote(list(base) + overlay.circuit_airspaces)
 
         # The page links to the OpenAir file rather than carrying it, so the file has
         # to be written beside the page — publishing the HTML alone gives a dead button.
@@ -141,7 +143,7 @@ def main(argv=None) -> int:
         )
         args.html.write_text(_page(article, "Planner",
                                    three_d=payload is not None), encoding="utf-8")
-        print(f"{args.html}: {len(base)} base airspaces + {len(overlay.airspaces)} added")
+        print(f"{args.html}: {len(base)} openAIP airspaces + {overlay.circuit_count} circuits")
         print(f"{beside}: linked from the page ({len(text) / 1024:.0f} KB)")
 
     if args.report:

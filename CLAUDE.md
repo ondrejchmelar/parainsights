@@ -155,19 +155,35 @@ to FL165 or higher are **capped at 4 000 m**, drawn with a dashed open lid and t
 ceiling in the label, because drawn true they hide everything a paraglider meets. See
 "The boxes" in `docs/airspaces.md`.
 
-The same layer goes over **each flight's own 3D map** in the report, behind an `airspace`
-switch that starts off — the flight is the subject there and the airspace is context, the
-same call the phase labels make. Each flight gets only the zones reaching the box its
-terrain was fetched for (`scene.layer`), so a flight in Pakistan carries no layer and no
-button, and the report grows by the airspace it can actually draw. It needs `--airspace`
-*and* `--terrain`. **An uploaded flight gets the same switch** from the rings the page
-already carries for its Planner view (`js/upload.js`, `airspaceNear`), cut to the box its
-ground was fetched for. The data is Czech only, so a flight elsewhere — Col Rodella,
-Hunza — gets the switch **disabled**, titled with why (`airspaceChecked` in the job
-options, `noAirspace` in the merged bar): a page that has airspace shows the control on
-every flight, because a button present on one flight and missing on the next reads as a
-fault. OpenAIP's free per-country exports now sit in a requester-pays bucket and its API
-needs a key.
+**The maps' airspace is openAIP's, across Europe** (October 2026). openAIP (openaip.net)
+is the community airspace database, CC BY-NC 4.0 — fine for this non-commercial site,
+credited wherever it is drawn. Its API needs a key and a key in a page is anyone's, so
+the pages never call it: `airspaces/openaip.py` fetches 45 European countries (the Alps,
+Turkey) and writes one file each into `public/airspace/layers/` with an `index.json` of
+their boxes — 6.5 MB, 1.2 MB gzipped, France and Italy the largest at ~840 KB.
+`.github/workflows/airspace.yml` refetches on the 3rd of every month with the repository
+secret `OPENAIP_API_KEY`, commits only files whose airspace changed (a new date on the
+same data would be a megabyte of history a month), and starts the Pages deploy itself —
+a push with the workflow's token starts no workflow. Locally the key is
+`~/.config/parainsights/openaip-key` or `OPENAIP_API_KEY`, never the repository.
+Each ring carries the published name, class and limits too (`nm ac lo hi`), so
+`openaip.read` gives the objects back and the Planner page builds from the committed
+Czech file with no key. Service boundaries (FIR, airways, sectors) and anything floored at
+FL195 or above are not drawn (`openaip.TYPES`).
+**Czechia is openAIP too, ATZs included; ours adds only the traffic circuits**
+(`cz-circuits.json`, written by both command lines) — the pilot's call, to keep it
+simple. Our corrected aerodrome zones stay in the OpenAir download for XCTrack, which
+is what that file is for. The Aeroklub `CZ_low` file it replaced is gone from
+`sources.py`.
+**Every flight's map loads its airspace when opened**, bundled and uploaded alike
+(`loadAirspace` in `view3d`, before the views are built): the index once, then only the
+files whose box reaches the flight's ground, the rings that do, biggest first. A
+refresh therefore reaches every flight without rebuilding the report, which CI cannot
+do. The scene carries `airspaceRemote` (where the layers are; the report names it in
+`<meta name="airspace-layers">` for uploads) and the switch starts disabled — "Loading
+the airspace…" — then is enabled with the credit as its title, or says why not (Hunza:
+"the layers cover Europe"). Fetching means **airspace needs the page served over
+http(s)**; opened from `file://` the switch says it could not load.
 
 ## A network is assumed
 
@@ -250,8 +266,8 @@ uv run python -m tracklog_viewer.cli FLIGHT.igc --terrain --meteo \
 git add public/index.html && git commit -m "Publish flight" && git push
 ```
 
-Nothing server-side is involved — it is one static HTML file. The same file opened over
-`file://` behaves identically.
+Nothing server-side is involved — it is static files. Opened over `file://` the page
+works except for what it fetches beside itself: the airspace layers.
 
 ## What the tool does
 

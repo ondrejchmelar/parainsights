@@ -100,6 +100,12 @@ class Overlay:
         return sum(1 for a in self.airspaces if a.meta.get("kind") == "atz")
 
     @property
+    def circuit_airspaces(self) -> list:
+        """What the maps draw of this layer: the circuits. Aerodrome zones on the maps are
+        openAIP's (`openaip.py`); ours stay in the OpenAir download for XCTrack."""
+        return [a for a in self.airspaces if a.meta.get("kind") == "circuit"]
+
+    @property
     def circuit_count(self) -> int:
         return sum(1 for a in self.airspaces if a.meta.get("kind") == "circuit")
 

@@ -314,7 +314,7 @@ SCRIPT = r"""
          noAirspace ?
           '<div class="view3d-seg view3d-airspace" role="group" aria-label="Airspace">' +
           '<button type="button" data-m3="airspace" aria-pressed="false" disabled' +
-          ' title="No airspace data under this flight — the layer covers Czechia only" aria-label="No airspace data under this flight — the layer covers Czechia only">airspace</button></div>' : '') +
+          ' title="No airspace data under this flight — the layers cover Europe" aria-label="No airspace data under this flight — the layers cover Europe">airspace</button></div>' : '') +
         '<div class="view3d-seg view3d-zoom" role="group" aria-label="Zoom">' +
           '<button type="button" data-m3="zoom-out" title="Zoom out" aria-label="Zoom out">&minus;</button>' +
           '<button type="button" data-m3="zoom-in" title="Zoom in" aria-label="Zoom in">+</button></div>' +

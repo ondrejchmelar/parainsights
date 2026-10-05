@@ -140,13 +140,16 @@ class TestView3dPayload:
         # Mostly one or two characters a step at 1 Hz, which is the whole saving.
         assert max(abs(v) for v in track["lon"][1:]) < 100
 
-    def test_the_airspace_switch_is_disabled_where_there_is_none(self, ramp, tmp_path):
-        """A page with airspace offers the switch on every flight; under a flight with
-        none it is there, disabled, and says why — a missing button explains nothing."""
-        out = self._scene(ramp, tmp_path, {"airspaceChecked": True})
+    def test_the_airspace_switch_waits_for_the_layers(self, ramp, tmp_path):
+        """A page with airspace offers the switch on every flight, disabled until the map
+        has loaded the layers under its ground (`loadAirspace`), which then enables it or
+        says why not. The rings are not in the scene: a monthly refresh reaches every
+        flight without a rebuild."""
+        out = self._scene(ramp, tmp_path, {"airspaceRemote": "airspace/layers/"})
+        assert out.scene["airspaceRemote"] == "airspace/layers/"
         assert out.scene["airspaceToggle"] is True and out.scene["airspaces"] == []
         assert 'data-view3d-act="airspace-toggle" aria-pressed="false" disabled' in out.panel
-        assert "Czechia only" in out.panel
+        assert "Loading the airspace" in out.panel
         plain = self._scene(ramp, tmp_path)
         assert "airspace-toggle" not in plain.panel, "no airspace on the page, no switch"
 

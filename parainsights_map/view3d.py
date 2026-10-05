@@ -576,18 +576,98 @@ function readScene(node) {
 // `initView3d` for a scene that may still have to fetch its terrain. Resolves with the
 // handle, or with null where `initView3d` would have returned null; rejects only when the
 // terrain could not be fetched at all, which the caller has to say something about.
+// The airspace under a flight's ground, from the layer files `airspaces/openaip.py` writes
+// beside the Planner: the index once per page, then only the files whose box reaches this
+// one, each fetched and decoded once however many flights share it. Never rejects — a
+// map without its airspace is still a map — and fills `scene.airspaces` in place, before
+// the views are built from the scene. Then the switch: enabled, or disabled saying why.
+var airspaceFiles = {};
+function airspaceJson(url) {
+  if (!airspaceFiles[url]) {
+    airspaceFiles[url] = fetch(url).then(function (response) {
+      if (!response.ok) throw new Error(response.status + ' ' + url);
+      return response.json();
+    });
+    airspaceFiles[url].catch(function () { delete airspaceFiles[url]; });
+  }
+  return airspaceFiles[url];
+}
+function loadAirspace(root, scene) {
+  var href = scene.airspaceRemote, dem = scene.terrain;
+  if (!href || !dem || typeof fetch !== 'function') return Promise.resolve();
+  function overlaps(b) {
+    return b && !(b[1] < dem.west || b[0] > dem.east || b[3] < dem.south || b[2] > dem.north);
+  }
+  function decode(ring) {
+    if (!ring.enc) return ring;
+    var lon = [], lat = [], x = 0, y = 0;
+    for (var i = 0; i < ring.lon.length; i++) {
+      x += ring.lon[i]; y += ring.lat[i];
+      lon.push(x / ring.enc); lat.push(y / ring.enc);
+    }
+    var out = {};
+    Object.keys(ring).forEach(function (k) { if (k !== 'enc') out[k] = ring[k]; });
+    out.lon = lon; out.lat = lat;
+    return out;
+  }
+  var credits = [];
+  var found = airspaceJson(href + 'index.json').then(function (index) {
+    scene.airspaceColours = index.colours || {};
+    var names = Object.keys(index.files || {}).filter(function (name) {
+      return overlaps(index.files[name].bbox);
+    });
+    return Promise.all(names.map(function (name) {
+      return airspaceJson(href + name).then(function (file) {
+        if (!file.decoded) file.decoded = (file.airspaces || []).map(decode);
+        var near = file.decoded.filter(function (ring) {
+          var w = Math.min.apply(null, ring.lon), e = Math.max.apply(null, ring.lon);
+          var s = Math.min.apply(null, ring.lat), n = Math.max.apply(null, ring.lat);
+          return !(e < dem.west || w > dem.east || n < dem.south || s > dem.north);
+        });
+        if (near.length && index.files[name].credit && credits.indexOf(index.files[name].credit) < 0) {
+          credits.push(index.files[name].credit);
+        }
+        return near;
+      }, function () { return []; });
+    }));
+  }).then(function (parts) {
+    // Back to front across files as within one: the biggest first, so the smallest thing
+    // under the pointer is the one hovered (`airspaces.scene.rings`).
+    function size(ring) {
+      return (Math.max.apply(null, ring.lon) - Math.min.apply(null, ring.lon)) *
+             (Math.max.apply(null, ring.lat) - Math.min.apply(null, ring.lat));
+    }
+    scene.airspaces = [].concat.apply([], parts).sort(function (a, b) { return size(b) - size(a); });
+    scene.airspaceCredit = credits.join(' · ');
+  }, function () { scene.airspaces = []; scene.airspaceFailed = true; });
+  return found.then(function () {
+    var button = root.querySelector('[data-view3d-act="airspace-toggle"]');
+    if (!button) return;
+    var any = scene.airspaces.length > 0;
+    var why = any ? 'Draw the airspace over this flight' + (scene.airspaceCredit ? ' (' + scene.airspaceCredit + ')' : '')
+      : scene.airspaceFailed ? 'The airspace could not be loaded'
+      : 'No airspace data under this flight — the layers cover Europe';
+    button.disabled = !any;
+    button.title = why;
+    button.setAttribute('aria-label', why);
+  });
+}
+
 function initView3dWhenReady(root, cursorTrack) {
   var payload = root.querySelector('.view3d-data');
   if (!payload) return Promise.resolve(null);
   var scene = readScene(payload);
   var dem = scene.terrain;
-  if (!dem || !dem.remote || dem.z) return Promise.resolve(initView3d(root, cursorTrack, scene));
+  var airspace = loadAirspace(root, scene);
+  if (!dem || !dem.remote || dem.z) {
+    return airspace.then(function () { return initView3d(root, cursorTrack, scene); });
+  }
   var box = root.querySelector('.view3d-loading');
   if (box) {
     box.querySelector('.view3d-loading-text').textContent = 'Loading terrain…';
     box.hidden = false;
   }
-  return loadTerrain(dem).then(function () {
+  return Promise.all([loadTerrain(dem), airspace]).then(function () {
     if (box) box.hidden = true;
     return initView3d(root, cursorTrack, scene);
   }, function (error) {

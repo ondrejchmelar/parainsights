@@ -1,20 +1,15 @@
 """Where the data comes from, and the cache that keeps it off the network twice.
 
-Four sources, all public and all free to use:
+Three sources for this repository's own layer (the aerodrome zones and circuits), all
+public and all free to use. The base airspace is openAIP's, fetched monthly by
+`openaip.py` and read from the committed layer files; it replaced Aeroklub ČR's `CZ_low`
+OpenAir file in October 2026, when the maps went from Czechia to Europe.
 
 `RLP_ATZ`
     The ATZ themselves, as UAS geographical zones. This is the only machine-readable
     publication of Czech ATZ geometry there is; the AIP gives them as prose. The path
     carries an AIRAC date, so `atz_url` finds the current one by walking back from
     today over the publication dates.
-
-`AEROKLUB`
-    `CZ_low` in OpenAir, by Jan Zahradka on behalf of Aeroklub ČR. This is the base
-    airspace and it is the same data airspace.xcontest.org carries for Czechia —
-    xcontest's own about page says it builds from soaringweb.org, and soaringweb's
-    Czech page is this file, republished. Going to the origin instead of the mirror
-    gets a file that is current rather than one AIRAC cycle stale, and xcontest's
-    export endpoint needs an account anyway.
 
 `VFR_MANUAL`
     Per-aerodrome text pages: reference point, elevation, circuit altitude, and the
@@ -30,7 +25,6 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-import re
 import urllib.request
 from pathlib import Path
 
@@ -51,7 +45,6 @@ RLP_ATZ = "https://aim.rlp.cz/data/uas/{date}/actual/LKR315{pub}.json"
 # which is why they are opt-in.
 PUBLICATIONS = ("A", "B", "C", "D")
 DEFAULT_PUBLICATIONS = ("A", "B")
-AEROKLUB_DIR = "https://airspace.aeroklub.cz/docs/public/"
 VFR_MANUAL = "https://aim.rlp.cz/vfrmanual/actual/{icao}_text_en.html"
 OURAIRPORTS = "https://davidmegginson.github.io/ourairports-data/{table}.csv"
 
@@ -109,26 +102,6 @@ def atz(*, refresh: bool = False, on: dt.date | None = None, pub: str = "A") -> 
         if data:
             return json.loads(data)
     raise RuntimeError(f"no LKR315{pub} publication in the last 14 AIRAC cycles")
-
-
-def base_airspace(*, refresh: bool = False, variant: str = "CZ_low") -> tuple[str, str]:
-    """Aeroklub's `CZ_low` OpenAir file, as (text, version).
-
-    The version in the filename is Aeroklub's own effective date and does not follow
-    AIRAC, so it is read from the directory listing rather than computed. `CZ_low` is
-    the one to use — below FL95, which is where a paraglider is.
-    """
-    listing = fetch(
-        AEROKLUB_DIR, cache_key="aeroklub-index.html", refresh=refresh
-    ).decode("utf-8", "replace")
-    versions = sorted(set(re.findall(rf"{variant}_(\d\d-\d\d-\d\d)\.txt", listing)))
-    if not versions:
-        raise RuntimeError(f"no {variant} file offered at {AEROKLUB_DIR}")
-    version = versions[-1]
-    name = f"{variant}_{version}.txt"
-    return fetch(
-        AEROKLUB_DIR + name, cache_key=name, refresh=refresh
-    ).decode("utf-8", "replace"), version
 
 
 def vfr_page(icao: str, *, refresh: bool = False) -> str | None:

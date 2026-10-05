@@ -61,8 +61,9 @@
   //
   // inputs:  { terrain, sceneTerrain, meteo (parsed), certificationTable, now }
   // options: { uid, hidden, label ('PILOT|SITE|GLIDER', empty fields keep the file's),
-  //            airspace, airspaceChecked (the page has airspace, so a flight with none
-  //            under it shows the switch disabled), plan ({ payload, source }), format }
+  //            airspaceRemote (where the airspace layer files are, relative to the page:
+  //            the map loads those under its ground when opened), plan ({ payload,
+  //            source }), format }
   var SHAPE_NAMES = { fai: 'FAI triangle', flat: 'flat triangle', open: 'open distance' };
   function annotate(summary, label) {
     if (!label) return;
@@ -100,7 +101,7 @@
       meteo: inputs.meteo || null, route: route, terrain: inputs.terrain || null,
       sceneTerrain: inputs.sceneTerrain || null, uid: options.uid, hidden: !!options.hidden,
       flightPlan: done.plan, certificationTable: inputs.certificationTable || null,
-      now: inputs.now, airspace: options.airspace || null, airspaceChecked: !!options.airspaceChecked
+      now: inputs.now, airspaceRemote: options.airspaceRemote || null
     });
     var format = (options.format || '').toUpperCase();
     return {
@@ -113,35 +114,13 @@
     };
   }
 
-  // The airspace over this flight's ground, from the rings the page already carries for
-  // its Planner view — the same rings `airspaces.scene.layer` gives a bundled flight, cut
-  // to the same box (bounding box against bounding box, so a TMA containing the whole
-  // flight counts). Nothing when the page has no airspace or none reaches the box, and
-  // then the 3D map has no airspace button, as for a flight in Pakistan.
-  var airspaceRings = null;
-  function pageAirspace() {
-    if (airspaceRings !== null) return airspaceRings;
-    airspaceRings = false;
-    if (typeof document === 'undefined') return airspaceRings;
-    var data = document.querySelector('.airspace-article .view3d-data');
-    try {
-      var scene = data && (typeof readScene === 'function' ? readScene(data) : JSON.parse(data.textContent));
-      if (scene && scene.airspaces && scene.airspaces.length) {
-        airspaceRings = { rings: scene.airspaces, colours: scene.airspaceColours || {} };
-      }
-    } catch (error) { /* no airspace, rather than no upload */ }
-    return airspaceRings;
-  }
-  function airspaceNear(grid) {
-    var held = pageAirspace();
-    if (!held || !grid) return null;
-    var found = held.rings.filter(function (ring) {
-      if (!ring.lon || ring.lon.length < 3) return false;
-      var west = Math.min.apply(null, ring.lon), east = Math.max.apply(null, ring.lon);
-      var south = Math.min.apply(null, ring.lat), north = Math.max.apply(null, ring.lat);
-      return !(east < grid.west || west > grid.east || north < grid.south || south > grid.north);
-    });
-    return found.length ? { airspaces: found, airspaceColours: held.colours } : null;
+  // Where the airspace layer files are (`airspaces/openaip.py`): the report names them in
+  // a meta tag when it was built with airspace. An uploaded flight's map loads the ones
+  // under its ground when opened, as a bundled flight's does.
+  function airspaceLayers() {
+    if (typeof document === 'undefined') return null;
+    var meta = document.querySelector('meta[name="airspace-layers"]');
+    return meta ? meta.getAttribute('content') : null;
   }
 
   // Let the page paint before a long synchronous stretch, so a stage the caller has just
@@ -177,8 +156,8 @@
       var made = compose(flight, name, {
         terrain: inputs[0], sceneTerrain: inputs[0], meteo: inputs[1],
         certificationTable: inputs[2], now: now
-      }, { uid: 'up' + (++counter), hidden: true, airspace: inputs[0] ? airspaceNear(inputs[0]) : null,
-        airspaceChecked: !!pageAirspace(), format: /\.(kml|kmz)$/i.test(name || '') ? name.split('.').pop() : '' }, done);
+      }, { uid: 'up' + (++counter), hidden: true, airspaceRemote: inputs[0] ? airspaceLayers() : null,
+        format: /\.(kml|kmz)$/i.test(name || '') ? name.split('.').pop() : '' }, done);
       var holder = document.createElement('div');
       holder.innerHTML = made.html;
       return {

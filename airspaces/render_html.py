@@ -448,6 +448,9 @@ def classify(airspace) -> str:
     kind = airspace.meta.get("kind")
     if kind in ("atz", "circuit"):
         return kind
+    # openAIP's type says it outright (`openaip.TYPES`), where OpenAir has to be read.
+    if airspace.meta.get("group"):
+        return airspace.meta["group"]
     name = (airspace.name or "").upper()
     cls = (airspace.airspace_class or "").upper()
     if cls in ("R", "P", "D") or "DANGER" in name:
@@ -696,10 +699,8 @@ def sources_table(overlay, base_version: str, shift: float) -> str:
     colour = dict((key, hue) for key, _, hue in CLASSES)
     clipped = len(overlay.zones) - overlay.circle_count
     stamp = overlay.atz_date.replace("-", "_")
-    aeroklub = _link(
-        f"{sources.AEROKLUB_DIR}CZ_low_{base_version}.txt",
-        "Aeroklub ČR — CZ_low, Jan Zahradka",
-    )
+    # openAIP, refreshed monthly (`openaip.py`); CC BY-NC 4.0, which asks for this credit.
+    base_source = _link("https://www.openaip.net", "openAIP") + " — CC BY-NC 4.0"
     zone_links = ", ".join(
         _link(sources.RLP_ATZ.format(date=stamp, pub=pub), f"LKR315{pub}")
         for pub in sorted(overlay.by_publication)
@@ -707,16 +708,18 @@ def sources_table(overlay, base_version: str, shift: float) -> str:
     rows = [
         (["base", "restricted"],
          "Controlled, restricted, danger, prohibited",
-         aeroklub,
+         base_source,
          _escape(base_version)),
         (["gliding"],
          "Gliding areas, dropzones, PGZ",
-         aeroklub,
+         base_source,
          _escape(base_version)),
         (["atz"],
-         _atz_row(overlay, clipped, shift),
-         f"{_link('https://aim.rlp.cz/', 'ŘLP ČR')} — UAS zones, {zone_links}",
-         _escape(overlay.atz_date)),
+         "Aerodrome zones on the map — openAIP's. The download's are this site's own: "
+         + _atz_row(overlay, clipped, shift)[len("Aerodrome zones — "):],
+         f"map: {base_source}; download: {_link('https://aim.rlp.cz/', 'ŘLP ČR')} — "
+         f"UAS zones, {zone_links}",
+         f"{_escape(base_version)}; {_escape(overlay.atz_date)}"),
         (["circuit"],
          "Traffic circuits (okruhy) — <strong>drawn by this tool, not a published "
          "boundary.</strong> Shape scaled off the AIP's VOC charts (±10%); altitude "
@@ -927,12 +930,12 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
     `openair_href` is where the download lives *relative to the page*, which is not the
     same as its filename once this article is embedded in a report one directory up.
     """
-    airspaces = list(base) + list(overlay.airspaces)
+    airspaces = list(base) + overlay.circuit_airspaces
     rings = [a.points for a in airspaces if a.points] + [basemap.BORDER]
     project = Projection(_bounds(rings))
     east, north, samples = overlay.offset
     shift = math.hypot(east, north)
-    top = int(math.ceil(max(floor_metres(a) for a in airspaces) / 50.0) * 50)
+    top = int(math.ceil(max((floor_metres(a) for a in airspaces), default=0) / 50.0) * 50)
 
     # Only where there is a 3D view to say it about. The flat fallback draws outlines,
     # and a page that described boxes nobody could see would be worse than silent.
@@ -990,10 +993,10 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
 
     return f"""<article class="flight airspace-article" id="{uid}-article"{plan_attr}>
   <h1>Planner</h1>
-  <p class="lede">Everything the published airspace carries, plus the airfields it leaves
-  out: a zone around each of the {overlay.atz_count} public aerodromes, and the traffic
-  circuit at {overlay.circuit_fields} fields and ultralight strips. A paraglider may fly
-  inside the zone but must stay out of the circuit, and no instrument draws either.
+  <p class="lede">Everything openAIP carries over Czechia, plus what no published source
+  draws: the traffic circuit at {overlay.circuit_fields} fields and ultralight strips. A
+  paraglider may fly inside an aerodrome zone but must stay out of its circuit, and no
+  instrument draws the circuit.
   Scroll to zoom, drag to pan, hover for the name and limits.{boxes}{plan_lede}</p>
   {controls(top, flat=scene is None)}
   {plan_bar}
