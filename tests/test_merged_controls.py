@@ -461,8 +461,13 @@ def test_follow_keeps_every_compared_glider_in_the_picture(browser):
       }}
       return [at(tr.lon[i], tr.lat[i], tr.alt[i]), at(__beside.lon[i], __beside.lat[i], __beside.alt[i])]
         .map(p => [p.x, p.y]); }})()""")
+    # Not just on the canvas: above the replay bar, the buttons and the legend over its
+    # bottom, which on a phone cover a third of the map.
+    clear = browser.js(f"""(() => {{ var top = ({MAP}).getContainer().getBoundingClientRect().top;
+      return Math.min.apply(null, ['.m3-bottom'].map(s => document.querySelector('.merged-view ' + s))
+        .filter(el => el && !el.hidden).map(el => el.getBoundingClientRect().top - top)); }})()""")
     for x, y in spots:
-        assert 0 < x < width and 0 < y < height, (spots, width, height)
+        assert 0 < x < width and 0 < y < clear, (spots, width, clear)
     browser.js(f"""({ENTRY}).setFollow(false); ({ENTRY}).setOthers(null);
       var tr = __handle.built.scene.track; __altBefore.forEach((a, k) => tr.alt[k] = a); 1""")
 

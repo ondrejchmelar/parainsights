@@ -72,11 +72,12 @@ STYLE = """
 @media (pointer: coarse) {
   .merged-view .m3-range input::-webkit-slider-thumb { width: 22px; height: 22px; margin-top: 0; }
 }
-.merged-view .m3-measure { position: absolute; left: 12px; top: 40px; z-index: 3; margin: 0;
+.merged-view .m3-measure { position: absolute; left: 50%; transform: translateX(-50%); top: 12px;
+  z-index: 3; margin: 0; white-space: nowrap;
   padding: 4px 9px; font-size: 12px; color: var(--ink); background: var(--panel);
   border: 1px solid var(--rule); border-radius: 2px; font-variant-numeric: tabular-nums; }
 .merged-view .m3-measure[hidden] { display: none; }
-.merged-view .m3-others { position: absolute; left: 12px; bottom: 96px; z-index: 3; margin: 0;
+.merged-view .m3-others { position: absolute; left: 12px; top: 44px; z-index: 3; margin: 0;
   padding: 5px 9px; list-style: none; font-size: 12px; line-height: 1.6; color: var(--ink);
   background: var(--panel); border: 1px solid var(--rule); border-radius: 2px; }
 .merged-view .m3-others[hidden] { display: none; }
@@ -1275,7 +1276,7 @@ SCRIPT = r"""
         }
         return { lon: lon / n, lat: lat / n, alt: alt / n };
       }
-      var following = false, followFrame = null, followLast = 0;
+      var following = false, followFrame = null, followLast = 0, fitBias = 0;
       // Where the reader has turned the view off the direction of flight, with the arrows.
       var yawOffset = 0;
       var cam = null;          // { bearing, zoom, pitch } the camera is easing towards
@@ -1311,11 +1312,16 @@ SCRIPT = r"""
         var bearing = map.getBearing(), zoom = map.getZoom(), pitch = map.getPitch();
         var p = steadyAt(cutoff);
         var H = map.getContainer().clientHeight || 500, W = map.getContainer().clientWidth || 800;
+        // Where the gliders go: 60% of the way down the part of the map nothing covers. The
+        // legend, the replay bar and the buttons take the bottom third of a phone's map, and
+        // a fixed "a fifth below the middle" put the gliders right under them.
+        var free = freeHeight(H);
+        var aimY = free * 0.6, lift = aimY - H / 2;
         // Comparing: every glider in the picture. The camera looks at the middle of the
         // group (each one's steady position at the shared "now") and pulls back just far
         // enough to hold them all with a margin — never closer than the reader's own zoom.
         // Across the view a metre is a metre; along it, the tilt foreshortens it.
-        var fitZoom = Infinity, group = [p];
+        var fitZoom = Infinity, group = [p], fitting = false;
         others.forEach(function (o) {
           if (o.far) return;
           var at = cutoff - o.offset;
@@ -1340,7 +1346,7 @@ SCRIPT = r"""
           var Cpx = map.transform.cameraToCenterDistance || (H / 2 / Math.tan(36.87 / 2 * Math.PI / 180));
           // Measured from the point the camera looks at, which is the look-ahead's distance
           // beyond the group's middle — itself proportional to the answer, so a few rounds.
-          var room = H / 2 * 0.8, liftPx = H * 0.2, need = across / (W / 2 * 0.8);
+          var room = (free - aimY) * 0.8, liftPx = lift, need = across / (W / 2 * 0.8);
           for (var round = 0; round < 4; round++) {
             var aheadM = liftPx * Cpx * need / (Cpx * Math.cos(tiltNow) + liftPx * Math.sin(tiltNow));
             var near = along + aheadM;
@@ -1348,6 +1354,20 @@ SCRIPT = r"""
                             near * (Math.sin(tiltNow) / Cpx + Math.cos(tiltNow) / room));
           }
           if (need > 0) fitZoom = Math.log2(40075016.686 * Math.cos(c.lat * Math.PI / 180) / (512 * need));
+          // And checked against what is drawn: the model is close, not exact, so each frame
+          // the gliders are projected and the fit eases out while one is outside the free
+          // area, and back in while all have room to spare.
+          fitZoom += fitBias;
+          var worst = 0;
+          group.forEach(function (q) {
+            try {
+              var at = map.transform.coordinatePoint(
+                maplibregl.MercatorCoordinate.fromLngLat([q.lon, q.lat]), q.alt * vertical);
+              worst = Math.max(worst, at.y / free, Math.abs(at.x - W / 2) / (W / 2));
+            } catch (error) { /* no projection yet */ }
+          });
+          if (worst > 0.92 && fitBias > -3) { fitBias -= 0.04; fitting = true; }
+          else if (worst < 0.75 && fitBias < 0) { fitBias = Math.min(fitBias + 0.01, 0); fitting = true; }
           p = c;
         }
         var dTurn = turn(bearing, target), dZoom = Math.min(cam.zoom, fitZoom) - zoom, dPitch = cam.pitch - pitch;
@@ -1372,7 +1392,6 @@ SCRIPT = r"""
         // t the tilt), and solving that for `lift` gives the distance. Not padding:
         // MapLibre puts the sky by the unpadded horizon, and with padding a band between
         // the sky and the far terrain was drawn as nothing at all.
-        var lift = H * 0.2;
         if (map.terrain) {
           map._elevationFreeze = true;
           map.transform.elevation = p.alt * vertical;
@@ -1385,7 +1404,7 @@ SCRIPT = r"""
         map.jumpTo({ center: [p.lon + ahead * Math.sin(heading) / (111320 * Math.cos(p.lat * Math.PI / 180)),
                               p.lat + ahead * Math.cos(heading) / 111320],
                      bearing: bearing, zoom: zoom, pitch: pitch });
-        if (playing || Math.abs(dTurn) > 0.05 || Math.abs(dZoom) > 0.01 || Math.abs(dPitch) > 0.05) {
+        if (playing || fitting || Math.abs(dTurn) > 0.05 || Math.abs(dZoom) > 0.01 || Math.abs(dPitch) > 0.05) {
           kickFollow();
         } else followLast = 0;
       }
@@ -1414,6 +1433,18 @@ SCRIPT = r"""
         map._elevationFreeze = false;
         map.triggerRepaint();
       }
+      // How far down the map is free of the controls along its bottom (`.m3-bottom`: the
+      // replay bar and the buttons), in the map's own pixels. The legend of compared
+      // flights sits top left, out of their way; at the bottom it collided with the bar.
+      function freeHeight(H) {
+        var top = map.getContainer().getBoundingClientRect().top, bottom = H;
+        [view.querySelector('.m3-bottom')].forEach(function (el) {
+          if (!el || el.hidden) return;
+          var r = el.getBoundingClientRect();
+          if (r.height) bottom = Math.min(bottom, r.top - top);
+        });
+        return Math.max(bottom, H * 0.4);
+      }
       function setFollow(on) {
         if (!hasTime || on === following) return;
         following = on;
@@ -1426,6 +1457,7 @@ SCRIPT = r"""
         // glider and a view along the ground; a reader already closer keeps their zoom.
         if (on) {
           yawOffset = 0;
+          fitBias = 0;
           cam = { zoom: Math.max(map.getZoom(), 12.5), pitch: Math.max(map.getPitch(), 60) };
           kickFollow();
         }

@@ -604,7 +604,11 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   the whole group** at the shared "now": it looks at the middle of the gliders' steady
   positions and pulls back just enough to hold them, never closer than the reader's zoom —
   a pinhole fit, because a glider nearer the camera is magnified and the look-ahead puts
-  the middle below the screen's. Flown the same day (starts within 12 h,
+  the middle below the screen's, then checked each frame against where the gliders are
+  drawn (`fitBias`, the model being close rather than exact). **The gliders are placed in
+  the part of the map nothing covers** (`freeHeight`: down to the replay bar, the buttons
+  or the legend), 60% of the way down it: on a phone those cover the bottom third, and a
+  fixed "a fifth below the middle" put the gliders under them. Flown the same day (starts within 12 h,
   `scene.start` is the first fix in UTC seconds) the replay runs on one clock — a dot
   where each glider was at the same moment, its trail inside the same window; otherwise
   by time since launch, and the legend says so. A flight more than 150 km from this map's
