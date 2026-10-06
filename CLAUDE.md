@@ -613,8 +613,13 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   `spanEnd`), and follow frames whichever gliders are in the air, this one only while it
   is; the figures stay relative to the selected flight. Compared tracks are drawn flat
   like the own one — billboarded they faced the camera and read thicker. The legend sits
-  top left (this flight bold; how each is aligned in time is in its tooltip), MapLibre's (i) bottom left
-  with the bar starting right of it.
+  top left (this flight bold; how each is aligned in time is in its tooltip), MapLibre's (i)
+  beside it in the same corner row (at the bottom left it never lined up with the bar).
+  Every flight is drawn alike in the replay: its track, its climbs and a dot at "now" —
+  this one too — and no white leading stretch while comparing. The relief view's shading
+  comes from DEM level 12 at most (`shade` source): at 15 the whole-metre steps terraced
+  gentle slopes into bands. The background under the imagery is dark green, under the bare
+  relief the light one the shading was made for.
   **The side view is part of the map** (October 2026): the report wraps the 3D panel and
   the side view in one block (`.flight-map`), the chart right under the map, full width,
   no caption; its axis buttons and legend sit below the block. The merged map's full

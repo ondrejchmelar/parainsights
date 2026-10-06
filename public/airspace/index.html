@@ -395,13 +395,15 @@ canvas.view3d.is-over-rose { cursor: pointer; }
 .merged-view .m3-now b { font-weight: 600; }
 .merged-view .m3-rose p { margin: 4px 0 0; font-size: 11px; line-height: 1.3; color: #fff;
   text-shadow: 0 0 3px rgba(12,14,18,0.95), 0 0 2px rgba(12,14,18,0.95); }
-.merged-view .m3-bottom { position: absolute; left: 44px; right: 10px; bottom: 10px; z-index: 3;
+.merged-view .m3-bottom { position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 3;
   display: flex; flex-wrap: wrap; align-items: center; gap: 5px; pointer-events: none; }
 .merged-view .m3-bottom > * { pointer-events: auto; }
 .merged-view .m3-bottom .view3d-controls { position: static; margin-left: auto; }
 .merged-view .m3-replay { display: flex; gap: 5px; align-items: center; }
 .merged-view .m3-replay[hidden], .merged-view .m3-time[hidden],
 .merged-view .view3d-controls[hidden] { display: none; }
+.merged-view .m3-bottom button, .merged-view .m3-rate { height: 30px; box-sizing: border-box; }
+.merged-view .m3-icon { display: inline-flex; align-items: center; justify-content: center; }
 .merged-view .m3-replay button { font: inherit; font-size: 11px; letter-spacing: 0.06em;
   text-transform: uppercase; padding: 6px 9px; cursor: pointer; color: var(--ink-2);
   background: var(--panel); border: 1px solid var(--rule); border-radius: 2px; }
@@ -447,8 +449,8 @@ canvas.view3d.is-over-rose { cursor: pointer; }
   padding: 4px 9px; font-size: 12px; color: var(--ink); background: var(--panel);
   border: 1px solid var(--rule); border-radius: 2px; font-variant-numeric: tabular-nums; }
 .merged-view .m3-measure[hidden] { display: none; }
-.merged-view .m3-others { position: absolute; left: 10px; top: 10px; z-index: 3; margin: 0;
-  max-width: calc(100% - 10px - 120px);
+.merged-view .m3-others { float: left; margin: 10px 0 0 10px; pointer-events: auto;
+  max-width: calc(100vw - 200px);
   padding: 3px 8px; list-style: none; font-size: 11.5px; line-height: 1.5; color: var(--ink);
   background: var(--panel); border: 1px solid var(--rule); border-radius: 2px; }
 .merged-view .m3-others[hidden] { display: none; }
@@ -459,10 +461,13 @@ canvas.view3d.is-over-rose { cursor: pointer; }
 .merged-view .m3-others .is-far { color: var(--ink-3); }
 .merged-view .m3-status { position: absolute; left: 12px; top: 34px; z-index: 3; margin: 0;
   font-size: 12px; color: var(--ink-2); }
-/* MapLibre's own credits, the openable kind: an (i) at the bottom left that opens to name
-   every source on screen. Bottom left, the bar starting right of it: the rose holds the
-   top right and the legend of compared flights the top left. */
-.merged-view .maplibregl-ctrl-bottom-left { z-index: 4; }
+/* MapLibre's own credits, the openable kind: an (i) at the top left that opens to name
+   every source on screen, after the legend of compared flights in the same row. At the
+   bottom left it never lined up with the bar beside it. */
+.merged-view .maplibregl-ctrl-top-left { z-index: 4; }
+/* MapLibre stacks each corner control on a line of its own (`clear: both`); the (i) sits
+   beside the legend instead. */
+.merged-view .maplibregl-ctrl-top-left .maplibregl-ctrl { clear: none; }
 .merged-view .maplibregl-ctrl-attrib { font-size: 11px; }
 /* Last, so it wins over the rules above it at equal specificity. */
 /* A phone: the bar stays one row; where it and the replay buttons do not fit side by
@@ -5668,6 +5673,9 @@ window.__view3dBackend = function (host) {
       // the map with no imagery and no terrain: MapLibre does not survive a style change
       // arriving while the last one is still loading. A hidden layer fetches no tiles,
       // so carrying all of them costs nothing until one is shown.
+      // Under the imagery the dark green that hides a missing tile; under the bare relief,
+      // where the background *is* the ground, the light one the shading was made for.
+      function groundColour(key) { return key === 'off' ? '#d6d2c4' : '#3d4436'; }
       function style(key) {
         var sources = {
           // Declared at half their size so MapLibre asks one zoom deeper than it would:
@@ -5677,13 +5685,16 @@ window.__view3dBackend = function (host) {
                  encoding: 'terrarium', attribution: 'Terrain: AWS Open Data Terrain Tiles' },
           // Its own source for the shading: MapLibre renders both worse when the hillshade
           // and the 3D terrain share one.
-          shade: { type: 'raster-dem', tiles: [window.__mapTerrarium], tileSize: 128, maxzoom: 15,
+          // The shading from level 12 at most, smoothed up from there: at 15 the DEM's
+          // whole-metre steps terraced every gentle slope into bands, plain to see in the
+          // relief view.
+          shade: { type: 'raster-dem', tiles: [window.__mapTerrarium], tileSize: 128, maxzoom: 12,
                    encoding: 'terrarium' }
         };
         // Under the imagery: what shows where a tile has not arrived yet. A pale beige
         // here flashed against the dark ground every time the follow camera moved into
         // new tiles; a dark muted green, near the photograph's own average, barely shows.
-        var below = [{ id: 'bg', type: 'background', paint: { 'background-color': '#3d4436' } }];
+        var below = [{ id: 'bg', type: 'background', paint: { 'background-color': groundColour(key) } }];
         var above = [];
         styles.forEach(function (name) {
           var source = tiles[name];
@@ -5811,9 +5822,13 @@ window.__view3dBackend = function (host) {
         if (vertical !== 1) map.setTerrain({ source: 'dem', exaggeration: vertical });
       });
       // Credits from the sources themselves, so switching the basemap changes them.
-      // Bottom left, where the bar leaves room (the pilot's call): the top left holds the
-      // legend of compared flights, and the bar starts to the right of it (`.m3-bottom`).
-      map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
+      // Top left, after the legend of compared flights, in one row: at the bottom left the
+      // (i) never lined up with the bar beside it.
+      map.addControl(new maplibregl.AttributionControl({ compact: true }), 'top-left');
+      (function () {
+        var corner = view.querySelector('.maplibregl-ctrl-top-left');
+        if (corner) corner.insertBefore(view.querySelector('.m3-others'), corner.firstChild);
+      })();
       // Start closed: MapLibre opens a compact control on a wide map, and the credits then
       // sit over the flight until someone closes them.
       // MapLibre opens it by itself the moment the first credit text arrives from a source,
@@ -6023,7 +6038,16 @@ window.__view3dBackend = function (host) {
             var far = box.west === undefined ? false
               : (e < box.west - mx || w > box.east + mx || n2 < box.south - my || s2 > box.north + my);
             var sameDay = scene.start && o.start && Math.abs(o.start - scene.start) < 12 * 3600;
-            return { name: o.name, colour: o.colour, lon: tr2.lon, lat: tr2.lat, alt: tr2.alt,
+            // Each climb at the time of the fix nearest it, so the replay can window it.
+            var climbs = (o.climbs || []).map(function (c) {
+              var best = 0, bestD = Infinity;
+              for (var i = 0; i < tr2.lon.length; i++) {
+                var d = (tr2.lon[i] - c.lon) * (tr2.lon[i] - c.lon) + (tr2.lat[i] - c.lat) * (tr2.lat[i] - c.lat);
+                if (d < bestD) { bestD = d; best = i; }
+              }
+              return { lon: c.lon, lat: c.lat, alt: c.alt, t: tr2.t ? tr2.t[best] : best };
+            });
+            return { name: o.name, colour: o.colour, lon: tr2.lon, lat: tr2.lat, alt: tr2.alt, climbs: climbs,
                      t: tr2.t || tr2.lon.map(function (_, i) { return i; }), far: far,
                      offset: sameDay ? o.start - scene.start : 0, sameDay: !!sameDay };
           });
@@ -6164,7 +6188,9 @@ window.__view3dBackend = function (host) {
           updateTriggers: { getPath: vertical, getColor: ownColour }
         }));
         // While the replay runs, its leading edge: the last seven minutes in white.
-        if (hasTime && replay && !replay.hidden) out.push(new deck.TripsLayer({
+        // Not while comparing: each flight is its one colour there, and a white stretch on
+        // this one alone read as a different flight.
+        if (hasTime && replay && !replay.hidden && !ownColour) out.push(new deck.TripsLayer({
           id: 'replay', data: [{ path: tr.lon.map(function (lon, i) { return [lon, tr.lat[i], tr.alt[i]]; }),
                                  times: tr.t }],
           getPath: function (d) { return d.path.map(function (p) { return [p[0], p[1], z(p[2])]; }); },
@@ -6183,6 +6209,18 @@ window.__view3dBackend = function (host) {
           radiusUnits: 'pixels', getRadius: 4, billboard: true, updateTriggers: { getPosition: vertical },
           parameters: ON_TOP
         }));
+        // Where this glider is at the replay's "now", as each compared one is shown.
+        if (hasTime && replay && !replay.hidden && cutoff >= 0 && cutoff <= duration) {
+          var me = positionAt(cutoff);
+          out.push(new deck.ScatterplotLayer({
+            id: 'own-now', data: [[me.lon, me.lat, me.alt]],
+            getPosition: function (d) { return [d[0], d[1], z(d[2])]; },
+            getFillColor: ownColour ? rgb(ownColour, 255) : [255, 255, 255, 255],
+            getLineColor: ownColour ? [255, 255, 255, 255] : [20, 20, 20, 255],
+            stroked: true, lineWidthMinPixels: 2, radiusUnits: 'pixels', getRadius: 6,
+            billboard: true, parameters: ON_TOP, updateTriggers: { getPosition: vertical }
+          }));
+        }
         if (scene.landing && inWindow(duration)) out.push(new deck.ScatterplotLayer({
           id: 'landing', data: [scene.landing],
           getPosition: function (d) { return [d.lon, d.lat, z(d.alt)]; },
@@ -6244,6 +6282,17 @@ window.__view3dBackend = function (host) {
               }));
             }
           }
+          // Its climbs, in its colour, inside the same window as its track.
+          var shownClimbs = (o.climbs || []).filter(function (c) {
+            return !(hasTime && replay && !replay.hidden) || (c.t >= from - o.offset && c.t <= cutoff - o.offset);
+          });
+          if (shownClimbs.length) out.push(new deck.ScatterplotLayer({
+            id: 'other-climbs-' + k, data: shownClimbs,
+            getPosition: function (d) { return [d.lon, d.lat, z(d.alt)]; },
+            getFillColor: rgb(o.colour, 255), getLineColor: [255, 255, 255, 220], stroked: true,
+            lineWidthMinPixels: 1, radiusUnits: 'pixels', getRadius: 4, billboard: true,
+            parameters: ON_TOP, updateTriggers: { getPosition: vertical }
+          }));
           if (b - a < 1) return;
           out.push(new deck.PathLayer({
             id: 'other-' + k, data: [{ a: a, b: b }],
@@ -6967,6 +7016,7 @@ window.__view3dBackend = function (host) {
           map.setLayoutProperty(id, 'visibility', id === shadeFor(key) ? 'visible' : 'none');
         });
         map.setLayoutProperty('place-labels', 'visibility', labelled[key] ? 'visible' : 'none');
+        map.setPaintProperty('bg', 'background-color', groundColour(key));
       }
       function setVertical(v) {
         vertical = v;

@@ -1163,7 +1163,7 @@ SCRIPT = """
     if (node && typeof readScene === 'function') {
       try {
         var scene = readScene(node);
-        scenes[uid] = { track: scene.track, start: scene.start,
+        scenes[uid] = { track: scene.track, start: scene.start, climbs: scene.climbs || [],
                         name: article.getAttribute('data-compare-name') || uid };
       } catch (error) { /* a flight without a scene is compared by its figures only */ }
     }
@@ -1185,7 +1185,8 @@ SCRIPT = """
         return;
       }
       var scene = sceneOf(article);
-      if (scene) out.others.push({ name: scene.name, track: scene.track, start: scene.start, colour: colour });
+      if (scene) out.others.push({ name: scene.name, track: scene.track, start: scene.start,
+                                   climbs: scene.climbs, colour: colour });
     });
     return out;
   };
