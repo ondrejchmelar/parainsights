@@ -477,7 +477,8 @@ section { margin-top: 34px; }
 .tooltip {
   position: absolute;
   pointer-events: none;
-  z-index: 5;
+  /* Above the map block's own layers: in full screen the tooltip is moved into it. */
+  z-index: 70;
   background: var(--panel);
   border: 1px solid var(--rule-strong);
   border-radius: 3px;
@@ -1321,8 +1322,18 @@ function initFlight(root) {
     var tipBox = tip.getBoundingClientRect();
     var pageX = point.box.left + source.px[index] / point.vb.width * point.box.width;
     var pageY = point.box.top + source.py[index] / point.vb.height * point.box.height;
-    tip.style.left = Math.min(pageX + 14, window.innerWidth - tipBox.width - 10) + window.scrollX + 'px';
-    tip.style.top = (pageY - tipBox.height - 12) + window.scrollY + 'px';
+    // In full screen (or the in-page maximise) the map block is all there is on screen, and
+    // a tooltip left in the page under it is never seen: it moves into the block, which
+    // sits at the viewport's corner, so it is placed without the page's scroll.
+    var full = document.fullscreenElement && document.fullscreenElement.contains(root)
+      ? document.fullscreenElement : root.querySelector('.flight-map.is-maximised');
+    var into = full || document.body;
+    if (tip.parentNode !== into) {
+      into.appendChild(tip);
+      tipBox = tip.getBoundingClientRect();
+    }
+    tip.style.left = Math.min(pageX + 14, window.innerWidth - tipBox.width - 10) + (full ? 0 : window.scrollX) + 'px';
+    tip.style.top = (pageY - tipBox.height - 12) + (full ? 0 : window.scrollY) + 'px';
     highlight(data.segment[index]);
   }
 
