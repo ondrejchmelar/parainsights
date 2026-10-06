@@ -405,17 +405,22 @@
         fmt(tow.finish_altitude, 0) + ' m — starts with the flight, climbs steadily and was flown almost straight (' +
         (tow.swept_turns !== null ? fmt(tow.swept_turns, 1) + ' turns of heading' : 'nearly straight') + '). It is kept out of the thermal statistics and out of the wind estimate, where a straight climb would have measured the glider\'s own track rather than the air.</p>';
     }
-    var sideView = '\n    <div class="toggle" role="group" aria-label="Ground axis for the side view">\n' +
+    // The side view: the chart, then its axis buttons and legend under it. With a 3D map
+    // it sits in the map's own block (`.flight-map`), joined to it and going full screen
+    // with it, where the buttons and the legend are not shown.
+    var sideChart = '\n    <div class="panel hero side-view">\n' +
+      '      <div class="profile chart-host" data-chart="profile" data-mode="flown"\n           style="aspect-ratio:' + Ch.PROFILE.width + '/' + Ch.PROFILE.height + '">\n' +
+      '        <p class="chart-missing">The side view is drawn in this page, from the same\n          numbers the hover cursor reads. It needs JavaScript; everything above it does\n          not.</p>\n      </div>\n    </div>\n';
+    var sideControls = '    <div class="side-controls">\n' +
+      '    <div class="toggle" role="group" aria-label="Ground axis for the side view">\n' +
       '      <button type="button" class="toggle-button is-on" data-profile="flown" aria-pressed="true">\n        distance flown</button>\n' +
       '      <button type="button" class="toggle-button" data-profile="from_start" aria-pressed="false">\n        from launch</button>\n' +
       '      <button type="button" class="toggle-button" data-profile="time" aria-pressed="false">\n        time</button>\n    </div>\n' +
-      '    <div class="panel hero">\n      <p class="chart-title">Side view — height above the ground axis. Shading is the detected\n        phase; the trace itself is coloured by climb rate.</p>\n' +
-      '      <div class="profile chart-host" data-chart="profile" data-mode="flown"\n           style="aspect-ratio:' + Ch.PROFILE.width + '/' + Ch.PROFILE.height + '">\n' +
-      '        <p class="chart-missing">The side view is drawn in this page, from the same\n          numbers the hover cursor reads. It needs JavaScript; everything above it does\n          not.</p>\n      </div>\n    </div>\n' +
       '    <ul class="legend">\n      <li class="ramp">' + ramp + '</li>\n      <li>trace colour: sink &minus;4 m/s → climb +4 m/s</li>\n' +
       '      <li><span class="swatch" style="background:var(--tow);opacity:.5"></span>tow</li>\n' +
       '      <li><span class="swatch" style="background:var(--climb);opacity:.5"></span>climbing</li>\n' +
-      '      <li><span class="swatch" style="background:var(--sink);opacity:.5"></span>gliding</li>\n    </ul>';
+      '      <li><span class="swatch" style="background:var(--sink);opacity:.5"></span>gliding</li>\n    </ul>\n    </div>';
+    var sideView = sideChart + sideControls;
 
     var view3dSection, clearance = null;
     if (terrain) {
@@ -425,9 +430,9 @@
         '      <p>Hovering a moment in the side view marks the same moment on the map above, and in\n         the top view below. Click to keep it there while you look; click again, or press\n' +
         '         <kbd>Esc</kbd>, to let go. A row in the climbs or glides table does the same for\n         where that phase began.' +
         (payload.airspaceRemote ? " <strong>Airspace</strong> draws the zones this flight came within 5 km and 200 m (height) of, as the boxes they are, floor to ceiling — hover one for its name and limits. Zones that bind nobody (danger and firing areas, sport and alert areas, gliding sectors) are left out, and so are those active only by NOTAM: NOTAMs are not fetched, so one activated during the flight is missing too. Airspace &copy; <a href=\"https://www.openaip.net\" rel=\"noreferrer\">openAIP</a>, CC BY-NC 4.0, refreshed monthly; in Czechia the traffic circuits are this site's own, from ŘLP publications." : '') +
-        '</p>\n    </div>\n    <div class="renderer-host" data-renderer-default="merged">\n    ' + TV.scene.switchHtml() + '\n    ' +
+        '</p>\n    </div>\n    <div class="flight-map">\n    <div class="renderer-host" data-renderer-default="merged">\n    ' + TV.scene.switchHtml() + '\n    ' +
         TV.scene.panel(payload, uid) +
-        '\n    </div>\n' + sideView + '\n  </section>';
+        '\n    </div>' + sideChart + '    </div>\n' + sideControls + '\n  </section>';
     } else {
       view3dSection = '\n  <section>\n    <div class="section-head">\n      <h2>The flight from the side</h2>\n' +
         '      <p>Hovering a moment marks the same moment in the top view below. Click to keep it\n         there while you look; click again, or press <kbd>Esc</kbd>, to let go.</p>\n    </div>\n' +

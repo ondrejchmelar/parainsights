@@ -331,12 +331,17 @@ class TestPageText:
     @needs_node
     def test_the_side_view_hangs_off_the_map_itself(self, tmp_path):
         """The map and the side view are the same flight from two angles on one cursor, so
-        the side view is pasted inside the map's section — no heading, no section gap.
-        With no terrain there is no map, and the side view carries the section alone."""
+        the side view is part of the map's own block (`.flight-map`) — right under the 3D
+        panel, going full screen with it — and its axis buttons and legend sit below the
+        block. With no terrain there is no map, and the side view carries the section alone."""
         source = REPORT_JS.read_text(encoding="utf-8")
         panel = source.index("TV.scene.panel(payload, uid")
-        assert source.index("sideView", panel) - panel < 400, (
+        block = source.rindex('<div class="flight-map">', 0, panel)
+        assert panel - block < 300, "the 3D panel is not inside the map block"
+        assert source.index("sideChart", panel) - panel < 120, (
             "the side view no longer follows the 3D panel directly")
+        assert source.index("sideControls", panel) > source.index("sideChart", panel), (
+            "the axis buttons belong below the chart")
         html = article(tmp_path, "side.igc", [(300, 2.5), (300, 2.0), (300, 1.4), (300, 0.8)])
         assert "The flight from the side" in html
         # The side view is drawn in the page, so the article carries its host.

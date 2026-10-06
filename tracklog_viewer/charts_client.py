@@ -104,18 +104,57 @@ SCRIPT = r"""
   }
 
   // ---- the side view -------------------------------------------------------------
-  function profile(data, cursor, mode) {
+  // A compared flight's trace on this chart's ground axis, from its 3D scene's track:
+  // distance flown or from its launch on the sphere, or time — on this flight's clock when
+  // flown the same day (as the 3D replay), from its own launch otherwise. Thinned to
+  // about 1 500 points: it is a line to compare against, not one to read fixes off.
+  function comparedTrace(o, own, mode) {
+    var tr = o.track, n = tr.lon.length, step = Math.max(Math.ceil(n / 1500), 1);
+    var R = 6371000, rad = Math.PI / 180, flown = 0, xs = [], ys = [];
+    function metres(i, j) {
+      var dLat = (tr.lat[j] - tr.lat[i]) * rad, dLon = (tr.lon[j] - tr.lon[i]) * rad;
+      var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(tr.lat[i] * rad) *
+              Math.cos(tr.lat[j] * rad) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+    }
+    var offset = own && own.start && o.start && Math.abs(o.start - own.start) < 12 * 3600
+      ? o.start - own.start : 0;
+    var last = 0;
+    for (var i = 0; i < n; i += step) {
+      if (mode === 'flown') { flown += metres(last, i); last = i; }
+      xs.push(mode === 'time' ? (tr.t ? tr.t[i] : i) + offset
+              : mode === 'from_start' ? metres(0, i) : flown);
+      ys.push(tr.alt[i]);
+    }
+    return { x: xs, y: ys, colour: o.colour };
+  }
+
+  // `aspect`: the host's width over its height, where its shape is not the chart's own —
+  // full screen gives the side view a band a quarter of the screen tall, and drawn at its
+  // usual proportions it shrank to a strip in the middle. The plot widens; text stays.
+  function profile(data, cursor, mode, compared, aspect) {
     var box = data.profile;
     var left = box.left, right = box.right, top = box.top, bottom = box.bottom;
-    var W = box.width, H = box.height;
+    var H = box.height, W = aspect ? Math.round(H * aspect) : box.width;
     var plotW = W - left - right, plotH = H - top - bottom;
     var along = mode === 'from_start' ? data.d : (mode === 'time' ? cursor.t : data.s);
     var alt = cursor.alt;
-    var spanMax = Math.max(along[along.length - 1], 1);
+    var spanMax = Math.max(along[along.length - 1], 1), spanMin = 0;
     for (var i = 0; i < along.length; i++) spanMax = Math.max(spanMax, along[i]);
     var floor = data.floor, ceiling = data.ceiling;
+    // Comparing: every compared flight on the same axes, which grow to hold them all.
+    var traces = compared && compared.others ? compared.others.map(function (o) {
+      return comparedTrace(o, compared.own, mode);
+    }) : [];
+    traces.forEach(function (t) {
+      for (var k = 0; k < t.x.length; k++) {
+        spanMax = Math.max(spanMax, t.x[k]); spanMin = Math.min(spanMin, t.x[k]);
+        floor = Math.min(floor, Math.floor(t.y[k] / 250) * 250);
+        ceiling = Math.max(ceiling, Math.ceil(t.y[k] / 250) * 250);
+      }
+    });
 
-    function sx(value) { return left + plotW * value / spanMax; }
+    function sx(value) { return left + plotW * (value - spanMin) / Math.max(spanMax - spanMin, 1); }
     function sy(value) {
       return top + plotH * (1 - (value - floor) / Math.max(ceiling - floor, 1));
     }
@@ -177,8 +216,22 @@ SCRIPT = r"""
     });
     svg.appendChild(references);
 
+    traces.forEach(function (t) {
+      var d = '';
+      for (var k = 0; k < t.x.length; k++) d += (k ? 'L' : 'M') + sx(t.x[k]).toFixed(1) + ' ' + sy(t.y[k]).toFixed(1);
+      svg.appendChild(make('path', { 'class': 'compared-trace', d: d, fill: 'none', stroke: t.colour,
+        'stroke-width': 1.6, 'stroke-linejoin': 'round', opacity: 0.9 }));
+    });
     var track = make('g', { 'class': 'track' });
-    trackPaths(track, data.ramp, cursor.climb, px, py);
+    if (traces.length && compared.own) {
+      // This flight in its comparison colour, as on the map: one colour a flight.
+      var own = '';
+      for (var k2 = 0; k2 < px.length; k2++) own += (k2 ? 'L' : 'M') + px[k2].toFixed(1) + ' ' + py[k2].toFixed(1);
+      track.appendChild(make('path', { d: own, fill: 'none', stroke: compared.own.colour,
+        'stroke-width': 2.2, 'stroke-linejoin': 'round' }));
+    } else {
+      trackPaths(track, data.ramp, cursor.climb, px, py);
+    }
     svg.appendChild(track);
 
     var ends = make('g', { 'class': 'endpoints' });
@@ -361,7 +414,8 @@ SCRIPT = r"""
     if (side) {
       var mode = side.dataset.mode || 'flown';
       side.textContent = '';
-      side.appendChild(profile(data, cursor, mode));
+      side.appendChild(profile(data, cursor, mode, comparedFor(article), shapeOf(side)));
+      watch(article, side);
     }
     var top = article.querySelector('.chart-host[data-chart="plan"]');
     if (top) {
@@ -422,11 +476,37 @@ SCRIPT = r"""
     if (!host || !article.__chartData) return;
     host.dataset.mode = mode;
     host.textContent = '';
-    host.appendChild(profile(article.__chartData, article.__cursorData, mode));
+    host.appendChild(profile(article.__chartData, article.__cursorData, mode, comparedFor(article),
+                             shapeOf(host)));
     // The cursor binds to the SVG that was there when it ran, so the new one has to be
     // handed back to it. Without this the toggle produces a chart the cursor cannot
     // drive, which looks exactly like the cursor being broken.
     if (article.__relinkCharts) article.__relinkCharts();
+  }
+
+  // The host's own proportions where CSS has given it a box of its own (full screen: a
+  // fixed height, `aspect-ratio: auto`); null where the chart's proportions are the box's.
+  function shapeOf(host) {
+    if (getComputedStyle(host).aspectRatio !== 'auto' || !host.clientHeight) return null;
+    return host.clientWidth / host.clientHeight;
+  }
+  // Redrawn when the host changes shape — entering and leaving full screen.
+  function watch(article, host) {
+    if (host.__watched || !window.ResizeObserver) return;
+    host.__watched = true;
+    var last = null, timer = null;
+    new ResizeObserver(function () {
+      var shape = shapeOf(host), key = shape ? shape.toFixed(2) : 'own';
+      if (key === last) return;
+      last = key;
+      clearTimeout(timer);
+      timer = setTimeout(function () { redraw(article, host.dataset.mode || 'flown'); }, 60);
+    }).observe(host);
+  }
+
+  // The flights compared with this one (`window.__compareFor`, `render_html`), or null.
+  function comparedFor(article) {
+    return window.__compareFor ? window.__compareFor(article.getAttribute('data-flight-report')) : null;
   }
 
   // Exposed so a flight added after this ran can be drawn the same way, and so a test

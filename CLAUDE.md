@@ -615,6 +615,15 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   like the own one — billboarded they faced the camera and read thicker. The legend sits
   top left (this flight bold; how each is aligned in time is in its tooltip), MapLibre's (i) bottom left
   with the bar starting right of it.
+  **The side view is part of the map** (October 2026): the report wraps the 3D panel and
+  the side view in one block (`.flight-map`), the chart right under the map, full width,
+  no caption; its axis buttons and legend sit below the block. The merged map's full
+  screen takes the whole block (the map flexes, the chart a quarter of the screen,
+  redrawn to that band's proportions by a ResizeObserver in `charts_client`, `shapeOf`);
+  the buttons, legend and renderer switch are not shown there. Comparing, the side view
+  draws every compared flight's height on the same axes (`comparedTrace`: distance flown,
+  from its launch, or time on the shared clock as in the replay), each in its colour and
+  this flight's in its own, the axes widened to hold them all.
   **The replay drives the charts**: its "now" moves the side and top views' cursor
   (`article.__cursorAtTime`, quiet: no tooltip, not echoed back to the map), and the map
   shows the height at "now" top right (`.m3-now`: this flight's with its climb, each

@@ -6986,15 +6986,18 @@ window.__view3dBackend = function (host) {
         button.setAttribute('aria-pressed', String(on));
       }
       var help = view.querySelector('[data-m3="help"].view3d-keys');
+      // Full screen takes the flight's map block where the page has one (`.flight-map`:
+      // the map with the side view under it), the panel alone where it does not.
       function fullscreen() {
+        var target = panel.closest('.flight-map') || panel;
         var maximise = function () {
-          panel.classList.toggle('is-maximised');
+          target.classList.toggle('is-maximised');
           setTimeout(function () { map.resize(); }, 0);
         };
-        if (document.fullscreenElement === panel) { document.exitFullscreen(); return; }
-        if (panel.classList.contains('is-maximised')) { maximise(); return; }
+        if (document.fullscreenElement === target) { document.exitFullscreen(); return; }
+        if (target.classList.contains('is-maximised')) { maximise(); return; }
         try {
-          var p = panel.requestFullscreen && panel.requestFullscreen();
+          var p = target.requestFullscreen && target.requestFullscreen();
           if (p && p.catch) p.catch(maximise); else if (!p) maximise();
         } catch (error) { maximise(); }
       }

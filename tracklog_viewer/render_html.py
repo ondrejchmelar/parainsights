@@ -208,6 +208,30 @@ section { margin-top: 34px; }
 }
 
 .hero { padding: 6px 4px 0; overflow: hidden; }
+/* The 3D map and the side view as one block (`.flight-map`): the chart right under the
+   map, as wide as it, on the same ground, its axis buttons and legend below the block.
+   The merged map makes the whole block full screen, so the side view goes with it. */
+.flight-map .side-view { --page: calc(100vw - var(--scrollbar, 0px)); width: var(--page);
+  margin: 0 0 0 calc(50% - var(--page) / 2); border-radius: 0; border-left: 0;
+  border-right: 0; border-top: 0; }
+.flight-map .side-view .chart-host { max-width: 1100px; margin: 0 auto; }
+.side-controls { margin-top: 12px; }
+.flight-map:fullscreen, .flight-map.is-maximised { display: flex; flex-direction: column;
+  background: var(--panel); width: 100%; height: 100%; margin: 0; }
+.flight-map.is-maximised { position: fixed; inset: 0; z-index: 60; width: auto; height: auto; }
+.flight-map::backdrop { background: var(--panel); }
+.flight-map:fullscreen .renderer-switch, .flight-map.is-maximised .renderer-switch { display: none; }
+.flight-map:fullscreen .renderer-host, .flight-map.is-maximised .renderer-host {
+  flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.flight-map:fullscreen .view3d-panel, .flight-map.is-maximised .view3d-panel {
+  flex: 1 1 auto; min-height: 0; width: 100%; margin: 0; }
+.flight-map:fullscreen canvas.view3d, .flight-map.is-maximised canvas.view3d {
+  height: 100%; aspect-ratio: auto; }
+.flight-map:fullscreen .side-view, .flight-map.is-maximised .side-view {
+  flex: 0 0 auto; width: 100%; margin: 0; }
+.flight-map:fullscreen .side-view .chart-host, .flight-map.is-maximised .side-view .chart-host {
+  height: 24vh; aspect-ratio: auto !important; max-width: none; }
+.flight-map:fullscreen .side-view .chart, .flight-map.is-maximised .side-view .chart { height: 100%; }
 .caption { color: var(--ink-3); font-size: 12.5px; margin: 4px 4px 10px; }
 .chart-title {
   font-family: 'NarrowDisplay', "Liberation Sans Narrow", ui-sans-serif, sans-serif;
@@ -1155,7 +1179,8 @@ SCRIPT = """
       var colour = OTHER_COLOURS[i % OTHER_COLOURS.length];
       var name = article.getAttribute('data-compare-name') || '';
       if (article.getAttribute('data-flight-report') === uid) {
-        out.own = { name: name, colour: colour };
+        var mine = sceneOf(article);
+        out.own = { name: name, colour: colour, start: mine ? mine.start : null };
         return;
       }
       var scene = sceneOf(article);
@@ -1168,6 +1193,9 @@ SCRIPT = """
       var canvas = article.querySelector('canvas.view3d');
       var entry = canvas && window.__mergedAll && window.__mergedAll[canvas.id];
       if (entry && entry.setOthers) entry.setOthers(window.__compareFor(article.getAttribute('data-flight-report')));
+      // The side view draws the compared flights too.
+      var host = article.querySelector('.chart-host[data-chart="profile"]');
+      if (host && window.__drawProfile) window.__drawProfile(article, host.dataset.mode || 'flown');
     });
   }
   // Flights come and go (uploads, the × on a tab); re-settle when they do.
