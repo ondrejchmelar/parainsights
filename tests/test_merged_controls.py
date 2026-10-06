@@ -431,7 +431,8 @@ def test_compared_flights_are_drawn_on_one_clock_and_far_ones_are_listed(browser
     assert "other-now-0" in ids, ids
     # The height at "now", top right: this flight's with its climb, then each compared one.
     now = browser.js("document.querySelector('.merged-view .m3-now').innerText").splitlines()
-    assert len(now) == 2 and "m/s" in now[0] and now[1].endswith(" m"), now
+    # Each glider's height and climb, the compared one's as well as this one's.
+    assert len(now) == 2 and all(" m · " in line and line.endswith("m/s") for line in now), now
     browser.js(f"({ENTRY}).setOthers(null); 1")
     assert browser.js("document.querySelector('.merged-view .m3-others').hidden")
 

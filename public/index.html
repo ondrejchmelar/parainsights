@@ -990,7 +990,10 @@ canvas.view3d.is-over-rose { cursor: pointer; }
 .merged-view .m3-now { font-variant-numeric: tabular-nums; }
 .merged-view .m3-now b { font-weight: 600; }
 .merged-view .m3-rose p { margin: 4px 0 0; font-size: 11px; line-height: 1.3; color: #fff;
-  text-shadow: 0 0 3px rgba(12,14,18,0.95), 0 0 2px rgba(12,14,18,0.95); }
+  /* A dark halo, several deep, so the text holds over the light relief as well as over
+     the photograph: one soft shadow vanished against the pale ground. */
+  text-shadow: 0 0 2px rgba(8,10,14,1), 0 0 3px rgba(8,10,14,1), 0 0 5px rgba(8,10,14,0.9),
+    1px 1px 1px rgba(8,10,14,1), -1px -1px 1px rgba(8,10,14,1); }
 .merged-view .m3-bottom { position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 3;
   display: flex; flex-wrap: wrap; align-items: center; gap: 5px; pointer-events: none; }
 .merged-view .m3-bottom > * { pointer-events: auto; }
@@ -6789,6 +6792,10 @@ window.__view3dBackend = function (host) {
   var TRACK_WIDTH = 2.6 / Math.min(window.devicePixelRatio || 1, 2);
   var PLAY_ICON = '<svg width="11" height="12" viewBox="0 0 11 12" aria-hidden="true">' +
     '<path d="M1 1 L10 6 L1 11 Z" fill="currentColor"/></svg>';
+  // The replay's own button: a camera. The play triangle is the play button inside the
+  // replay, and two buttons with the same triangle were one too many.
+  var CAMERA_ICON = '<svg width="16" height="12" viewBox="0 0 16 12" aria-hidden="true" fill="currentColor">' +
+    '<rect x="0.5" y="2" width="10" height="8" rx="1.5"/><path d="M11.5 5 L15.5 2.5 L15.5 9.5 L11.5 7 Z"/></svg>';
   var RULER_ICON = '<svg width="14" height="12" viewBox="0 0 14 12" aria-hidden="true" fill="none"' +
     ' stroke="currentColor" stroke-width="1.3"><path d="M1 8.5 8.5 1l4.5 4.5L5 13z" transform="translate(0 -1.5)"/>' +
     '<path d="M4 5.5l1.5 1.5M6 3.5l1.5 1.5M8 1.5l1.5 1.5" transform="translate(0 -0.5)"/></svg>';
@@ -7019,7 +7026,7 @@ window.__view3dBackend = function (host) {
           '<button type="button" data-m3="zoom-out" title="Zoom out" aria-label="Zoom out">&minus;</button>' +
           '<button type="button" data-m3="zoom-in" title="Zoom in" aria-label="Zoom in">+</button></div>' +
         (hasTime ? '<button type="button" data-m3="replay" class="m3-icon" aria-pressed="false"' +
-          ' title="Replay the flight" aria-label="Replay the flight">' + PLAY_ICON + '</button>' : '') +
+          ' title="Replay the flight" aria-label="Replay the flight">' + CAMERA_ICON + '</button>' : '') +
         '<button type="button" data-m3="measure" class="m3-icon" aria-pressed="false"' +
           ' title="Measure a distance (d)" aria-label="Measure a distance">' + RULER_ICON + '</button>' +
         '<button type="button" data-m3="help" title="Controls" aria-label="How to control this view">?</button>' +
@@ -7641,9 +7648,13 @@ window.__view3dBackend = function (host) {
         out.push(new deck.ScatterplotLayer({
           id: 'climbs', data: marks.filter(function (d) { return inWindow(d.t); }),
           getPosition: function (d) { return [d.position[0], d.position[1], z(d.position[2])]; },
-          getFillColor: function (d) { return d.tow ? [27, 175, 122] : [226, 96, 44]; },
+          // Comparing, this flight's climbs in its own colour, as the others' are in theirs.
+          getFillColor: function (d) {
+            return d.tow ? [27, 175, 122] : ownColour ? rgb(ownColour, 255) : [226, 96, 44];
+          },
+          updateTriggers: { getFillColor: ownColour, getPosition: vertical },
           getLineColor: [255, 255, 255, 220], stroked: true, lineWidthMinPixels: 1,
-          radiusUnits: 'pixels', getRadius: 4, billboard: true, updateTriggers: { getPosition: vertical },
+          radiusUnits: 'pixels', getRadius: 4, billboard: true,
           parameters: ON_TOP
         }));
         // Where this glider is at the replay's "now", as each compared one is shown.
@@ -7887,14 +7898,18 @@ window.__view3dBackend = function (host) {
         var lines = [];
         if (flying) {
           var climb = (heightAt(cutoff + 10) - heightAt(cutoff - 10)) / 20;
-          lines.push('<b>' + Math.round(heightAt(cutoff)).toLocaleString('en-US') + ' m</b> · ' +
-                     (climb >= 0 ? '+' : '') + climb.toFixed(1) + ' m/s');
+          // In this flight's comparison colour when comparing, as every other mark of it is.
+          lines.push('<span' + (ownColour ? ' style="color:' + ownColour + '"' : '') + '><b>' +
+                     Math.round(heightAt(cutoff)).toLocaleString('en-US') + ' m</b> · ' +
+                     (climb >= 0 ? '+' : '') + climb.toFixed(1) + ' m/s</span>');
         }
         others.forEach(function (o) {
           var at = cutoff - o.offset;
           if (o.far || at < o.t[0] || at > o.t[o.t.length - 1]) return;
-          lines.push('<span style="color:' + o.colour + '">' +
-                     Math.round(positionOf(o, at)[2]).toLocaleString('en-US') + ' m</span>');
+          var rate = (positionOf(o, at + 10)[2] - positionOf(o, at - 10)[2]) / 20;
+          lines.push('<span style="color:' + o.colour + '"><b>' +
+                     Math.round(positionOf(o, at)[2]).toLocaleString('en-US') + ' m</b> · ' +
+                     (rate >= 0 ? '+' : '') + rate.toFixed(1) + ' m/s</span>');
         });
         nowText.innerHTML = lines.join('<br>');
         nowText.hidden = !lines.length;
@@ -7917,10 +7932,10 @@ window.__view3dBackend = function (host) {
         });
         showRange();
       }
-      // Seconds of flight per second of replay. Two minutes a second is where it opens:
-      // a three-hour flight in a minute and a half, a single climb still watchable.
+      // Seconds of flight per second of replay. A minute a second is where it opens: a
+      // three-hour flight in three minutes, a climb slow enough to watch it worked.
       var SPEEDS = [10, 30, 60, 120, 300, 600, 1200];
-      var speed = 3;
+      var speed = 2;
       var rateLabel = view.querySelector('.m3-rate');
       function showSpeed() {
         if (!rateLabel) return;
