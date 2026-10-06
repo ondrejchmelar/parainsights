@@ -1398,6 +1398,22 @@ function initFlight(root) {
   // the axis toggle rebuilds the side view; without it the toggle silently produces a
   // chart the cursor cannot drive, which looks exactly like the cursor being broken.
   root.__relinkCharts = collectViews;
+  // The 3D map's replay drives the charts (`map3d`, `setTime`): its "now", in seconds
+  // since the first fix, as the cursor on the side and top views. Quiet — no tooltip, and
+  // not back to the map, which is showing the replay already.
+  root.__cursorAtTime = function (t) {
+    if (!data.t || !data.t.length) return;
+    var lo = 0, hi = data.t.length - 1;
+    while (lo < hi) { var mid = (lo + hi) >> 1; if (data.t[mid] < t) lo = mid + 1; else hi = mid; }
+    if (lo > 0 && Math.abs(data.t[lo - 1] - t) < Math.abs(data.t[lo] - t)) lo--;
+    views.forEach(function (view) {
+      if (lo >= view.px.length || !view.svg.getClientRects().length) return;
+      if (view.dot) { view.dot.setAttribute('cx', view.px[lo]); view.dot.setAttribute('cy', view.py[lo]); }
+      if (view.crosshair) { view.crosshair.setAttribute('x1', view.px[lo]); view.crosshair.setAttribute('x2', view.px[lo]); }
+      if (view.cursor) view.cursor.classList.add('on');
+    });
+    highlight(data.segment[lo]);
+  };
 
   // Escape lets go from anywhere, which is the one shortcut a reader will guess.
   root.addEventListener('keydown', function (event) {

@@ -413,8 +413,13 @@ def test_compared_flights_are_drawn_on_one_clock_and_far_ones_are_listed(browser
     ids = [d["id"] for d in browser.js(f"({ENTRY}).layers()")]
     legend = browser.js("document.querySelector('.merged-view .m3-others').textContent")
     assert "other-0" in ids and "other-1" not in ids, ids
-    assert "NEAR" in legend and "FAR — too far to show" in legend
-    assert "time since launch" not in legend, "same day: one clock"
+    assert "NEAR" in legend and "FAR · too far to show" in legend
+    assert "by launch" not in legend, "same day: one clock"
+    # All flights are equal on the map: NEAR launched 10 min later, so it lands 10 min
+    # later too, and the replay runs until it does — not just to this flight's landing.
+    own_end = browser.js("__handle.built.scene.track.t.slice(-1)[0]")
+    assert browser.js("+document.querySelector('.merged-view .m3-to').max") == own_end + 600
+    assert browser.js("+document.querySelector('.merged-view .m3-from').min") == 0
     # The replay at 30 min: NEAR launched 10 min later, so it is 20 min into its flight.
     browser.js("""(() => { var v = document.querySelector('.merged-view');
       if (v.querySelector('.m3-replay').hidden) v.querySelector('[data-m3=replay]').click();
@@ -423,6 +428,9 @@ def test_compared_flights_are_drawn_on_one_clock_and_far_ones_are_listed(browser
     time.sleep(0.5)
     ids = [d["id"] for d in browser.js(f"({ENTRY}).layers()")]
     assert "other-now-0" in ids, ids
+    # The height at "now", top right: this flight's with its climb, then each compared one.
+    now = browser.js("document.querySelector('.merged-view .m3-now').innerText").splitlines()
+    assert len(now) == 2 and "m/s" in now[0] and now[1].endswith(" m"), now
     browser.js(f"({ENTRY}).setOthers(null); 1")
     assert browser.js("document.querySelector('.merged-view .m3-others').hidden")
 

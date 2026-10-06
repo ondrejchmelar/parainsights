@@ -608,7 +608,17 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   drawn (`fitBias`, the model being close rather than exact). **The gliders are placed in
   the part of the map nothing covers** (`freeHeight`: down to the replay bar, the buttons
   or the legend), 60% of the way down it: on a phone those cover the bottom third, and a
-  fixed "a fifth below the middle" put the gliders under them. Flown the same day (starts within 12 h,
+  fixed "a fifth below the middle" put the gliders under them. **In the map all compared
+  flights are equal**: the replay spans the first start to the last landing (`spanStart`,
+  `spanEnd`), and follow frames whichever gliders are in the air, this one only while it
+  is; the figures stay relative to the selected flight. Compared tracks are drawn flat
+  like the own one — billboarded they faced the camera and read thicker. The legend sits
+  top left (this flight bold, "· by launch" for another day), MapLibre's (i) bottom left
+  with the bar starting right of it.
+  **The replay drives the charts**: its "now" moves the side and top views' cursor
+  (`article.__cursorAtTime`, quiet: no tooltip, not echoed back to the map), and the map
+  shows the height at "now" top right (`.m3-now`: this flight's with its climb, each
+  compared glider's in its colour). Flown the same day (starts within 12 h,
   `scene.start` is the first fix in UTC seconds) the replay runs on one clock — a dot
   where each glider was at the same moment, its trail inside the same window; otherwise
   by time since launch, and the legend says so. A flight more than 150 km from this map's
