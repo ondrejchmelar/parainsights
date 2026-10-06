@@ -414,7 +414,8 @@ def test_compared_flights_are_drawn_on_one_clock_and_far_ones_are_listed(browser
     legend = browser.js("document.querySelector('.merged-view .m3-others').textContent")
     assert "other-0" in ids and "other-1" not in ids, ids
     assert "NEAR" in legend and "FAR · too far to show" in legend
-    assert "by launch" not in legend, "same day: one clock"
+    titles = browser.js("Array.from(document.querySelectorAll('.merged-view .m3-others li')).map(li => li.title)")
+    assert any(t.startswith("Same day") for t in titles), titles      # one clock
     # All flights are equal on the map: NEAR launched 10 min later, so it lands 10 min
     # later too, and the replay runs until it does — not just to this flight's landing.
     own_end = browser.js("__handle.built.scene.track.t.slice(-1)[0]")

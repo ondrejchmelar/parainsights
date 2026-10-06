@@ -613,7 +613,7 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   `spanEnd`), and follow frames whichever gliders are in the air, this one only while it
   is; the figures stay relative to the selected flight. Compared tracks are drawn flat
   like the own one — billboarded they faced the camera and read thicker. The legend sits
-  top left (this flight bold, "· by launch" for another day), MapLibre's (i) bottom left
+  top left (this flight bold; how each is aligned in time is in its tooltip), MapLibre's (i) bottom left
   with the bar starting right of it.
   **The replay drives the charts**: its "now" moves the side and top views' cursor
   (`article.__cursorAtTime`, quiet: no tooltip, not echoed back to the map), and the map

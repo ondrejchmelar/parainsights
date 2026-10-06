@@ -821,11 +821,13 @@ SCRIPT = r"""
         }
         ownColour = others.length && compared.own ? compared.own.colour : null;
         ownName = others.length && compared.own ? compared.own.name : '';
-        // Beside the (i), one short line a flight: this one in bold, a flight from another
-        // day marked as aligned by launch (the full wording on hover).
+        // Top left, one short line a flight: this one in bold; how each is aligned in time
+        // is in its tooltip.
         othersList.innerHTML = (ownColour ? '<li class="is-own" title="This flight"><i style="background:' +
             ownColour + '"></i>' + ownName.replace(/[<&]/g, '') + '</li>' : '') + others.map(function (o) {
-          var note = o.far ? ' · too far to show' : o.sameDay ? '' : ' · by launch';
+          // Another day is aligned by launch without saying so on the line: the tooltip has
+          // it, and the line has no room for it beside the (i).
+          var note = o.far ? ' · too far to show' : '';
           var title = o.far ? 'More than 150 km away: not drawn'
             : o.sameDay ? 'Same day: replayed on the same clock' : 'Another day: replayed by time since launch';
           return '<li' + (o.far ? ' class="is-far"' : '') + ' title="' + title + '"><i style="background:' +
