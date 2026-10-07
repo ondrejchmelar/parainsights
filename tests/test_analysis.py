@@ -213,6 +213,32 @@ class TestPhases:
         assert glide.average_ld == pytest.approx(10.0, abs=0.3)
         assert glide.average_speed == pytest.approx(36.0, abs=1.0)
 
+    def test_a_glide_that_doubles_back_is_two_glides(self, tmp_path):
+        # Out north and back south, 10:1 each way: start to finish in a straight line is
+        # 0.6 km for 600 m lost — a 1:1 glide that was never flown.
+        # The turn is a rounded one, 150 m across and 47 s long: short enough that the
+        # classifier bridges it and calls the whole thing one glide.
+        out = straight(300, speed=10.0, climb=-1.0)
+        _, _, top, alt = out[-1]
+        radius, arc = 75.0, []
+        seconds = int(math.pi * radius / 10.0)
+        for second in range(1, seconds + 1):
+            angle = second * 10.0 / radius
+            arc.append((300 + second, radius - radius * math.cos(angle), top + radius * math.sin(angle),
+                        alt - second))
+        back = straight(300, speed=10.0, climb=-1.0, t0=301 + seconds, alt0=alt - seconds - 1,
+                        x0=2 * radius, y0=top, heading=180.0)
+        glides = js.analyse(build(tmp_path / "g.igc", out + arc + back)).glides
+        assert len(glides) == 2
+        for glide in glides:
+            assert glide.average_ld == pytest.approx(10.0, abs=0.5)
+
+    def test_a_glide_that_bends_a_little_stays_one(self, tmp_path):
+        out = straight(300, speed=10.0, climb=-1.0)
+        on = straight(300, speed=10.0, climb=-1.0, t0=301, alt0=out[-1][3] - 1, x0=out[-1][1],
+                      y0=out[-1][2], heading=45.0)
+        assert len(js.analyse(build(tmp_path / "g.igc", out + on)).glides) == 1
+
     def test_launch_climb_flown_straight_is_a_tow(self, tmp_path):
         """A winch or aerotow launch, not a thermal off the deck."""
         points = straight(180, speed=8.0, climb=3.0, alt0=400.0)

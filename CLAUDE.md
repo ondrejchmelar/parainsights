@@ -419,6 +419,14 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   for `_condense` to bridge. On the Dolomites flight this takes every per-thermal wind
   into 0.7–9.7 km/h with no outliers, at the cost of 18 climbs becoming 13 — the ones
   dropped were 1–2 turn straight-ish bumps that were never really thermals.
+- **A glide that doubles back is two glides** (October 2026). Its distance is start to
+  finish in a straight line, fair for a glide that bends and nonsense for one that turns
+  round: a rounded 180° inside a glide is short enough for the condensing to bridge, and
+  out 1.5 km and back 1 km read as a 2.3:1 glide of 0.5 km. `splitAtTurns` cuts a glide at
+  the fix furthest off the straight line when the legs either side of it differ by more
+  than 90°, each leg at least 60 s, and judges each part again; the parts stand as glides
+  whatever their length. A turn under 90° stays one glide — it costs at most 29% of the
+  distance, and the reader asked for slight changes to be left alone.
 - **A turn is a full revolution; how far the nose swung is a different number.**
   `turns` counts heading advancing through 360° in *one* direction (`_revolutions`), so a
   wingover — 180° out, 180° back — is no longer most of a turn, and a climb circled both
@@ -632,7 +640,11 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   the buttons, legend and renderer switch are not shown there. Comparing, the side view
   draws every compared flight's height on the same axes (`comparedTrace`: distance flown,
   from its launch, or time on the shared clock as in the replay), each in its colour and
-  this flight's in its own, the axes widened to hold them all.
+  this flight's in its own, the axes widened to hold them all. Its tooltip gives height
+  AMSL and above the ground (`cursor-data` `agl`, from `terrain.clearance`), climb, speed
+  and phase. In full screen it is moved into the full-screen element, which is *inside*
+  the article — the check once asked it the other way round, and the tooltip stayed in
+  the page body, behind the full screen (`test_compare`).
   **The replay drives the charts**: its "now" moves the side and top views' cursor
   (`article.__cursorAtTime`, quiet: no tooltip, not echoed back to the map), and the map
   shows the height at "now" top right (`.m3-now`: this flight's with its climb, each
@@ -902,8 +914,17 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   so these are taken from it — and only a drag (4 px of mouse, 8 px of one finger) ends
   following, not a press; and the arrows turn the view off the
   direction of flight (← →, 15°, kept as the flight turns) and tilt it (↑ ↓, 10°) without
-  ending it, and on a phone two fingers do the same: spread zooms, moving both up or down
-  tilts (MapLibre's half a degree a pixel), a twist turns; a drag on the map, the rose or reset hands the camera back. **The camera looks at the glider's mean
+  ending it — both the reverse of MapLibre's shifted arrows, at the reader's request: they
+  move the camera round the glider (↑ lifts it, ← swings it left), not the view — and on a phone two fingers do the same: spread zooms, moving both up or down
+  tilts (MapLibre's half a degree a pixel), a twist turns; a drag on the map, the rose or reset hands the camera back.
+  **The offset and the course are eased apart**: the course follows the flight at its own
+  rate (≤ 90°/s), the reader's offset settles in 0.15 s, and the offset is kept within
+  ±180° (`wrapOffset`, moving the eased value by the same 360°). Eased as one bearing, a
+  press during a turn was swallowed by the turn rate limit and the two fought; and an
+  offset of 300° turned the long way round. Space plays and pauses anywhere in the view,
+  and while the replay plays the screen is kept on (Wake Lock, re-taken when the page is
+  shown again). With the replay open the side and top views' white cursor is not drawn
+  on the map: the replay's own dot is "now" there, and the two read as one big dot. **The camera looks at the glider's mean
   position over ±45 s** (`steadyAt`), not the glider: locked to it the view swung round
   every thermal circle. Each step runs on an animation frame or, within 100 ms, a timer —
   a browser that stops serving frames to a page it thinks hidden froze the camera.

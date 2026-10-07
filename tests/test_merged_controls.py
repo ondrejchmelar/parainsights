@@ -333,8 +333,9 @@ def test_follow_survives_zooming_and_turning_and_ends_on_a_drag(browser):
     before = browser.js(f"({MAP}).getPitch()")
     browser.key("ArrowUp", "ArrowUp", 38)
     browser.key("ArrowRight", "ArrowRight", 39)
+    # The pilot's way round: → turns the view 15° left of the course, ↑ tilts it down.
     offset = f"(({MAP}).getBearing() - ({ENTRY}).courseAt(1800) + 540) % 360 - 180"
-    browser.wait(f"({MAP}).getPitch() > {before + 9} && Math.abs({offset} - 15) < 1", timeout=20)
+    browser.wait(f"({MAP}).getPitch() < {before - 9} && Math.abs({offset} + 15) < 1", timeout=20)
     assert browser.js(following), "the arrows turn and tilt the follow camera"
 
     browser.drag((x, y), (x + 60, y + 20))
@@ -374,7 +375,7 @@ def test_two_fingers_tilt_and_turn_the_follow_camera(browser):
             time.sleep(0.03)
         touch("touchEnd", [])
         turned = browser.js(f"({ENTRY}).followCamera()")
-        assert turned["turn"] == pytest.approx(after["turn"] - 30, abs=2)
+        assert turned["turn"] == pytest.approx(after["turn"] - 30, abs=2)  # the ground follows the fingers
         assert browser.js(f"({ENTRY}).following()")
     finally:
         browser.call("Emulation.setTouchEmulationEnabled", enabled=False)

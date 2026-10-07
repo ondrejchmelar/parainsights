@@ -18,7 +18,8 @@
     MAX_DIVE_CLIMB: -2.0, CONDENSE_THERMAL: 60, CONDENSE_GLIDE: 60, CONDENSE_DIVE: 30,
     TURNING_THRESHOLD: 3.0, THERMAL_SLOW_KMH: 10.0, TURN_ONSET_SECONDS: 5.0,
     TURN_RESOLUTION_LIMIT: 5.0, REVERSAL_HYSTERESIS: 60.0, TOW_START_SECONDS: 120,
-    TOW_MIN_CLIMB: 1.0, TOW_MAX_TURNS_PER_MINUTE: 1.5, TOW_RESOLUTION_LIMIT: 15.0
+    TOW_MIN_CLIMB: 1.0, TOW_MAX_TURNS_PER_MINUTE: 1.5, TOW_RESOLUTION_LIMIT: 15.0,
+    GLIDE_SPLIT_TURN: 90.0, GLIDE_SPLIT_LEG_SECONDS: 60
   };
 
   // Half-open [start, stop) ranges where mask is true.
@@ -345,6 +346,28 @@
     return out;
   }
 
+  // A glide's distance is start to finish in a straight line, which is fair for a glide
+  // that bends a little and nonsense for one that doubles back: out 1.5 km and back 1 km
+  // made a 2.3:1 "glide" of 0.5 km. So a glide is cut where its course turns by more than
+  // GLIDE_SPLIT_TURN — at the fix furthest off the straight line, judged by the legs either
+  // side of it — and each part, if both are at least GLIDE_SPLIT_LEG_SECONDS long, is
+  // judged again. The parts are glides of their own, whatever their length: each is part
+  // of one that qualified.
+  function splitAtTurns(series, start, stop) {
+    var x = series.x, y = series.y, t = series.t, last = stop - 1;
+    var best = -1, bestDetour = 0;
+    for (var k = start + 1; k < last; k++) {
+      if (t[k] - t[start] < C.GLIDE_SPLIT_LEG_SECONDS || t[last] - t[k] < C.GLIDE_SPLIT_LEG_SECONDS) continue;
+      var detour = Math.hypot(x[k] - x[start], y[k] - y[start]) + Math.hypot(x[last] - x[k], y[last] - y[k]);
+      if (detour > bestDetour) { bestDetour = detour; best = k; }
+    }
+    if (best < 0) return [[start, stop]];
+    var ax = x[best] - x[start], ay = y[best] - y[start], bx = x[last] - x[best], by = y[last] - y[best];
+    var cos = (ax * bx + ay * by) / (Math.hypot(ax, ay) * Math.hypot(bx, by) || 1);
+    if (cos > Math.cos(C.GLIDE_SPLIT_TURN * Math.PI / 180)) return [[start, stop]];
+    return splitAtTurns(series, start, best).concat(splitAtTurns(series, best, stop));
+  }
+
   function analyse(flight, options) {
     options = options || {};
     var series = flightMod.derive(flight, options.window);
@@ -358,7 +381,9 @@
         var duration = series.t[r[1] - 1] - series.t[r[0]];
         var dz = series.alt[r[1] - 1] - series.alt[r[0]];
         if (duration >= rule[1] && rule[2](dz, Math.max(duration, 1))) {
-          segments.push(segment(flight, series, rule[0], r[0], r[1]));
+          (rule[0] === 'glide' ? splitAtTurns(series, r[0], r[1]) : [r]).forEach(function (part) {
+            segments.push(segment(flight, series, rule[0], part[0], part[1]));
+          });
         }
       });
     });

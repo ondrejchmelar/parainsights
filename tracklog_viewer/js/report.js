@@ -44,7 +44,9 @@
     return out;
   }
 
-  function cursorData(a) {
+  // `clearance` (per fix, `TV.terrain.clearance`) adds the height above the ground where
+  // the report has an elevation model.
+  function cursorData(a, clearance) {
     var s = a.series, f = a.flight, indices = sampleIndices(a), phaseOf = {};
     a.segments.forEach(function (seg) { for (var i = seg.start; i < seg.stop; i++) phaseOf[i] = seg; });
     var floor = Math.floor(np.min(s.alt) / 250) * 250, ceiling = Math.ceil(np.max(s.alt) / 250) * 250;
@@ -60,6 +62,7 @@
       clock: indices.map(function (i) { return igc.clock(f.time[i], f.timezone); }),
       phase: indices.map(function (i) { return phaseOf[i] ? phaseOf[i].phase : 'cruise'; }),
       segment: indices.map(function (i) { return phaseOf[i] ? phaseOf[i].start : null; }),
+      agl: clearance ? indices.map(function (i) { return Math.round(clearance[i]); }) : null,
       cursor3d: {
         lon: indices.map(function (i) { return R(f.lon[i], 5); }),
         lat: indices.map(function (i) { return R(f.lat[i], 5); }),
@@ -541,7 +544,7 @@
       '% of airtime. The rest is transitions too\n        short or too ambiguous to call, which is honest rather than tidy.</p>\n    </div>\n  </section>\n\n' +
       '  <footer>\n    <span>' + summary.fixes.toLocaleString('en-US') + ' fixes at ' + fmt(summary.duration / summary.fixes, 1) +
       ' s · timezone from\n      ' + esc(summary.timezone || 'UTC') + '</span>\n    <span>tracklog viewer · your track is analysed in this page and never uploaded</span>\n  </footer>\n' +
-      '  <script type="application/json" class="cursor-data">' + JSON.stringify(cursorData(a)) + '</script>\n' +
+      '  <script type="application/json" class="cursor-data">' + JSON.stringify(cursorData(a, clearance)) + '</script>\n' +
       '  <script type="application/json" class="chart-data">' + JSON.stringify(Ch.payload(a, meteo, route, sample, planH)) + '</script>\n</article>\n';
   }
 

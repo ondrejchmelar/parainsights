@@ -381,8 +381,28 @@ SCRIPT = r"""
     panel.appendChild(view);
 
     var playing = false, frame = null, map = null;
+    // While the replay plays, the screen stays on: a phone dims and locks a page nobody
+    // touches, mid-flight. Released on pause; taken again if the page comes back to the
+    // front still playing (a browser drops the lock when it is hidden).
+    var wakeLock = null;
+    function holdAwake(on) {
+      if (on && !wakeLock && navigator.wakeLock && navigator.wakeLock.request) {
+        navigator.wakeLock.request('screen').then(function (lock) {
+          if (!playing) { lock.release(); return; }
+          wakeLock = lock;
+          lock.addEventListener('release', function () { if (wakeLock === lock) wakeLock = null; });
+        }, function () { /* refused: the screen may dim, the replay still runs */ });
+      } else if (!on && wakeLock) {
+        var held = wakeLock; wakeLock = null;
+        held.release();
+      }
+    }
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible' && playing) holdAwake(true);
+    });
     function pause() {
       playing = false;
+      holdAwake(false);
       if (frame) cancelAnimationFrame(frame);
       var b = view.querySelector('[data-m3="play"]');
       if (b) {
@@ -1098,7 +1118,9 @@ SCRIPT = r"""
             updateTriggers: { getPath: [a, b, vertical] }
           }));
         });
-        if (cursor) {
+        // Not while the replay is open: it drives the charts' cursor itself, and its own
+        // dot already marks the glider — the two side by side read as two gliders.
+        if (cursor && !(hasTime && replay && !replay.hidden)) {
           var g = ground(cursor[0], cursor[1]);
           out.push(new deck.LineLayer({
             id: 'cursor-stem', data: [cursor],
@@ -1305,6 +1327,7 @@ SCRIPT = r"""
         var b = view.querySelector('[data-m3="play"]');
         if (playing) { pause(); return; }
         playing = true; last = 0;
+        holdAwake(true);
         b.innerHTML = PAUSE_ICON; b.classList.add('is-on');
         b.setAttribute('aria-pressed', 'true'); b.setAttribute('aria-label', 'Pause');
         if (cutoff >= spanEnd) setTime(from);
@@ -1411,7 +1434,14 @@ SCRIPT = r"""
       }
       var following = false, followFrame = null, followLast = 0, fitBias = 0;
       // Where the reader has turned the view off the direction of flight, with the arrows.
-      var yawOffset = 0;
+      var yawOffset = 0, camCourse = null, camOffset = 0;
+      // The reader's turn stays within half a circle (the pilot's call): past 180° it is the
+      // same view the other way round, and kept growing it wound up into a turn the camera
+      // then had to unwind. The shown offset moves with it, so wrapping does not spin.
+      function wrapOffset() {
+        if (yawOffset > 180) { yawOffset -= 360; camOffset -= 360; }
+        else if (yawOffset <= -180) { yawOffset += 360; camOffset += 360; }
+      }
       var cam = null;          // { bearing, zoom, pitch } the camera is easing towards
       // The next step on an animation frame or, failing one within 100 ms, a timer: a
       // browser that stops serving frames to a page it considers hidden or idle (an
@@ -1439,7 +1469,13 @@ SCRIPT = r"""
         if (!following || view.hidden) return;
         var dt = followLast ? Math.min((now - followLast) / 1000, 1) : 1 / 60;
         followLast = now;
-        var target = courseAt(cutoff) + yawOffset;
+        // Two parts, eased apart so they cannot fight: the direction of flight, smoothed and
+        // rate-limited as before, and the reader's own turn off it (arrows, twist), which
+        // follows them within a fraction of a second. Mixed into one eased target, a turn
+        // pressed while the flight was turning came out slow, partial — and past 180°
+        // went the short way round, the opposite way to the one pressed.
+        var target = courseAt(cutoff);
+        if (camCourse === null) camCourse = map.getBearing() - camOffset;
         // Heading over 0.7 s, zoom and tilt over 0.3 s: the zoom is the reader's own.
         var kTurn = 1 - Math.exp(-dt / 0.7), kZoom = 1 - Math.exp(-dt / 0.3);
         var bearing = map.getBearing(), zoom = map.getZoom(), pitch = map.getPitch();
@@ -1467,7 +1503,7 @@ SCRIPT = r"""
         if (group.length > 1 || (group.length === 1 && group[0] !== p)) {
           var c = { lon: 0, lat: 0, alt: 0 };
           group.forEach(function (q) { c.lon += q.lon / group.length; c.lat += q.lat / group.length; c.alt += q.alt / group.length; });
-          var kx = 111320 * Math.cos(c.lat * Math.PI / 180), ky = 111320, rb = target * Math.PI / 180;
+          var kx = 111320 * Math.cos(c.lat * Math.PI / 180), ky = 111320, rb = (target + yawOffset) * Math.PI / 180;
           var across = 0, along = 0;
           group.forEach(function (q) {
             var dx = (q.lon - c.lon) * kx, dy = (q.lat - c.lat) * ky;
@@ -1506,12 +1542,15 @@ SCRIPT = r"""
           else if (worst < 0.75 && fitBias < 0) { fitBias = Math.min(fitBias + 0.01, 0); fitting = true; }
           p = c;
         }
-        var dTurn = turn(bearing, target), dZoom = Math.min(cam.zoom, fitZoom) - zoom, dPitch = cam.pitch - pitch;
+        var dTurn = turn(camCourse, target), dZoom = Math.min(cam.zoom, fitZoom) - zoom, dPitch = cam.pitch - pitch;
         // And never faster than 90° a second: where the flight really turns back, the
         // smoothed heading still swings half round in a few minutes of flight, which at
         // 5 min/s is under a second on screen.
-        var swing = Math.max(-90 * dt, Math.min(90 * dt, dTurn * kTurn));
-        bearing += swing; zoom += dZoom * kZoom; pitch += dPitch * kZoom;
+        camCourse += Math.max(-90 * dt, Math.min(90 * dt, dTurn * kTurn));
+        var dOffset = yawOffset - camOffset;
+        camOffset += dOffset * (1 - Math.exp(-dt / 0.15));
+        bearing = camCourse + camOffset;
+        zoom += dZoom * kZoom; pitch += dPitch * kZoom;
         // MapLibre orbits a point on the ground, at the height of the terrain under the
         // centre, and the glider is kilometres above it (here its steady position). Estimating where on the ground
         // to look so the glider lands mid-screen worked over Krupka and hunted over the
@@ -1540,7 +1579,8 @@ SCRIPT = r"""
         map.jumpTo({ center: [p.lon + ahead * Math.sin(heading) / (111320 * Math.cos(p.lat * Math.PI / 180)),
                               p.lat + ahead * Math.cos(heading) / 111320],
                      bearing: bearing, zoom: zoom, pitch: pitch });
-        if (playing || fitting || Math.abs(dTurn) > 0.05 || Math.abs(dZoom) > 0.01 || Math.abs(dPitch) > 0.05) {
+        if (playing || fitting || Math.abs(dTurn) > 0.05 || Math.abs(dOffset) > 0.05 ||
+            Math.abs(dZoom) > 0.01 || Math.abs(dPitch) > 0.05) {
           kickFollow();
         } else followLast = 0;
       }
@@ -1592,7 +1632,7 @@ SCRIPT = r"""
         // Opening on the whole flight, follow comes down to a few kilometres around the
         // glider and a view along the ground; a reader already closer keeps their zoom.
         if (on) {
-          yawOffset = 0;
+          yawOffset = 0; camOffset = 0; camCourse = null;
           fitBias = 0;
           cam = { zoom: Math.max(map.getZoom(), 12.5), pitch: Math.max(map.getPitch(), 60) };
           kickFollow();
@@ -1685,6 +1725,7 @@ SCRIPT = r"""
             followZoomBy(Math.log2(now.spread / touch.spread), true);
             cam.pitch = Math.min(85, Math.max(0, cam.pitch - (now.y - touch.y) * 0.5));
             yawOffset -= turn(touch.angle, now.angle);
+            wrapOffset();
             kickFollow();
           }
           touch = now;
@@ -1710,6 +1751,14 @@ SCRIPT = r"""
       function inView(event) {
         return view.contains(event.target) && !/^(INPUT|SELECT|TEXTAREA)$/.test(event.target.tagName);
       }
+      // Space plays and pauses from anywhere in the view. On a focused bar button it also
+      // "clicked" that button — the camera, say — as well as toggling the replay.
+      view.addEventListener('keydown', function (event) {
+        if (event.key !== ' ' || !inView(event) || event.ctrlKey || event.metaKey || event.altKey) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        togglePlay();
+      }, true);
       view.addEventListener('keydown', function (event) {
         if (!following || !inView(event)) return;
         var k = event.key;
@@ -1724,9 +1773,11 @@ SCRIPT = r"""
           // means nothing while the camera rides with the glider, so shift is not needed.
           event.preventDefault();
           event.stopImmediatePropagation();
-          if (k === 'ArrowLeft') yawOffset -= 15;
-          else if (k === 'ArrowRight') yawOffset += 15;
-          else cam.pitch = Math.min(85, Math.max(0, cam.pitch + (k === 'ArrowUp' ? 10 : -10)));
+          // The pilot's way round (October 2026): → turns the view 15° to the left of the
+          // direction of flight, ↑ tilts it down towards the ground.
+          if (k === 'ArrowLeft') { yawOffset += 15; wrapOffset(); }
+          else if (k === 'ArrowRight') { yawOffset -= 15; wrapOffset(); }
+          else cam.pitch = Math.min(85, Math.max(0, cam.pitch + (k === 'ArrowUp' ? -10 : 10)));
           kickFollow();
         }
       }, true);

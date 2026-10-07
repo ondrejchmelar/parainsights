@@ -1315,9 +1315,10 @@ function initFlight(root) {
 
     tip.innerHTML =
       '<div class="t-time">' + data.clock[index] + '</div>' +
-      '<div class="t-row">' + data.alt[index] + ' m &middot; ' +
-      (data.climb[index] > 0 ? '+' : '') + data.climb[index].toFixed(1) + ' m/s</div>' +
-      '<div class="t-row">' + data.speed[index] + ' km/h &middot; ' + data.phase[index] + '</div>';
+      '<div class="t-row">' + data.alt[index] + ' m AMSL' +
+      (data.agl ? ' &middot; ' + Math.max(0, data.agl[index]) + ' m AGL' : '') + '</div>' +
+      '<div class="t-row">' + (data.climb[index] > 0 ? '+' : '') + data.climb[index].toFixed(1) + ' m/s &middot; ' +
+      data.speed[index] + ' km/h &middot; ' + data.phase[index] + '</div>';
     if (terrainView) terrainView.setCursor(index);
     tip.classList.add('on');
     var tipBox = tip.getBoundingClientRect();
@@ -1326,7 +1327,8 @@ function initFlight(root) {
     // In full screen (or the in-page maximise) the map block is all there is on screen, and
     // a tooltip left in the page under it is never seen: it moves into the block, which
     // sits at the viewport's corner, so it is placed without the page's scroll.
-    var full = document.fullscreenElement && document.fullscreenElement.contains(root)
+    // (The full-screen element is inside this flight's article, not around it.)
+    var full = document.fullscreenElement && root.contains(document.fullscreenElement)
       ? document.fullscreenElement : root.querySelector('.flight-map.is-maximised');
     var into = full || document.body;
     if (tip.parentNode !== into) {

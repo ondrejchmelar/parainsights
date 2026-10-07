@@ -70,3 +70,26 @@ def test_removing_a_compared_flight_leaves_the_comparison(page):
     time.sleep(0.4)
     assert page.js("document.querySelectorAll('[data-flight-report=\"f0\"]').length") == 0
     assert not page.js("document.documentElement.classList.contains('is-comparing')")
+
+
+def test_the_side_view_tooltip_is_shown_in_full_screen(page):
+    """In full screen only the full-screen element is drawn, so a tooltip left in the page
+    body is never seen. The full-screen element is *inside* the flight's article; the check
+    once asked it the other way round and the tooltip stayed behind."""
+    _tap(page, '[data-flight-tab="f1"] .tab-open')
+    full = page.call("Runtime.evaluate", userGesture=True, awaitPromise=True, returnByValue=True,
+                     expression="document.querySelector('[data-flight-report=\"f1\"] .side-view')"
+                                ".closest('section').requestFullscreen().then(() => true)")
+    assert full["result"].get("value"), full
+    try:
+        x, y = page.js("(() => { var r = document.querySelector('[data-flight-report=\"f1\"]"
+                       " .side-view .hit').getBoundingClientRect();"
+                       " return [r.left + r.width * 0.4, r.top + r.height / 2]; })()")
+        page.click(x, y)
+        time.sleep(0.4)
+        state = page.js("""(() => { var t = document.getElementById('tip');
+          return { on: t.classList.contains('on'),
+                   inside: document.fullscreenElement.contains(t) }; })()""")
+        assert state == {"on": True, "inside": True}, state
+    finally:
+        page.js("document.exitFullscreen().then(() => true)")
