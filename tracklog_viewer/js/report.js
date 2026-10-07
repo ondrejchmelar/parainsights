@@ -91,9 +91,9 @@
     if (!w) return '';
     var inside = clearance.slice(w[0], w[1]), median = np.median(inside), low = np.min(inside);
     if (low < 0) {
-      return 'Median ground clearance in flight was ' + fmt(median, 0) + '&nbsp;m &mdash; the launch and the landing are left out, or both would win by being on the ground.';
+      return 'Median height over the ground directly beneath you was ' + fmt(median, 0) + '&nbsp;m &mdash; the launch and the landing are left out, or both would win by being on the ground.';
     }
-    return 'Lowest ground clearance in flight was ' + fmt(low, 0) + '&nbsp;m, median ' + fmt(median, 0) +
+    return 'Lowest height over the ground directly beneath you was ' + fmt(low, 0) + '&nbsp;m, median ' + fmt(median, 0) +
       '&nbsp;m &mdash; the launch and the landing are left out, or both would win by being on the ground.';
   }
 
@@ -425,10 +425,11 @@
       '      <li><span class="swatch" style="background:var(--sink);opacity:.5"></span>gliding</li>\n    </ul>\n    </div>';
     var sideView = sideChart + sideControls;
 
-    var view3dSection, clearance = null;
+    var view3dSection, clearance = null, valley = null;
     if (terrain) {
       var payload = TV.scene.data(a, options.sceneTerrain || terrain, { airspaceRemote: options.airspaceRemote });
       clearance = TV.terrain.clearance(terrain, a);
+      valley = TV.terrain.valleyClearance(terrain, a);
       view3dSection = '\n  <section>\n    <div class="section-head">\n      <h2>The flight over the ground</h2>\n' +
         '      <p>Hovering a moment in the side view marks the same moment on the map above, and in\n         the top view below. Click to keep it there while you look; click again, or press\n' +
         '         <kbd>Esc</kbd>, to let go. A row in the climbs or glides table does the same for\n         where that phase began.' +
@@ -459,7 +460,7 @@
         ' circled climbs, which this flight supports to about ' + fmt(perf.confidence, 0, { percent: true }) + '.' + bestNote;
     }
 
-    var result = TV.debrief.build(a, { route: route, weather: weather, clearance: clearance, flightPlan: options.flightPlan || null });
+    var result = TV.debrief.build(a, { route: route, weather: weather, clearance: clearance, valley: valley, flightPlan: options.flightPlan || null });
     var sources = TV.insolation.sources(a, terrain);
     var debriefSection = debriefCards(result, uid, sample, clearanceNote(clearance) + ' ' + triggerNote(a, terrain),
                                       meteo ? '' : meteoReason(a, now));

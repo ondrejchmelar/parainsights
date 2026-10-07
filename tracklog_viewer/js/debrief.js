@@ -16,7 +16,7 @@
   var THRESHOLDS = {
     weak_climb_share: 0.65, gap_over_median: 3.25, gap_minimum_seconds: 300,
     centring_ratio: 0.75, best_climb_left_metres: 100.0, other_lossy_share: 0.18,
-    low_clearance: 100.0, ground_margin: 100.0, band_share: 0.20, band_ratio: 0.75,
+    low_clearance: 100.0, low_valley: 300.0, ground_margin: 100.0, band_share: 0.20, band_ratio: 0.75,
     ceiling_used: 0.85, near_close: 0.35, minimum_share: 0.02, cards: 5
   };
 
@@ -80,28 +80,46 @@
     });
   }
 
-  function lowPoint(a, clearance) {
+  // The lowest the pilot got and climbed out of. `valley` (`TV.terrain.valleyClearance`)
+  // is height above the lowest ground within 2 km, which is how low a pilot really was:
+  // over the ground directly beneath (`clearance`), soaring 70 m above a ridge top read
+  // as the closest call of the day with 500 m to the valley beside it. Without `valley`
+  // the ground beneath is all there is, and the bar is lower to match.
+  //
+  // Two cuts, or the ends of the flight win. The launch and the landing are left out by
+  // the ground beneath (`airborneWindow`); and nothing after the last climb counts, because
+  // the glide out to land always ends lower than any low point the pilot flew out of.
+  function lowPoint(a, clearance, valley) {
     if (!clearance || clearance.length !== a.series.t.length) return null;
     if (!clearance.some(function (v) { return isFinite(v); })) return null;
+    if (valley && valley.length !== clearance.length) valley = null;
     var w = M.airborneWindow(clearance, THRESHOLDS.ground_margin);
     if (!w) return null;
-    var lo = w[0], hi = w[1], index = -1, lowest = Infinity, inside = [];
+    var climbs = a.segments.filter(function (s) { return s.phase === 'thermal'; });
+    var lo = w[0], hi = Math.min(w[1], climbs.length ? climbs[climbs.length - 1].stop : w[1]);
+    var height = valley || clearance, index = -1, lowest = Infinity, inside = [];
     for (var i = lo; i < hi; i++) {
-      var v = clearance[i];
+      var v = height[i];
       if (v !== v) continue;
       inside.push(v);
       if (v < lowest) { lowest = v; index = i; }
     }
+    if (index < 0) return null;
     var median = np.median(inside);
-    if (lowest > THRESHOLDS.low_clearance || lowest < 0) return null;
+    if (lowest > (valley ? THRESHOLDS.low_valley : THRESHOLDS.low_clearance) || lowest < 0) return null;
     var when = igc.clock(a.flight.time[index], a.flight.timezone);
+    var beneath = valley && clearance[index] < lowest - 50
+      ? ' The ground directly under you was ' + num(Math.max(clearance[index], 0)) + ' m below: you were over a slope.' : '';
     return finding({
       id: 'low-point',
-      title: 'You came within ' + fmt(lowest, 0) + ' m of the ground',
-      sentence: 'That was at ' + when + '. For most of the flight you had about ' + num(median) +
-        ' m underneath you. Launch and landing are left out of this, or they would win every time.',
+      title: valley ? 'Your lowest was ' + fmt(lowest, 0) + ' m above the valley floor'
+                    : 'You came within ' + fmt(lowest, 0) + ' m of the ground',
+      sentence: 'That was at ' + when + ', and you climbed out of it. For most of the flight you had about ' + num(median) +
+        (valley ? ' m above the valley floor (the lowest ground within 2 km).' : ' m underneath you.') + beneath +
+        ' Launch and the glide out to land are left out of this, or they would win every time.',
       cost: metres(Math.max(median - lowest, 0.0), a), at: when, cursor: index,
-      evidence: { lowest: R(lowest), median: R(median), from: lo, to: hi }
+      evidence: { lowest: R(lowest), median: R(median), from: lo, to: hi, valley: !!valley,
+                  beneath: R(clearance[index]) }
     });
   }
 
@@ -297,16 +315,17 @@
     return { sentence: parts.join(' '), headline: headline };
   }
 
-  // `options`: route, weather, clearance, flightPlan, limit — each optional; absent, the
+  // `options`: route, weather, clearance, valley, flightPlan, limit — each optional; absent, the
   // findings resting on it do not exist and the input is named in `suppressed`.
   function build(a, options) {
     options = options || {};
     var route = options.route || null, weather = options.weather || null;
     var clearance = options.clearance || null, flightPlan = options.flightPlan || null;
+    var valley = options.valley || null;
     var builders = [
       function () { return bestClimbLeft(a); },
       function () { return expensiveGap(a); },
-      function () { return lowPoint(a, clearance); },
+      function () { return lowPoint(a, clearance, valley); },
       function () { return climbSelection(a); },
       function () { return centring(a); },
       function () { return workingBand(a); },

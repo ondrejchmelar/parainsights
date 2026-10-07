@@ -278,6 +278,37 @@ class TestLowPoint:
                     {"base": 800.0, "at": [[0.5, -227.0]]}).value is None
 
 
+class TestLowPointOverTheValley:
+    """How low a pilot was is how far above the ground they would land on — the valley —
+    not the slope beneath. 70 m over a ridge top with 500 m to the valley beside it is
+    ridge soaring, and was reported as the closest call of the day."""
+
+    def _day(self, tmp_path):
+        return a_day(tmp_path, "valley.igc", [(300, 2.5), (300, 2.0), (300, 1.4), (300, 0.8)], glide=700)
+
+    def test_skimming_a_ridge_high_over_the_valley_is_not_a_low_point(self, tmp_path):
+        card = part(self._day(tmp_path), "lowPoint",
+                    {"base": 800.0, "at": [[0.5, 70.0]]},
+                    {"base": 1200.0, "at": [[0.5, 520.0]]}).value
+        assert card is None, card
+
+    def test_a_low_save_over_the_valley_is_one_and_says_so(self, tmp_path):
+        card = part(self._day(tmp_path), "lowPoint",
+                    {"base": 800.0, "at": [[0.5, 150.0]]},
+                    {"base": 1200.0, "at": [[0.5, 180.0]]}).value
+        assert card is not None
+        assert card["title"] == "Your lowest was 180 m above the valley floor"
+        assert card["evidence"]["valley"] and card["evidence"]["lowest"] == 180
+
+    def test_the_glide_out_to_land_cannot_win(self, tmp_path):
+        """After the last climb the flight only goes down, and always ends lower than any
+        low point it climbed out of."""
+        card = part(self._day(tmp_path), "lowPoint",
+                    {"base": 800.0},
+                    {"base": 1200.0, "at": [[0.97, 150.0]]}).value
+        assert card is None, card
+
+
 class TestTriangleCategory:
     """Only a route from `triangle()` may claim a triangle category.
 

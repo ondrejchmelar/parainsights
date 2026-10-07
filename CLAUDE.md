@@ -438,6 +438,16 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   than 90°, each leg at least 60 s, and judges each part again; the parts stand as glides
   whatever their length. A turn under 90° stays one glide — it costs at most 29% of the
   distance, and the reader asked for slight changes to be left alone.
+- **How low a pilot was is measured from the valley floor** (October 2026), not the
+  ground directly beneath: soaring 70 m over a ridge top with 500 m to the valley beside
+  it was reported as "you came within 71 m of the ground". The low-point finding uses
+  `TV.terrain.valleyClearance` — height above the lowest ground within 2 km
+  (`valleyFloor`, a min filter over the DEM grid; on five flights the lowest point moved
+  40 m at most between 1 and 5 km) — and fires under 300 m (`low_valley`). It ends at the
+  last climb: measured from the valley, the glide out to land always ended lower than any
+  low point flown, where over the ground beneath the landing's rising ground had hidden
+  that. The ground beneath still cuts off launch and landing, and is what the AGL
+  tooltip and the debrief's context note give.
 - **A turn is a full revolution; how far the nose swung is a different number.**
   `turns` counts heading advancing through 360° in *one* direction (`_revolutions`), so a
   wingover — 180° out, 180° back — is no longer most of a turn, and a climb circled both

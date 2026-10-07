@@ -33,6 +33,47 @@
     return f.lat.map(function (lat, i) { return alt[i] - at(grid, lat, f.lon[i]); });
   }
 
+  // The valley floor: the lowest ground within `radius` metres of each node, as a grid of
+  // its own (a square window, min-filtered along the rows and then the columns).
+  //
+  // Height above the ground directly beneath says a pilot soaring 70 m over a ridge top
+  // nearly hit the ground, with 500 m of air to the valley beside them. How low a pilot
+  // really was is how far above the ground they would have to land on: the valley. The
+  // radius is the floor's reach, and the answer barely depends on it — measured on five
+  // flights from Krupka to the Karakoram, the lowest point moves 40 m at most between 1
+  // and 5 km.
+  var VALLEY_RADIUS = 2000;
+  function valleyFloor(grid, radius) {
+    var rows = grid.rows, cols = grid.cols, z = grid.z;
+    var rowM = 111320 * (grid.north - grid.south) / Math.max(rows - 1, 1);
+    var colM = 111320 * Math.cos((grid.north + grid.south) / 2 * Math.PI / 180) *
+      (grid.east - grid.west) / Math.max(cols - 1, 1);
+    var rx = Math.max(1, Math.round(radius / colM)), ry = Math.max(1, Math.round(radius / rowM));
+    var along = new Array(rows * cols), out = new Array(rows * cols), r, c, k, low;
+    for (r = 0; r < rows; r++) {
+      for (c = 0; c < cols; c++) {
+        low = Infinity;
+        for (k = Math.max(0, c - rx); k <= Math.min(cols - 1, c + rx); k++) low = Math.min(low, z[r * cols + k]);
+        along[r * cols + c] = low;
+      }
+    }
+    for (c = 0; c < cols; c++) {
+      for (r = 0; r < rows; r++) {
+        low = Infinity;
+        for (k = Math.max(0, r - ry); k <= Math.min(rows - 1, r + ry); k++) low = Math.min(low, along[k * cols + c]);
+        out[r * cols + c] = low;
+      }
+    }
+    return { west: grid.west, east: grid.east, south: grid.south, north: grid.north,
+             rows: rows, cols: cols, z: out };
+  }
+
+  // Height above the valley floor for every fix (`valleyFloor`), from GPS altitude as
+  // `clearance` is.
+  function valleyClearance(grid, analysis, radius) {
+    return clearance(valleyFloor(grid, radius || VALLEY_RADIUS), analysis);
+  }
+
   // ---- the grid an upload asks for: `terrain.for_flight` + `Terrain.to_remote` ---------
   var TILE_URL = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
   var MAX_TILES = 64;
@@ -74,5 +115,6 @@
              rows: size[0], cols: size[1], remote: { url: TILE_URL, zoom: chooseZoom(west, east, south, north) } };
   }
 
-  TV.terrain = { at: at, clearance: clearance, cell: cell, remoteFor: remoteFor, chooseZoom: chooseZoom };
+  TV.terrain = { at: at, clearance: clearance, valleyFloor: valleyFloor, valleyClearance: valleyClearance,
+                 VALLEY_RADIUS: VALLEY_RADIUS, cell: cell, remoteFor: remoteFor, chooseZoom: chooseZoom };
 })(typeof window !== 'undefined' ? (window.TV = window.TV || {}) : (globalThis.TV = globalThis.TV || {}));

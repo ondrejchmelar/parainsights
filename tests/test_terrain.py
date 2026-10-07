@@ -240,3 +240,19 @@ class TestASilentFailureIsNotAFailureReport:
         grid = terrain.fetch(12.0, 19.0, 48.5, 51.0, report=said.append)
         assert grid is not None, "one good tile is still a mesh"
         assert len(said) == 1 and said[0].startswith("terrain: 1 of ")
+
+
+def test_the_valley_floor_is_the_lowest_ground_within_the_radius():
+    """A ridge at 1 000 m with a valley at 200 m 1.5 km away: within 2 km of the ridge the
+    floor is the valley's, and beyond the radius the ridge's own height again."""
+    cols, rows = 41, 41          # 0.002° steps: about 222 m north-south, 146 m east-west
+    z = []
+    for r in range(rows):
+        for c in range(cols):
+            z.append(200 if c == 0 else 1000)
+    grid = {"west": 14.0, "east": 14.08, "south": 49.0, "north": 49.08, "rows": rows, "cols": cols, "z": z}
+    floor = js.run("return TV.terrain.valleyFloor(input.grid, 2000).z;", grid=grid)
+    row = floor[20 * cols:21 * cols]
+    assert row[0] == 200 and row[10] == 200, "1.5 km from the valley the floor is the valley's"
+    assert row[14] == 200 and row[15] == 1000, "the radius is 2 km: 14 steps of 146 m, and no more"
+
