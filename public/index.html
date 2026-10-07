@@ -2004,8 +2004,7 @@ a.site-source:hover { color: var(--ink); border-color: var(--rule-strong); }
 <footer class="site-foot"><a href="https://github.com/ondrejchmelar/parainsights" rel="noreferrer">parainsights on GitHub</a> — the source, the issues, and how every number on these pages is worked out. Airspace © <a href="https://www.openaip.net" rel="noreferrer">openAIP</a> (CC BY-NC 4.0); imagery © Esri, Maxar, Earthstar Geographics; place names © OpenMapTiles, © OpenStreetMap contributors; terrain: AWS Open Data; weather: Open-Meteo.</footer>
 </div>
 <div class="tooltip" id="tip" role="status" aria-live="polite"></div>
-<script>
-// The scrollbar's width, so a full-bleed panel can be exactly the layout viewport.
+<script>// The scrollbar's width, so a full-bleed panel can be exactly the layout viewport.
 //
 // This has to be innerWidth - clientWidth: an offscreen probe element reports 0 in a
 // browser that gives overlay scrollbars to elements and a classic one to the document,
@@ -2368,7 +2367,6 @@ function initView3d(root, cursorTrack, preset) {
   return handle;
 }
 
-
 (function () {
   var MAPLIBRE = 'https://unpkg.com/maplibre-gl@4.7.1/dist', DECK = 'https://unpkg.com/deck.gl@9.0.35/dist.min.js', TERRARIUM = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
   var libraries = null;
@@ -2440,7 +2438,6 @@ function initView3d(root, cursorTrack, preset) {
   });
   window.addEventListener('pageshow', function () { setTimeout(window.__reviveMaps, 300); });
 })();
-
 
 (function () {
   var COMPASS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
@@ -4423,7 +4420,6 @@ function initView3d(root, cursorTrack, preset) {
   };
 })();
 
-
 // The side view and the top view, built here rather than shipped as SVG.
 //
 // The output is the same DOM `charts.py` writes — same elements in the same order, same
@@ -4909,7 +4905,6 @@ function initView3d(root, cursorTrack, preset) {
 
   document.querySelectorAll('[data-flight-report]').forEach(draw);
 })();
-
 
 // "The air that day" for a flight whose article was written without the day's weather —
 // a report built without --meteo, or an upload whose fetch failed. Deferred until the
@@ -10075,8 +10070,7 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
   TV.upload = { read: read, readBytes: readBytes, build: build, place: place, paint: paint, compose: compose };
 })(typeof window !== 'undefined' ? (window.TV = window.TV || {}) : (globalThis.TV = globalThis.TV || {}));
 </script>
-<script>
-(function () {
+<script>(function () {
   var drop = document.getElementById('ql-drop');
   if (!drop) return;
   var input = document.getElementById('ql-file');
@@ -10200,8 +10194,7 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
   });
 })();
 </script>
-<script>
-(function () {
+<script>(function () {
   var root = document.documentElement;
   function dark() {
     return root.dataset.theme
@@ -10237,8 +10230,7 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
   });
 })();
 </script>
-<script>
-(function () {
+<script>(function () {
   // The published hours are UTC and the reader thinks in Czech local time — two hours
   // apart for the whole flying season, which is a big enough error to be the very thing
   // this control exists to prevent. So the input is wall-clock Prague and the comparison
@@ -10348,7 +10340,6 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
     input.dispatchEvent(new Event('input', { bubbles: true }));
   });
 })();
-
 (function () {
   var svg = document.getElementById('asp-map');
   if (!svg) return;
@@ -10522,7 +10513,6 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
   refilter();
   apply();
 })();
-
 (function () {
   var article = document.querySelector('.airspace-article');
   var panel = article && article.querySelector('.view3d-panel');
@@ -10615,7 +10605,6 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
   if (window.__openMap) window.__openMap(panel.closest('.renderer-host'));
   }
 })();
-
 (function () {
   var holder = document.querySelector('[data-planner]');
   if (!holder) return;
@@ -11126,8 +11115,7 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
   }
 })();
 </script>
-<script>
-// The top-level view switch. One level above the flight tabs: those choose which
+<script>// The top-level view switch. One level above the flight tabs: those choose which
 // flight, this chooses whether you are looking at flights at all.
 (function () {
   var nav = document.getElementById('views');

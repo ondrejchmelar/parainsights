@@ -21,6 +21,7 @@ strip that guessed would be wrong in one of the two places.
 """
 
 from __future__ import annotations
+from pathlib import Path
 
 # key, label, directory under public/. Order is the order a day happens in: what is the
 # weather, where shall I go, what will I fly, and then what did I actually do.
@@ -70,43 +71,7 @@ try {
 # do next, and "follow the system" is a thing readers set once in their system and never
 # think about again — a page that offers it as a third click is a page asking them to
 # manage a preference they already expressed.
-THEME_SCRIPT = """
-(function () {
-  var root = document.documentElement;
-  function dark() {
-    return root.dataset.theme
-      ? root.dataset.theme === 'dark'
-      : window.matchMedia('(prefers-color-scheme: dark)').matches;
-  }
-  function label(button) {
-    var isDark = dark();
-    button.setAttribute('aria-pressed', isDark ? 'true' : 'false');
-    button.title = isDark ? 'Switch to the light theme' : 'Switch to the dark theme';
-    button.querySelector('.theme-glyph').textContent = isDark ? '\u2600' : '\u263D';
-  }
-  var buttons = document.querySelectorAll('.theme-toggle');
-  buttons.forEach(function (button) {
-    label(button);
-    button.addEventListener('click', function () {
-      root.dataset.theme = dark() ? 'light' : 'dark';
-      try {
-        localStorage.setItem('parainsights.theme', root.dataset.theme);
-      } catch (e) { /* private mode: the page still switches, it just forgets */ }
-      buttons.forEach(label);
-      // The canvases are painted with the tokens read at draw time, so they hold the
-      // old theme until something asks them to redraw. Each tool exposes its own.
-      if (window.__meteo && window.__meteo.draw) window.__meteo.draw();
-      if (window.__drawCharts) {
-        document.querySelectorAll('[data-flight-report]').forEach(window.__drawCharts);
-      }
-    });
-  });
-  // The system changing under a reader who has expressed no preference.
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
-    if (!root.dataset.theme) buttons.forEach(label);
-  });
-})();
-"""
+THEME_SCRIPT = (Path(__file__).parent / "js/theme.js").read_text(encoding="utf-8")
 
 
 def theme_button() -> str:

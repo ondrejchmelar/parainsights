@@ -28,9 +28,15 @@ build-backend = "setuptools.build_meta"
 include = ["tracklog_viewer*", "airspaces*", "meteo*", "planner*", "parainsights_common*",
            "parainsights_map*"]
 
-# The analysis and the articles, in JavaScript: read from beside the package, not imported.
+# The JavaScript, read from beside each package rather than imported: the analysis and
+# the articles (`tracklog_viewer/js/`), and every page's own scripts.
 [tool.setuptools.package-data]
-tracklog_viewer = ["js/*.js"]
+tracklog_viewer = ["js/*.js", "page/*.js"]
+airspaces = ["js/*.js"]
+meteo = ["js/*.js"]
+planner = ["js/*.js"]
+parainsights_common = ["js/*.js"]
+parainsights_map = ["js/*.js"]
 
 # Set explicitly so pytest does not walk up and adopt an enclosing project's config.
 [tool.pytest.ini_options]

@@ -303,6 +303,16 @@ score the route, write the article. An uploaded track goes through it in the pag
 report's own flights go through it at build time in Node (`js_build.py`). The Python is the
 build and the page around the articles.
 
+**All JavaScript lives in `.js` files** (October 2026): the analysis bundle in
+`tracklog_viewer/js/`, and each page's own scripts beside the module that writes the page
+— `tracklog_viewer/page/` (report, view tabs, charts, upload panel), `parainsights_map/js/`,
+`planner/js/`, `airspaces/js/`, `meteo/js/`, `parainsights_common/js/`. The Python module
+reads its file into the same constant it always had (`map3d.SCRIPT`, …) and the page inlines
+it, so nothing about the page changed; a build-time value goes in as a `__NAME__` token
+replaced on read (`render_map`'s CDN URLs, the planner's scoring constants from `js/xc.js`).
+They were strings inside the `.py` files until then — ~5 700 lines no linter or `node
+--check` could see, and a stray `%` in the planner's `%`-formatted one broke the page once.
+
 | Module | Responsibility |
 |---|---|
 | `js/igc.js` | IGC parsing. **Every logger quirk lives here and nowhere else.** The take-off's timezone from `js/vendor/tz-lookup.js` |
@@ -330,10 +340,10 @@ build and the page around the articles.
 | `js_build.py` | Runs `build_runner.js` |
 | `sources.py` | A file, a URL's download, or a refusal for an XContest page |
 | `certification.py` | The register-matching rules and `gliders.py`, compiled to `gliders.json` |
-| `render_html.py` | The page around the articles: stylesheet, page script, strips, bundle |
-| `upload_panel.py` | The `+ your track` panel |
-| `charts_client.py` | The side and top views, drawn in the browser from the article's payload |
-| `parainsights_map/` | The 3D map (a package of its own): `map3d` (the map: MapLibre + deck.gl and its controls), `view3d` (the panel, the scene, ground and airspace loading, the handle the charts drive), `render_map` (the library loader, `__openMap`, context-loss revival), `terrain` (DEM grids) |
+| `render_html.py` | The page around the articles: stylesheet, strips, bundle; its script is `page/report.js` and `page/view_tabs.js` |
+| `upload_panel.py` | The `+ your track` panel (`page/upload_panel.js`) |
+| `charts_client.py` | The side and top views, drawn in the browser from the article's payload (`page/charts.js`) |
+| `parainsights_map/` | The 3D map (a package of its own): `map3d` (the map: MapLibre + deck.gl and its controls), `view3d` (the panel, the scene, ground and airspace loading, the handle the charts drive), `render_map` (the library loader, `__openMap`, context-loss revival), `terrain` (DEM grids); their scripts in `js/` |
 
 ## Decisions, and the reasons behind them
 
