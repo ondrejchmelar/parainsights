@@ -584,12 +584,9 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
 
 
 def _map(airspaces, project, scene: dict | None, uid: str) -> str:
-    """The map itself: the 3D view where a scene was built for it, the flat SVG where
-    one could not be — no network at build time, or no Pillow to stitch imagery with.
-
-    The fallback is not a courtesy. The 3D view needs an elevation grid and a stitched
-    basemap, both fetched, and the one thing this page must never do is fail to draw the
-    airspace because a tile server was slow."""
+    """The map itself: the 3D map where a scene was built for it, the flat SVG where it
+    was not — which is only when asked for (`--flat`): the 3D map fetches its ground and
+    imagery in the page, so a build cannot lose them (`scene.remote`)."""
     if scene is None:
         return map_svg(airspaces, project)
     from parainsights_map import view3d

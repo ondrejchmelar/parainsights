@@ -7,7 +7,8 @@ and the replay slider. From the canvas view: the control bar, its keys, the sun 
 rose, the climb and glide labels, the airspace boxes — and its imagery treatment: the
 photograph shaded towards warm white and dark blue from the sun's real position, never
 MapLibre's default black-and-white overlay that greys it. It is now the only one; the
-comments below still say "the canvas" where a choice was made to match it.
+comments in `js/map3d.js` say "the canvas" where a choice was made to match the
+renderer that is gone.
 
 It draws from the panel's scene and follows the linked cursor through the panel's handle
 (`view3d.initView3d`: `handle.built`, and the wrapped `setCursor`). MapLibre and deck.gl

@@ -367,11 +367,11 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   rounding — five or six vertices per thermal circle, drawn as zigzags), at 5 decimals.
   The DEM grid is **120 000 nodes over up to 480 columns**, fetched from up to 64 tiles,
   and the showcase flights **fetch it at view time** (`Terrain.to_remote`) rather than
-  embedding ~600 KB of heights each; the Python analysis still uses the heights it
-  fetched. Zooming in fetches patches of up to 320 nodes across from 36 tiles, down to
-  the DEM's ~25 m, and imagery from up to 96 tiles. Measure a perf problem before
-  trading any of this back. (History: 2 600 nodes was 59×43 over an alpine box — every
-  facet of the heightfield visible as a quadrilateral.)
+  embedding ~600 KB of heights each; the build's analysis (clearance, the valley floor,
+  the slopes under climbs) uses the same grid, fetched at build time. The map streams
+  its own terrain and imagery at every zoom. Measure a perf problem before trading any
+  of this back. (History: 2 600 nodes was 59×43 over an alpine box — every facet of the
+  canvas view's heightfield visible as a quadrilateral.)
 - **XContest ranks by score, not distance, and that changes which route wins.** The
   multipliers are open 1.0, flat triangle 1.2, FAI triangle 1.4, so a *shorter* triangle
   routinely beats a longer one — and the open optimum. `xc.triangle()` maximises
@@ -617,10 +617,9 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   chart holds the light where it was** rather than snapping back to mid-flight, which was
   a full re-light and a colour swing across the whole terrain triggered by the pointer
   merely leaving on its way somewhere else — and it undid the comparison the reader had
-  just set up. Mid-flight is still where an untouched panel starts. A table rather than a
-  JavaScript port on purpose:
-  `quicklook.py` already duplicates thresholds that can drift, and 144 pairs of numbers
-  cannot. The azimuth is **unwrapped** in the table, or interpolating across 360 sweeps
+  just set up. Mid-flight is still where an untouched panel starts. The scene carries the
+  day as a table (`TV.sun.forFlight`, written with the article) and the map interpolates
+  it, rather than running the solar algorithm per hover. The azimuth is **unwrapped** in the table, or interpolating across 360 sweeps
   the light the long way round the compass. The map re-lights MapLibre's hillshade
   (`sunTo`) only once the sun has moved a degree, while the rose reads the exact
   position and stays smooth. A sun below

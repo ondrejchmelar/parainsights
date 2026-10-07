@@ -686,7 +686,7 @@ function initFlight(root) {
   }
 
   collectViews();
-  // How a redrawn chart gets back into the cursor. `charts_client.js` calls this after
+  // How a redrawn chart gets back into the cursor. `page/charts.js` calls this after
   // the axis toggle rebuilds the side view; without it the toggle silently produces a
   // chart the cursor cannot drive, which looks exactly like the cursor being broken.
   root.__relinkCharts = collectViews;
@@ -790,7 +790,8 @@ function initFlight(root) {
   // front of them and no way to ask where on the ground it happened.
   //
   // `data-cursor` is a position in the sampled arrays the charts are drawn over, mapped
-  // from the segment's fix index in Python, exactly as a finding's cursor is. A row
+  // from the segment's fix index when the article is written (`js/report.js`), exactly as
+  // a finding's cursor is. A row
   // without one (a table built with no sample) simply stays hover-only.
   root.querySelectorAll('tr[data-segment]').forEach(function (row) {
     row.tabIndex = 0;

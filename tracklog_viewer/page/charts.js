@@ -1,6 +1,6 @@
 // The side view and the top view, built here rather than shipped as SVG.
 //
-// The output is the same DOM `charts.py` writes — same elements in the same order, same
+// The output is the same DOM `js/charts.js` writes for the built charts — same elements in the same order, same
 // classes, same data attributes — because everything that reads these charts was written
 // against that DOM: the linked cursor, the tooltip, the band highlight, the debrief's
 // "show me", the theme's `var()` fills. This file is a second *renderer*, deliberately

@@ -1,11 +1,11 @@
-/* The report's server-drawn charts: `tracklog_viewer/charts.py` (the ones the article
- * still bakes in) and `charts_client.payload`, ported.
+/* The report's built charts: `tracklog_viewer/charts.py` (the ones the article bakes in)
+ * and `charts_client.payload`, ported.
  * The Python is retired; it is in git at `ada5e5b`.
  *
- * The output is the Python's SVG, element for element and attribute for attribute, so the
- * page's CSS, the linked cursor and the tooltips go on working whichever side drew it.
- * The side and top views are not here: those were already drawn in the page
- * (`charts_client.SCRIPT`), and this only builds the payload they draw from.
+ * The output was the Python's SVG, element for element and attribute for attribute, so
+ * the page's CSS, the linked cursor and the tooltips went on working across the port.
+ * The side and top views are not here: those are drawn in the page (`page/charts.js`),
+ * and this only builds the payload they draw from.
  *
  * `meteo` throughout is the object `TV.meteo.parse` returns.
  */

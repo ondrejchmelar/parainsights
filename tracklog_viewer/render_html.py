@@ -4,7 +4,8 @@ The articles themselves — one per flight — are written by the JavaScript in 
 (`js/upload.js`'s `compose`), at build time for the flights the page ships with
 (`js_build.py`) and in the page for a track the reader drops on it. This module is the
 document they sit in: the stylesheet, the page script that draws the charts and links
-the cursor, the view and flight strips, the upload panel, and the JavaScript bundle.
+the cursor (`page/report.js`), the view and flight strips, the upload panel, and the
+JavaScript bundle.
 """
 
 import html

@@ -15,7 +15,8 @@ Two rules keep it honest:
   indexed by; two independently decimated samples put the marker on a different moment
   than the one under the pointer.
 
-This module is only the stylesheet and the script; the payload is `TV.charts.payload`.
+This module is only the stylesheet and the script (`page/charts.js`); the payload is
+`TV.charts.payload`.
 """
 
 

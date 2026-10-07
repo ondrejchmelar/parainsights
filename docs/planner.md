@@ -9,19 +9,19 @@ crosses a TMA is not a plan and on a bare basemap you cannot see that.
 
 ## It is a layer, not a viewer
 
-The planner draws nothing of its own. It writes into the two members of the `view3d`
-scene that a flight already uses and asks for a redraw:
+The planner draws nothing of its own. It hands the 3D map (`parainsights_map/map3d.py`)
+what to draw, through the map's entry in `window.__mergedAll`:
 
-| what | how it is drawn |
+| what | how |
 |---|---|
-| the course line | `scene.track`, at 60 m above the terrain under each point |
-| the turnpoints | `scene.climbs`, the numbered markers a flight uses for its climbs |
+| the course line and the numbered turnpoints | `setRoute(walk, points)`, drawn on the ground |
+| the FAI areas and the closing circle | `setShapes(features)`, GeoJSON on the terrain |
+| a click on the ground, as `[lon, lat]` | `onClick(fn)` |
 
-That is why the whole feature is about two hundred lines, and it buys something better
-than brevity: **a planned task and a flown flight are drawn by the same code**, so they
-cannot disagree about where a line on this map is. The two things the view had to expose
-are `groundLonLat` — what is under this screen point, in the coordinates a plan is
-written in rather than the projection's own metric frame — and `groundAt`.
+That buys something better than brevity: **a planned task and a flown flight are drawn
+by the same map**, so they cannot disagree about where a line on this map is. (Until
+October 2026 the planner wrote into the canvas view's scene — `scene.track`,
+`scene.climbs` — and that renderer is gone.)
 
 ## Decisions, and the reasons behind them
 
@@ -30,7 +30,7 @@ written in rather than the projection's own metric frame — and `groundAt`.
   this kind of tool is broken. The map's own `click` (MapLibre's, `entry.onClick`)
   already refuses a pointer that moved, and the planner takes its turnpoints from it.
 
-- **The scoring constants are interpolated from `tracklog_viewer/xc.py`, never typed.**
+- **The scoring constants are interpolated from `tracklog_viewer/js/xc.js`, never typed.**
   A planner that scored a task differently from the report that later measures the flight
   would be worse than no planner. `FAI_MIN_SIDE`, `MAX_CLOSING` and the three multipliers
   come out of the module, and a test fails if the script stops containing them.
@@ -101,12 +101,9 @@ was. "Nothing crossed" is only ever said about ground the map has airspace for.
 The terrain is **not in the page**: it ships as `terrain.remote()` — the box, the grid
 and the tile zoom — and the browser fetches the terrarium tiles and samples them onto
 the same 120 000 nodes `terrain.fetch` would have built (`loadTerrain` in `view3d`).
-Carried, that grid was half of a 1.3 MB page. The base relief is about 2.5 km a node;
-zoom in and hold still and `view3d` fetches a finer patch for what is on screen (about
-160 nodes across it, down to 25 m), draws it in place of the base mesh there, and reads
-heights from it — so picks and turnpoint altitudes follow the finer ground too. The same
-applies on the airspace map and in the report, whose embedded grids carry the tile
-source for it. WebGL only; the 2D fallback keeps the base grid.
+Carried, that grid was half of a 1.3 MB page. It is about 2.5 km a node, and is what
+ground heights are read from (airspace floors given above the ground); the map draws
+its own terrain, streamed at every zoom.
 
 ## Whether anybody is there
 

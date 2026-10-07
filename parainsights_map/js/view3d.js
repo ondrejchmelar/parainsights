@@ -152,7 +152,7 @@ function readScene(node) {
 // beside the Planner: the index once per page, then only the files whose box reaches this
 // one, each fetched and decoded once however many flights share it. Never rejects — a
 // map without its airspace is still a map — and fills `scene.airspaces` in place, before
-// the views are built from the scene. Then the switch: enabled, or disabled saying why.
+// the map is built from the scene. Then `settleAirspace` says what the switch says.
 var airspaceFiles = {};
 function airspaceJson(url) {
   if (!airspaceFiles[url]) {

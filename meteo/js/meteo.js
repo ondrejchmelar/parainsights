@@ -1658,8 +1658,7 @@
   // Exposed for tests, and only what a test cannot reach any other way: the two rules
   // that read a sounding, the state the pointer writes into, and a redraw. Everything
   // else about this page is observable in the DOM. The alternative was a second copy of
-  // the capping rule in Python, which is exactly the drift `quicklook.py` is a warning
-  // about.
+  // the capping rule in Python, and two copies of a rule drift apart.
   window.__meteo = {
     state: state,
     // The one judgement this page makes. Exposed so a test can drive *it* rather than a

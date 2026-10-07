@@ -240,8 +240,8 @@ def test_the_verdict_is_the_sites_own_rose():
     """The real function, driven in the page, over every case at once.
 
     This used to be a second copy of the rule written in Python beside it — it could
-    fail on the *numbers* changing and never on the *shape*, which is the drift
-    `quicklook.py` is the standing warning about. `window.__meteo.verdict` is the real
+    fail on the *numbers* changing and never on the *shape* — two copies of a rule drift
+    apart. `window.__meteo.verdict` is the real
     one, and one probe runs the whole table rather than paying for six browsers.
     """
     answer = _probe_page("""
@@ -289,8 +289,8 @@ class TestTheSiteStrip:
 #
 # What this page draws about the air — the layer that stops the day, and the numbers under
 # the pointer — is JavaScript reading a forecast, and neither can be checked from Python
-# without writing a second copy of the rule. `quicklook.py` is the standing warning about
-# what a second copy becomes, so instead the real page runs in a real browser with `fetch`
+# without writing a second copy of the rule, and a second copy drifts. So instead the real
+# page runs in a real browser with `fetch`
 # answering from a profile built here: an inversion at a height this file chose, and a
 # wind that turns through north so the interpolation has something to get wrong.
 #

@@ -61,7 +61,7 @@ class TestThePayload:
     def test_one_value_per_sample_in_every_series(self, flight):
         """The trace, the cursor and the bands all index the same list. Two lists of
         different lengths is a marker that lands on a different moment than the one
-        under the pointer, which is the bug `quicklook.py` already has a comment about."""
+        under the pointer."""
         data = _payload(flight)
         n = len(flight.cursor["alt"])
         for key in ("s", "d", "x", "y"):

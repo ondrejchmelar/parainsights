@@ -11,9 +11,9 @@ one place in this repository that is deliberately not self-contained: a forecast
 03:00 and published is wrong by lunchtime, and there is no build step between the reader
 and the site. See `docs/meteo.md` for what that costs.
 
-The charts are canvas rather than SVG for the same reason `quicklook.py`'s are: they are
-redrawn whenever the reader moves the hour slider, and rebuilding a few hundred SVG nodes
-on every step of a range input is what makes a page feel heavy.
+The charts are canvas rather than SVG: they are redrawn whenever the reader moves the
+hour slider, and rebuilding a few hundred SVG nodes on every step of a range input is
+what makes a page feel heavy.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ from pathlib import Path
 # have none at all — they get no meteogram rather than a Czech airfield's.
 FLYMET_RANGE_KM = 60
 
-# Open-Meteo, keyless and CORS-open. The pressure levels are `tracklog_viewer/meteo.py`'s,
+# Open-Meteo, keyless and CORS-open. The pressure levels are `tracklog_viewer/js/meteo.js`'s,
 # so a forecast profile and a flown profile are the same shape and can be read against
 # each other without a conversion nobody would remember.
 LEVELS = (1000, 975, 950, 925, 900, 850, 800, 700, 600, 500)

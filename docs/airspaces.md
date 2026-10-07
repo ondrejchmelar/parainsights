@@ -331,8 +331,9 @@ so its filename is read from the directory listing instead of computed.
   and Tábor's dropzone could not be clicked through its own ATZ. Smallest on top means
   the most specific thing under the cursor is the one you get.
 
-- **The map is the viewer's 3D view, and the flat SVG is its fallback.** `view3d` is a
-  map widget, not flight code — hand it a terrain grid, some imagery and a list of things
+- **The map is the viewer's 3D map, and the flat SVG is its fallback.** The 3D map
+  (`parainsights_map`: `map3d` drawing, `view3d` the panel and scene) is a map widget,
+  not flight code — hand it a terrain grid, some imagery and a list of things
   to draw and it never asks what a flight is — so the airspace map is that same panel with
   no track in it: terrain, a satellite/map/relief switch, and the same gestures a reader
   already learned on the flights tab. Two consequences worth knowing. **Each airspace is
@@ -342,9 +343,8 @@ so its filename is read from the directory listing instead of computed.
   different objects here. See "The boxes" below for how one is built. And **it opens
   nearly flat** (`view.pitch` 1.32 from the payload, against the flight camera's 0.46),
   because over 500 km of country the three-quarter view turns the far half into a sliver.
-  The scene needs terrain and imagery, both fetched, so `airspaces.cli --html` falls back
-  to `map_svg` when the fetch fails and `--flat` asks for it outright — a slow tile server
-  must never cost the reader the airspace itself.
+  The map fetches its terrain and imagery in the page, so a build cannot lose them, and
+  the flat map is only what `--flat` asks for.
 
 - **`airspaces` importing the 3D map (`parainsights_map`) does not break the "share a
   page, not code" rule; it marks where the rule ends.** The rule is about geodesy and analysis,
@@ -437,13 +437,14 @@ view in the tracklog report (`tracklog_viewer.cli --airspace`). Both are publish
 - ~~**Draw the flight's own track over the airspace map.**~~ **Done, the other way
   round** — the airspace goes over the flight's map rather than the flight over the
   country. `scene.layer` cuts the 743 zones to the box the flight's terrain was fetched
-  for and hands them to `view3d.data`; the panel carries an `airspace` switch, off until
+  for and hands them to `view3d.data` (since October 2026: openAIP layers loaded in the
+  page, `loadAirspace`); the map carries an `airspace` switch, off until
   pressed, and names a zone on hover. A flight the layer does not reach — Pakistan, the
   Dolomites — gets no layer and so no button. It needs `--airspace` *and* `--terrain`:
   the first is what fetches the airspace at all, the second is what gives the flight a
   3D map to put it on.
 - **Airspace against the track**: which zones a flight entered, how close it came, and
-  at what height — the natural bridge to `tracklog_viewer/analysis.py`. Half of it is
+  at what height — the natural bridge to `tracklog_viewer/js/analysis.js`. Half of it is
   now cheap: the report already knows which zones are over the flight, in the payload the
   switch draws from. What is missing is the geometry against the track, and the vertical
   test in particular — a ring the track crosses at 800 m under a floor of FL95 is not an
@@ -460,7 +461,7 @@ view in the tracklog report (`tracklog_viewer.cli --airspace`). Both are publish
 ## The boxes
 
 An airspace is a volume, and the map draws it as one: `scene.rings` ships the outline and
-both heights, and `view3d` extrudes it. What is worth writing down is the four ways a
+both heights, and the map (`map3d`) extrudes it. What is worth writing down is the four ways a
 published limit can behave and the one place the drawing is deliberately not the data.
 
 **A limit is a number *and* a datum.** `limit_metres` answers both, because `1000 AGL` and

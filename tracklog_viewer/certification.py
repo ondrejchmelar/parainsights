@@ -61,7 +61,7 @@ PAGE = 100
 TIMEOUT = 40
 # The portal answers a bare urllib request, but a request with no agent string is the
 # kind of traffic a public service is right to block later. Name the tool.
-AGENT = "parainsights/1.0 (+https://gitlab.com/parainsights) glider certification table"
+AGENT = "parainsights/1.0 (+https://github.com/ondrejchmelar/parainsights) glider certification table"
 
 # The sizes a wing is sold in, as they appear at the end of a type name. Stripped when
 # matching a header that carries no size — see `_model`. Numbers are handled separately:

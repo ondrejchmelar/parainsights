@@ -26,7 +26,7 @@ The free Windy tier is not a smaller version of the paid one — it deliberately
 a trade this project can make, so Windy is out as a data source. Checked August 2026:
 `api.windy.com/point-forecast/pricing`, `api.windy.com/map-forecast/pricing`.
 
-Open-Meteo is already a dependency (`tracklog_viewer/meteo.py` fetches the day's profile
+Open-Meteo is already a dependency (`tracklog_viewer/js/meteo.js` fetches the day's profile
 for a flown flight) and gives the same pressure levels with no key. What is left on the
 table is Windy's *map*, which is genuinely better than a static chart; an embed is a
 possible future layer, and it would be the free Map Forecast tier, which is dev-only —
@@ -34,7 +34,8 @@ so that too would have to be paid for or done without.
 
 Flymet (`flymet.meteopress.cz`) is now shown as well, and it is worth being precise about
 what that means. Its meteograms are images generated per station with no documented API,
-no archive endpoint (`tracklog_viewer/meteo.py` already records that) and no licence to
+no archive endpoint (a past flight's weather comes from Open-Meteo's archive instead,
+`tracklog_viewer/js/meteo.js`) and no licence to
 redistribute them — so **nothing here copies, caches or rebuilds one**. The page carries a
 URL; the reader's own browser fetches the picture from flymet, with flymet named in the
 caption and the caption a link back to its own page. That is the same relationship as the
@@ -82,7 +83,8 @@ not. The reason is that a forecast has a shelf life of hours: a page built at 03
 published is wrong by lunchtime, and there is no build step between the reader and the
 site. So the page ships the *site list* and the charts' code, and asks Open-Meteo for the
 numbers when it is opened. Open-Meteo sends `Access-Control-Allow-Origin: *`, which is
-what makes this possible at all — the same property `quicklook.py` relies on for terrain.
+what makes this possible at all — the same property an uploaded flight relies on for
+its terrain (`js/upload.js`).
 
 Consequences, all of them accepted: the page is useless offline, it says so rather than
 drawing an empty chart, and it cannot be a view inside a published artifact that blocks

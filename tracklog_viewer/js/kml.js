@@ -6,7 +6,7 @@
  * datum, so it is treated as GPS, and there is no pressure altitude at all.
  *
  * The XML and the ZIP are read here rather than by the browser: `DOMParser` does not
- * exist in Node, where the parity harness runs this against the Python, and the reading
+ * exist in Node, where the build and the tests run this, and the reading
  * the analysis needs — element names, their first text, document order — is small. KMZ
  * decompression is the one thing borrowed: `options.inflateRaw(bytes) → Promise<bytes>`,
  * which defaults to the browser's `DecompressionStream('deflate-raw')`.

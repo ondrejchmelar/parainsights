@@ -49,6 +49,11 @@ uv run python -m tests.vendor          # once: MapLibre and deck.gl for the 3D m
 uv run pytest -c pyproject.toml
 ```
 
-The flight report is built locally from tracklogs, which stay out of the repository; the
-other pages are built by the Pages workflow. Layout, decisions, the build commands and
-why things are the way they are: [CLAUDE.md](CLAUDE.md).
+**Publishing.** The Flights page (`public/index.html`) is built locally — it needs the
+tracklogs, which stay out of the repository — and committed. The Pages workflow
+(`.github/workflows/pages.yml`) runs the tests, refuses to publish a Flights page older
+than the code that renders it (`ci/stale.sh`), builds the Meteo and Planner pages itself,
+and deploys. Uploaded tracks need no build: they are analysed in the reader's browser.
+
+Layout, decisions, the build commands and why things are the way they are:
+[CLAUDE.md](CLAUDE.md).

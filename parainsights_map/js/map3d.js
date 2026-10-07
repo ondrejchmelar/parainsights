@@ -12,7 +12,7 @@
   // Writing depth, a translucent box drawn before the track hid every part of the flight
   // inside or behind it — over Krupka, nearly all of it, the moment airspace was on.
   var GLASS = { depthWriteEnabled: false };
-  // The canvas view strokes its track 2.6 px wide on a backing store of up to twice the
+  // The canvas view stroked its track 2.6 px wide on a backing store of up to twice the
   // screen's density, so on a phone it is 1.3 CSS px and on a desktop 2.6. deck.gl's
   // pixels are CSS pixels, so the same line takes the same arithmetic.
   var TRACK_WIDTH = 2.6 / Math.min(window.devicePixelRatio || 1, 2);
@@ -32,7 +32,7 @@
     return [(v >> 16) & 255, (v >> 8) & 255, v & 255, alpha];
   }
 
-  // The track as runs of one colour: the palette index per fix is the canvas view's own.
+  // The track as runs of one colour, by the palette index per fix the scene carries.
   // Each run carries its fixes' times too, so the track can be cut to a window of the
   // flight (the from-to slider) by a TripsLayer rather than rebuilt on every drag.
   function segments(scene) {
@@ -319,7 +319,7 @@
       var spanStart = 0, spanEnd = duration;
       if (restore) basemap = restore.basemap;
       var labels = { climb: false, glide: false }, airspaceOn = alwaysAirspace;
-      // The canvas handle's airspace filter (class, floor, hours), followed here: the
+      // The panel handle's airspace filter (class, floor, hours), followed here: the
       // page's controls set it on that handle, and the two maps must hide the same rings.
       var airspaceFilter = handle.airspaceFilter ? handle.airspaceFilter() : null;
       var route = null;       // a planned task: { walk: [[lon, lat]…], points: [[lon, lat]…] }
@@ -370,7 +370,7 @@
       function style(key) {
         var sources = {
           // Declared at half their size so MapLibre asks one zoom deeper than it would:
-          // four times the tiles, and relief and imagery as sharp as the canvas's grid.
+          // four times the tiles, and relief and imagery as sharp as the canvas view's grid was.
           // At their natural size the DEM it picks is ~4x coarser and the hills read flat.
           dem: { type: 'raster-dem', tiles: [window.__mapTerrarium], tileSize: 128, maxzoom: 15,
                  encoding: 'terrarium', attribution: 'Terrain: AWS Open Data Terrain Tiles' },
@@ -416,7 +416,7 @@
             });
           });
         });
-        // The canvas view's own shading, not MapLibre's default: sunlit slopes lifted
+        // The canvas view's shading, not MapLibre's default: sunlit slopes lifted
         // towards a warm white and shaded ones towards a dark blue, lit from where the sun
         // was. Black-and-white shading over the photograph is what greyed it out. Under
         // any label layer, so place names stay crisp.
@@ -536,11 +536,11 @@
         watch.observe(box, { attributes: true, attributeFilter: ['class'] });
       })();
 
-      // The canvas view's mouse: a left drag with any modifier — shift, ctrl, alt or meta —
+      // The canvas view's mouse, kept: a left drag with any modifier — shift, ctrl, alt or meta —
       // rotates and tilts, as a right drag does. MapLibre only knows ctrl and the right
       // button, and gives shift-drag to a box zoom the canvas never had.
       //
-      // And it turns about the ground that was grabbed, as the canvas does
+      // And it turns about the ground that was grabbed, as the canvas did
       // (`pickAnchor`/`holdGround` in view3d.py), not about the middle of the map: the
       // point under the pointer is found on the terrain at pointerdown, and after every
       // step the map is panned so that point is back under where it was grabbed. The
@@ -626,7 +626,7 @@
       if (!restore) fit(false);
 
       // ---- what is drawn over it -----------------------------------------------------
-      // The canvas view's labels: the phase as a span from where it began to where it
+      // The canvas view's labels, kept: the phase as a span from where it began to where it
       // ended, dots at both ends, and its numbers in white over the middle — no box.
       // When a point on the track was flown: the time of the nearest fix. The climbs and
       // the phases arrive as places, not times, and the from-to window hides by time.
@@ -812,7 +812,7 @@
             getPath: function (d) { return d.path; }, getColor: function (d) { return rgb(d.colour, 200); },
             getWidth: 1.2, widthUnits: 'pixels', parameters: GLASS, updateTriggers: { data: vertical }
           }));
-          // The corners' vertical edges, where a zone has corners (as the canvas view).
+          // The corners' vertical edges, where a zone has corners (as the canvas view drew them).
           out.push(new deck.LineLayer({
             id: 'airspace-corners', data: drawn.reduce(function (all, d) {
               if (d.ring.length > 24) return all;
@@ -826,7 +826,7 @@
           }));
         }
         // A planned task (the planner on the airspace page): the course 60 m over the
-        // ground, as the canvas draws it, and the turnpoints numbered.
+        // ground, as the canvas drew it, and the turnpoints numbered.
         if (route && route.walk.length > 1) {
           out.push(new deck.PathLayer({
             id: 'plan-line', data: [route.walk],
@@ -1807,7 +1807,7 @@
         else if (act === 'faster' && speed < SPEEDS.length - 1) { speed++; showSpeed(); }
       });
       // Arrows, shift + arrows and + / − are MapLibre's own keyboard handler, which maps
-      // them the way the canvas view does. These are the rest of the canvas's keys.
+      // them the way the canvas view did. These are the rest of its keys.
       view.querySelector('.ml-map').addEventListener('keydown', function (event) {
         if (event.ctrlKey || event.metaKey || event.altKey) return;
         var k = event.key, done = true;
@@ -1910,7 +1910,7 @@
         if (restore.follow) setFollow(true);
       }
 
-      // The canvas handle's airspace filter, followed: wrapped like the cursor calls, and
+      // The panel handle's airspace filter, followed: wrapped like the cursor calls, and
       // unwrapped by `dispose` with them.
       if (handle.setAirspaceFilter && !handle.setAirspaceFilter.__merged) {
         var ownFilter = handle.setAirspaceFilter;
