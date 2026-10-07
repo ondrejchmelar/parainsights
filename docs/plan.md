@@ -127,6 +127,10 @@ scoring multipliers are **done** — see *Matching XContest* below.
 
 ### WebGL for the 3D view
 
+*Historical: the canvas renderer and this WebGL backend were retired in October 2026 in
+favour of the MapLibre map (`parainsights_map/map3d.py`); see CLAUDE.md, "Only the
+merged map". What follows is how they were built.*
+
 **Done.** `view3d_gl.py`. The heightfield is one `drawElements` against a 24-bit depth
 buffer, and the fold artefacts are gone rather than mitigated.
 

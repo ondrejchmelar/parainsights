@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import parainsights_common as common
-from parainsights_map import map3d, render_map, view3d, view3d_gl
+from parainsights_map import map3d, render_map, view3d
 
 from . import charts_client, upload_panel
 
@@ -220,12 +220,11 @@ section { margin-top: 34px; }
   background: var(--panel); width: 100%; height: 100%; margin: 0; }
 .flight-map.is-maximised { position: fixed; inset: 0; z-index: 60; width: auto; height: auto; }
 .flight-map::backdrop { background: var(--panel); }
-.flight-map:fullscreen .renderer-switch, .flight-map.is-maximised .renderer-switch { display: none; }
 .flight-map:fullscreen .renderer-host, .flight-map.is-maximised .renderer-host {
   flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .flight-map:fullscreen .view3d-panel, .flight-map.is-maximised .view3d-panel {
   flex: 1 1 auto; min-height: 0; width: 100%; margin: 0; }
-.flight-map:fullscreen canvas.view3d, .flight-map.is-maximised canvas.view3d {
+.flight-map:fullscreen .view3d, .flight-map.is-maximised .view3d {
   height: 100%; aspect-ratio: auto; }
 .flight-map:fullscreen .side-view, .flight-map.is-maximised .side-view {
   flex: 0 0 auto; width: 100%; margin: 0; }
@@ -1192,8 +1191,8 @@ SCRIPT = """
   };
   function showOthers() {
     articles().forEach(function (article) {
-      var canvas = article.querySelector('canvas.view3d');
-      var entry = canvas && window.__mergedAll && window.__mergedAll[canvas.id];
+      var box = article.querySelector('.view3d');
+      var entry = box && window.__mergedAll && window.__mergedAll[box.id];
       if (entry && entry.setOthers) entry.setOthers(window.__compareFor(article.getAttribute('data-flight-report')));
       // The side view draws the compared flights too.
       var host = article.querySelector('.chart-host[data-chart="profile"]');
@@ -1237,10 +1236,9 @@ function initFlight(root) {
       return initView3dWhenReady(root, data.cursor3d || null);
     }).then(function (handle) {
       terrainView = handle;
-      // The merged map is the default view; the canvas built underneath it is what it
-      // draws from, and what is left if MapLibre cannot be fetched.
+      // The map draws from the panel's handle (`render_map`, `map3d`).
       var host = root.querySelector('.renderer-host');
-      if (handle && host && window.__openDefaultRenderer) window.__openDefaultRenderer(host);
+      if (handle && host && window.__openMap) window.__openMap(host);
     }, function () {});
   }
 
@@ -1593,22 +1591,17 @@ var flightTabs = (function () {
     var wasOn = tab && tab.classList.contains('is-on');
     if (tab) tab.parentNode.removeChild(tab);
     if (report) {
-      // Drop the 3D handles this article owned: each holds a DEM grid and a stitched
-      // basemap image, so leaving them in the registry keeps a removed flight's memory.
-      // A WebGL context is scarcer still — a page gets about sixteen — so it is handed
-      // back rather than left for the collector.
-      if (window.__view3dAll) {
-        report.querySelectorAll('canvas.view3d').forEach(function (canvas) {
-          var handle = window.__view3dAll[canvas.id];
-          if (handle && handle.dispose) handle.dispose();
-          delete window.__view3dAll[canvas.id];
-          // The MapLibre renderer, where the reader switched to it, holds a context too.
-          ['__maplibreAll', '__mergedAll'].forEach(function (registry) {
-            var other = window[registry] && window[registry][canvas.id];
-            if (other) { other.map.remove(); delete window[registry][canvas.id]; }
-          });
-        });
-      }
+      // Drop the 3D map and handle this article owned: the handle holds a DEM grid, so
+      // leaving it in the registry keeps a removed flight's memory, and a WebGL context
+      // is scarcer still — a page gets about sixteen — so it is handed back rather than
+      // left for the collector.
+      report.querySelectorAll('.renderer-host').forEach(function (host) {
+        if (host.__map) { host.__map.api.dispose(); host.__map = null; }
+      });
+      report.querySelectorAll('.view3d').forEach(function (box) {
+        if (window.__view3dAll) delete window.__view3dAll[box.id];
+        if (window.__mergedAll) delete window.__mergedAll[box.id];
+      });
       report.parentNode.removeChild(report);
     }
     if (!wasOn) return;
@@ -1678,15 +1671,13 @@ VIEW_SCRIPT = """
       button.classList.toggle('is-on', on);
       button.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
-    // A 3D panel inside a hidden section has a zero-sized box, so it drew nothing and
-    // its first frame never came — the airspace view opened as an empty canvas until
-    // something was dragged in it. Now the view that has just been revealed is redrawn.
-    if (window.__view3dAll) {
-      Object.keys(window.__view3dAll).forEach(function (id) {
-        // Every panel, not only the revealed one: a hidden canvas measures zero, so
-        // `resize()` bails and redrawing it costs nothing.
-        var handle = window.__view3dAll[id];
-        if (handle && handle.redraw) handle.redraw();
+    // A map inside a hidden section has a zero-sized box; the one just revealed is told
+    // its size. Every map, not only the revealed one: a hidden one measures zero and
+    // MapLibre leaves it as it is.
+    if (window.__mergedAll) {
+      Object.keys(window.__mergedAll).forEach(function (id) {
+        var entry = window.__mergedAll[id];
+        if (entry && entry.map) entry.map.resize();
       });
     }
     window.scrollTo({ top: 0, behavior: 'auto' });
@@ -1828,7 +1819,7 @@ def _page(title: str, bodies: list[str], tabs: str = "", extras: "list[Extra]" =
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{escape(title)}</title>
 <script>{common.THEME_BOOT}</script>
-<style>{_font_face()}{STYLE}{view3d.STYLE}{view3d_gl.STYLE}{render_map.SWITCH_STYLE}{map3d.STYLE}{upload_panel.STYLE}{charts_client.STYLE}
+<style>{_font_face()}{STYLE}{view3d.STYLE}{render_map.STYLE}{map3d.STYLE}{upload_panel.STYLE}{charts_client.STYLE}
 {VIEW_STYLE if extras else ""}{"".join(e.style for e in extras)}</style>
 <div class="wrap">
 {_view_nav(extras)}
@@ -1838,8 +1829,7 @@ def _page(title: str, bodies: list[str], tabs: str = "", extras: "list[Extra]" =
 </div>
 <div class="tooltip" id="tip" role="status" aria-live="polite"></div>
 <script>{view3d.SCRIPT}
-{view3d_gl.SCRIPT}
-{render_map.SWITCH_SCRIPT}
+{render_map.SCRIPT}
 {map3d.SCRIPT}
 {charts_client.SCRIPT}
 {SCRIPT}</script>

@@ -16,7 +16,7 @@ import re
 
 
 import parainsights_common as common
-from tests.test_view3d_gl import needs_chrome
+from tests.browser import needs_chrome
 
 
 class TestTheTokensAreSharedAndScopedBothWays:
@@ -68,16 +68,6 @@ class TestTheButton:
         from tracklog_viewer import render_html
 
         assert "theme-toggle" in render_html._view_nav([])
-
-
-def test_the_handles_are_walked_the_way_they_are_stored():
-    """`window.__view3dAll` is an object keyed by canvas id — `render_html` registers and
-    deletes handles by id so a removed flight takes its DEM and its stitched image with
-    it. `Array.forEach` on it throws, and because a listener's exception never reaches
-    the `click()` that dispatched it, the button went on looking like it worked while
-    the 3D views kept the old theme."""
-    assert "Object.keys(window.__view3dAll)" in common.THEME_SCRIPT
-    assert "window.__view3dAll.forEach" not in common.THEME_SCRIPT
 
 
 class TestTheOrderIsTheSameEverywhere:

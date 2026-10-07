@@ -1,16 +1,17 @@
-"""The merged 3D map: MapLibre's engine under the canvas view's controls.
+"""The 3D map: MapLibre's engine with deck.gl drawing over it, and the report's controls.
 
-What each renderer was better at, in one view. From MapLibre (`render_map`): the whole
+It began as the third of three renderers (October 2026) — the canvas view (`view3d`),
+plain MapLibre, and this, merging what each was better at. From MapLibre: the whole
 planet rather than one fetched rectangle, imagery and terrain streamed at every zoom,
-and the replay slider. From the canvas view (`view3d`): the control bar, its keys, the
-sun and wind rose, the climb and glide labels, the airspace boxes — and the canvas's
-imagery treatment: the photograph shaded towards warm white and dark blue from the
-sun's real position, never MapLibre's default black-and-white overlay that greys it.
+and the replay slider. From the canvas view: the control bar, its keys, the sun and wind
+rose, the climb and glide labels, the airspace boxes — and its imagery treatment: the
+photograph shaded towards warm white and dark blue from the sun's real position, never
+MapLibre's default black-and-white overlay that greys it. It is now the only one; the
+comments below still say "the canvas" where a choice was made to match it.
 
-It is the third position of the renderer switch (`render_map.switch_html`) while the
-three are compared, and it draws from the same scene and follows the same linked
-cursor as the other two (`handle.built`, and the wrapped `setCursor`). MapLibre and
-deck.gl come from `render_map`'s loader, on the first switch.
+It draws from the panel's scene and follows the linked cursor through the panel's handle
+(`view3d.initView3d`: `handle.built`, and the wrapped `setCursor`). MapLibre and deck.gl
+come from `render_map`'s loader, which also mounts this (`window.__openMap`).
 
 Heights: MapLibre exaggerates terrain from sea level, so everything drawn above it is
 scaled the same way — `alt × vertical` — or a track 500 m over a 1 000 m ridge would
@@ -285,14 +286,15 @@ SCRIPT = r"""
     // Offered but empty: the page has airspace, none of it under this flight.
     var noAirspace = !!(scene.airspaceToggle && !hasAirspace);
     var alwaysAirspace = !!(!scene.airspaceToggle && scene.airspaces && scene.airspaces.length);
-    // The exaggerations this panel offers, and the one it opens on, are the canvas
-    // panel's own (`view3d.panel(verticals=…)`): ×1/2/4 under a flight, ×1/5/15 under a
-    // country of airspace, where a traffic circuit at ×1 is a third of a pixel tall.
-    var offered = Array.prototype.map.call(
-      panel.querySelectorAll('[data-view3d-act="exaggerate-set"]'),
-      function (b) { return parseFloat(b.dataset.vertical); }).filter(function (v) { return v > 0; });
-    var pressed = panel.querySelector('[data-view3d-act="exaggerate-set"].is-on');
-    var openVertical = pressed ? parseFloat(pressed.dataset.vertical) : 1;
+    // What the switch says, from `settleAirspace`: drawn with its credit, or why not.
+    var airspaceWhy = String(scene.airspaceWhy || (hasAirspace ? 'Draw the airspace over this flight'
+      : 'No airspace data under this flight — the layers cover Europe')).replace(/"/g, '&quot;');
+    // The exaggerations this panel offers, and the one it opens on, are the page's
+    // (`view3d.panel(verticals=…)`): ×1/2/4 under a flight, ×1/5/15 under a country of
+    // airspace, where a traffic circuit at ×1 is a third of a pixel tall.
+    var offered = (panel.dataset.verticals || '1,2,4').split(',').map(parseFloat)
+      .filter(function (v) { return v > 0; });
+    var openVertical = parseFloat(panel.dataset.vertical) || offered[0] || 1;
     var hasPhases = !!(scene.phases && scene.phases.length);
 
     var view = document.createElement('div');
@@ -358,12 +360,12 @@ SCRIPT = r"""
           ' aria-label="Label each glide with its ratio and distance">glides</button></div>' : '') +
         (hasAirspace ?
           '<div class="view3d-seg view3d-airspace" role="group" aria-label="Airspace">' +
-          '<button type="button" data-m3="airspace" aria-pressed="false"' +
-          ' aria-label="Draw the airspace over this flight">airspace</button></div>' :
+          '<button type="button" data-m3="airspace" aria-pressed="false" title="' + airspaceWhy + '"' +
+          ' aria-label="' + airspaceWhy + '">airspace</button></div>' :
          noAirspace ?
           '<div class="view3d-seg view3d-airspace" role="group" aria-label="Airspace">' +
           '<button type="button" data-m3="airspace" aria-pressed="false" disabled' +
-          ' title="No airspace data under this flight — the layers cover Europe" aria-label="No airspace data under this flight — the layers cover Europe">airspace</button></div>' : '') +
+          ' title="' + airspaceWhy + '" aria-label="' + airspaceWhy + '">airspace</button></div>' : '') +
         '<div class="view3d-seg view3d-zoom" role="group" aria-label="Zoom">' +
           '<button type="button" data-m3="zoom-out" title="Zoom out" aria-label="Zoom out">&minus;</button>' +
           '<button type="button" data-m3="zoom-in" title="Zoom in" aria-label="Zoom in">+</button></div>' +
@@ -2047,7 +2049,7 @@ SCRIPT = r"""
       });
 
       // A comparison chosen before this view was built.
-      var myUid = (panel.querySelector('canvas.view3d') || { id: '' }).id.replace(/^view3d-/, '');
+      var myUid = (panel.querySelector('.view3d') || { id: '' }).id.replace(/^view3d-/, '');
       if (window.__compareFor) setOthers(window.__compareFor(myUid));
 
       var entry = {
@@ -2083,13 +2085,12 @@ SCRIPT = r"""
         }
       };
       window.__mergedAll = window.__mergedAll || {};
-      window.__mergedAll[panel.querySelector('canvas.view3d').id] = entry;
+      window.__mergedAll[panel.querySelector('.view3d').id] = entry;
       // For whatever else draws on this panel — the planner listens for it.
       panel.dispatchEvent(new CustomEvent('merged-ready', { detail: entry }));
     }, function (error) {
       view.querySelector('.m3-status').textContent =
-        'MapLibre could not be loaded (' + error.message + '). It needs a network; the ' +
-        'canvas view does not.';
+        'The map could not be loaded (' + error.message + '). It needs a network.';
     });
     return api;
   };

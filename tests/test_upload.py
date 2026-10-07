@@ -13,7 +13,7 @@ from pathlib import Path
 
 from tests.test_analysis import build
 from tests.flights import FLIGHTS
-from tests.test_view3d_gl import CHROME, CHROME_FLAGS, needs_chrome
+from tests.browser import CHROME, CHROME_FLAGS, needs_chrome
 from tracklog_viewer import render_html
 
 # A longer virtual clock than the suite's default: virtual time runs on while the file
@@ -119,18 +119,16 @@ window.addEventListener('load', function () {
     var waited = 0;
     (function poll() {
       var a = document.querySelector('[data-flight-report="up1"]');
-      var canvas = a && a.querySelector('canvas.view3d');
-      var handle = canvas && window.__view3dAll && window.__view3dAll[canvas.id];
+      var box = a && a.querySelector('.view3d');
+      var handle = box && window.__view3dAll && window.__view3dAll[box.id];
       var st = document.getElementById('ql-status');
       if (!handle && !st.classList.contains('is-error') && (waited += 500) < 55000) return setTimeout(poll, 500);
       var out = { article: !!a, view: !!handle };
       if (handle) {
-        var scene = handle.built.scene, button = a.querySelector('[data-view3d-act="airspace-toggle"]');
+        var scene = handle.built.scene;
         out.remote = scene.airspaceRemote;
         out.rings = (scene.airspaces || []).map(function (r) { return r.n; });
-        out.button = !!button;
-        out.enabled = !!button && !button.disabled;
-        out.title = button && button.title;
+        out.title = scene.airspaceWhy;
         out.compare = !!document.querySelector('[data-flight-tab="up1"] [data-compare-toggle="up1"]');
       }
       document.getElementById('probe-out').textContent = JSON.stringify(out);
@@ -175,6 +173,6 @@ def test_an_upload_loads_the_airspace_under_its_ground(tmp_path):
     assert out["article"] and out["view"], out
     assert out["remote"] == "layers/"
     assert out["rings"] == ["OVER THE FLIGHT"], out
-    assert out["button"] and out["enabled"], out
+    assert out["title"].startswith("Draw the airspace"), out
     assert "openAIP" in out["title"], out
     assert out["compare"], "an uploaded flight's tab can join the comparison too"

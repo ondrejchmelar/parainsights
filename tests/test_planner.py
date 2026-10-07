@@ -1,13 +1,11 @@
 """The planner, driven in a real browser.
 
-Clicking a canvas that also pans, zooms, rotates and tilts is the whole difficulty here,
-and none of it is visible from Python: whether a click lands where the reader pointed,
-whether a drag leaves a turnpoint behind, and whether three points score as a triangle
-are all claims about what the page does with a PointerEvent. So this renders the page
-over a synthetic DEM, dispatches real events at it and reads the answers out of the DOM.
+Whether three points score as a triangle, whether an open course is two legs, what a
+leg crosses and when — all claims about what the page does with the points it is given.
+So this renders the page over a synthetic DEM, hands it clicks the way the map would
+(`_MAP`) and reads the answers out of the DOM.
 
-No network: the terrain is generated and there is no basemap.
-"""
+No network: the terrain is generated and there is no basemap."""
 
 import json
 import math
@@ -24,7 +22,7 @@ from planner import render_html as planner_html
 from tests.js import needs_node
 
 xc = planner_html.xc
-from tests.test_view3d_gl import CHROME, CHROME_FLAGS, needs_chrome
+from tests.browser import CHROME, CHROME_FLAGS, needs_chrome
 from parainsights_map import terrain as terrain_module
 from parainsights_map import view3d
 
@@ -101,30 +99,31 @@ def _run(body: str, spaces=(), terrain=None) -> dict:
     return answer
 
 
-# Three points around the middle of the canvas, and one drag. `tap` is a pointerdown and
-# a pointerup at the same place; `drag` moves between them, which is how the map is
-# panned and must therefore *not* leave a turnpoint behind.
-_HARNESS = """
-var canvas = document.querySelector('canvas.view3d');
-var handle = window.__view3dAll[canvas.id];
+# The map (`map3d`) needs MapLibre, which these probes do not load; the planner's side of
+# its contract is three members, so a stand-in carries them: `onClick` (a click on the
+# ground, as [lon, lat]), `setRoute` (the course drawn) and `setShapes` (the FAI areas).
+# A drag of the map dropping no turnpoint is MapLibre's own `click`, not the planner's.
+_MAP = """
+var box = document.querySelector('.view3d');
+var handle = window.__view3dAll[box.id];
+var route = { walk: [], points: [] }, clicked = null;
+var entry = { onClick: function (fn) { clicked = fn; },
+              setRoute: function (walk, points) { route = { walk: walk || [], points: points || [] }; },
+              setShapes: function () {} };
+window.__mergedAll = window.__mergedAll || {};
+window.__mergedAll[box.id] = entry;
+document.querySelector('[data-planner] .view3d-panel')
+  .dispatchEvent(new CustomEvent('merged-ready', { detail: entry }));
 document.getElementById('plan-draw').click();
-var box = canvas.getBoundingClientRect();
-function send(type, x, y) {
-  canvas.dispatchEvent(new PointerEvent(type, {
-    pointerId: 3, clientX: x, clientY: y, bubbles: true, cancelable: true,
-    pointerType: 'mouse', isPrimary: true, button: 0, buttons: type === 'pointerup' ? 0 : 1
-  }));
-}
+function turnpoints() { return route.points.length; }
+"""
+
+
+# Three points around the middle of the ground, by fraction of its box.
+_HARNESS = _MAP + """
+var dem = handle.scene().terrain;
 function tap(fx, fy) {
-  var x = box.left + box.width * fx, y = box.top + box.height * fy;
-  send('pointerdown', x, y);
-  send('pointerup', x, y);
-}
-function drag(fx, fy, dx, dy) {
-  var x = box.left + box.width * fx, y = box.top + box.height * fy;
-  send('pointerdown', x, y);
-  send('pointermove', x + dx, y + dy);
-  send('pointerup', x + dx, y + dy);
+  clicked([dem.west + (dem.east - dem.west) * fx, dem.north - (dem.north - dem.south) * fy]);
 }
 function figure(name) {
   var cells = document.querySelectorAll('#plan-figures div');
@@ -135,24 +134,22 @@ function figure(name) {
   }
   return null;
 }
-function turnpoints() { return handle.scene().climbs.length; }
 """
 
 
 @needs_chrome
-def test_a_tap_drops_a_turnpoint_and_a_drag_does_not():
-    """The failure this exists for: the planner shares its canvas with the map's own
-    gestures, so a naive click handler leaves a turnpoint behind on every pan. A
-    pointerup that has travelled is a gesture, not a point."""
+def test_a_click_drops_a_turnpoint_only_while_drawing():
+    """Off, a click on the map is the map's; pressing *Draw a task* makes it a point."""
     answer = _run(_HARNESS + """
+    document.getElementById('plan-draw').click();
     tap(0.4, 0.5);
-    var afterTap = turnpoints();
-    drag(0.6, 0.5, 60, 20);
-    var afterDrag = turnpoints();
-    return { afterTap: afterTap, afterDrag: afterDrag };
+    var off = turnpoints();
+    document.getElementById('plan-draw').click();
+    tap(0.4, 0.5);
+    return { off: off, on: turnpoints() };
     """)
-    assert answer["afterTap"] == 1, "a tap on the map dropped no turnpoint"
-    assert answer["afterDrag"] == 1, "a drag of the map left a turnpoint behind"
+    assert answer["off"] == 0, "a click dropped a turnpoint while not drawing"
+    assert answer["on"] == 1, "a click on the map dropped no turnpoint"
 
 
 @needs_chrome
@@ -198,18 +195,18 @@ def test_three_points_left_open_are_two_legs_and_not_a_triangle():
     is whether the number under the map describes the course above it."""
     answer = _run(_HARNESS + """
     tap(0.35, 0.40); tap(0.60, 0.40); tap(0.48, 0.62);
-    var track = handle.scene().track;
+    var track = route.walk;
     var open = { shape: document.querySelector('.plan-shape').textContent,
                  multiplier: figure('multiplier'),
                  distance: figure('distance'),
                  legs: document.getElementById('plan-legs').textContent,
-                 drawn: track.lon.map(function (lon, i) { return [lon, track.lat[i]]; }) };
+                 drawn: track.slice() };
     document.getElementById('plan-close').checked = true;
     document.getElementById('plan-close').dispatchEvent(new Event('change'));
-    var shut = handle.scene().track;
+    var shut = route.walk;
     open.closedDistance = figure('distance');
     open.closedShape = document.querySelector('.plan-shape').textContent;
-    open.closedDrawn = shut.lon.length;
+    open.closedDrawn = shut.length;
     return open;
     """)
     assert answer["shape"] == "open distance"
@@ -295,23 +292,8 @@ def test_the_planner_scores_with_the_reports_own_constants():
 # here rather than by clicking, because where a click lands is already tested above and
 # what is being measured now is the geometry, which wants exact coordinates.
 
-_DROP = """
-var canvas = document.querySelector('canvas.view3d');
-var handle = window.__view3dAll[canvas.id];
-document.getElementById('plan-draw').click();
-function at(lon, lat) {
-  var m = handle.toMetres(lon, lat);
-  var p = handle.worldProject(m[0], m[1], handle.groundAt(lon, lat));
-  var box = canvas.getBoundingClientRect();
-  var x = box.left + p[0] / canvas.width * box.width;
-  var y = box.top + p[1] / canvas.height * box.height;
-  canvas.dispatchEvent(new PointerEvent('pointerdown', {
-    pointerId: 5, clientX: x, clientY: y, bubbles: true, cancelable: true,
-    pointerType: 'mouse', isPrimary: true, button: 0, buttons: 1 }));
-  canvas.dispatchEvent(new PointerEvent('pointerup', {
-    pointerId: 5, clientX: x, clientY: y, bubbles: true, cancelable: true,
-    pointerType: 'mouse', isPrimary: true, button: 0, buttons: 0 }));
-}
+_DROP = _MAP + """
+function at(lon, lat) { clicked([lon, lat]); }
 function crossed() {
   return Array.prototype.map.call(
     document.querySelectorAll('#plan-airspace .plan-crossed li'),
@@ -342,18 +324,22 @@ function marks() {
                mark: tag ? tag.textContent : null };
     });
 }
-// What is under a point on the map. A ring the filter dropped was never drawn and so is
-// not in the hit list — which is the reader-facing consequence of hiding it, and the
-// only one observable from here. `redraw` first because `setAirspaceFilter` paints on
-// the next animation frame and this probe returns before one arrives; on the page that
-// is 16 ms and nobody sees it, in here it is the difference between the two answers.
+// What is under a point on the map: the smallest ring there that the map's airspace
+// filter keeps (`setAirspaceFilter`). A ring the filter dropped is not drawn, which is
+// the reader-facing consequence of hiding it.
 function under(lon, lat) {
-  handle.redraw();
-  var m = handle.toMetres(lon, lat);
-  var p = handle.worldProject(m[0], m[1], handle.groundAt(lon, lat));
-  var box = canvas.getBoundingClientRect();
-  var found = handle.airspaceAt(box.left + p[0] / canvas.width * box.width,
-                               box.top + p[1] / canvas.height * box.height);
+  var keep = handle.airspaceFilter(), found = null;
+  (handle.scene().airspaces || []).forEach(function (ring) {
+    if (keep && !keep(ring)) return;
+    var inside = false;
+    for (var a = 0, b = ring.lon.length - 1; a < ring.lon.length; b = a++) {
+      if ((ring.lat[a] > lat) !== (ring.lat[b] > lat) &&
+          lon < (ring.lon[b] - ring.lon[a]) * (lat - ring.lat[a]) / (ring.lat[b] - ring.lat[a]) + ring.lon[a]) {
+        inside = !inside;
+      }
+    }
+    if (inside) found = ring;   // the rings run biggest first, so the last is the smallest
+  });
   return found ? found.n : null;
 }
 """
@@ -510,7 +496,7 @@ def _terrain_at(west, east, south, north):
 def test_a_route_outside_czechia_is_not_called_clear():
     answer = _run(_DROP + """
     at(13.7, 47.3); at(14.3, 47.7);
-    return { points: handle.scene().climbs.length,
+    return { points: turnpoints(),
              text: document.getElementById('plan-airspace').textContent };
     """, terrain=_terrain_at(13.5, 14.5, 47.0, 48.0))
     assert answer["points"] == 2, "a turnpoint in Austria was refused"

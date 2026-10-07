@@ -6,7 +6,7 @@ were measured in headless Chrome at a true 390 x 844 viewport rather than estima
 These are static assertions over the generated CSS and markup rather than browser probes,
 deliberately. A regression here is someone typing `font-size: 10.5px` or dropping an
 `aria-label`, and a string test catches that in the fast job that runs everywhere — the
-browser job is `allow_failure: true` and covers only the two view3d suites.
+browser job drives the map itself (`test_merged_controls`).
 """
 
 import pathlib
@@ -16,7 +16,7 @@ import pytest
 
 from tests.js import needs_node
 from tracklog_viewer import render_html
-from parainsights_map import view3d
+from parainsights_map import map3d, view3d
 
 
 def media_block(css: str, query: str) -> str:
@@ -99,27 +99,12 @@ class TestMapButtonNames:
     # a ctrl-drag and a right-drag that the caption above the panel already teaches, and
     # they were the slots pushing the bar onto a second row. What remains still has to be
     # nameable — zoom and reset are glyphs, and a glyph is not an accessible name.
-    GLYPH_ACTS = ("zoom-in", "zoom-out", "reset")
+    GLYPH_ACTS = ("zoom-in", "zoom-out", "reset", "help")
 
-    def _panel(self):
-        return view3d.panel({"bounds": {}}, "uid")
-
-    def test_every_control_carries_an_aria_label(self):
-        html = self._panel()
-        for act in self.GLYPH_ACTS + ("fullscreen",):
-            button = re.search(
-                rf'<button[^>]*data-view3d-act="{act}"[^>]*>', html, re.S
-            )
-            assert button, f"no button for {act}"
-            assert "aria-label=" in button.group(0), (
-                f"{act} computes its name from its contents"
-            )
-
-    def test_the_glyph_buttons_are_not_named_by_their_glyph(self):
-        html = self._panel()
-        for act in self.GLYPH_ACTS:
+    def test_every_glyph_button_is_named_by_more_than_its_glyph(self):
+        for act in self.GLYPH_ACTS + ("fullscreen", "slower", "faster"):
             label = re.search(
-                rf'data-view3d-act="{act}"[^>]*aria-label="([^"]+)"', html, re.S
+                rf"data-m3=\"{act}\"[^>]*aria-label=\"([^\"]+)\"", map3d.SCRIPT, re.S
             )
             assert label, f"{act} has no aria-label"
             assert len(label.group(1)) > 2, (
@@ -127,61 +112,26 @@ class TestMapButtonNames:
             )
 
     def test_the_nudge_buttons_that_duplicate_gestures_are_gone(self):
-        html = self._panel()
         for act in ("rotate-left", "rotate-right", "tilt-up", "tilt-down"):
-            assert f'data-view3d-act="{act}"' not in html, (
-                f"{act} is back; it duplicates a gesture the caption teaches"
+            assert f'data-m3="{act}"' not in map3d.SCRIPT, (
+                f"{act} is back; it duplicates a gesture"
             )
-
-    def test_the_exaggeration_segments_are_named_individually(self):
-        """`x1 height` at rest was a button announcing that nothing is happening."""
-        html = self._panel()
-        labels = re.findall(
-            r'data-view3d-act="exaggerate-set"[^>]*aria-label="([^"]+)"', html, re.S
-        )
-        assert len(labels) == 3, f"expected three exaggeration segments, got {labels}"
 
 
 class TestKeyboardControl:
-    """Phase 2: the keyboard is what lets the nudge buttons go."""
+    """The keyboard is what lets the nudge buttons go."""
 
-    def test_the_canvas_is_focusable(self):
-        assert 'tabindex="0"' in view3d.panel({"bounds": {}}, "uid")
+    def test_the_map_is_focusable(self):
+        assert 'class="ml-map" tabindex="0"' in map3d.SCRIPT
 
-    def test_keys_are_bound_to_act_names_not_camera_fields(self):
-        """One code path rather than two that drift — and it is why a held arrow
-        anchors through `holdGround` exactly as a held button does."""
-        assert "KEY_ACTS" in view3d.SCRIPT
-        assert "runAct(act)" in view3d.SCRIPT
-
-    def test_the_view_keys_are_bound_to_the_canvas_not_the_document(self):
-        """A report holds several flights, each with its own panel. A document-level
-        keydown drives whichever panel the code finds first — a bug this file already
-        carries a comment about for buttons.
-
-        Escape is the one legitimate exception and it predates this: leaving full screen
-        has to work wherever focus is, and it is the Fullscreen API's own contract. So the
-        rule is not "no document handler", it is "the document handler does nothing but
-        Escape" — which is what this asserts.
-        """
-        assert "canvas.addEventListener('keydown'" in view3d.SCRIPT
-
-        for match in re.finditer(
-            r"document\.addEventListener\('keydown', function \(event\) \{(.{0,120})",
-            view3d.SCRIPT, re.S,
-        ):
-            assert "Escape" in match.group(1), (
-                "a document-level keydown that is not the Escape guard: it will drive "
-                f"another flight's panel — {match.group(1)!r}"
-            )
+    def test_the_view_keys_are_bound_to_the_map_not_the_document(self):
+        """A report holds several flights, each with its own map. A document-level
+        keydown drives whichever map the code finds first."""
+        assert "view.addEventListener('keydown'" in map3d.SCRIPT
+        assert "document.addEventListener('keydown'" not in map3d.SCRIPT
 
     def test_arrow_keys_do_not_scroll_the_page(self):
-        assert "event.preventDefault()" in view3d.SCRIPT
-
-    def test_state_keys_address_a_state_directly(self):
-        """`1 2 4` and `S M R` are what a cycle could never offer."""
-        assert "KEY_STYLES" in view3d.SCRIPT
-        assert "'exaggerate-set'" in view3d.SCRIPT
+        assert "event.preventDefault()" in map3d.SCRIPT
 
 
 REPORT_JS = pathlib.Path(render_html.__file__).parent / "js" / "report.js"
@@ -299,15 +249,11 @@ class TestPageText:
         """Five lines teaching drag, ctrl-drag and scroll on every page load, for
         gestures every map on the web already has."""
         assert "right-drag or ctrl-drag" not in render_html.STYLE
-        panel = view3d.panel({"bounds": {}}, "uid")
-        # The lesson survives, but behind the ? button rather than above the map.
-        assert "right-drag / ctrl-drag" in panel
 
     def test_the_controls_are_explained_behind_a_button_instead(self):
-        panel = view3d.panel({"bounds": {}}, "uid")
-        assert 'data-view3d-act="help"' in panel
-        assert "view3d-keys" in panel
-        assert "right-drag / ctrl-drag" in panel
+        assert 'data-m3="help"' in map3d.SCRIPT
+        assert "view3d-keys" in map3d.SCRIPT
+        assert "right-drag / ctrl-drag" in map3d.SCRIPT
 
     def test_the_terrain_facts_live_in_the_debrief(self):
         """Slope aspect and ground clearance are about the flight, not about how the
@@ -346,69 +292,6 @@ class TestPageText:
         assert "The flight from the side" in html
         # The side view is drawn in the page, so the article carries its host.
         assert 'data-chart="profile"' in html
-
-
-class TestBasemapSpinner:
-    """Stitching a basemap over a cross-country box is slow enough that "did my click
-    register" is a real question, and the credit line in the corner was the only sign."""
-
-    def _panel(self):
-        return view3d.panel({"bounds": {}}, "uid")
-
-    def test_the_panel_carries_a_loading_overlay(self):
-        panel = self._panel()
-        assert "view3d-loading" in panel
-        assert "view3d-spin" in panel
-
-    def test_it_starts_hidden(self):
-        assert 'class="view3d-loading" hidden' in self._panel()
-
-    def test_it_is_shown_when_tiles_start_loading(self):
-        assert "showLoading(" in view3d.SCRIPT
-
-    def test_every_exit_from_the_load_hides_it(self):
-        """Including the ones that give up: a spinner left running over terrain that is
-        never going to change is worse than no spinner."""
-        script = view3d.SCRIPT
-        assert script.count("hideLoading()") >= 3
-
-    def test_a_hung_request_is_given_up_on(self):
-        """The failure this suite originally missed.
-
-        A blocked host or a captive portal *hangs* rather than returning an error, so
-        neither the tile `onerror` nor `finish()` ever runs and the spinner — and the
-        credit line before it — sat there indefinitely. Measured against a proxy that
-        drops the tile hosts: still loading after eight seconds with nothing pending.
-        """
-        script = view3d.SCRIPT
-        assert "TILE_STALL_MS" in script
-        assert "function stall()" in script
-        # The watchdog and the normal finish must not both run.
-        assert "if (settled) return;" in script
-
-    def test_the_watchdog_is_a_stall_detector_not_a_deadline(self):
-        """A slow connection trickling 80 tiles in is still making progress, and cutting
-        it off at a fixed deadline would break exactly the case the spinner is for."""
-        script = view3d.SCRIPT
-        assert "function progress()" in script
-        # Every tile outcome re-arms it, errors included: the host answered either way.
-        assert script.count("progress();") >= 3
-
-    def test_it_clears_after_the_stitched_image_is_shaded_not_before(self):
-        """`shadedTexture` and `sampleCellColours` run after the last tile arrives, so
-        hiding on tile count leaves the reader watching unchanged terrain."""
-        script = view3d.SCRIPT
-        stitched = script.index("var image = mosaic;")
-        shaded = script.index("shadedTexture(image, box)", stitched)
-        colours = script.index("sampleCellColours();", shaded)
-        assert colours < script.index("hideLoading()", colours), (
-            "the spinner clears before the stitched imagery is shaded and sampled")
-
-    def test_the_label_survives_reduced_motion(self):
-        """The global reduced-motion rule stops the ring, so the text beside it is what
-        carries the message."""
-        assert "view3d-loading-text" in self._panel()
-        assert "prefers-reduced-motion" in view3d.STYLE
 
 
 @needs_node

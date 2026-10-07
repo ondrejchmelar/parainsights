@@ -18,9 +18,9 @@ parainsights/
 ├── meteo/                 the day's sounding against pgweb's essential takeoffs
 ├── planner/               a task drawn on the airspace it crosses — a section of the airspace page
 ├── parainsights_common/   the one thing every page shares: the strip between the tools
-├── parainsights_map/      the 3D map every page draws with: canvas, WebGL, merged, MapLibre, terrain
+├── parainsights_map/      the 3D map every page draws with: MapLibre + deck.gl, the scene, terrain
 ├── ci/                    the checks the pipeline runs that are not tests
-├── tests/                 pytest, ~630 tests, no network; the JS through Node (tests/js.py)
+├── tests/                 pytest, ~560 tests, no network; the JS through Node (tests/js.py)
 └── docs/
     ├── formats.md            IGC and KML/KMZ format research, measured on real files
     ├── plan.md               tracklog viewer: scope, decisions and status
@@ -45,9 +45,9 @@ it is about *geodesy and analysis*, where the tools genuinely disagree.
 
 The 3D map is the exception that shows the edge of it. It is a **map widget** — hand it a
 terrain grid, some imagery and a list of things to draw and it never asks what a flight
-is — so the viewer and the Planner share it, as the package `parainsights_map` (the canvas
-view, its WebGL backend, the merged and plain MapLibre views, the renderer switch and the
-DEM fetcher), rather than each carrying 120 KB of JavaScript. Its flight code went to
+is — so the viewer and the Planner share it, as the package `parainsights_map` (the map,
+the panel and scene it draws from, the library loader and the DEM fetcher), rather than
+each carrying its own copy. Its flight code went to
 `js/scene.js` first, which is what made it a move. Imports of it from `airspaces` are
 lazy, so the OpenAir file still builds with the map absent. Likewise `planner`
 reads its scoring constants out of `tracklog_viewer/js/xc.js` — a planner that scored a
@@ -61,7 +61,7 @@ as the packages, so there is nothing to line up by hand:
 
 ```bash
 uv sync --extra dev          # creates .venv on the pinned Python, from uv.lock
-uv run pytest -c pyproject.toml     # ~630 tests, a few minutes in parallel, no network
+uv run pytest -c pyproject.toml     # ~560 tests, a few minutes in parallel, no network
 ```
 
 `-c pyproject.toml` matters when the repo sits inside another project — pytest otherwise
@@ -198,7 +198,7 @@ The Planner map still draws everything.
 
 **This was not always true and the code still remembers it.** Everything here was built
 to run inside a published artifact, behind a policy that blocks every external host — and
-that one constraint is why there is an embedded DEM, an embedded basemap, locally
+that one constraint is why there was an embedded DEM, an embedded basemap, locally
 rendered charts, a canvas 3D view instead of a map library, and an inlined font.
 
 That assumption is retired. The site is GitHub Pages, the reader has a connection, and
@@ -206,21 +206,22 @@ the trade was never close: a fetched mosaic is 10–20 m a pixel where an embedd
 afford 45, the detail layer makes it sharper again as you zoom in, and the file is half
 the size. So **imagery is fetched at view time** in all three page-writing tools, and
 `--embed`, which baked it in, is gone: nothing used it. The planner fetches its
-**terrain** at view time too (`terrain.remote`, loaded by `view3d`'s
-`initView3dWhenReady`), and every 3D map fetches a finer terrain patch for what is on
-screen once the reader zooms in and holds still (`terrainPlan`, WebGL only). `--online` is still accepted and does nothing, so an old command
-line still runs.
+**terrain grid** at view time too (`terrain.remote`, loaded by `view3d`'s
+`initView3dWhenReady`) — what ground heights are read from (airspace floors given above
+the ground, which zones a flight came near); the map streams its own terrain.
+`--online` is still accepted and does nothing, so an old command line still runs.
 
 What is *not* retired, because it is still true and still worth keeping:
 
 - the charts are rendered locally, because Google Image Charts died in 2019 and took
   every graph in igc2kmz's output with it;
-- the font is inlined, because a font is one request for a document's whole appearance;
-- the 3D view is a canvas and a shader rather than a map library, because that is what
-  makes it embeddable in a report at all.
+- the font is inlined, because a font is one request for a document's whole appearance.
 
-And two things now *require* a network at view time rather than merely preferring one:
-the meteo page has no numbers of its own, and the imagery on every 3D map is fetched.
+The 3D view was a canvas and a shader of its own for that reason; it is MapLibre and
+deck.gl from unpkg now (October 2026), and the canvas renderer is gone (see "Only the
+merged map" under Decisions). So three things *require* a network at view time rather
+than merely preferring one: the meteo page has no numbers of its own, the imagery on
+every 3D map is fetched, and so is the map itself.
 Both say so on screen when the fetch fails rather than drawing an empty frame.
 
 **The meteo page compares up to three takeoffs, and three is the palette's number.**
@@ -332,7 +333,7 @@ build and the page around the articles.
 | `render_html.py` | The page around the articles: stylesheet, page script, strips, bundle |
 | `upload_panel.py` | The `+ your track` panel |
 | `charts_client.py` | The side and top views, drawn in the browser from the article's payload |
-| `parainsights_map/` | The 3D map (a package of its own): `view3d` (canvas), `view3d_gl` (WebGL backend), `map3d` (merged), `render_map` (plain MapLibre, the switch, the loader), `terrain` (DEM grids) |
+| `parainsights_map/` | The 3D map (a package of its own): `map3d` (the map: MapLibre + deck.gl and its controls), `view3d` (the panel, the scene, ground and airspace loading, the handle the charts drive), `render_map` (the library loader, `__openMap`, context-loss revival), `terrain` (DEM grids) |
 
 ## Decisions, and the reasons behind them
 
@@ -506,94 +507,9 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   zoomed in. **The merged view draws place names as text instead**: OpenFreeMap's
   OpenStreetMap vector tiles and fonts (keyless, CORS-open), cities bold, villages from
   zoom 11, white on a dark halo, placed by MapLibre so they never collide, over the
-  photograph only. The canvas and plain MapLibre views enlarge the level-12 tile. A photograph tells a pilot
+  photograph only. A photograph tells a pilot
   what the ground under a climb was; a road map does not. Attribution to Esri/Maxar is
   required and is rendered on the map and in the caption.
-- **Every basemap style is fetched at view time.** When stitching from tiles, give each
-  source layer **its own canvas** and composite in order at the end: the label layer is
-  requested second and frequently answers first, so painting into a shared mosaic as tiles
-  arrive makes z-order a race.
-- **One tile level of improvement is worth a fetch; two is a 4x zoom of nothing.**
-  Halving the visible box buys exactly one tile level inside a fixed tile budget, so
-  `DETAIL_STEP = 2` meant the imagery stood still across a fourfold zoom. Measured on the
-  fixture: a fetch at tile zoom 15 around view zoom 8, then nothing at 12, 16, 20 or 28 —
-  the reader gets three and a half times closer and the ground only gets blurrier — and
-  the next fetch at 40, the ceiling. That is what "the tiles stopped updating with zoom"
-  was, and it was a threshold rather than a fault. At one level the ladder is 12, 13, 15,
-  16, 17 and the worst plateau is 2.5x. The two things that keep this from being a
-  fetching machine are untouched: `DETAIL_DELAY` of stillness, and a padded box so small
-  pans ask for nothing.
-- **The tile budget is what sets image quality, not the JPEG settings.** `MAX_TILES = 24`
-  held every stitch to zoom 10 — about 80 m per pixel, which is why the draped imagery
-  looked like a smear, and no `max_width` above the native 1280 px could help. 80 tiles
-  reaches zoom 12 (~22 m/px) on a cross-country box; the runtime path allows 120 because
-  it pays in requests rather than bytes. A single-flight report embeds both styles at
-  zoom 12 (~550 KB); a multi-flight document pays that per flight, so it takes zoom 11.
-- **The heightfield is WebGL; everything else about the 3D view is not.** `view3d_gl.py`
-  registers a backend and `view3d.py` calls it in place of its per-cell drape. It is a
-  seam, not a second viewer: one camera, one set of gestures, one tile stitcher, one set
-  of probes. The backend *reads* `view` and `fit` by reference rather than owning a copy,
-  which is what keeps `groundUnder()`/`holdGround()` inverting the same projection every
-  gesture anchors through — measured agreement between the matrix and `project()` is
-  1.1e-05 px. Consequences: the track, markers and cursor stay in 2D on the canvas that
-  was already there (the GL canvas goes *behind* it, and the sky gradient moves with it);
-  falling back is `renderer = null`; and `preserveDrawingBuffer` is on, without which a
-  headless screenshot of the one view that most needs looking at comes back blank.
-- **A depth buffer is the fix for folded cells, and the 2D path is still live.** One
-  `drawElements` at 1.9 ms where the drape took 99 ms, drawing 25 600 cells against
-  6 400 — and across a 105-camera sweep the 2D renderer folds cells at 27 of them and
-  WebGL at none. But `drawTerrain`/`fillHull`/`texturedTriangle` are not dead code: they
-  run on a browser without WebGL *and* after a `webglcontextlost`, so they are kept whole
-  and there is a test that says so. The paragraph below is what that path still does.
-- **The draped texture is filtered LINEAR, with no mipmaps.** Mipmapping the terrain
-  looked obviously right and cost more than half the detail on screen: mip level comes
-  from the *longest* texture derivative, and terrain is viewed at a grazing angle, so a
-  low pitch blurs by the elongated axis in both directions. It reads as two faults with
-  one cause — the imagery goes soft, and the terrain goes **flat**, because
-  `shadedTexture()` bakes the hillshade into the texture being blurred away. Measured at
-  zoom 4 / pitch 0.20 against the canvas renderer: 44% of its detail mipmapped, 64% with
-  16× anisotropy, 98% with plain LINEAR. Anisotropy is queried and reported but not used.
-  **Measure any change here on a real report** — the effect needs the ratio between
-  texture resolution and projected ground scale that a real DEM and stitched basemap
-  have, and it does not reproduce on synthetic test data.
-- **A WebGL context is scarcer than memory.** A page gets about sixteen, and flights
-  accumulate — so removing a flight calls `handle.dispose()`, which deletes the buffers
-  and forces `WEBGL_lose_context`. Without it, adding and removing a few tracks exhausts
-  the contexts and every panel silently drops to 2D. Context loss from any other cause
-  falls back the same way rather than leaving a blank panel.
-- **Painter's order has no depth buffer, so cells fold.** (The fallback path.) A cell whose projected quad turns
-  inside out (a slope steeper than the pitch angle) cannot be drawn as a quad: textured
-  affinely it smears into a wedge, filled as one path it renders as a bowtie — also a wedge
-  — and skipped it leaves the sky showing, because nothing was painted behind it. It gets a
-  flat hull fill, plus two *clipped, individually-affine triangles* when the camera is still
-  (three points determine an affine map exactly, so a triangle is right even when the quad
-  is not). 955 of 6 324 cells fold at the default camera and 1 834 zoomed in at low pitch,
-  which is why this matters. Cells are also depth-sorted by `wy·cos p − wz·sin p` rather
-  than walked by horizontal depth, which ignores height entirely.
-- **The hillshade is baked into the texture, never drawn per cell.** Cells must overdraw
-  their neighbours — a projected quad is not a parallelogram, so the affine texture fit
-  leaves hairlines — and *any* semi-transparent tint drawn over that overdraw lands twice
-  in the overlap. That is a dark lattice over the whole slab; matching the tint to a
-  smaller extent gives every cell an untinted border, which is the same lattice again.
-  The basemap raster and the DEM are both axis-aligned in lon/lat, so `shadedTexture()`
-  composites the illumination into a copy of the image once, at grid resolution, and lets
-  the browser interpolate it. Smoother, faster, and no artefact.
-- **Overdrawing a texture cell means growing the source too.** Stretching the same slice
-  over a 10% larger quad scales the imagery up inside each cell, so its content no longer
-  lines up with its neighbour's and every boundary becomes a visible step. Grow the source
-  rect and the destination by the same fraction about the same centre. This, not the
-  shading, was the lattice that survived three attempts to fix it.
-- **The drape mesh is a cell budget, and coarse while the camera moves.** (The fallback
-  path — WebGL draws the whole grid every frame at the same cost either way.) Each cell
-  costs a `drawImage`, so a mesh fine enough to hide its own quadrilaterals cannot run on
-  every frame of a drag: `FINE_BUDGET` 5 200 cells settles in ~130 ms, `COARSE_BUDGET`
-  1 800 keeps a drag near 45 fps, and a 180 ms timer after the last gesture swaps back.
-- **Hillshade is stretched to the terrain's own lit range.** A fixed shading curve assumes
-  alpine relief; over the 390–761 m of ground a Czech flight crosses, `lit` stays within a
-  few hundredths of flat-ground illumination and the overlay does nothing, which is how a
-  draped road map came out looking like a flat sheet. `litMid`/`litSpread` are measured
-  once from the grid and the shading is normalised against them (and skipped entirely when
-  the range is under 0.01, as on a flat plane).
 - **Uploading your own track is the first tab, not the last.** The bundled flights are a
   showcase. The reader's own file is the product, so the `+ your track` tab leads and a
   note under the tabs says the analysis happens in the page.
@@ -637,7 +553,7 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   no caption; its axis buttons and legend sit below the block. The merged map's full
   screen takes the whole block (the map flexes, the chart a quarter of the screen,
   redrawn to that band's proportions by a ResizeObserver in `charts_client`, `shapeOf`);
-  the buttons, legend and renderer switch are not shown there. Comparing, the side view
+  the buttons and legend are not shown there. Comparing, the side view
   draws every compared flight's height on the same axes (`comparedTrace`: distance flown,
   from its launch, or time on the shared clock as in the replay), each in its colour and
   this flight's in its own, the axes widened to hold them all. Its tooltip gives height
@@ -660,7 +576,8 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   may use a bare `id` — two flights would collide, so every id carries the uid — the
   tab strip is driven by **one delegated listener** on the strip rather than a listener per
   tab, because tabs appear at runtime, and removing an article must delete its entries from
-  `window.__view3dAll`, each of which holds a DEM grid and a stitched image.
+  `window.__view3dAll` and `__mergedAll` and dispose of its map (`host.__map`): each
+  holds a DEM grid, and the map a WebGL context, of which a page gets about sixteen.
 - **A tab is a wrapper, not a button.** It contains an open button and a close button, and
   a button inside a button is invalid HTML that browsers silently unnest.
 - **Full-bleed needs the scrollbar measured.** `100vw` includes the scrollbar, so a
@@ -684,35 +601,29 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   JavaScript port on purpose:
   `quicklook.py` already duplicates thresholds that can drift, and 144 pairs of numbers
   cannot. The azimuth is **unwrapped** in the table, or interpolating across 360 sweeps
-  the light the long way round the compass. Re-lighting re-measures the lit range,
-  re-bakes the draped texture and calls `renderer.relight()` to rebuild the vertex
-  colours in WebGL — far too much for a mousemove, so it only fires once the sun has
-  moved a degree, while the arrow reads the exact position and stays smooth. A sun below
-  the horizon is held 3° up and labelled rather than drawing a black panel.
-- **The sun and the wind are arrows on the canvas, not in the DOM.** Both are geographic
-  bearings, so both have to turn with the view — a rose drawn in the DOM would agree with
-  the terrain at one heading and lie at every other. They live in the corner of the 2D
-  overlay and are drawn from `bearingToScreen`, which folds in the two conventions that
-  cancel: `view.yaw` turns the world counter-clockwise and screen y grows downward.
-  **The wind arrow points opposite `wind.from`** — the reported bearing is where the air
-  comes from, the arrow shows where it is going, and drawing it along the bearing is the
-  classic 180° error that still looks like a perfectly good arrow. `handle.rose()` exposes
-  both angles so a test can fail on it instead of a screenshot not doing so. **A click on
-  the rose turns the view north** (`orientNorth`, anchored on the fit like a button zoom),
-  and in the merged view on its SVG (`easeTo({bearing: 0})`); the planner ignores a click
-  there (`handle.overRose`) so it does not also drop a turnpoint.
+  the light the long way round the compass. The map re-lights MapLibre's hillshade
+  (`sunTo`) only once the sun has moved a degree, while the rose reads the exact
+  position and stays smooth. A sun below
+  the horizon is held 3° up rather than drawing a black panel.
+- **The sun and the wind are on the compass rose, which turns with the map.** Both are
+  geographic bearings, so a rose that did not turn would agree with the ground at one
+  heading and lie at every other. **The wind arrow points opposite `wind.from`** — the
+  reported bearing is where the air comes from, the arrow shows where it is going, and
+  drawing it along the bearing is the classic 180° error that still looks like a
+  perfectly good arrow. **A click on the rose turns the map north**
+  (`easeTo({bearing: 0})`), and is not also a turnpoint for the planner.
 - **An uploaded track fetches its own DEM, and CORS is why it can.** `js/upload.js` asks
   for the box the CLI would (`TV.terrain.remoteFor`: 64 tiles, 120 000 nodes over up to
   480 columns) and the page's own `loadTerrain` fills it — mosaicking the terrarium tiles
   onto a canvas and decoding `R * 256 + G + B / 256 - 32768`, the formula in
   `terrain.py`. It works because the tiles carry `Access-Control-Allow-Origin: *`;
   without that the canvas is tainted, `getImageData` throws, and the upload goes on with
-  no ground — no 3D view and no clearance finding, as a report built without
-  `--terrain`, and the status line says so.
+  no ground grid — no clearance finding, as a report built without `--terrain`, and the
+  status line says so.
 - **An uploaded track is wired exactly as a built report's flight is**, because it *is*
   one: the article comes from the same `compose`, and `TV.upload.place` runs
-  `__drawCharts` and `initFlight` on it, which bind the linked cursor, the tables, the 3D
-  view and the renderer switch. (The reduced `quicklook.py` needed its own `linkCharts`
+  `__drawCharts` and `initFlight` on it, which bind the linked cursor, the tables and the
+  3D map. (The reduced `quicklook.py` needed its own `linkCharts`
   for this, and its canvas charts had no tooltip or band highlight; both are gone.)
 - **Full screen is the real Fullscreen API, and the in-page maximise is its fallback.**
   It used to be the fallback only, because `requestFullscreen` fails two ways at once in
@@ -722,39 +633,13 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   served from a host the API is granted, and it is what a reader means by full screen. So
   the button asks for it, and falls back to `.is-maximised` on a throw, on a rejection,
   *and* on an implementation that returns undefined and quietly does nothing — the third
-  needs a check after a tick, which no amount of promise handling would catch. Everything
-  downstream asks `panelIsFull()` and does not care which path won. A synthetic click is
-  not a user activation, so a test can only reach the granted path by stubbing the API —
-  which means the fallback is what a browser test exercises by default, and both are
-  pinned in `tests/test_view3d_fullscreen.py`.
-- **The report declares a doctype, and the full-screen canvas is measured from its
-  panel.** These are one bug. Without a doctype the page is in **quirks mode**, where
-  `document.documentElement.clientHeight` is the height of the whole *document* rather
-  than of the viewport — and that is what `applyMaximisedSize()` sized the maximised
-  canvas from. On a 4 316 px report, full screen produced a 4 316 px canvas inside an
-  813 px panel: terrain drawn for a viewport five times too tall, the track overlay
-  registered against a projection the GL canvas underneath did not share, and every
-  gesture anchored through the wrong one. The controls stayed exactly where CSS put them
-  and did nothing sensible, which is how it was reported. Both halves are fixed, and the
-  second is the one that matters: the canvas is sized from `panel.clientWidth/Height` —
-  the panel's padding box, which is the same box `inset: 0` gives the GL canvas — so no
-  global can ever mean something different again. The panel is embeddable and does not
-  own the document it lands in. `tests/test_view3d_fullscreen.py` runs the maximise
-  probe in **both** modes for that reason; against the old code the quirks case reports
-  a 3 021 px canvas in an 813 px panel.
+  needs a check after a tick, which no amount of promise handling would catch. It takes
+  the flight's whole map block (`.flight-map`: the map and the side view), and the
+  side-view tooltip moves into it (`test_compare`).
 - **The keyboard follows the map; the pointer follows the hand.** Bare arrows pan and
-  shift + arrows rotate and tilt, matching the pointer, where it used to be the other way
-  round — so holding shift turned a pan into a rotate on the mouse and a rotate into a pan
-  on the keyboard, on the same panel. And `rotate-left` swings the ground *anticlockwise*,
-  which is `view.yaw` **increasing** and the opposite sign to the orbit drag beside it.
-  That looks like a bug in the source and is not: a drag is direct manipulation of a
-  grabbed point, so pushing left spins the world clockwise, exactly as the twist gesture
-  is deliberately opposite to the drag. A key grabs nothing, so it follows the map. Both
-  are pinned by `tests/test_view3d_gestures.py`, which dispatches real `KeyboardEvent`s
-  and measures where the ground ended up — reading the sign off the source is what got it
-  wrong in the first place. Note that a shifted arrow moves `panX`/`panY` too, and that is
-  not a pan: a turn anchors through `holdGround` so the ground under the middle of the
-  view stays there, exactly as the orbit drag does.
+  shift + arrows rotate and tilt, matching the pointer: holding shift turns a drag, and
+  so it turns a key. Keys are bound to the map, never the document — a report holds
+  several flights, and a document-level handler drives whichever map it finds first.
 - **A click pins the linked cursor; hover is only a preview.** Hover is the right default
   — sweep a chart and the map keeps up — but on its own it takes the marker away at the
   moment the reader wants it, when they have found something and are turning to look at
@@ -781,86 +666,24 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   same rule as a flag — `confident` is false where the label is a fallback rather than a
   finding, and the table prints a dash, since "thermal because there was nothing to check"
   is not the claim "thermal because the ground was flat".
-- **Twist rotates the map, the orbit drag rotates the camera, and the two are opposite
-  on purpose.** A twist is direct manipulation — the ground follows the fingers, so
-  `view.yaw -= angleDelta(...)`. The minus is the whole point and it looks wrong: the
-  finger angle is `atan2` in client coordinates where y grows *downward*, so a
-  clockwise twist is a **positive** delta, while a positive `view.yaw` turns the scene
-  **counter-clockwise**. Three sign conventions, two of which cancel; the gesture span
-  the map backwards for its entire life because every test measured the magnitude of
-  `dyaw` and never its sign. Dragging, by contrast, walks the camera (Google Earth's
-  model, which pilots know), so the ground swings the other way — that is not a bug.
-  Both senses are pinned by tests that dispatch real `PointerEvent`s.
-- **A gesture anchors on the terrain it grabbed, not on the flat datum under it.**
-  `world()` measures height from `dem.min`, so inverting the projection with `wz = 0`
-  solves the *datum plane* — and the mountainside a reader puts the cursor on stands well
-  above it, so the two are the same screen pixel and kilometres apart on the ground.
-  Turning about the wrong one swings the view. Measured on the ridged fixture's 618 m of
-  relief: the grabbed terrain slid **7.1 px on a 90 px orbit drag and 12.7 px on 180 px**,
-  growing with the drag; an alpine flight carries several times that relief, which is why
-  the report's map felt wrong to rotate while the airspace map — 1.4 km of relief across
-  500 km of country — felt fine. `groundUnder` iterates onto the surface (three passes:
-  datum guess, terrain height there, corrected northing; each pass corrects by the slope
-  times the previous error) and returns the height *with* the point, so `holdGround`
-  re-projects it where it is. The measurement to be careful with is the tautological one:
-  asking whether the point the code chose to hold stayed put answers zero either way, so
-  the test computes the surface point itself and measures *that*.
-- **An orbit anchored at the edge of the canvas throws the view away, and the fix is
-  where the pivot is allowed to be.** Turning about a point holds *that* point still and
-  swings everything else around it by an amount proportional to its distance from the
-  pivot — so grabbing near a corner puts the whole scene on a long lever. Measured on a
-  30 px rotate: the middle of the view slides **2 px** anchored centrally and **45–88 px**
-  anchored at the edges, which reads as the map jumping somewhere else. It is not a
-  regression and never was one; it is what orbiting about a corner does. `pickAnchor`
-  clamps the pivot into the middle half of the canvas (`ANCHOR_INSET`), which takes those
-  same drags to 2 px and 21–50 px, and it is applied at **both** places an orbit can pick
-  one — the `pointerdown` that normally wins, and the `pointermove` fallback for a gesture
-  that arrived without one. The drag still follows the finger; only the point it turns
-  about is kept off the lever's end.
-- **A zoom with no pointer behind it anchors on the fit, not on the middle of the
-  canvas.** The wheel anchors on the pointer and always did; the buttons and the `+`/`-`
-  keys have no pointer, and they zoomed about `(W/2, H/2)` while `refit` centres the
-  scene on `(W/2, 0.58H)` — the sky above a flight needs more room than the ground below
-  it. Every point except that one pixel row therefore translated on each press, always
-  the same way: **13 px per zoom-in on a 549 px canvas**, so five presses walked what the
-  reader was looking at 60 px down the panel. It accumulates, which is why it reads as a
-  fault rather than as a choice. `box()` returns the anchor's client position now, and
-  `tests/test_view3d_gestures.py` holds a button zoom to a *pure magnification*: every
-  point lands on `anchor + (before − anchor) × ratio`, measured at 1, 5 and 10 presses
-  and at three world points, worst error 0 px. Predicting it that way needs no inverse
-  projection, so the test measures the zoom rather than the probe — the first attempt
-  measured `groundUnder`'s own 7 px of sampling error being magnified and looked like a
-  drift that was not there.
-- **Zoom anchoring is measured from the fit's anchor, not the canvas corner.** A point's
-  screen position is `anchor + world·scale·zoom + pan`, and `refit()` puts the anchor at
-  `(W/2, 0.58H)`. Dropping that term biases every zoom by `anchor·(ratio−1)`, which reads
-  as the view diving towards the bottom-right on both wheel and pinch. Verified at three
-  different cursor positions, error ≤ 0.1 px.
-- **`handle.redraw()` paints synchronously; `draw()` schedules a frame.** Headless Chrome
-  stops servicing `requestAnimationFrame` once the page goes idle, so a test that
-  scheduled a frame and then measured the projection was reading numbers from *before* its
-  own input. Every gesture measurement was wrong in the same invisible way — including one
-  that "proved" the anchor was in the wrong place — until the test hook bypassed the
-  scheduler. A chained rAF loop in probe code hangs outright under
-  `--virtual-time-budget`; use `setTimeout` there.
-- **The 3D canvas has no width/height attributes.** CSS sizes the box (`aspect-ratio`)
-  and JS matches the backing store to it, capped at 2× pixel ratio; that is what lets the
-  same code serve an inline panel and full screen.
-- **Three 3D views, for now.** `view3d.py` (canvas) and plain MapLibre (`render_map.py`)
-  came first; the report carries both, for comparison: a `canvas | MapLibre` switch above each 3D
-  panel (`render_map.switch_html`, `SWITCH_SCRIPT`), bundled flights and uploads alike.
-  The MapLibre side draws from the scene the canvas view was built from
-  (`handle.built`), so it cannot show a different flight, and follows the linked cursor
-  by wrapping that handle's `setCursor`/`revealCursor`/`clearCursor`. It adds a replay
-  slider, which is why `scene.track` carries `t` (seconds since the first fix). MapLibre
-  and deck.gl are loaded from unpkg on the first switch, never before.
-  **The switch is three-way now — `canvas | MapLibre | merged` — and the merged view is
-  where this is heading** (it is to replace both, everywhere, once compared). **Every
-  3D map opens on merged** (October 2026): the host carries `data-renderer-default`,
-  and `window.__openDefaultRenderer` (in `render_map`'s switch script) clicks it once a
-  flight's canvas view is built — merged draws from that canvas handle — and clicks
-  back to the canvas if MapLibre cannot be fetched. The suite has no network, so it
-  runs every flight on the fallback.
+- **Only the merged map** (October 2026). There were three 3D views behind a switch: the
+  canvas (`view3d`, a heightfield of its own in 2D canvas or WebGL), plain MapLibre and
+  the merged view, which took what each was better at and became the default. The other
+  two are gone (in git history), and so is the switch. What is left of `view3d` is the
+  data: the panel (`view3d.panel`, a sized box, the exaggerations offered as
+  `data-verticals`/`data-vertical`, the scene as JSON), `readScene`, the ground grid
+  (`loadTerrain`), the airspace (`loadAirspace`, `relevantAirspace`, `settleAirspace`,
+  which leaves the switch's wording in `scene.airspaceWhy`) and the handle
+  (`initView3d`): `built`, `groundAt`, the cursor members and the airspace filter, which
+  only remember — the map wraps them, which is how a chart hover or a planner filter
+  reaches it. `render_map` loads MapLibre and deck.gl from unpkg once per page and
+  mounts the map (`window.__openMap(host)`) once the handle is ready. **Without a
+  network there is no 3D map**, and it says so; the canvas was the offline fallback, and
+  the site is read online. The suite has no network, so the map is driven from a local
+  copy of the libraries (`tests/vendor.py`, `test_merged_controls`) and everything else
+  from the handle alone. The map draws from the scene (`handle.built`), so it cannot show
+  a different flight, and `scene.track` carries `t` (seconds since the first fix) for
+  the replay.
   `map3d.py` keeps from MapLibre the whole planet, streamed tiles and the replay; and
   from the canvas the control bar and its keys, the sun and wind rose, the climb and
   glide labels, the airspace boxes and the imagery treatment. That last one is the
@@ -869,8 +692,8 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   through MapLibre's `hillshade-highlight-color`/`-shadow-color`; its default black and
   white is what greyed the photograph. The DEM and the photograph are declared at
   `tileSize: 128` so MapLibre asks one zoom deeper (4x the tiles): at their natural size
-  it picks a DEM ~4x coarser than the canvas's grid and the relief reads flat. Two
-  MapLibre facts both views now honour: terrain is exaggerated **from sea level**, so
+  it picks a DEM ~4x coarser than the canvas's grid was and the relief reads flat. Two
+  MapLibre facts the map honours: terrain is exaggerated **from sea level**, so
   anything drawn over it is `alt × vertical`; and deck.gl layers sharing a point fight
   for depth, so markers and labels draw with `depthCompare: 'always'`.
   **Esri's levels under 12 are a different, darker mosaic** (blue channel 26 against 59
@@ -878,11 +701,8 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   them jumps colour as the zoom crosses the line. `TILE_SOURCES["satellite"]
   ["consistent_from"] = 12`, and the merged view builds tiles one and two levels under
   that from the level-12 tiles beneath them (a `m3tiles://` MapLibre protocol); only the
-  far horizon, at three levels down and more, still uses the native tiles. The canvas
-  view has the same jump on large flights, whose whole-flight mosaic falls to level 11
-  under its 120-tile budget — not fixed, because level 12 there means mosaics past iOS
-  Safari's canvas limit.
-  The merged view's controls follow the canvas's: a left drag with shift, alt or meta
+  far horizon, at three levels down and more, still uses the native tiles.
+  The map's controls follow the canvas's: a left drag with shift, alt or meta
   turns and tilts as a right drag does (box zoom is off), labels are white with an
   outline over a coloured span, and the replay is one play button in the bar that opens
   a **from-to range** (two handles on one bar, full width) with play/pause and speed
@@ -962,15 +782,15 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   waits for every tile) and not `isStyleLoaded()` (false while any tile is in flight) —
   both lost an early x2 press and drew the track over ground still at x1.
   **A phone that locks or backgrounds the page takes its WebGL contexts and often never
-  gives them back**: the map stays black while every button still answers. Both MapLibre
-  views check their canvases (`isContextLost`) when the page becomes visible again and
+  gives them back**: the map stays black while every button still answers. The map
+  checks its canvases (`isContextLost`) when the page becomes visible again and
   1.5 s after MapLibre reports a loss, and rebuild themselves in place from a snapshot —
   camera, basemap, exaggeration, labels, airspace, the replay and its window
   (`window.__reviveMaps`, `api.lost/snapshot/dispose`). A rebuild takes its cursor
-  wrappers back off the canvas handle, and builds the restored basemap and exaggeration
+  wrappers back off the panel's handle, and builds the restored basemap and exaggeration
   into its first style: set over it before that style loads, MapLibre throws inside a
-  promise and the rebuild silently never finishes. Not covered by a test, because both
-  views need MapLibre from a CDN and the suite has no network; checked by hand with
+  promise and the rebuild silently never finishes. Not covered by a test; checked by
+  hand with
   `WEBGL_lose_context`.
 - **A declared task the flight did not fly is worse than no task at all.** A logger writes
   out whatever task happens to be loaded, so a `C` record is evidence of what was in
@@ -1030,17 +850,13 @@ The numbers are checkable, so check them:
   google-chrome --headless --disable-gpu --no-sandbox --window-size=1280,3000 \
     --screenshot=shot.png --virtual-time-budget=10000 page.html
   ```
-  For the 3D canvas add `--enable-unsafe-swiftshader --use-gl=angle --use-angle=swiftshader`.
-- **The 3D view is tested in a browser, because none of its claims are visible from
-  Python.** `tests/test_view3d_gl.py` renders a panel over a synthetic DEM, runs a probe
-  in it and reads the numbers back out of the DOM — Chrome cannot be asked for the value
-  of an expression, so the probe writes into an element and the DOM is dumped. It skips
-  when there is no Chrome, and it touches no network. Two habits from it:
-  **the fixture is ridged on purpose** — a gentle DEM folds no cells and would let a
-  do-nothing renderer pass, so there is a control test asserting the 2D path *does* fold
-  on it; and **timing is not asserted there**, because `--virtual-time-budget` does not
-  advance the clock during synchronous work and every duration comes back zero. Frame
-  costs were measured over the DevTools protocol instead and written into `docs/plan.md`.
+  For WebGL add `--enable-unsafe-swiftshader --use-gl=angle --use-angle=swiftshader`.
+- **What needs a browser and not the map is probed from the DOM** (`tests/browser.py`,
+  `_probe`): a panel over a synthetic DEM with the panel script alone, a snippet run
+  against its handle, the answer written into an element and the DOM dumped — Chrome
+  cannot be asked for the value of an expression. It skips when there is no Chrome and
+  touches no network. **Timing is not asserted there**, because `--virtual-time-budget`
+  does not advance the clock during synchronous work and every duration comes back zero.
 - **The merged map is tested with real input** (`tests/test_merged_controls.py`): MapLibre
   and deck.gl, the pinned versions the page loads from its CDN, are cached once by
   `python -m tests.vendor` (a network step CI runs first) and served from localhost; the
@@ -1079,14 +895,11 @@ The **theme toggle** lives in that strip on every page. `common.TOKENS` holds th
 (three pages carried identical copies), `common.THEME_BOOT` applies the stored choice in
 the `<head>` — after the first paint it is a white flash on a dark page, every time —
 and `common.THEME_SCRIPT` flips `data-theme`, remembers it, and asks the canvases to
-redraw, because a canvas holds the tokens it was painted with. **`window.__view3dAll` is
-an object keyed by canvas id, not an array** — `render_html` registers and deletes
-handles by id so a removed flight takes its DEM and its stitched image with it — and an
-`Array.forEach` on it throws. That throw taught something worth keeping: *a listener's
-exception never reaches the `click()` that dispatched it*, so the button looked like it
-worked, the theme changed, and only the 3D views quietly kept the old sky. A probe that
-does not install a `window.onerror` collector cannot see it, and a report built with
-`fetch_tiles=False` has no handles registered to fail on. Two states, not three:
+redraw (the meteo charts and the report's charts), because a canvas holds the tokens it
+was painted with. Something worth keeping from the canvas 3D view's time: *a listener's
+exception never reaches the `click()` that dispatched it*, so a redraw that throws leaves
+a button that looks like it worked; a probe without a `window.onerror` collector cannot
+see it. Two states, not three:
 "follow the system" is a preference a reader has already expressed in their system.
 
 ## Design system
@@ -1108,17 +921,15 @@ the font stays inlined because it is one request for a document's whole appearan
 **Queued, in no particular order (October 2026), not started:**
 
 - ~~**Planner and Airspace in one tab.**~~ **Done** — see "airspaces, in one paragraph".
-- ~~**The planner on the merged 3D map**~~ **Done.** The airspace map sits in the flights'
-  `renderer-host` with the three-way switch and opens on **merged**
-  (`data-renderer-default`), falling back to the canvas by itself when MapLibre cannot be
-  fetched — so the suite, which has no network, still runs the planner on the canvas.
-  `map3d` learned what the page needs: a scene with rings and no `airspaceToggle` draws
-  them always; it follows the canvas handle's airspace filter (`setAirspaceFilter` is
-  wrapped like the cursor calls, `handle.airspaceFilter()` gives the starting one); the
-  exaggerations and the opening one are the canvas panel's own (×1/5/15 here); it opens
-  on `view.focus` at the scene's pitch; and its entry in `__mergedAll` takes a route
-  (`setRoute`) and reports clicks (`onClick`), announced to the panel as `merged-ready`.
-  The planner hands its route to both maps and takes turnpoints from either.
+- ~~**The planner on the merged 3D map**~~ **Done.** The airspace map sits in a
+  `renderer-host` like a flight's. `map3d` learned what the page needs: a scene with
+  rings and no `airspaceToggle` draws them always; it follows the handle's airspace
+  filter (`setAirspaceFilter` is wrapped like the cursor calls, `handle.airspaceFilter()`
+  gives the starting one); the exaggerations and the opening one are the panel's
+  (×1/5/15 here); it opens on `view.focus` at the scene's pitch; and its entry in
+  `__mergedAll` takes a route (`setRoute`) and reports clicks (`onClick`), announced to
+  the panel as `merged-ready`. The planner's browser tests stand in for the map with
+  those three members (`test_planner._MAP`).
   **FAI areas** (`faiArea`, on by default, merged map only — drawn by MapLibre as
   GeoJSON so they lie on the terrain, through `entry.setShapes`): xcplanner's convention
   (dkm/xcplanner `faiSector`), which pilots know — turnpoint 1 green, 2 blue, 3 red, each
@@ -1130,15 +941,13 @@ the font stays inlined because it is one request for a document's whole appearan
   — sets the closing test, the circle and the multipliers. Checked by
   hand over CDP with the network: merged at ×5 over Czechia, 745 boxes and 663 with the
   aerodrome zones unticked, three clicks a scored triangle.
-- **Only the merged map.** Drop the canvas and plain MapLibre renderers and the switch,
-  everywhere — once the merged view covers what the airspace and planner pages need from
-  the canvas (their own controls, the flat-map fallback). ~~Fix first: the merged
-  view's shift-drag turned about the centre.~~ **Fixed**: the modified-drag block in
-  `map3d.py` unprojects the ground under the pointer (clamped into the middle half, as
-  `pickAnchor` does) and pans it back under the pointer after every step, in up to four
-  passes because over terrain the centre's height moves with the pan. Measured by hand
-  over CDP on the Col Rodella flight, a 64° turn and 15° tilt: the grabbed ground moved
-  **944 px** before, **0.6 px** after. Not in the suite — it needs MapLibre from a CDN.
+- ~~**Only the merged map.**~~ **Done** (October 2026) — see "Only the merged map" under
+  Decisions. The merged view's shift-drag turns about the ground grabbed: the
+  modified-drag block in `map3d.py` unprojects the ground under the pointer (clamped
+  into the middle half) and pans it back under the pointer after every step, in up to
+  four passes because over terrain the centre's height moves with the pan — measured on
+  the Col Rodella flight, a 64° turn and 15° tilt: **944 px** before, **0.6 px** after
+  (`test_merged_controls`).
 - ~~**An airgram on the meteo page**~~ **Done**: a third chart in each takeoff's column
   (`drawAir`), wind by hour (05-21, the meteogram's clock) and height (the same ceiling as
   both charts) from the profile already fetched — no new request. Speed is one hue over

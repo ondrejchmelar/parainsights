@@ -16,7 +16,7 @@ import pytest
 from tests.flights import FLIGHTS
 from tests.test_analysis import build
 from tests.test_merged_controls import Browser, _box  # noqa: F401  (Browser is reused)
-from tests.test_view3d_gl import CHROME
+from tests.browser import CHROME
 
 pytest.importorskip("websocket")
 pytestmark = pytest.mark.skipif(CHROME is None, reason="no Chrome")

@@ -25,10 +25,10 @@ written in rather than the projection's own metric frame — and `groundAt`.
 
 ## Decisions, and the reasons behind them
 
-- **A click is a pointerup that has not travelled.** The canvas pans, zooms, rotates and
-  tilts, so a plain click handler drops a turnpoint on every drag of the map — the usual
-  way this kind of tool is broken. More than 6 px between down and up is a gesture.
-  `tests/test_planner.py` drags the map and asserts that nothing was left behind.
+- **A click is a click that has not travelled.** The map pans, zooms, rotates and tilts,
+  so a plain pointer handler drops a turnpoint on every drag of the map — the usual way
+  this kind of tool is broken. The map's own `click` (MapLibre's, `entry.onClick`)
+  already refuses a pointer that moved, and the planner takes its turnpoints from it.
 
 - **The scoring constants are interpolated from `tracklog_viewer/xc.py`, never typed.**
   A planner that scored a task differently from the report that later measures the flight

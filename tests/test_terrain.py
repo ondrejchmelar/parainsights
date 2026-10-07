@@ -140,39 +140,21 @@ class TestView3dPayload:
         # Mostly one or two characters a step at 1 Hz, which is the whole saving.
         assert max(abs(v) for v in track["lon"][1:]) < 100
 
-    def test_the_airspace_switch_waits_for_the_layers(self, ramp, tmp_path):
-        """A page with airspace offers the switch on every flight, disabled until the map
-        has loaded the layers under its ground (`loadAirspace`), which then enables it or
-        says why not. The rings are not in the scene: a monthly refresh reaches every
-        flight without a rebuild."""
+    def test_the_airspace_is_loaded_by_the_page(self, ramp, tmp_path):
+        """A page with airspace offers it on every flight: the map loads the layers under
+        its ground (`loadAirspace`) and its switch then draws them or says why not
+        (`settleAirspace`). The rings are not in the scene: a monthly refresh reaches
+        every flight without a rebuild."""
         out = self._scene(ramp, tmp_path, {"airspaceRemote": "airspace/layers/"})
         assert out.scene["airspaceRemote"] == "airspace/layers/"
         assert out.scene["airspaceToggle"] is True and out.scene["airspaces"] == []
-        assert 'data-view3d-act="airspace-toggle" aria-pressed="false" disabled' in out.panel
-        assert "Loading the airspace" in out.panel
         plain = self._scene(ramp, tmp_path)
-        assert "airspace-toggle" not in plain.panel, "no airspace on the page, no switch"
+        assert not plain.scene.get("airspaceToggle"), "no airspace on the page, no switch"
 
     def test_every_style_is_fetched_at_view_time(self, ramp, tmp_path):
         payload = self._scene(ramp, tmp_path).scene
         assert not payload.get("basemaps")
         assert set(payload["tiles"]) == {"satellite", "map"}
-
-    def test_the_basemap_control_shows_which_style_is_on(self, ramp, tmp_path):
-        """Naming what is on screen is right for a two-state toggle and wrong for three:
-        with a cycle you cannot see the options, cannot tell how many presses reach the
-        one you want, and cannot jump. The segmented control presses the segment instead,
-        which is also what lets the keyboard address a style directly."""
-        import re
-
-        markup = self._scene(ramp, tmp_path).panel
-        segments = re.findall(
-            r'data-view3d-act="basemap-set" data-style="(\w+)" aria-pressed="(\w+)"', markup)
-        assert segments, "no basemap segments in the panel"
-        pressed = [style for style, on in segments if on == "true"]
-        assert pressed == ["satellite"], f"expected satellite pressed, got {pressed}"
-        # Every style the document can show, plus bare relief.
-        assert "off" in [style for style, _ in segments]
 
     def test_the_cursor_track_is_the_charts_own_sample(self, ramp, tmp_path):
         out = self._scene(ramp, tmp_path)

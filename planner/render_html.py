@@ -11,15 +11,11 @@ already live in this repository — is that the map underneath is the **airspace
 line that looks 60 km long and crosses a TMA is not a plan, and on a bare basemap you
 cannot see that.
 
-Nothing here re-implements the 3D view or the airspace layer. The planner is a *layer
-over* `view3d`, and it draws through the same two members a flight uses:
-
-- `scene.track` — the course line, at ground level;
-- `scene.climbs` — the numbered turnpoint markers.
-
-That is the whole reason the planner is ~200 lines. It also means a planned task and a
-flown flight are drawn by exactly the same code, and cannot disagree about where a line
-on this map is.
+Nothing here re-implements the 3D map or the airspace layer. The planner is a *layer
+over* the map (`parainsights_map.map3d`): it hands the route over with `setRoute` and
+the FAI areas with `setShapes`, and takes clicks back with `onClick`. The map draws the
+course with the same code that draws a flight's, so the two cannot disagree about where
+a line on this map is.
 
 The scoring rules are XContest's and are `tracklog_viewer/js/xc.js`'s, read from it with
 their constants asserted against it by a test: every side at least 28% of the perimeter
@@ -94,7 +90,6 @@ STYLE = """
   border-color:var(--ink); }
 .plan-section { margin:18px 0 0; }
 .plan-section h2 { font-size:17px; margin:0 0 4px; }
-[data-planner][data-drawing="on"] canvas.view3d,
 [data-planner][data-drawing="on"] .maplibregl-canvas-container.maplibregl-interactive { cursor:crosshair; }
 """
 
@@ -189,7 +184,7 @@ SCRIPT = """
           function () { /* the panel says why */ });
 
   function plan(handle) {
-  var canvas = panel.querySelector('canvas.view3d');
+  var box = panel.querySelector('.view3d');
 
   var FAI_MIN_SIDE = %(fai)s;
   // Two rule sets, chosen under the map. XContest world: the report's own (`js/xc.js`).
@@ -469,26 +464,10 @@ SCRIPT = """
 
   // ---- drawing -----------------------------------------------------------------------
   //
-  // Straight into the scene the view already knows how to draw: the course line is a
-  // track at ground level and the turnpoints are the numbered markers a flight uses for
-  // its climbs. No second renderer, and no way for the two to disagree about where a
-  // point on this map is.
+  // On the map (`map3d`): the course as a line on the ground and the turnpoints numbered
+  // (`setRoute`), the FAI areas under them (`setShapes`).
   function redraw() {
-    var scene = handle.scene();
-    var line = { lon: [], lat: [], alt: [], c: [] };
     var walk = course();
-    walk.forEach(function (point) {
-      line.lon.push(point[0]);
-      line.lat.push(point[1]);
-      line.alt.push(handle.groundAt(point[0], point[1]) + 60);
-      line.c.push(scene.palette.length - 1);
-    });
-    scene.track = line;
-    scene.climbs = points.map(function (point, i) {
-      return { label: String(i + 1), lon: point[0], lat: point[1],
-               alt: handle.groundAt(point[0], point[1]) + 60, tow: false };
-    });
-    handle.redraw();
     var merged = mergedEntry();
     if (merged) {
       merged.setRoute(walk, points);
@@ -596,7 +575,7 @@ SCRIPT = """
   // panel and takes its clicks. It gets the route from `redraw` and hands its clicks back
   // here, so a turnpoint dropped on either map is one turnpoint, in one list.
   function mergedEntry() {
-    return window.__mergedAll && window.__mergedAll[canvas.id];
+    return window.__mergedAll && window.__mergedAll[box.id];
   }
   function hookMerged(entry) {
     if (!entry || entry.__planner) return;
@@ -665,27 +644,8 @@ SCRIPT = """
 
   // ---- input -------------------------------------------------------------------------
   //
-  // A click, and only a click. The same canvas pans, zooms, rotates and tilts, so a
-  // pointerup that has travelled more than a few pixels since its pointerdown is a
-  // gesture and must not drop a turnpoint — otherwise every drag of the map would leave
-  // a point behind, which is the way this kind of tool is usually broken.
-  var down = null;
-  canvas.addEventListener('pointerdown', function (event) {
-    down = { x: event.clientX, y: event.clientY, id: event.pointerId, count: 1 };
-  });
-  canvas.addEventListener('pointerup', function (event) {
-    if (!down || down.id !== event.pointerId) { down = null; return; }
-    if (holder.dataset.drawing !== 'on') { down = null; return; }
-    // The rose turns the view north; it is not a place on the ground.
-    if (handle.overRose && handle.overRose(event.clientX, event.clientY)) { down = null; return; }
-    var moved = Math.hypot(event.clientX - down.x, event.clientY - down.y);
-    down = null;
-    if (moved > 6) return;
-    var point = handle.groundLonLat(event.clientX, event.clientY);
-    if (!point) return;
-    addPoint(point);
-  });
-
+  // A click on the map is a turnpoint while drawing (`hookMerged`): MapLibre's `click`
+  // already refuses a pointer that moved, so a drag of the map leaves no point behind.
   var drawButton = document.getElementById('plan-draw');
   function drawing(on) {
     holder.dataset.drawing = on ? 'on' : 'off';

@@ -43,15 +43,7 @@ CLASSES = [
 ]
 
 STYLE = """
-/* The renderer switch, for the standalone page — the report styles `.toggle` itself. */
 .airspace-article .renderer-host { position: relative; }
-.airspace-article .toggle { display:inline-flex; margin:0 0 8px; border:1px solid var(--rule);
-  border-radius:3px; overflow:hidden; }
-.airspace-article .toggle-button { font:inherit; font-size:11.5px; text-transform:uppercase;
-  letter-spacing:.08em; padding:5px 12px; background:none; border:0; border-radius:0;
-  color:var(--ink-3); cursor:pointer; }
-.airspace-article .toggle-button + .toggle-button { border-left:1px solid var(--rule); }
-.airspace-article .toggle-button.is-on { background:var(--ink); color:var(--paper); }
 .asp-wrap { margin: 0 0 30px; }
 .asp-map { width: 100%; aspect-ratio: 3 / 2; background: var(--panel);
   border: 1px solid var(--rule); border-radius: 4px; touch-action: none;
@@ -649,7 +641,7 @@ def controls(top: int, flat: bool = True) -> str:
         f'value="{top}" data-top="{top}">'
         '<span class="asp-readout" id="asp-readout"></span></span>'
         '<span class="asp-readout" id="asp-count"></span>'
-        # The 3D view carries its own reset in the bar across the bottom of the canvas,
+        # The 3D map carries its own reset in the bar across its bottom,
         # and two buttons that both say "reset" and do different amounts is worse than
         # one. There, this button clears the filters *and* presses that one.
         f'<button type="button" id="asp-reset">'
@@ -807,12 +799,9 @@ SCRIPT3D = """
   });
 
   function wire(handle) {
-  var tip = document.getElementById('asp-name');
-  var canvas = panel.querySelector('canvas.view3d');
-
-  // The filter is a predicate handed to the view, not a pass over the DOM: on the flat
+  // The filter is a predicate handed to the map, not a pass over the DOM: on the flat
   // map every airspace was an SVG element with a `display` to set, and here they are
-  // entries in a payload that the canvas redraws from scratch every frame.
+  // entries in a payload the map draws from (`map3d` follows `setAirspaceFilter`).
   function refilter() {
     var on = {};
     document.querySelectorAll('[data-asp-class]').forEach(function (box) {
@@ -858,43 +847,6 @@ SCRIPT3D = """
   if (whenBox) whenBox.addEventListener('change', refilter);
   if (whenInput) whenInput.addEventListener('input', refilter);
 
-  // Hover on a mouse, tap-to-pin on a touchscreen — the same split the flat map made,
-  // and for the same reason: a touchscreen's pointerout means the finger lifted, not
-  // that the label stopped being wanted. Not while a gesture is running, or every drag
-  // would fight the label for the frame.
-  function placeTip(x, y, above) {
-    var holder = tip.parentNode.getBoundingClientRect();
-    var left = x - holder.left + (above ? -tip.offsetWidth / 2 : 12);
-    var top = y - holder.top + (above ? -tip.offsetHeight - 16 : 12);
-    left = Math.max(4, Math.min(left, holder.width - tip.offsetWidth - 4));
-    tip.style.left = left + 'px';
-    tip.style.top = Math.max(4, top) + 'px';
-  }
-  function show(space, x, y, above) {
-    tip.textContent = space.n;
-    tip.classList.add('is-on');
-    placeTip(x, y, above);
-  }
-  function hide() { if (tip) tip.classList.remove('is-on'); }
-
-  if (canvas && tip) {
-    canvas.addEventListener('pointermove', function (e) {
-      if (e.pointerType === 'touch' || e.buttons) return;
-      var space = handle.airspaceAt(e.clientX, e.clientY);
-      if (space) show(space, e.clientX, e.clientY, false); else hide();
-    });
-    canvas.addEventListener('pointerleave', hide);
-    canvas.addEventListener('pointerdown', function (e) {
-      // While a task is being drawn a tap is a turnpoint, not a question.
-      if (e.pointerType !== 'touch' || article.dataset.drawing === 'on') return;
-      var space = handle.airspaceAt(e.clientX, e.clientY);
-      if (space) show(space, e.clientX, e.clientY, true); else hide();
-    });
-    document.addEventListener('pointerdown', function (e) {
-      if (tip && e.pointerType === 'touch' && !panel.contains(e.target)) hide();
-    });
-  }
-
   var reset = document.getElementById('asp-reset');
   if (reset) reset.addEventListener('click', function () {
     document.querySelectorAll('[data-asp-class]').forEach(function (box) {
@@ -903,15 +855,13 @@ SCRIPT3D = """
     if (slider) slider.value = slider.dataset.top;
     if (whenBox) whenBox.checked = false;
     refilter();
-    var act = panel.querySelector('[data-view3d-act="reset"]');
+    var act = panel.querySelector('[data-m3="reset"]');
     if (act) act.click();
   });
 
   refilter();
 
-  // Open on the renderer the host asks for, and fall back to the canvas if MapLibre
-  // cannot be fetched — offline, or blocked — rather than leaving a panel that says so.
-  if (window.__openDefaultRenderer) window.__openDefaultRenderer(panel.closest('.renderer-host'));
+  if (window.__openMap) window.__openMap(panel.closest('.renderer-host'));
   }
 })();
 """
@@ -1025,13 +975,8 @@ def _map(airspaces, project, scene: dict | None, uid: str) -> str:
     # of country a 300 m traffic circuit is **0.3 px** tall and an ATZ 0.7 px, so every
     # box is two coincident rings — the flat map with extra steps. x1 is still one press
     # away and the segmented control says which is on, so nothing here is hidden; what is
-    # hidden at true scale is the entire point of the view.
-    from parainsights_map import render_map
-
-    # The flights' renderer switch, opening on the merged map (MapLibre's engine under
-    # the canvas's controls), which the planner draws on too. The canvas stays one press
-    # away, and is what the page falls back to when MapLibre cannot be fetched.
-    return ('<div class="renderer-host" data-renderer-default="merged">'
-            + render_map.switch_html()
+    # hidden at true scale is the entire point of the view. The map is the flights' own
+    # (`map3d`, opened by `render_map`), and the planner draws on it too.
+    return ('<div class="renderer-host">'
             + view3d.panel(scene, uid, verticals=(1, 5, 15), vertical=5)
             + "</div>")

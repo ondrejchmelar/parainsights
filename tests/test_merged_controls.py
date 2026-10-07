@@ -33,9 +33,9 @@ from pathlib import Path
 
 import pytest
 
-from parainsights_map import map3d, render_map, view3d, view3d_gl
+from parainsights_map import map3d, render_map, view3d
 from tests import vendor
-from tests.test_view3d_gl import CHROME, _scene
+from tests.browser import CHROME, _scene
 
 websocket = pytest.importorskip("websocket")
 
@@ -60,7 +60,7 @@ _FLAGS = [
 def _scene_with_time() -> dict:
     """The GL tests' ridged scene, with a time on every fix (replay and follow need it)
     and its one airspace zone covering the whole track."""
-    scene = _scene(airspace=True, basemap=False)
+    scene = _scene(airspace=True)
     track = scene["track"]
     track["t"] = [i * 30 for i in range(len(track["lon"]))]
     ring = scene["airspaces"][0]
@@ -73,20 +73,20 @@ def _scene_with_time() -> dict:
 
 def _page() -> str:
     scene = _scene_with_time()
-    switch = (render_map.SWITCH_SCRIPT
+    loader = (render_map.SCRIPT
               .replace(render_map.MAPLIBRE, "/vendor")
               .replace(render_map.DECK, "/vendor/deck.min.js"))
     return (
         '<!doctype html><meta charset="utf-8"><title>merged</title>'
-        f"<style>{view3d.STYLE}{view3d_gl.STYLE}{render_map.SWITCH_STYLE}{map3d.STYLE}</style>"
-        '<div class="wrap"><div class="renderer-host" data-renderer-default="merged">'
-        + render_map.switch_html() + view3d.panel(scene, "t") + "</div></div>"
-        + f"<script>{view3d.SCRIPT}\n{view3d_gl.SCRIPT}\n{switch}\n{map3d.SCRIPT}</script>"
+        f"<style>{view3d.STYLE}{render_map.STYLE}{map3d.STYLE}</style>"
+        '<div class="wrap"><div class="renderer-host">'
+        + view3d.panel(scene, "t") + "</div></div>"
+        + f"<script>{view3d.SCRIPT}\n{loader}\n{map3d.SCRIPT}</script>"
         "<script>window.__errors = [];"
         "addEventListener('error', function (e) { __errors.push(String(e.message)); });"
         "var host = document.querySelector('.renderer-host');"
         "initView3dWhenReady(host, null).then(function (handle) {"
-        "  window.__handle = handle; window.__openDefaultRenderer(host); });</script>"
+        "  window.__handle = handle; window.__openMap(host); });</script>"
     )
 
 
@@ -224,10 +224,9 @@ def _reset(browser, **camera):
     time.sleep(0.3)
 
 
-def test_the_merged_map_is_what_opens(browser):
-    """Merged is the default 3D view; the canvas is only what is left without MapLibre."""
-    on = browser.js("document.querySelector('[data-renderer].is-on').dataset.renderer")
-    assert on == "merged"
+def test_the_map_opens(browser):
+    """The panel's map is mounted over it, and nothing threw on the way."""
+    assert browser.js("!!document.querySelector('.renderer-host .merged-view:not([hidden])')")
     assert browser.js("window.__errors") == []
 
 

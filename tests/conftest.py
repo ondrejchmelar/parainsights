@@ -5,7 +5,7 @@ naming the address, so a test that would have downloaded real tiles, a forecast 
 CDN script fails where it stands instead of passing slowly while online and failing
 offline. Local servers (the synthetic tile servers, the flymet stand-in) are untouched.
 Headless Chrome is a separate process and is fenced separately, by the resolver rule in
-`tests/test_view3d_gl.CHROME_FLAGS`.
+`tests/browser.CHROME_FLAGS`.
 """
 
 import ipaddress

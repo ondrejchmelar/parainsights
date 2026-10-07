@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 
 from meteo import cli, render_html, sites, sources
-from tests.test_view3d_gl import CHROME, CHROME_FLAGS, needs_chrome
+from tests.browser import CHROME, CHROME_FLAGS, needs_chrome
 
 
 class TestTheSiteList:

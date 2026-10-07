@@ -59,12 +59,10 @@ jobs:
           PARAINSIGHTS_REQUIRE: node
 
   # Every test that drives a real browser — the `tests` job above skips them all for want
-  # of one. Among them is the entire regression suite for the WebGL renderer: no folded
-  # cells at any camera, the matrix agreeing with `project()` to a hundredth of a pixel,
-  # the texture not going blurry, a clockwise twist turning the map clockwise, context
-  # loss falling back, disposal returning the context. Two of those guard bugs found by
-  # looking at the output rather than by a test, which is exactly the kind that comes
-  # back. GitLab ran only the two view3d files here; the rest never ran in CI at all.
+  # of one. Among them is the 3D map's control suite (`test_merged_controls`): drags that
+  # turn about the ground grabbed, follow surviving zoom and turn, two-finger tilt, the
+  # airspace hiding nothing — bugs found by looking at the output rather than by a test,
+  # which is exactly the kind that comes back.
   #
   # GitHub's runner image already carries `google-chrome`, which is all the tests look
   # for on PATH. Software rendering is forced in the test flags, so no GPU is needed.

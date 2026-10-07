@@ -12,7 +12,7 @@ import pytest
 
 from airspaces import aerodromes, atz, build, circuits, geo, hours, openair, render_html
 from airspaces.aerodromes import Aerodrome, Runway
-from tests.test_view3d_gl import CHROME, CHROME_FLAGS, needs_chrome
+from tests.browser import CHROME, CHROME_FLAGS, needs_chrome
 
 DATA = Path(__file__).parent / "data"
 
@@ -1257,8 +1257,8 @@ def test_the_3d_map_gives_the_same_answer_as_the_flat_one():
         "Czech airspace", three_d=True,
     )
     _check(_probe(page, """
-    var canvas = document.querySelector('canvas.view3d');
-    var handle = window.__view3dAll[canvas.id];
+    var box = document.querySelector('.view3d');
+    var handle = window.__view3dAll[box.id];
     function names() {
       var when = window.aspHours.chosen(), holidays = window.aspHours.holidays();
       return (handle.scene().airspaces || []).filter(function (space) {
@@ -1267,112 +1267,6 @@ def test_the_3d_map_gives_the_same_answer_as_the_flat_one():
     }
     var all = names().length;
     """ + _ASK))
-
-
-# ------------------------------------------- the boxes, in a browser
-#
-# The claim is geometric and about pixels, so it cannot be made from Python: that a zone
-# is drawn as a solid between two heights, and that the solid — not only the outline on
-# its floor — is what the reader can point at. Both were wrong in the flat version by
-# construction, and both are what somebody looking for "what is above me" is doing.
-
-
-def _box_page():
-    """One base airspace over flat ground, on the real published page."""
-    import numpy as np
-
-    from airspaces import cli as airspace_cli
-    from airspaces import scene as airspace_scene
-    from parainsights_map import terrain as terrain_module
-
-    overlay, base = _hours_fixture()
-    ground = terrain_module.Terrain(
-        west=14.0, east=16.0, south=49.0, north=51.0,
-        elevations=np.full((24, 24), 400.0),
-    )
-    payload = airspace_scene.build(base + overlay.airspaces, terrain=ground,
-                                   tiles=False)
-    return airspace_cli._page(
-        render_html.body(overlay, base, "26-04-01", scene=payload),
-        "Czech airspace", three_d=True,
-    )
-
-
-# Tilted well off the top-down opening camera, because a box seen from straight above is
-# its own floor and this test would pass on the flat renderer. North up (`yaw = 0`) so
-# that "above the northmost vertex on screen" is a place the floor ring does not reach.
-#
-# Zoomed in, too, and that is not a convenience: heights are drawn at true scale, so a
-# 2 500 m box on a map of the whole country is five pixels tall. Reading it needs the
-# zoom a reader looking at one CTR would have used anyway.
-_BOX = """
-var canvas = document.querySelector('canvas.view3d');
-var handle = window.__view3dAll[canvas.id];
-handle.view.yaw = 0; handle.view.pitch = 0.45; handle.view.zoom = 6;
-handle.view.panX = 0; handle.view.panY = 0;
-handle.redraw();
-var space = handle.scene().airspaces.filter(function (s) {
-  return s.n.indexOf('MCTR') === 0;
-})[0];
-var centre = handle.toMetres(space.lon[0], space.lat[0]);
-var middle = handle.worldProject(centre[0], centre[1], 1500);
-var size = handle.metrics();
-handle.view.panX += size.W / 2 - middle[0];
-handle.view.panY += size.H / 2 - middle[1];
-handle.redraw();
-var north = 0;
-for (var i = 1; i < space.lat.length; i++) {
-  if (space.lat[i] > space.lat[north]) north = i;
-}
-function screenAt(lon, lat, z) {
-  var m = handle.toMetres(lon, lat);
-  var p = handle.worldProject(m[0], m[1], z);
-  var box = canvas.getBoundingClientRect();
-  return { x: box.left + p[0] / canvas.width * box.width,
-           y: box.top + p[1] / canvas.height * box.height };
-}
-var lon = space.lon[north], lat = space.lat[north];
-var onFloor = screenAt(lon, lat, handle.groundAt(lon, lat));
-var onLid = screenAt(lon, lat, space.c);
-"""
-
-
-@needs_chrome
-def test_the_box_is_drawn_between_its_two_heights():
-    """A ceiling at FL95 over ground at 400 m is 2 500 m of box, and at true scale and
-    this zoom that is a measurable number of pixels — up the screen, because the lid is
-    above the floor and not merely inside it."""
-    answer = _probe(_box_page(), _BOX + """
-    return { rise: onFloor.y - onLid.y, ceiling: space.c,
-             capped: !!space.t, label: space.n };
-    """)
-    assert answer["ceiling"] > 2800, "FL95 did not survive into the payload"
-    assert not answer["capped"], "FL95 is under the cap and must be drawn true"
-    assert answer["rise"] > 25, (
-        f"the lid landed {answer['rise']:.1f} px above the floor: not a box")
-    assert "FL 95" in answer["label"], "the published ceiling left the label"
-
-
-@needs_chrome
-def test_pointing_at_the_wall_names_the_airspace():
-    """What the reader gains, and the reason the hit test had to change with the drawing.
-    Tilted, most of what can be seen of a zone is its walls and its lid; a hit test that
-    knew only the floor made two thirds of the drawn shape unpointable — and the second
-    half of this asserts the point really is off the floor, so it cannot pass by the old
-    route."""
-    answer = _probe(_box_page(), _BOX + """
-    var onBox = handle.airspaceAt(onLid.x, onLid.y);
-    // The same page with the lid taken away is the flat renderer, and the same point
-    // must then find nothing: that is what makes this a test of the walls.
-    delete space.c;
-    handle.redraw();
-    var flat = handle.airspaceAt(onLid.x, onLid.y);
-    return { box: onBox ? onBox.n : null, flat: flat ? flat.n : null };
-    """)
-    assert answer["box"] and answer["box"].startswith("MCTR"), (
-        "a point on the lid found nothing: the box is not hit-tested")
-    assert answer["flat"] is None, (
-        "the point was inside the floor ring anyway, so this proves nothing about walls")
 
 
 def test_the_rings_are_delta_encoded_and_lose_nothing():

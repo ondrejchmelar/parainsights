@@ -1,10 +1,9 @@
-/* The 3D view's scene and panel for one flight: `view3d.data`, `view3d.panel` and
- * `render_map.switch_html`, ported.
+/* The 3D map's scene and panel for one flight: `view3d.data` and `view3d.panel`, ported.
  * The Python is retired; it is in git at `ada5e5b`.
  *
- * The renderers (`view3d.SCRIPT`, `map3d.SCRIPT`, `render_map.SWITCH_SCRIPT`) were always
- * in the page; what was built in Python was what they draw — the track, the climbs, the
- * phase labels, the sun table, the wind — and the markup around the canvas. Both are
+ * The map (`view3d.SCRIPT`, `render_map.SCRIPT`, `map3d.SCRIPT`) was always in the page;
+ * what was built in Python was what it draws — the track, the climbs, the phase labels,
+ * the sun table, the wind — and the markup around it. Both are
  * here now, with the same output, so an uploaded track gets the same 3D view as a
  * bundled one.
  */
@@ -32,9 +31,6 @@
   };
   var RAMP_RGB = [[-4.0, [23, 80, 143]], [-2.0, [42, 120, 214]], [-0.7, [143, 182, 230]], [0.7, [169, 164, 154]],
                   [2.0, [240, 160, 122]], [4.0, [235, 104, 52]], [Infinity, [200, 67, 26]]];
-  var EXPAND_ICON = '<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false">' +
-    '<path d="M1.5 5.5v-4h4M14.5 10.5v4h-4M14.5 5.5v-4h-4M1.5 10.5v4h4" fill="none" ' +
-    'stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
 
   function colourIndex(value) {
     for (var i = 0; i < RAMP_RGB.length; i++) if (value < RAMP_RGB[i][0]) return i;
@@ -108,80 +104,16 @@
     return out;
   }
 
+  // `view3d.panel`: the box the map mounts in, and the embedded data.
   function panel(payload, uid, options) {
     options = options || {};
     var verticals = options.verticals || [1, 2, 4];
-    var vertical = options.vertical === undefined ? null : options.vertical;
-    var available = Object.assign({}, payload.tiles || {}, payload.basemaps || {});
-    var keys = Object.keys(available);
-    var initial = 'satellite' in available ? 'satellite' : (keys[0] || '');
-    var credit = (available[initial] || {}).attribution || '';
-    var styles = ['satellite', 'map'].filter(function (k) { return k in available; });
-    keys.forEach(function (k) { if (styles.indexOf(k) < 0) styles.push(k); });
-    var segments = styles.map(function (key) {
-      var on = key === initial;
-      return '<button type="button" data-view3d-act="basemap-set" data-style="' + key + '" aria-pressed="' + (on ? 'true' : 'false') + '"' +
-        (on ? ' class=is-on' : '') + '>' + ((TILE_SOURCES[key] || {}).label || key) + '</button>';
-    }).join('') + '<button type="button" data-view3d-act="basemap-set" data-style="off" aria-pressed="false">relief</button>';
-    var start = vertical === null ? verticals[0] : vertical;
-    var exaggeration = verticals.map(function (level) {
-      var on = level === start;
-      return '<button type="button" data-view3d-act="exaggerate-set" data-vertical="' + level + '" aria-pressed="' +
-        (on ? 'true' : 'false') + '"' + (on ? ' class=is-on' : '') + ' aria-label="Vertical exaggeration &#215;' + level +
-        '">&#215;' + level + '</button>';
-    }).join('');
-    var labels = payload.phases && payload.phases.length
-      ? '<div class="view3d-seg view3d-labels" role="group" aria-label="Phase labels">' +
-        '<button type="button" data-view3d-act="labels-toggle" data-kind="climb" aria-pressed="false" aria-label="Label each climb with its rate and gain">climbs</button>' +
-        '<button type="button" data-view3d-act="labels-toggle" data-kind="glide" aria-pressed="false" aria-label="Label each glide with its ratio and distance">glides</button></div>'
-      : '';
-    // Disabled until the map has loaded the airspace under it (`loadAirspace`).
-    var airspace = payload.airspaceToggle
-      ? '<div class="view3d-seg view3d-airspace" role="group" aria-label="Airspace">' +
-        '<button type="button" data-view3d-act="airspace-toggle" aria-pressed="false" disabled title="Loading the airspace…" aria-label="Loading the airspace…">airspace</button></div>'
-      : '';
-    var airspaceName = payload.airspaceToggle ? '<div class="view3d-asp" hidden></div>' : '';
-    return '\n    <div class="panel view3d-panel">\n' +
-      '      <canvas class="view3d" id="view3d-' + uid + '" tabindex="0"\n' +
-      '              aria-label="Interactive three-dimensional view of the flight over terrain.\n' +
-      '                          Arrow keys pan and shift with them turns and tilts; press\n' +
-      '                          question mark for the key list.">\n      </canvas>\n' +
-      '      ' + airspaceName + '\n' +
-      '      <p class="view3d-credit">' + credit + '</p>\n' +
-      '      <p class="view3d-hint" hidden>arrows pan &middot; shift + arrows turn and tilt &middot;\n' +
-      '        <kbd>?</kbd> for keys</p>\n' +
-      '      <div class="view3d-loading" hidden>\n        <span class="view3d-spin"></span><span class="view3d-loading-text"></span>\n      </div>\n' +
-      '      <div class="view3d-keys" hidden data-view3d-act="help">\n' +
-      '        <p class="view3d-keys-head">Mouse and touch</p>\n        <dl>\n' +
-      '          <dt>drag</dt><dd>pan</dd>\n          <dt>right-drag / ctrl-drag</dt><dd>rotate and tilt</dd>\n' +
-      '          <dt>scroll / pinch</dt><dd>zoom</dd>\n          <dt>two-finger twist</dt><dd>rotate</dd>\n        </dl>\n' +
-      '        <p class="view3d-keys-head">Keys, once the view has focus</p>\n        <dl>\n' +
-      '          <dt>arrows</dt><dd>pan</dd>\n          <dt>shift + &larr; &rarr;</dt><dd>rotate</dd>\n' +
-      '          <dt>shift + &uarr; &darr;</dt><dd>tilt</dd>\n          <dt>+ &minus;</dt><dd>zoom</dd>\n' +
-      '          <dt>1 2 4</dt><dd>exaggeration</dd>\n          <dt>s m r</dt><dd>satellite, map, relief</dd>\n' +
-      '          ' + (payload.airspaceToggle ? '<dt>a</dt><dd>airspace</dd>' : '') + '\n' +
-      '          <dt>f</dt><dd>full screen</dd>\n          <dt>0</dt><dd>reset view</dd>\n        </dl>\n' +
-      '        <p class="view3d-keys-foot">Hovering the charts moves the marker here too.\n          Click this list to close it.</p>\n      </div>\n' +
-      '      <div class="view3d-controls">\n' +
-      '        <div class="view3d-seg" role="group" aria-label="What the ground is">' + segments + '</div>\n' +
-      '        <div class="view3d-seg view3d-vert" role="group"\n             aria-label="Vertical exaggeration">' + exaggeration + '</div>\n' +
-      '        \n        ' + labels + '\n        ' + airspace + '\n        \n' +
-      '        <div class="view3d-seg view3d-zoom" role="group" aria-label="Zoom">\n' +
-      '          <button type="button" data-view3d-act="zoom-out"\n                  title="Zoom out" aria-label="Zoom out">&minus;</button>\n' +
-      '          <button type="button" data-view3d-act="zoom-in"\n                  title="Zoom in" aria-label="Zoom in">+</button>\n        </div>\n' +
-      '        <button type="button" data-view3d-act="help"\n                title="Controls" aria-label="How to control this view">?</button>\n' +
-      '        <button type="button" data-view3d-act="fullscreen"\n                title="Full screen" aria-label="Full screen">\n          ' +
-      EXPAND_ICON + '</button>\n' +
-      '        <button type="button" class="view3d-reset" data-view3d-act="reset"\n                title="Reset view" aria-label="Reset view">&#8634;</button>\n      </div>\n' +
+    var start = options.vertical === undefined || options.vertical === null ? verticals[0] : options.vertical;
+    return '\n    <div class="panel view3d-panel" data-verticals="' + verticals.join(',') +
+      '" data-vertical="' + start + '">\n' +
+      '      <div class="view3d" id="view3d-' + uid + '"></div>\n' +
       '      <script type="application/json" class="view3d-data">' + JSON.stringify(payload) + '</script>\n    </div>';
   }
 
-  function switchHtml() {
-    return '<div class="toggle renderer-switch" role="group" aria-label="3D renderer">' +
-      '<button type="button" class="toggle-button is-on" data-renderer="canvas" aria-pressed="true">canvas</button>' +
-      '<button type="button" class="toggle-button" data-renderer="maplibre" aria-pressed="false">MapLibre</button>' +
-      '<button type="button" class="toggle-button" data-renderer="merged" aria-pressed="false">merged</button></div>';
-  }
-
-  TV.scene = { TILE_SOURCES: TILE_SOURCES, RAMP_RGB: RAMP_RGB, data: data, panel: panel, switchHtml: switchHtml };
+  TV.scene = { TILE_SOURCES: TILE_SOURCES, RAMP_RGB: RAMP_RGB, data: data, panel: panel };
 })(typeof window !== 'undefined' ? (window.TV = window.TV || {}) : (globalThis.TV = globalThis.TV || {}));

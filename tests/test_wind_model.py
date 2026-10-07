@@ -27,7 +27,7 @@ from pathlib import Path
 from tests import js
 from tests.js import needs_node
 from tests.test_analysis import build, circling, straight
-from tests.test_view3d_gl import CHROME, CHROME_FLAGS, needs_chrome
+from tests.browser import CHROME, CHROME_FLAGS, needs_chrome
 from tracklog_viewer import render_html
 
 pytestmark = needs_node

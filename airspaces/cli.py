@@ -25,13 +25,12 @@ def _page(article: str, title: str, *, three_d: bool = False) -> str:
     view_style, view_script = "", ""
     if three_d:
         from planner import render_html as planner_html
-        from parainsights_map import map3d, render_map, view3d, view3d_gl
+        from parainsights_map import map3d, render_map, view3d
 
-        view_style = (view3d.STYLE + view3d_gl.STYLE + render_map.SWITCH_STYLE + map3d.STYLE
-                      + planner_html.STYLE)
+        view_style = view3d.STYLE + render_map.STYLE + map3d.STYLE + planner_html.STYLE
         # The planner after the map: it waits on the handle `SCRIPT3D` publishes.
-        view_script = (f"<script>{view3d.SCRIPT}\n{view3d_gl.SCRIPT}\n"
-                       f"{render_map.SWITCH_SCRIPT}\n{map3d.SCRIPT}</script>\n"
+        view_script = (f"<script>{view3d.SCRIPT}\n"
+                       f"{render_map.SCRIPT}\n{map3d.SCRIPT}</script>\n"
                        f"<script>{render_html.SCRIPT3D}</script>\n"
                        f"<script>{planner_html.SCRIPT}</script>")
     return f"""<!doctype html>

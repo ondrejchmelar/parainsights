@@ -96,16 +96,6 @@ THEME_SCRIPT = """
       // The canvases are painted with the tokens read at draw time, so they hold the
       // old theme until something asks them to redraw. Each tool exposes its own.
       if (window.__meteo && window.__meteo.draw) window.__meteo.draw();
-      // Keyed by canvas id, not an array — `render_html` registers and deletes handles
-      // by id so a removed flight can take its DEM and its stitched image with it. An
-      // `Array.forEach` on it throws, and the throw would take the chart redraw below
-      // down with it, on the one page that has both.
-      if (window.__view3dAll) {
-        Object.keys(window.__view3dAll).forEach(function (id) {
-          var handle = window.__view3dAll[id];
-          if (handle && handle.redraw) handle.redraw();
-        });
-      }
       if (window.__drawCharts) {
         document.querySelectorAll('[data-flight-report]').forEach(window.__drawCharts);
       }
