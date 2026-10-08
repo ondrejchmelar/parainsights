@@ -350,8 +350,8 @@
       var route = null;       // a planned task: { walk: [[lon, lat]…], points: [[lon, lat]…] }
       // A flight's scored route, [[lon, lat]…] (`setScored`), drawn only while the map looks
       // straight down: in perspective, a straight line over mountains reads as anything
-      // but the distance it is. `lastPitch` is where the top-down button returns to.
-      var scored = null, topDown = false, lastPitch = null;
+      // but the distance it is. `lastView` is the view the top-down button returns to.
+      var scored = null, topDown = false, lastView = null;
       var clickers = [];
       var sunMinute = sun ? sun.at : null;
       var lines = segments(scene);
@@ -819,6 +819,17 @@
         refresh();
       }
       var framedFor = '';
+      // This flight and every compared one near enough to draw, as [[w, s], [e, n]].
+      function flightBounds() {
+        var w = Infinity, e = -Infinity, s = Infinity, n = -Infinity;
+        [tr].concat(others.filter(function (o) { return !o.far; })).forEach(function (o) {
+          for (var i = 0; i < o.lon.length; i++) {
+            w = Math.min(w, o.lon[i]); e = Math.max(e, o.lon[i]);
+            s = Math.min(s, o.lat[i]); n = Math.max(n, o.lat[i]);
+          }
+        });
+        return w < e || s < n ? [[w, s], [e, n]] : null;
+      }
 
       // deck.gl redoes a layer's attributes, every point of it, whenever its `data` is a
       // new array, and `layers()` runs for every move of the chart cursor and every frame
@@ -839,6 +850,20 @@
         return memo[id].value;
       }
       var landingData = scene.landing ? [scene.landing] : [];
+
+      // deck.gl draws a dot's size "in pixels" true only at the depth of the map's centre,
+      // and nearer or further in proportion: after the follow camera handed the view back
+      // low over the ground, the dots near it were drawn four times their size. This
+      // rescales each dot by its own depth, so a dot of 4 px is 4 px wherever it is.
+      // (The tracks stay ribbons lying in 3D: drawn facing the camera at a true width they
+      // read heavier, and cut into the slopes they were flown close to.)
+      var DOTS = (function () {
+        var ext = new deck.LayerExtension();
+        ext.getShaders = function () {
+          return { inject: { 'vs:DECKGL_FILTER_SIZE': 'size *= gl_Position.w / project_uFocalDistance;' } };
+        };
+        return [ext];
+      })();
 
       function layers() {
         var out = [];
@@ -900,6 +925,7 @@
             });
           });
           out.push(new deck.ScatterplotLayer({
+          extensions: DOTS,
             id: 'plan-points', data: tps,
             getPosition: function (d) { return [d.position[0], d.position[1], z(d.position[2])]; },
             getFillColor: [226, 96, 44], getLineColor: [255, 255, 255], stroked: true,
@@ -926,6 +952,7 @@
             updateTriggers: { getPath: vertical }, parameters: ON_TOP
           }));
           out.push(new deck.ScatterplotLayer({
+          extensions: DOTS,
             id: 'scored-corners', data: legs, getPosition: function (d) { return d; },
             getFillColor: [226, 96, 44], getLineColor: [255, 255, 255], stroked: true,
             lineWidthMinPixels: 2, radiusUnits: 'pixels', getRadius: 7, billboard: true,
@@ -942,7 +969,7 @@
         // The track between the two handles, in its climb colours: a trip whose "now" is
         // the right handle and whose trail reaches back to the left one, unfaded.
         if (hasTime) out.push(new deck.TripsLayer({
-          id: 'track', data: linesFrom(),
+                    id: 'track', data: linesFrom(),
           getPath: function (d) { return d.path.map(function (p) { return [p[0], p[1], z(p[2])]; }); },
           getTimestamps: function (d) { return d.times; },
           // While comparing, one colour per flight instead of the climb ramp: several
@@ -957,7 +984,7 @@
         // Not while comparing: each flight is its one colour there, and a white stretch on
         // this one alone read as a different flight.
         if (hasTime && replay && !replay.hidden && !ownColour) out.push(new deck.TripsLayer({
-          id: 'replay', data: kept('replay', [], function () {
+                    id: 'replay', data: kept('replay', [], function () {
             return [{ path: tr.lon.map(function (lon, i) { return [lon, tr.lat[i], tr.alt[i]]; }), times: tr.t }];
           }),
           getPath: function (d) { return d.path.map(function (p) { return [p[0], p[1], z(p[2])]; }); },
@@ -969,6 +996,7 @@
         // Where each climb was, as a dot: the numbers crowded the track and said nothing
         // the climbs table does not.
         out.push(new deck.ScatterplotLayer({
+          extensions: DOTS,
           id: 'climbs', data: same('climbs', marks.filter(function (d) { return inWindow(d.t); })),
           getPosition: function (d) { return [d.position[0], d.position[1], z(d.position[2])]; },
           // Comparing, this flight's climbs in its own colour, as the others' are in theirs.
@@ -984,6 +1012,7 @@
         if (hasTime && replay && !replay.hidden && cutoff >= 0 && cutoff <= duration) {
           var me = positionAt(cutoff);
           out.push(new deck.ScatterplotLayer({
+          extensions: DOTS,
             id: 'own-now', data: [[me.lon, me.lat, me.alt]],
             getPosition: function (d) { return [d[0], d[1], z(d[2])]; },
             getFillColor: ownColour ? rgb(ownColour, 255) : [255, 255, 255, 255],
@@ -993,6 +1022,7 @@
           }));
         }
         if (scene.landing && inWindow(duration)) out.push(new deck.ScatterplotLayer({
+          extensions: DOTS,
           id: 'landing', data: landingData,
           getPosition: function (d) { return [d.lon, d.lat, z(d.alt)]; },
           getFillColor: [20, 22, 26], getLineColor: [255, 255, 255], stroked: true,
@@ -1012,6 +1042,7 @@
             parameters: ON_TOP
           }));
           out.push(new deck.ScatterplotLayer({
+          extensions: DOTS,
             id: 'phase-ends', data: kept('phase-ends', [shown], function () {
               return shown.reduce(function (all, d) {
                 return all.concat([{ p: d.ends[0], c: d.colour }, { p: d.ends[1], c: d.colour }]);
@@ -1045,6 +1076,7 @@
             if (hi >= o.t[0] && hi <= o.t[o.t.length - 1]) {
               var now = positionOf(o, hi);
               out.push(new deck.ScatterplotLayer({
+          extensions: DOTS,
                 id: 'other-now-' + k, data: [now],
                 getPosition: function (d) { return [d[0], d[1], z(d[2])]; },
                 getFillColor: rgb(o.colour, 255), getLineColor: [255, 255, 255, 255],
@@ -1059,6 +1091,7 @@
             return !replaying || (c.t >= from - o.offset && c.t <= cutoff - o.offset);
           }));
           if (shownClimbs.length) out.push(new deck.ScatterplotLayer({
+          extensions: DOTS,
             id: 'other-climbs-' + k, data: shownClimbs,
             getPosition: function (d) { return [d.lon, d.lat, z(d.alt)]; },
             getFillColor: rgb(o.colour, 255), getLineColor: [255, 255, 255, 220], stroked: true,
@@ -1078,7 +1111,7 @@
           });
           if (!track.length) return;
           out.push(new deck.TripsLayer({
-            id: 'other-' + k, data: track,
+                      id: 'other-' + k, data: track,
             getPath: function (d) { return d.path.map(function (p) { return [p[0], p[1], z(p[2])]; }); },
             getTimestamps: function (d) { return d.times; },
             // Drawn as this flight's own track is (a TripsLayer, not billboarded): as a
@@ -1299,6 +1332,11 @@
         fill.style.left = ((from - spanStart) / span * 100) + '%';
         fill.style.right = (100 - (cutoff - spanStart) / span * 100) + '%';
         clockLabel.textContent = clockAt(from) + ' – ' + clockAt(cutoff);
+        // The same window on the side view, while the replay is open.
+        var article = panel.closest('[data-flight-report]');
+        if (article && article.__rangeAtTime) {
+          article.__rangeAtTime(replay && !replay.hidden ? [from, cutoff] : null);
+        }
       }
       // The right handle: the replay's "now", and the moment the sun is lit for.
       function setTime(seconds) {
@@ -2013,16 +2051,29 @@
         }
         else if (act === 'top') {
           setFollow(false);
-          // A second press goes back to the angle the reader had.
-          if (map.getPitch() < 1 && lastPitch !== null) map.easeTo({ pitch: lastPitch, duration: 600 });
-          else { lastPitch = map.getPitch() >= 1 ? map.getPitch() : null; map.easeTo({ pitch: 0, duration: 600 }); }
+          // Straight down on the whole flight (and the flights compared with it); a second
+          // press goes back to the view the reader had.
+          if (map.getPitch() < 1 && lastView !== null) {
+            map.easeTo({ center: lastView.center, zoom: lastView.zoom, pitch: lastView.pitch,
+                         bearing: lastView.bearing, duration: 600 });
+          } else {
+            lastView = map.getPitch() >= 1
+              ? { center: map.getCenter(), zoom: map.getZoom(), pitch: map.getPitch(), bearing: map.getBearing() }
+              : null;
+            var bounds = flightBounds();
+            if (bounds) {
+              map.fitBounds(bounds, { padding: { top: 70, bottom: 110, left: 50, right: 90 },
+                                      pitch: 0, bearing: map.getBearing(), duration: 600 });
+            } else map.easeTo({ pitch: 0, duration: 600 });
+          }
         }
         else if (act === 'help') help.hidden = !help.hidden;
         else if (act === 'measure') setMeasure(!measuring);
         else if (act === 'fullscreen') fullscreen();
         else if (act === 'reset') { setFollow(false); fit(true); }
         else if (act === 'play') togglePlay();
-        else if (act === 'replay') openReplay(replay.hidden);
+        // The replay opens following the glider; the camera button in its bar lets go.
+        else if (act === 'replay') { var opening = replay.hidden; openReplay(opening); if (opening) setFollow(true); }
         else if (act === 'follow') setFollow(!following);
         else if (act === 'slower' && speed > 0) { speed--; showSpeed(); }
         else if (act === 'faster' && speed < SPEEDS.length - 1) { speed++; showSpeed(); }
@@ -2040,8 +2091,8 @@
         else if (k === 'f' || k === 'F') fullscreen();
         else if (k === '0') { setFollow(false); fit(true); }
         else if ((k === 'c' || k === 'C') && hasTime) {
-          if (replay.hidden) openReplay(true);
-          setFollow(!following);
+          if (replay.hidden) { openReplay(true); setFollow(true); }
+          else setFollow(!following);
         }
         else if (k === '?') help.hidden = !help.hidden;
         else if (k === 'd' || k === 'D') setMeasure(!measuring);

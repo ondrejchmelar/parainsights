@@ -550,6 +550,7 @@ function initFlight(root) {
       });
     });
     views.forEach(bindView);
+    if (range) drawRange();
   }
 
   function svgPoint(view, event) {
@@ -742,6 +743,51 @@ function initFlight(root) {
       if (view.cursor) view.cursor.classList.add('on');
     });
     highlight(data.segment[lo]);
+  };
+
+  // The 3D replay's window (`map3d`, `showRange`): the side view dims what lies outside
+  // the two handles, so the slider's choice reads against the whole flight. Seconds since
+  // the first fix, as `__cursorAtTime`; null when the replay closes.
+  var range = null;
+  function indexAt(t) {
+    var lo = 0, hi = data.t.length - 1;
+    while (lo < hi) { var mid = (lo + hi) >> 1; if (data.t[mid] < t) lo = mid + 1; else hi = mid; }
+    return lo;
+  }
+  function drawRange() {
+    views.forEach(function (view) {
+      if (view.mode !== 'x') return;
+      var shade = view.svg.querySelector('.replay-range');
+      if (!range || !data.t || !data.t.length) { if (shade) shade.remove(); return; }
+      var n = view.px.length;
+      var a = Math.min(indexAt(range[0]), n - 1), b = Math.min(indexAt(range[1]), n - 1);
+      // Along distance or time the trace runs left to right; from launch it doubles back,
+      // and the window is the stretch of the axis it covers.
+      var left = Infinity, right = -Infinity;
+      for (var i = a; i <= b; i++) { left = Math.min(left, view.px[i]); right = Math.max(right, view.px[i]); }
+      var x = +view.hit.getAttribute('x'), w = +view.hit.getAttribute('width');
+      if (!shade) {
+        shade = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        shade.setAttribute('class', 'replay-range');
+        ['before', 'after'].forEach(function () {
+          var r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+          r.setAttribute('class', 'replay-dim');
+          r.setAttribute('y', view.hit.getAttribute('y'));
+          r.setAttribute('height', view.hit.getAttribute('height'));
+          shade.appendChild(r);
+        });
+        view.svg.insertBefore(shade, view.cursor || view.hit);
+      }
+      if (!(left <= right)) { left = x; right = x; }
+      shade.firstChild.setAttribute('x', x);
+      shade.firstChild.setAttribute('width', Math.max(left - x, 0));
+      shade.lastChild.setAttribute('x', right);
+      shade.lastChild.setAttribute('width', Math.max(x + w - right, 0));
+    });
+  }
+  root.__rangeAtTime = function (span) {
+    range = span ? [Math.max(span[0], 0), Math.max(span[1], 0)] : null;
+    drawRange();
   };
 
   // Escape lets go from anywhere, which is the one shortcut a reader will guess.

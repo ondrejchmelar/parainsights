@@ -147,6 +147,7 @@ svg.chart { overflow: visible; }
 .is-pinned .chart .crosshair { stroke-dasharray: none; }
 .chart .hit { fill: transparent; cursor: crosshair; }
 .chart .crosshair { stroke: var(--ink-2); stroke-width: 1; stroke-dasharray: 3 3; }
+.chart .replay-dim { fill: var(--panel); opacity: 0.7; pointer-events: none; }
 .chart-wind .wind-dot { fill: var(--panel); stroke: var(--sink); stroke-width: 2; }
 .chart-wind .wind-arrow { stroke: var(--sink); stroke-width: 1.6; }
 .chart-wind .wind-number { fill: var(--ink); text-anchor: middle; }
