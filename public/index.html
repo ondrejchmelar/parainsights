@@ -185,7 +185,7 @@ section > h2 { font-size: 24px; display: flex; align-items: center; margin-botto
 .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 26px; }
 .panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 14px; padding: 14px 16px 8px; }
 .panel.budget { padding: 18px 20px 10px; }
-.note, .caption { margin: 12px 0 0; color: var(--ink-2); font-size: 16px; display: block; }
+p.note, p.caption { margin: 12px 0 0; color: var(--ink-2); font-size: 16px; display: block; }
 .chart-missing { color: var(--ink-2); font-size: 15px; padding: 16px; margin: 0; }
 .more { margin-top: 14px; }
 
@@ -861,7 +861,7 @@ html[data-help="off"] .m3-help { display: none; }
 </svg></div>
       </div>
       <div class="chart">
-        <h3>Wind by height<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="About the wind chart">i</button><span class="info-pop caption" role="note">One point per climb, from circle drift, numbered as in the climbs table and so in the order flown; the first and last carry their clock time, and hovering any point gives the rest. Height is where the climb was worked; the tail points downwind. The model profile for the day is drawn behind them as a check.</span></span></h3>
+        <h3>Wind by height<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="About the wind chart">i</button><span class="info-pop" role="note">One point per climb, from circle drift, numbered as in the climbs table and so in the order flown; the first and last carry their clock time, and hovering any point gives the rest. Height is where the climb was worked; the tail points downwind. The model profile for the day is drawn behind them as a check.</span></span></h3>
         <p class="sub">About 0.9 m/s throughout, with no useful shear between the low climbs and the high ones.</p>
         <div class="panel"><svg viewBox="0 0 620 350" class="chart chart-wind" role="img"
      data-wind-frame='{"left":52,"right":58,"top":22,"bottom":42,"width":620,"height":350,"plotW":510,"plotH":286,"speedMax":4,"altMin":2250,"altMax":3750,"speedStep":1,"altStep":250,"band":400,"hasModel":false}'
@@ -989,7 +989,7 @@ html[data-help="off"] .m3-help { display: none; }
 </svg></div>
       </div>
       <div class="chart">
-        <h3>Wind by height<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="About the wind chart">i</button><span class="info-pop caption" role="note">One point per climb, from circle drift, numbered as in the climbs table and so in the order flown; the first and last carry their clock time, and hovering any point gives the rest. Height is where the climb was worked; the tail points downwind. The model profile for the day is drawn behind them as a check.</span></span></h3>
+        <h3>Wind by height<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="About the wind chart">i</button><span class="info-pop" role="note">One point per climb, from circle drift, numbered as in the climbs table and so in the order flown; the first and last carry their clock time, and hovering any point gives the rest. Height is where the climb was worked; the tail points downwind. The model profile for the day is drawn behind them as a check.</span></span></h3>
         <p class="sub">About 2.4 m/s throughout, with no useful shear between the low climbs and the high ones.</p>
         <div class="panel"><svg viewBox="0 0 620 350" class="chart chart-wind" role="img"
      data-wind-frame='{"left":52,"right":58,"top":22,"bottom":42,"width":620,"height":350,"plotW":510,"plotH":286,"speedMax":7,"altMin":500,"altMax":2250,"speedStep":1,"altStep":250,"band":400,"hasModel":false}'
@@ -1117,7 +1117,7 @@ html[data-help="off"] .m3-help { display: none; }
 </svg></div>
       </div>
       <div class="chart">
-        <h3>Wind by height<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="About the wind chart">i</button><span class="info-pop caption" role="note">One point per climb, from circle drift, numbered as in the climbs table and so in the order flown; the first and last carry their clock time, and hovering any point gives the rest. Height is where the climb was worked; the tail points downwind. The model profile for the day is drawn behind them as a check.</span></span></h3>
+        <h3>Wind by height<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="About the wind chart">i</button><span class="info-pop" role="note">One point per climb, from circle drift, numbered as in the climbs table and so in the order flown; the first and last carry their clock time, and hovering any point gives the rest. Height is where the climb was worked; the tail points downwind. The model profile for the day is drawn behind them as a check.</span></span></h3>
         <p class="sub">2.7 m/s in the lower climbs against 4.4 m/s in the higher ones — 1.7 m/s stronger with height.</p>
         <div class="panel"><svg viewBox="0 0 620 350" class="chart chart-wind" role="img"
      data-wind-frame='{"left":52,"right":58,"top":22,"bottom":42,"width":620,"height":350,"plotW":510,"plotH":286,"speedMax":11,"altMin":3250,"altMax":6250,"speedStep":1,"altStep":250,"band":400,"hasModel":false}'
@@ -9321,7 +9321,7 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
       '        <div class="panel">' + (histogram || '<p class="note">No thermalling time to summarise.</p>') + '</div>\n      </div>\n' +
       '      <div class="chart">\n        <h3>Wind by height' +
       info('One point per climb, from circle drift, numbered as in the climbs table and so in the order flown; the first and last carry their clock time, and hovering any point gives the rest. Height is where the climb was worked; the tail points downwind.' +
-           (meteo ? ' The model profile for the day is drawn behind them as a check.' : ' The day\'s forecast profile would be drawn behind these as a check on them, but ' + meteoReason(a, now) + '.'), 'About the wind chart').replace('class="info-pop"', 'class="info-pop caption"') + '</h3>\n' +
+           (meteo ? ' The model profile for the day is drawn behind them as a check.' : ' The day\'s forecast profile would be drawn behind these as a check on them, but ' + meteoReason(a, now) + '.'), 'About the wind chart') + '</h3>\n' +
       '        <p class="sub">' + windShearNote(a) + '</p>\n' +
       '        <div class="panel">' + (windChart || '<p class="note">Not enough circled climbs to sound the wind.</p>') + '</div>\n' +
       '        <ul class="legend legend-row"><li><i style="background:var(--sink)"></i>Measured from circle drift</li>' +

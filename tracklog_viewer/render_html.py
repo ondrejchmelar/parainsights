@@ -69,7 +69,7 @@ section > h2 { font-size: 24px; display: flex; align-items: center; margin-botto
 .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 26px; }
 .panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 14px; padding: 14px 16px 8px; }
 .panel.budget { padding: 18px 20px 10px; }
-.note, .caption { margin: 12px 0 0; color: var(--ink-2); font-size: 16px; display: block; }
+p.note, p.caption { margin: 12px 0 0; color: var(--ink-2); font-size: 16px; display: block; }
 .chart-missing { color: var(--ink-2); font-size: 15px; padding: 16px; margin: 0; }
 .more { margin-top: 14px; }
 

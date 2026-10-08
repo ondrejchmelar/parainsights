@@ -575,7 +575,7 @@
       '        <div class="panel">' + (histogram || '<p class="note">No thermalling time to summarise.</p>') + '</div>\n      </div>\n' +
       '      <div class="chart">\n        <h3>Wind by height' +
       info('One point per climb, from circle drift, numbered as in the climbs table and so in the order flown; the first and last carry their clock time, and hovering any point gives the rest. Height is where the climb was worked; the tail points downwind.' +
-           (meteo ? ' The model profile for the day is drawn behind them as a check.' : ' The day\'s forecast profile would be drawn behind these as a check on them, but ' + meteoReason(a, now) + '.'), 'About the wind chart').replace('class="info-pop"', 'class="info-pop caption"') + '</h3>\n' +
+           (meteo ? ' The model profile for the day is drawn behind them as a check.' : ' The day\'s forecast profile would be drawn behind these as a check on them, but ' + meteoReason(a, now) + '.'), 'About the wind chart') + '</h3>\n' +
       '        <p class="sub">' + windShearNote(a) + '</p>\n' +
       '        <div class="panel">' + (windChart || '<p class="note">Not enough circled climbs to sound the wind.</p>') + '</div>\n' +
       '        <ul class="legend legend-row"><li><i style="background:var(--sink)"></i>Measured from circle drift</li>' +
