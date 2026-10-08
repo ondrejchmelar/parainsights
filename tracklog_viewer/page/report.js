@@ -462,12 +462,23 @@
   }
 })();
 
-// Resolves when `element` is first on screen: now if it already is, else on the first
-// change that reveals it (the flight tabs and the view strip toggle `hidden`).
+// Resolves when `element` is first on screen: now if it already is, else when it comes
+// into view (the flight tabs toggle `hidden`). An IntersectionObserver, not a watch on
+// every attribute in the page: that one ran — and laid the page out — on each move of
+// the chart cursor, once for every flight not yet opened.
 function whenShown(element) {
   function shown() { return element.getClientRects().length > 0; }
   if (shown()) return Promise.resolve();
   return new Promise(function (resolve) {
+    if (window.IntersectionObserver) {
+      var seen = new IntersectionObserver(function (entries) {
+        if (entries.some(function (e) { return e.isIntersecting; }) || shown()) {
+          seen.disconnect(); resolve();
+        }
+      });
+      seen.observe(element);
+      return;
+    }
     var watch = new MutationObserver(function () {
       if (shown()) { watch.disconnect(); resolve(); }
     });
@@ -523,6 +534,7 @@ function initFlight(root) {
   var views = [];
   function collectViews() {
     views = [];
+    lit = undefined;   // a redrawn chart has lost its lit bands
     root.querySelectorAll('.hit[data-px]').forEach(function (hit) {
       if (!hit.dataset.px) return;
       var svg = hit.ownerSVGElement;
@@ -566,10 +578,15 @@ function initFlight(root) {
   }
 
   function place(index, source, point) {
-    views.forEach(function (view) {
-      if (index >= view.px.length) return;
+    // Everything read before anything is written: a read after a write makes the browser
+    // lay the page out again, and this runs on every move of the pointer. The tooltip's
+    // size is the last one's — its text changes, its size by a few pixels at most.
+    var drawn = views.filter(function (view) {
       // A hidden profile variant must not be drawn on: it has no layout box.
-      if (!view.svg.getClientRects().length) return;
+      return index < view.px.length && view.svg.getClientRects().length;
+    });
+    var tipBox = tip.classList.contains('on') ? tip.getBoundingClientRect() : null;
+    drawn.forEach(function (view) {
       var x = view.px[index];
       var y = view.py[index];
       if (view.dot) { view.dot.setAttribute('cx', x); view.dot.setAttribute('cy', y); }
@@ -588,7 +605,6 @@ function initFlight(root) {
       data.speed[index] + ' km/h &middot; ' + data.phase[index] + '</div>';
     if (terrainView) terrainView.setCursor(index);
     tip.classList.add('on');
-    var tipBox = tip.getBoundingClientRect();
     var pageX = point.box.left + source.px[index] / point.vb.width * point.box.width;
     var pageY = point.box.top + source.py[index] / point.vb.height * point.box.height;
     // In full screen (or the in-page maximise) the map block is all there is on screen, and
@@ -600,8 +616,9 @@ function initFlight(root) {
     var into = full || document.body;
     if (tip.parentNode !== into) {
       into.appendChild(tip);
-      tipBox = tip.getBoundingClientRect();
+      tipBox = null;
     }
+    if (!tipBox || !tipBox.width) tipBox = tip.getBoundingClientRect();
     tip.style.left = Math.min(pageX + 14, window.innerWidth - tipBox.width - 10) + (full ? 0 : window.scrollX) + 'px';
     tip.style.top = (pageY - tipBox.height - 12) + (full ? 0 : window.scrollY) + 'px';
     highlight(data.segment[index]);
@@ -715,8 +732,11 @@ function initFlight(root) {
     var lo = 0, hi = data.t.length - 1;
     while (lo < hi) { var mid = (lo + hi) >> 1; if (data.t[mid] < t) lo = mid + 1; else hi = mid; }
     if (lo > 0 && Math.abs(data.t[lo - 1] - t) < Math.abs(data.t[lo] - t)) lo--;
+    // No check that each chart has a layout box, as `place` makes for its tooltip: an
+    // attribute on a hidden one costs nothing, and asking, after this frame's writes,
+    // made the browser lay the page out on every frame of the replay.
     views.forEach(function (view) {
-      if (lo >= view.px.length || !view.svg.getClientRects().length) return;
+      if (lo >= view.px.length) return;
       if (view.dot) { view.dot.setAttribute('cx', view.px[lo]); view.dot.setAttribute('cy', view.py[lo]); }
       if (view.crosshair) { view.crosshair.setAttribute('x1', view.px[lo]); view.crosshair.setAttribute('x2', view.px[lo]); }
       if (view.cursor) view.cursor.classList.add('on');
@@ -749,7 +769,12 @@ function initFlight(root) {
     });
   });
 
+  // The segment lit last: hovering along one climb or glide asks for the same rows on
+  // every move, and each time they were all found again and switched off and on.
+  var lit;
   function highlight(key) {
+    if (key === lit) return;
+    lit = key;
     // Scoped to this flight: with several flights in one document, a global query
     // would light up the matching segment index in every other flight too.
     root.querySelectorAll('.band.active, .mark.active, .wind-point.active, tr.active')

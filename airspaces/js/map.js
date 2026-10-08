@@ -7,9 +7,19 @@
   // so in the report — where this view starts hidden behind its tab — nothing is fetched
   // until the reader opens it.
   function visible() { return panel.getClientRects().length > 0; }
+  // An IntersectionObserver where there is one: a watch on every attribute in the page
+  // ran, and laid the page out, on each frame of a flight's replay and each move of its
+  // chart cursor, for as long as this tab stayed closed.
   function whenVisible() {
     if (visible()) return Promise.resolve();
     return new Promise(function (resolve) {
+      if (window.IntersectionObserver) {
+        var seen = new IntersectionObserver(function () {
+          if (visible()) { seen.disconnect(); resolve(); }
+        });
+        seen.observe(panel);
+        return;
+      }
       var watch = new MutationObserver(function () {
         if (visible()) { watch.disconnect(); resolve(); }
       });

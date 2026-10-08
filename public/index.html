@@ -2484,9 +2484,29 @@ function initView3d(root, cursorTrack, preset) {
       }
       var framedFor = '';
 
+      // deck.gl redoes a layer's attributes, every point of it, whenever its `data` is a
+      // new array, and `layers()` runs for every move of the chart cursor and every frame
+      // of the replay. So what has not changed is handed back as the array it was last
+      // time: `same` for a list filtered afresh, `kept` for one built from others.
+      var memo = {};
+      function same(id, list) {
+        var was = memo[id];
+        if (was && was.length === list.length &&
+            list.every(function (d, i) { return d === was[i]; })) return was;
+        return (memo[id] = list);
+      }
+      function kept(id, deps, build) {
+        var was = memo[id];
+        if (was && was.deps.length === deps.length &&
+            deps.every(function (d, i) { return d === was.deps[i]; })) return was.value;
+        memo[id] = { deps: deps, value: build() };
+        return memo[id].value;
+      }
+      var landingData = scene.landing ? [scene.landing] : [];
+
       function layers() {
         var out = [];
-        var drawn = airspaceFilter ? boxes.filter(function (d) { return airspaceFilter(d.space); })
+        var drawn = airspaceFilter ? same('airspace', boxes.filter(function (d) { return airspaceFilter(d.space); }))
                                    : boxes;
         if (airspaceOn && drawn.length) {
           out.push(new deck.SolidPolygonLayer({
@@ -2498,22 +2518,26 @@ function initView3d(root, cursorTrack, preset) {
             updateTriggers: { getPolygon: vertical, getElevation: vertical }
           }));
           out.push(new deck.PathLayer({
-            id: 'airspace-edges', data: drawn.reduce(function (all, d) {
-              var shut = d.ring.concat([d.ring[0]]);
-              all.push({ colour: d.colour, path: shut.map(function (p) { return [p[0], p[1], z(d.floor)]; }) });
-              all.push({ colour: d.colour, path: shut.map(function (p) { return [p[0], p[1], z(d.top)]; }) });
-              return all;
-            }, []),
+            id: 'airspace-edges', data: kept('airspace-edges', [drawn, vertical], function () {
+              return drawn.reduce(function (all, d) {
+                var shut = d.ring.concat([d.ring[0]]);
+                all.push({ colour: d.colour, path: shut.map(function (p) { return [p[0], p[1], z(d.floor)]; }) });
+                all.push({ colour: d.colour, path: shut.map(function (p) { return [p[0], p[1], z(d.top)]; }) });
+                return all;
+              }, []);
+            }),
             getPath: function (d) { return d.path; }, getColor: function (d) { return rgb(d.colour, 200); },
-            getWidth: 1.2, widthUnits: 'pixels', parameters: GLASS, updateTriggers: { data: vertical }
+            getWidth: 1.2, widthUnits: 'pixels', parameters: GLASS
           }));
           // The corners' vertical edges, where a zone has corners (as the canvas view drew them).
           out.push(new deck.LineLayer({
-            id: 'airspace-corners', data: drawn.reduce(function (all, d) {
-              if (d.ring.length > 24) return all;
-              d.ring.forEach(function (p) { all.push({ colour: d.colour, p: p, floor: d.floor, top: d.top }); });
-              return all;
-            }, []),
+            id: 'airspace-corners', data: kept('airspace-corners', [drawn], function () {
+              return drawn.reduce(function (all, d) {
+                if (d.ring.length > 24) return all;
+                d.ring.forEach(function (p) { all.push({ colour: d.colour, p: p, floor: d.floor, top: d.top }); });
+                return all;
+              }, []);
+            }),
             getSourcePosition: function (d) { return [d.p[0], d.p[1], z(d.floor)]; },
             getTargetPosition: function (d) { return [d.p[0], d.p[1], z(d.top)]; },
             getColor: function (d) { return rgb(d.colour, 150); }, getWidth: 1, parameters: GLASS,
@@ -2524,7 +2548,7 @@ function initView3d(root, cursorTrack, preset) {
         // ground, as the canvas drew it, and the turnpoints numbered.
         if (route && route.walk.length > 1) {
           out.push(new deck.PathLayer({
-            id: 'plan-line', data: [route.walk],
+            id: 'plan-line', data: kept('plan-line', [route], function () { return [route.walk]; }),
             getPath: function (d) {
               return d.map(function (p) { return [p[0], p[1], z(ground(p[0], p[1]) + 60)]; });
             },
@@ -2534,8 +2558,10 @@ function initView3d(root, cursorTrack, preset) {
           }));
         }
         if (route && route.points.length) {
-          var tps = route.points.map(function (p, i) {
-            return { label: String(i + 1), position: [p[0], p[1], ground(p[0], p[1]) + 60] };
+          var tps = kept('plan-points', [route], function () {
+            return route.points.map(function (p, i) {
+              return { label: String(i + 1), position: [p[0], p[1], ground(p[0], p[1]) + 60] };
+            });
           });
           out.push(new deck.ScatterplotLayer({
             id: 'plan-points', data: tps,
@@ -2553,9 +2579,12 @@ function initView3d(root, cursorTrack, preset) {
           }));
         }
         if (scored && topDown) {
-          var legs = scored.map(function (p) { return [p[0], p[1], z(ground(p[0], p[1]) + 40)]; });
+          var legs = kept('scored', [scored, vertical], function () {
+            return scored.map(function (p) { return [p[0], p[1], z(ground(p[0], p[1]) + 40)]; });
+          });
           out.push(new deck.PathLayer({
-            id: 'scored-route', data: [legs], getPath: function (d) { return d; },
+            id: 'scored-route', data: kept('scored-route', [legs], function () { return [legs]; }),
+            getPath: function (d) { return d; },
             getColor: [255, 255, 255, 235], getWidth: 3, widthUnits: 'pixels',
             capRounded: true, jointRounded: true, billboard: true,
             updateTriggers: { getPath: vertical }, parameters: ON_TOP
@@ -2592,8 +2621,9 @@ function initView3d(root, cursorTrack, preset) {
         // Not while comparing: each flight is its one colour there, and a white stretch on
         // this one alone read as a different flight.
         if (hasTime && replay && !replay.hidden && !ownColour) out.push(new deck.TripsLayer({
-          id: 'replay', data: [{ path: tr.lon.map(function (lon, i) { return [lon, tr.lat[i], tr.alt[i]]; }),
-                                 times: tr.t }],
+          id: 'replay', data: kept('replay', [], function () {
+            return [{ path: tr.lon.map(function (lon, i) { return [lon, tr.lat[i], tr.alt[i]]; }), times: tr.t }];
+          }),
           getPath: function (d) { return d.path.map(function (p) { return [p[0], p[1], z(p[2])]; }); },
           getTimestamps: function (d) { return d.times; },
           getColor: [255, 255, 255], getWidth: TRACK_WIDTH * 1.5, widthUnits: 'pixels',
@@ -2603,7 +2633,7 @@ function initView3d(root, cursorTrack, preset) {
         // Where each climb was, as a dot: the numbers crowded the track and said nothing
         // the climbs table does not.
         out.push(new deck.ScatterplotLayer({
-          id: 'climbs', data: marks.filter(function (d) { return inWindow(d.t); }),
+          id: 'climbs', data: same('climbs', marks.filter(function (d) { return inWindow(d.t); })),
           getPosition: function (d) { return [d.position[0], d.position[1], z(d.position[2])]; },
           // Comparing, this flight's climbs in its own colour, as the others' are in theirs.
           getFillColor: function (d) {
@@ -2627,15 +2657,15 @@ function initView3d(root, cursorTrack, preset) {
           }));
         }
         if (scene.landing && inWindow(duration)) out.push(new deck.ScatterplotLayer({
-          id: 'landing', data: [scene.landing],
+          id: 'landing', data: landingData,
           getPosition: function (d) { return [d.lon, d.lat, z(d.alt)]; },
           getFillColor: [20, 22, 26], getLineColor: [255, 255, 255], stroked: true,
           lineWidthMinPixels: 2, radiusUnits: 'pixels', getRadius: 6, billboard: true,
           updateTriggers: { getPosition: vertical }, parameters: ON_TOP
         }));
-        var shown = phaseLabels.filter(function (p) {
+        var shown = same('phases', phaseLabels.filter(function (p) {
           return labels[p.kind] && inWindow(p.t[0]) && inWindow(p.t[1]);
-        });
+        }));
         if (shown.length) {
           var lift = function (p) { return [p[0], p[1], z(p[2])]; };
           out.push(new deck.PathLayer({
@@ -2646,9 +2676,11 @@ function initView3d(root, cursorTrack, preset) {
             parameters: ON_TOP
           }));
           out.push(new deck.ScatterplotLayer({
-            id: 'phase-ends', data: shown.reduce(function (all, d) {
-              return all.concat([{ p: d.ends[0], c: d.colour }, { p: d.ends[1], c: d.colour }]);
-            }, []),
+            id: 'phase-ends', data: kept('phase-ends', [shown], function () {
+              return shown.reduce(function (all, d) {
+                return all.concat([{ p: d.ends[0], c: d.colour }, { p: d.ends[1], c: d.colour }]);
+              }, []);
+            }),
             getPosition: function (d) { return lift(d.p); }, getFillColor: function (d) { return d.c; },
             radiusUnits: 'pixels', getRadius: 2.6, billboard: true,
             updateTriggers: { getPosition: vertical }, parameters: ON_TOP
@@ -2671,11 +2703,10 @@ function initView3d(root, cursorTrack, preset) {
         // of the shared clock and a dot where the glider was at its "now".
         others.forEach(function (o, k) {
           if (o.far) return;
-          var a = 0, b = o.t.length - 1;
-          if (hasTime && replay && !replay.hidden) {
-            var lo = from - o.offset, hi = cutoff - o.offset;
-            a = firstAt(o.t, lo); b = firstAt(o.t, hi + 1e-6) - 1;
-            if (b >= 0 && b < o.t.length && hi >= o.t[0] && hi <= o.t[o.t.length - 1]) {
+          var replaying = hasTime && replay && !replay.hidden;
+          if (replaying) {
+            var hi = cutoff - o.offset;
+            if (hi >= o.t[0] && hi <= o.t[o.t.length - 1]) {
               var now = positionOf(o, hi);
               out.push(new deck.ScatterplotLayer({
                 id: 'other-now-' + k, data: [now],
@@ -2688,9 +2719,9 @@ function initView3d(root, cursorTrack, preset) {
             }
           }
           // Its climbs, in its colour, inside the same window as its track.
-          var shownClimbs = (o.climbs || []).filter(function (c) {
-            return !(hasTime && replay && !replay.hidden) || (c.t >= from - o.offset && c.t <= cutoff - o.offset);
-          });
+          var shownClimbs = same('other-climbs-' + k, (o.climbs || []).filter(function (c) {
+            return !replaying || (c.t >= from - o.offset && c.t <= cutoff - o.offset);
+          }));
           if (shownClimbs.length) out.push(new deck.ScatterplotLayer({
             id: 'other-climbs-' + k, data: shownClimbs,
             getPosition: function (d) { return [d.lon, d.lat, z(d.alt)]; },
@@ -2698,39 +2729,30 @@ function initView3d(root, cursorTrack, preset) {
             lineWidthMinPixels: 1, radiusUnits: 'pixels', getRadius: 4, billboard: true,
             parameters: ON_TOP, updateTriggers: { getPosition: vertical }
           }));
-          if (b - a < 1) return;
-          out.push(new deck.PathLayer({
-            id: 'other-' + k, data: [{ a: a, b: b }],
-            getPath: function (d) {
-              var path = [];
-              for (var i = d.a; i <= d.b; i++) path.push([o.lon[i], o.lat[i], z(o.alt[i])]);
-              return path;
-            },
+          // Built once, and again only when the left handle moves: from that fix on, on
+          // this flight's clock. The right end is the TripsLayer's `currentTime`, on the
+          // GPU, as this flight's own track is cut (`linesFrom`).
+          var track = kept('other-' + k, [o, replaying ? from : null], function () {
+            var a = replaying ? firstAt(o.t, from - o.offset) : 0, path = [], times = [];
+            for (var i = a; i < o.t.length; i++) {
+              path.push([o.lon[i], o.lat[i], o.alt[i]]);
+              times.push(o.t[i] + o.offset);
+            }
+            return path.length > 1 ? [{ path: path, times: times }] : [];
+          });
+          if (!track.length) return;
+          out.push(new deck.TripsLayer({
+            id: 'other-' + k, data: track,
+            getPath: function (d) { return d.path.map(function (p) { return [p[0], p[1], z(p[2])]; }); },
+            getTimestamps: function (d) { return d.times; },
             // Drawn as this flight's own track is (a TripsLayer, not billboarded): as a
             // billboard it faced the camera at full width and read thicker at any tilt.
             getColor: rgb(o.colour, 235), getWidth: TRACK_WIDTH, widthUnits: 'pixels',
-            capRounded: true, jointRounded: true,
-            updateTriggers: { getPath: [a, b, vertical] }
+            currentTime: replaying ? cutoff : spanEnd + 1, trailLength: spanEnd - spanStart + 2,
+            fadeTrail: false, capRounded: true, jointRounded: true,
+            updateTriggers: { getPath: vertical }
           }));
         });
-        // Not while the replay is open: it drives the charts' cursor itself, and its own
-        // dot already marks the glider — the two side by side read as two gliders.
-        if (cursor && !(hasTime && replay && !replay.hidden)) {
-          var g = ground(cursor[0], cursor[1]);
-          out.push(new deck.LineLayer({
-            id: 'cursor-stem', data: [cursor],
-            getSourcePosition: function (d) { return [d[0], d[1], z(g)]; },
-            getTargetPosition: function (d) { return [d[0], d[1], z(d[2])]; },
-            getColor: [255, 255, 255, 170], getWidth: 1.5
-          }));
-          out.push(new deck.ScatterplotLayer({
-            id: 'cursor', data: [cursor],
-            getPosition: function (d) { return [d[0], d[1], z(d[2])]; },
-            getFillColor: [255, 255, 255], getLineColor: [20, 20, 20], stroked: true,
-            lineWidthMinPixels: 2, radiusUnits: 'pixels', getRadius: 7, billboard: true,
-            parameters: ON_TOP
-          }));
-        }
         return out;
       }
 
@@ -2750,10 +2772,69 @@ function initView3d(root, cursorTrack, preset) {
         }
       });
       map.addControl(overlay);
-      function refresh() { overlay.setProps({ layers: layers() }); }
+      // One redraw for everything a single event changed: a chart hover reached the map
+      // two and three times over (the cursor, the sun, the replay's "now"), and each
+      // rebuilt every layer. Run at the end of the task, before the frame is drawn, so
+      // nothing waits a frame for it — and not at all while the map is off screen, which
+      // catches up when it is back.
+      var dirty = false, queued = false;
+      function refresh() {
+        dirty = true;
+        if (queued) return;
+        queued = true;
+        Promise.resolve().then(flush);
+      }
+      function flush() {
+        queued = false;
+        if (!dirty || !onScreen) return;
+        dirty = false;
+        overlay.setProps({ layers: layers() });
+        wake();
+      }
+
+      // deck.gl's own loop asks for a frame 60 times a second for as long as the page is
+      // open, on every map — a hidden flight's too, and with nothing moving. It is what
+      // repaints after a change and what picks the airspace under the pointer, so it runs
+      // for a while after either and then sleeps; MapLibre draws the layers on its own
+      // frames (a pan, a tile arriving) whether it sleeps or not. Off screen — another
+      // flight's tab, or scrolled away — it does not wake at all.
+      var onScreen = true, sleepTimer = null;
+      function loop() {
+        var d = overlay._deck;
+        return d && d.isInitialized && d.animationLoop ? d.animationLoop : null;
+      }
+      function wake() {
+        clearTimeout(sleepTimer);
+        sleepTimer = null;
+        var l = loop();
+        if (!onScreen) { if (l) l.stop(); return; }
+        if (!l) { if (view.isConnected) sleepTimer = setTimeout(wake, 500); return; }
+        l.start();
+        sleepTimer = setTimeout(function () { var s = loop(); if (s) s.stop(); }, 2000);
+      }
+      wake();
+      ['pointermove', 'pointerdown', 'wheel', 'keydown', 'touchstart'].forEach(function (type) {
+        view.addEventListener(type, wake, { passive: true, capture: true });
+      });
+      map.on('movestart', wake);
+      map.on('moveend', wake);
+      var watchers = [];
+      if (window.IntersectionObserver) {
+        watchers.push(new IntersectionObserver(function (entries) {
+          var seen = entries[entries.length - 1].isIntersecting;
+          if (seen === onScreen) return;
+          onScreen = seen;
+          // A flight's tab left (the view has no box at all, not merely scrolled away):
+          // its replay stops rather than play on unseen.
+          if (!seen && !view.getClientRects().length) pause();
+          if (seen) { flush(); map.triggerRepaint(); kickFollow(); }
+          wake();
+        }));
+        watchers[0].observe(view);
+      }
 
       // ---- the rose --------------------------------------------------------------------
-      var rose = view.querySelector('.m3-rose');
+      var rose = view.querySelector('.m3-rose'), roseText = null;
       function screenAngle(bearing) { return bearing - map.getBearing(); }
       function drawRose() {
         if (!sun && !wind) return;
@@ -2782,9 +2863,53 @@ function initView3d(root, cursorTrack, preset) {
           sunGroup.style.display = 'none';
         }
         if (wind) text.push('Wind ' + wind.ms.toFixed(1) + ' m/s from ' + wind.cardinal);
-        rose.querySelector('.m3-rose-text').innerHTML = text.join('<br>');
+        var said = text.join('<br>');
+        if (said !== roseText) rose.querySelector('.m3-rose-text').innerHTML = roseText = said;
       }
       map.on('rotate', drawRose);
+
+      // ---- the linked cursor's mark ----------------------------------------------------
+      // The chart cursor's place on the map: a dot at the glider and a stem down to the
+      // ground. Drawn over the map in SVG, placed by MapLibre's own projection, not as
+      // deck.gl layers: a layer drawn in MapLibre's pass meant a whole new frame of the
+      // 3D ground for every move of the pointer along a chart — the main thread's whole
+      // time on an older laptop. The dot was drawn over everything before too; the stem
+      // now shows through a ridge in front of it. Not while the replay is open: it drives
+      // the charts' cursor itself, and its own dot already marks the glider.
+      var SVGNS = 'http://www.w3.org/2000/svg';
+      var mark = document.createElementNS(SVGNS, 'svg');
+      mark.setAttribute('class', 'm3-cursor');
+      mark.setAttribute('aria-hidden', 'true');
+      mark.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible';
+      mark.innerHTML = '<line stroke="rgba(255,255,255,0.67)" stroke-width="1.5"/>' +
+        '<circle r="7" fill="#fff" stroke="#141414" stroke-width="2"/>';
+      map.getCanvasContainer().appendChild(mark);
+      var stem = mark.firstChild, dot = mark.lastChild;
+      function screenAt(lon, lat, alt) {
+        var tf = map.transform, c = maplibregl.MercatorCoordinate.fromLngLat([lon, lat]);
+        var m = map.terrain && tf.pixelMatrix3D ? tf.pixelMatrix3D : tf.pixelMatrix;
+        var x = c.x * tf.worldSize, y = c.y * tf.worldSize;
+        var w = m[3] * x + m[7] * y + m[11] * alt + m[15];
+        if (!(w > 0)) return null;     // behind the camera
+        return [(m[0] * x + m[4] * y + m[8] * alt + m[12]) / w,
+                (m[1] * x + m[5] * y + m[9] * alt + m[13]) / w];
+      }
+      function drawMark() {
+        var top = cursor && !(hasTime && replay && !replay.hidden)
+          ? screenAt(cursor[0], cursor[1], z(cursor[2])) : null;
+        var foot = top && screenAt(cursor[0], cursor[1], z(ground(cursor[0], cursor[1])));
+        mark.style.display = top ? '' : 'none';
+        if (!top) return;
+        dot.setAttribute('cx', top[0]); dot.setAttribute('cy', top[1]);
+        stem.style.display = foot ? '' : 'none';
+        if (foot) {
+          stem.setAttribute('x1', foot[0]); stem.setAttribute('y1', foot[1]);
+          stem.setAttribute('x2', top[0]); stem.setAttribute('y2', top[1]);
+        }
+      }
+      drawMark();
+      // Every frame MapLibre draws, the camera may have moved under it.
+      map.on('render', function () { if (cursor) drawMark(); });
       // A click on the rose turns the map north, as a compass on any map does; the tilt
       // stays where it was.
       rose.querySelector('svg').addEventListener('click', function () {
@@ -2794,20 +2919,27 @@ function initView3d(root, cursorTrack, preset) {
       rose.querySelector('svg').setAttribute('aria-label', 'Turn the map north');
       rose.querySelector('svg').setAttribute('role', 'button');
       drawRose();
-      var lastLight = null;
+      // The rose follows the sun exactly; the shading in steps of 3°, and exactly once the
+      // cursor has rested for 150 ms. Under the 3D terrain a new light direction redraws
+      // every tile of the ground, and a sweep across the side chart asked for that on
+      // nearly every frame — a degree at a time, too little to see.
+      var lastLight = null, lightTimer = null;
+      function light(az) {
+        if (lastLight !== null && Math.abs(az - lastLight) < 0.05) return;
+        lastLight = az;
+        SHADES.forEach(function (id) {
+          map.setPaintProperty(id, 'hillshade-illumination-direction', az);
+        });
+      }
       function sunTo(minute) {
         if (!sun || minute === null || minute === undefined) return;
         sunMinute = minute;
         drawRose();
-        if (styleReady) {
-          var az = ((sunAt(minute).az % 360) + 360) % 360;
-          if (lastLight === null || Math.abs(az - lastLight) >= 1) {
-            lastLight = az;
-            SHADES.forEach(function (id) {
-              map.setPaintProperty(id, 'hillshade-illumination-direction', az);
-            });
-          }
-        }
+        if (!styleReady) return;
+        var az = ((sunAt(minute).az % 360) + 360) % 360;
+        clearTimeout(lightTimer);
+        if (lastLight === null || Math.abs(az - lastLight) >= 3) light(az);
+        else lightTimer = setTimeout(function () { light(az); }, 150);
       }
 
       // ---- replay ----------------------------------------------------------------------
@@ -2936,6 +3068,7 @@ function initView3d(root, cursorTrack, preset) {
         toggle.setAttribute('aria-pressed', String(on));
         replay.hidden = timeRow.hidden = !on;
         if (!on) nowText.hidden = true;
+        drawMark();
         if (on) { from = spanStart; setTime(spanStart); togglePlay(); return; }
         setFollow(false);
         pause();
@@ -3062,6 +3195,9 @@ function initView3d(root, cursorTrack, preset) {
       }
       function followTick(now) {
         if (!following || view.hidden) return;
+        // Off screen it waits: moving an unseen camera streams tiles nobody sees. The
+        // observer that saw it go kicks it again when it is back.
+        if (!onScreen) { followLast = 0; return; }
         var dt = followLast ? Math.min((now - followLast) / 1000, 1) : 1 / 60;
         followLast = now;
         // Two parts, eased apart so they cannot fight: the direction of flight, smoothed and
@@ -3075,7 +3211,7 @@ function initView3d(root, cursorTrack, preset) {
         var kTurn = 1 - Math.exp(-dt / 0.7), kZoom = 1 - Math.exp(-dt / 0.3);
         var bearing = map.getBearing(), zoom = map.getZoom(), pitch = map.getPitch();
         var p = steadyAt(cutoff);
-        var H = map.getContainer().clientHeight || 500, W = map.getContainer().clientWidth || 800;
+        var size = mapSize(), H = size.H || 500, W = size.W || 800;
         // Where the gliders go: 60% of the way down the part of the map nothing covers. The
         // legend, the replay bar and the buttons take the bottom third of a phone's map, and
         // a fixed "a fifth below the middle" put the gliders right under them.
@@ -3207,14 +3343,32 @@ function initView3d(root, cursorTrack, preset) {
       // How far down the map is free of the controls along its bottom (`.m3-bottom`: the
       // replay bar and the buttons), in the map's own pixels. The legend of compared
       // flights sits top left, out of their way; at the bottom it collided with the bar.
+      // Measured once and again only when either changes size: read on every frame of
+      // the follow camera, it made the browser lay the page out each time.
+      var freeCache = null, sizeCache = null;
+      function mapSize() {
+        if (sizeCache) return sizeCache;
+        var c = map.getContainer(), size = { H: c.clientHeight, W: c.clientWidth };
+        if (window.ResizeObserver) sizeCache = size;
+        return size;
+      }
+      if (window.ResizeObserver) {
+        var resized = new ResizeObserver(function () { freeCache = null; sizeCache = null; });
+        watchers.push(resized);
+        resized.observe(map.getContainer());
+        if (view.querySelector('.m3-bottom')) resized.observe(view.querySelector('.m3-bottom'));
+      }
       function freeHeight(H) {
+        if (freeCache && freeCache.H === H) return freeCache.free;
         var top = map.getContainer().getBoundingClientRect().top, bottom = H;
         [view.querySelector('.m3-bottom')].forEach(function (el) {
           if (!el || el.hidden) return;
           var r = el.getBoundingClientRect();
           if (r.height) bottom = Math.min(bottom, r.top - top);
         });
-        return Math.max(bottom, H * 0.4);
+        var free = Math.max(bottom, H * 0.4);
+        if (window.ResizeObserver) freeCache = { H: H, free: free };
+        return free;
       }
       function setFollow(on) {
         if (!hasTime || on === following) return;
@@ -3580,7 +3734,7 @@ function initView3d(root, cursorTrack, preset) {
             if (cursorTrack && cursorTrack.min && index !== null && index !== undefined) {
               sunTo(cursorTrack.min[Math.min(index, cursorTrack.min.length - 1)]);
             }
-            refresh();
+            drawMark();
             if (name === 'revealCursor' && cursor) {
               var p = map.project([cursor[0], cursor[1]]), c = map.getContainer();
               var inset = 60;
@@ -3595,7 +3749,7 @@ function initView3d(root, cursorTrack, preset) {
       unwrap.push({ name: 'clearCursor', original: clear });
       handle.clearCursor = function () {
         cursor = null;
-        if (!view.hidden) refresh();
+        drawMark();
         return clear ? clear.apply(handle, arguments) : undefined;
       };
       unwrap.forEach(function (w) { w.wrapper = handle[w.name]; });
@@ -3612,6 +3766,8 @@ function initView3d(root, cursorTrack, preset) {
       api.dispose = function () {
         pause();
         setFollow(false);
+        clearTimeout(sleepTimer); clearTimeout(lightTimer);
+        watchers.forEach(function (w) { w.disconnect(); });
         unwrap.forEach(function (w) { if (handle[w.name] === w.wrapper) handle[w.name] = w.original; });
         handle.__mergedFilterHooks = (handle.__mergedFilterHooks || []).filter(function (h) {
           return h !== filterHook;
@@ -4681,12 +4837,23 @@ function initView3d(root, cursorTrack, preset) {
   }
 })();
 
-// Resolves when `element` is first on screen: now if it already is, else on the first
-// change that reveals it (the flight tabs and the view strip toggle `hidden`).
+// Resolves when `element` is first on screen: now if it already is, else when it comes
+// into view (the flight tabs toggle `hidden`). An IntersectionObserver, not a watch on
+// every attribute in the page: that one ran — and laid the page out — on each move of
+// the chart cursor, once for every flight not yet opened.
 function whenShown(element) {
   function shown() { return element.getClientRects().length > 0; }
   if (shown()) return Promise.resolve();
   return new Promise(function (resolve) {
+    if (window.IntersectionObserver) {
+      var seen = new IntersectionObserver(function (entries) {
+        if (entries.some(function (e) { return e.isIntersecting; }) || shown()) {
+          seen.disconnect(); resolve();
+        }
+      });
+      seen.observe(element);
+      return;
+    }
     var watch = new MutationObserver(function () {
       if (shown()) { watch.disconnect(); resolve(); }
     });
@@ -4742,6 +4909,7 @@ function initFlight(root) {
   var views = [];
   function collectViews() {
     views = [];
+    lit = undefined;   // a redrawn chart has lost its lit bands
     root.querySelectorAll('.hit[data-px]').forEach(function (hit) {
       if (!hit.dataset.px) return;
       var svg = hit.ownerSVGElement;
@@ -4785,10 +4953,15 @@ function initFlight(root) {
   }
 
   function place(index, source, point) {
-    views.forEach(function (view) {
-      if (index >= view.px.length) return;
+    // Everything read before anything is written: a read after a write makes the browser
+    // lay the page out again, and this runs on every move of the pointer. The tooltip's
+    // size is the last one's — its text changes, its size by a few pixels at most.
+    var drawn = views.filter(function (view) {
       // A hidden profile variant must not be drawn on: it has no layout box.
-      if (!view.svg.getClientRects().length) return;
+      return index < view.px.length && view.svg.getClientRects().length;
+    });
+    var tipBox = tip.classList.contains('on') ? tip.getBoundingClientRect() : null;
+    drawn.forEach(function (view) {
       var x = view.px[index];
       var y = view.py[index];
       if (view.dot) { view.dot.setAttribute('cx', x); view.dot.setAttribute('cy', y); }
@@ -4807,7 +4980,6 @@ function initFlight(root) {
       data.speed[index] + ' km/h &middot; ' + data.phase[index] + '</div>';
     if (terrainView) terrainView.setCursor(index);
     tip.classList.add('on');
-    var tipBox = tip.getBoundingClientRect();
     var pageX = point.box.left + source.px[index] / point.vb.width * point.box.width;
     var pageY = point.box.top + source.py[index] / point.vb.height * point.box.height;
     // In full screen (or the in-page maximise) the map block is all there is on screen, and
@@ -4819,8 +4991,9 @@ function initFlight(root) {
     var into = full || document.body;
     if (tip.parentNode !== into) {
       into.appendChild(tip);
-      tipBox = tip.getBoundingClientRect();
+      tipBox = null;
     }
+    if (!tipBox || !tipBox.width) tipBox = tip.getBoundingClientRect();
     tip.style.left = Math.min(pageX + 14, window.innerWidth - tipBox.width - 10) + (full ? 0 : window.scrollX) + 'px';
     tip.style.top = (pageY - tipBox.height - 12) + (full ? 0 : window.scrollY) + 'px';
     highlight(data.segment[index]);
@@ -4934,8 +5107,11 @@ function initFlight(root) {
     var lo = 0, hi = data.t.length - 1;
     while (lo < hi) { var mid = (lo + hi) >> 1; if (data.t[mid] < t) lo = mid + 1; else hi = mid; }
     if (lo > 0 && Math.abs(data.t[lo - 1] - t) < Math.abs(data.t[lo] - t)) lo--;
+    // No check that each chart has a layout box, as `place` makes for its tooltip: an
+    // attribute on a hidden one costs nothing, and asking, after this frame's writes,
+    // made the browser lay the page out on every frame of the replay.
     views.forEach(function (view) {
-      if (lo >= view.px.length || !view.svg.getClientRects().length) return;
+      if (lo >= view.px.length) return;
       if (view.dot) { view.dot.setAttribute('cx', view.px[lo]); view.dot.setAttribute('cy', view.py[lo]); }
       if (view.crosshair) { view.crosshair.setAttribute('x1', view.px[lo]); view.crosshair.setAttribute('x2', view.px[lo]); }
       if (view.cursor) view.cursor.classList.add('on');
@@ -4968,7 +5144,12 @@ function initFlight(root) {
     });
   });
 
+  // The segment lit last: hovering along one climb or glide asks for the same rows on
+  // every move, and each time they were all found again and switched off and on.
+  var lit;
   function highlight(key) {
+    if (key === lit) return;
+    lit = key;
     // Scoped to this flight: with several flights in one document, a global query
     // would light up the matching segment index in every other flight too.
     root.querySelectorAll('.band.active, .mark.active, .wind-point.active, tr.active')
@@ -10046,9 +10227,19 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
   // so in the report — where this view starts hidden behind its tab — nothing is fetched
   // until the reader opens it.
   function visible() { return panel.getClientRects().length > 0; }
+  // An IntersectionObserver where there is one: a watch on every attribute in the page
+  // ran, and laid the page out, on each frame of a flight's replay and each move of its
+  // chart cursor, for as long as this tab stayed closed.
   function whenVisible() {
     if (visible()) return Promise.resolve();
     return new Promise(function (resolve) {
+      if (window.IntersectionObserver) {
+        var seen = new IntersectionObserver(function () {
+          if (visible()) { seen.disconnect(); resolve(); }
+        });
+        seen.observe(panel);
+        return;
+      }
       var watch = new MutationObserver(function () {
         if (visible()) { watch.disconnect(); resolve(); }
       });

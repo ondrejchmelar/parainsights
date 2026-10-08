@@ -1008,31 +1008,25 @@ because a chart service that dies takes every graph with it.
   cloudbase, both named at their evening end. Each column is the airgram and the sounding,
   side by side on one height scale for a single takeoff. The airgram reads on a tap and
   does not take vertical drags, so it is the column's strip to scroll the page from.
-- **The map's CPU, on an old laptop** (measured 2026-10-08 on an Intel HD 620, 4 cores,
-  devicePixelRatio 1, no throttling). Hovering a chart or playing the replay holds the main
-  thread at 100 % and the map at ~13 fps (~75 ms a frame); idle is 60 rAF/s per map, hidden
-  ones included. Waste first, no quality lost:
-  1. *One map update per frame.* `report.js` binds `mousemove` straight to `place()`, and
-     the map's `setCursor` wrapper (`map3d.js` ~1846) runs `sunTo()` + `refresh()` on every
-     event. Coalesce both into one `requestAnimationFrame`. `sunTo` sets
-     `hillshade-illumination-direction` for every degree the sun moves (~1094), and under
-     3D terrain a paint change re-renders every tile's texture: re-light only on a ≥ 3°
-     change, or ~150 ms after the pointer stops (the rose can stay exact).
-  2. *Stable deck.gl data.* `layers()` hands deck new arrays on every call: the replay
-     TripsLayer's whole-track `path` (~885), `marks.filter` for climbs (~896), the airspace
-     edges and corners (~806, ~817), `other-k` (~993), per-point arrays in `getPath`
-     (~862, ~871, ~887). Build them once; do the time window on the GPU
-     (`DataFilterExtension` `filterRange`, the TripsLayer's `currentTime`).
-  3. *Pause what is not seen.* deck's `AnimationLoop` runs forever on every map, hidden
-     tabs too (three visited flights: 180 rAF/s, 19 % CPU, nothing moving). Stop/start it
-     on an IntersectionObserver and the tab switch, call `api.hide()` on the flight being
-     left, and drop `whenShown`'s body-wide MutationObservers (`report.js` ~463).
-  4. *Layout in the hover path.* `place()` writes `tip.innerHTML` then reads its
-     `getBoundingClientRect()`; `highlight()` re-queries and re-toggles rows when the
-     segment has not changed; `followTick` reads `freeHeight()` every frame.
-  Only if frames still exceed ~40 ms after that: an optional light mode for weak hardware
-  (`tileSize: 256` for shade and imagery under terrain, `pixelRatio` ≤ 1.5,
-  `fadeDuration: 0`) — a quality trade-off, never the default.
+- **The map's CPU, on an old laptop — the waste is done** (measured 2026-10-08 on an Intel
+  HD 620, 4 cores, devicePixelRatio 1, `/tmp/perf/run7.py`). Main thread, before → after:
+  idle 60 frames/s per map, hidden ones included → 0; hovering the side chart 99 % → 33 %
+  (the map redraws ~6 times a second instead of on every move); replay script time 31 % →
+  11 %. How: the chart cursor's dot and stem are SVG over the map (`drawMark`, placed by
+  MapLibre's projection, within 0.1 px of deck's) instead of deck layers, so a hover no
+  longer redraws the 3D ground — the stem now shows through a ridge; the shading re-lit
+  in 3° steps and exactly 150 ms after the cursor rests; `refresh()` coalesced to one
+  `setProps` a task, skipped off screen; deck's data arrays kept (`same`, `kept`) and the
+  compared tracks cut on the GPU (TripsLayer); deck's animation loop asleep 2 s after the
+  last change or input and whenever the map is off screen (an IntersectionObserver, which
+  also pauses the replay when its flight's tab is left); the page-wide MutationObservers
+  (`whenShown`, the airspace tab's `whenVisible`) replaced by IntersectionObservers; no
+  layout reads in the hover, replay and follow paths. What remains is MapLibre drawing
+  the 3D terrain at all — replay and follow still hold the main thread at ~32 / 20 fps,
+  ~30 ms a frame, mostly `uniformMatrix4fv` and `getTerrainData` over the many 128 px
+  tiles. If that still bites: an optional light mode for weak hardware (`tileSize: 256`
+  for shade and imagery under terrain, `pixelRatio` ≤ 1.5, `fadeDuration: 0`, or a
+  replay frame cap) — a quality trade-off, never the default.
 - **Every feature for an uploaded track, and JavaScript as the one runtime language for
   the viewer — done** (October 2026; Pyodide was considered and rejected). In four steps,
   each checked before the next: (1) the analysis ported to `js/` and held to the Python

@@ -142,9 +142,10 @@ window.addEventListener('load', function () {
       // Read the elements, never `body.textContent`: the page carries its own script
       // inline, and every sentence this feature writes appears in that source too — so
       // a whole-document search says "the caption is there" on a page where it is not.
+      // The wind chart's explanation is its ⓘ bubble, which the page rewrites as a caption.
       function captions() {
         return Array.prototype.map.call(
-          document.querySelectorAll('.caption'), function (p) { return p.textContent; });
+          document.querySelectorAll('.caption, .info-pop'), function (p) { return p.textContent; });
       }
       out.legend = !!document.querySelector('.legend .model-swatch');
       out.caption = captions().some(function (text) {
