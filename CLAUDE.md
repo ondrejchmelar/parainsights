@@ -930,10 +930,39 @@ categorical trio. Both light and dark themes are defined token-by-token, with
 way. Palettes were checked with the skill's `validate_palette.js`; if you change one, run
 it again — several candidate ramps failed on contrast or step spacing.
 
-Reports carry their own charts as inline SVG and their own woff2, and fetch their
-imagery. That is no longer the hard constraint it was — see "A network is assumed" — but
-the charts stay local because a chart service that dies takes every graph with it, and
-the font stays inlined because it is one request for a document's whole appearance.
+**The redesign (October 2026)** — a UX review for older readers with weaker eyesight;
+the mockups and the reasoning are outside the repository (`parainsights-ux-review/`).
+One language across the four pages, stated once in `parainsights_common` (`TOKENS`,
+`BASE`, `STYLE`):
+- **Tokens, warm, one set for every page** — the report's cool blue-grey set is gone.
+  `ink-3` is `ink-2` now (the old faint grey failed 4.5 : 1 in the light theme); `rule`
+  outlines what you do not click, `edge` what you do (≥ 3 : 1); `accent` is the one
+  action colour; `good / warn / bad` are verdicts and always carry a word; `series-1..3`
+  are the meteo takeoffs' identity colours (violet, cyan, pink — never a status colour;
+  ≥ 4.5 : 1 on the panel in both themes, the weakest pair cyan/pink under protanopia,
+  which the table's names and the lines' labels cover); `float*` is anything floating
+  over a map.
+- **Type**: 16 px body, nothing a reader must read under 15 px, sentence case — no 11 px
+  letter-spaced capitals anywhere, charts included (SVG and canvas). The report no
+  longer inlines its narrow display font.
+- **Controls**: 44 px high, 16 px / 600, `edge` outline; hover `panel-2`; the selected
+  one **ink-filled** everywhere (nav, segmented controls, map toggles). The open flight
+  tab's accent ring is the one deliberate exception. Map buttons are 36 px (38 on a
+  phone) with a 44 px hit area, translucent like the panels over the map.
+- **Radii**: 10 controls · 11 segmented controls · 14 cards, panels, images, popovers ·
+  pill for chips, nav tools and badges; checkboxes keep 5.
+- **Icons**: one stroked set, 20 px, 1.75 px round stroke, `currentColor`
+  (`common.icon`, and the same paths in `map3d.js` and `meteo.js`). No Unicode glyphs as
+  icons.
+- **Explanations go behind an ⓘ** (`common.info`, `info` in `js/report.js`) straight
+  after the label they explain: hover on a desktop, tap on touch, Esc closes, kept on
+  screen by `prefs.js`. The **Help** switch hides every ⓘ and the map's ? (remembered
+  like the theme; desktop only). **aA** zooms the page an eighth, the maps excepted.
+- Colour is never alone: legends name every segment (time bar, side view, sparklines).
+
+Reports carry their own charts as inline SVG and fetch their imagery. That is no longer
+the hard constraint it was — see "A network is assumed" — but the charts stay local
+because a chart service that dies takes every graph with it.
 
 ## Wanted next
 
@@ -979,6 +1008,31 @@ the font stays inlined because it is one request for a document's whole appearan
   cloudbase, both named at their evening end. Each column is the airgram and the sounding,
   side by side on one height scale for a single takeoff. The airgram reads on a tap and
   does not take vertical drags, so it is the column's strip to scroll the page from.
+- **The map's CPU, on an old laptop** (measured 2026-10-08 on an Intel HD 620, 4 cores,
+  devicePixelRatio 1, no throttling). Hovering a chart or playing the replay holds the main
+  thread at 100 % and the map at ~13 fps (~75 ms a frame); idle is 60 rAF/s per map, hidden
+  ones included. Waste first, no quality lost:
+  1. *One map update per frame.* `report.js` binds `mousemove` straight to `place()`, and
+     the map's `setCursor` wrapper (`map3d.js` ~1846) runs `sunTo()` + `refresh()` on every
+     event. Coalesce both into one `requestAnimationFrame`. `sunTo` sets
+     `hillshade-illumination-direction` for every degree the sun moves (~1094), and under
+     3D terrain a paint change re-renders every tile's texture: re-light only on a ≥ 3°
+     change, or ~150 ms after the pointer stops (the rose can stay exact).
+  2. *Stable deck.gl data.* `layers()` hands deck new arrays on every call: the replay
+     TripsLayer's whole-track `path` (~885), `marks.filter` for climbs (~896), the airspace
+     edges and corners (~806, ~817), `other-k` (~993), per-point arrays in `getPath`
+     (~862, ~871, ~887). Build them once; do the time window on the GPU
+     (`DataFilterExtension` `filterRange`, the TripsLayer's `currentTime`).
+  3. *Pause what is not seen.* deck's `AnimationLoop` runs forever on every map, hidden
+     tabs too (three visited flights: 180 rAF/s, 19 % CPU, nothing moving). Stop/start it
+     on an IntersectionObserver and the tab switch, call `api.hide()` on the flight being
+     left, and drop `whenShown`'s body-wide MutationObservers (`report.js` ~463).
+  4. *Layout in the hover path.* `place()` writes `tip.innerHTML` then reads its
+     `getBoundingClientRect()`; `highlight()` re-queries and re-toggles rows when the
+     segment has not changed; `followTick` reads `freeHeight()` every frame.
+  Only if frames still exceed ~40 ms after that: an optional light mode for weak hardware
+  (`tileSize: 256` for shade and imagery under terrain, `pixelRatio` ≤ 1.5,
+  `fadeDuration: 0`) — a quality trade-off, never the default.
 - **Every feature for an uploaded track, and JavaScript as the one runtime language for
   the viewer — done** (October 2026; Pyodide was considered and rejected). In four steps,
   each checked before the next: (1) the analysis ported to `js/` and held to the Python

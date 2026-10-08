@@ -6,329 +6,367 @@
 try {
   var t = localStorage.getItem('parainsights.theme');
   if (t) document.documentElement.dataset.theme = t;
+  if (localStorage.getItem('parainsights.text') === 'large') document.documentElement.dataset.text = 'large';
+  if (localStorage.getItem('parainsights.help') === 'off') document.documentElement.dataset.help = 'off';
 } catch (e) {}
 </script>
 <style>
 
-:root { --paper:#fff; --panel:#f7f7f5; --panel-2:#eeeeea; --rule:#dcdcd6;
-  --ink:#1b1b19; --ink-2:#4a4a45; --ink-3:#82827a; color-scheme: light; }
+:root { color-scheme: light; --paper:#f6f5f1; --panel:#ffffff; --panel-2:#eeece6; --ink:#161614; --ink-2:#45433d;
+  --ink-3:#45433d; --rule:#d9d5cb; --edge:#8f8a80; --rule-strong:#8f8a80;
+  --accent:#c2410c; --on-accent:#ffffff; --good:#13803f; --on-good:#ffffff;
+  --warn:#8f6200; --on-warn:#ffffff; --bad:#b42318;
+  --series-1:#7c3aed; --series-2:#0e7f93; --series-3:#c42a72;
+  --float:rgba(255,255,255,.92); --float-2:rgba(238,236,230,.96); --float-edge:rgba(0,0,0,.16);
+  --float-shadow:0 6px 20px rgba(0,0,0,.18); --pop-bg:#1d1d1a; --pop-ink:#f2f0ea;
+  --climb:#eb6834; --climb-1:#f0a07a; --climb-2:#eb6834; --climb-3:#c8431a;
+  --sink:#1d5fd1; --sink-1:#8fb6e6; --sink-2:#1d5fd1; --sink-3:#17508f;
+  --tow:#1baf7a; --neutral:#a9a49a; --shadow-ink:#c3bfb4;
+  --ld-1:#86aed8; --ld-2:#5f92c9; --ld-3:#3f74b4; --ld-4:#2a5894; --ld-5:#173d69; }
 @media (prefers-color-scheme: dark) {
-  :root:where(:not([data-theme="light"])) { color-scheme: dark;
-    --paper:#151513; --panel:#1e1e1b; --panel-2:#262622; --rule:#3a3a34;
-    --ink:#eeeee8; --ink-2:#c0c0b8; --ink-3:#8a8a80; }
+  :root:where(:not([data-theme="light"])) { color-scheme: dark; --paper:#141412; --panel:#1d1d1a; --panel-2:#272723; --ink:#efede8; --ink-2:#c3bfb6;
+    --ink-3:#c3bfb6; --rule:#34332e; --edge:#6b685f; --rule-strong:#6b685f;
+    --accent:#e8692c; --on-accent:#141412; --good:#2fb36a; --on-good:#0b1a10;
+    --warn:#d9a21b; --on-warn:#111111; --bad:#e5484d;
+    --series-1:#a78bfa; --series-2:#3cc8dc; --series-3:#f47fb0;
+    --float:rgba(20,20,18,.84); --float-2:rgba(39,39,35,.92); --float-edge:rgba(255,255,255,.16);
+    --float-shadow:0 6px 20px rgba(0,0,0,.35); --pop-bg:#f3f1ec; --pop-ink:#181816;
+    --climb:#e8692c; --climb-1:#b06a4a; --climb-2:#e8692c; --climb-3:#f08a55;
+    --sink:#4b8ff0; --sink-1:#4a6f9e; --sink-2:#4b8ff0; --sink-3:#86b2f5;
+    --tow:#199e70; --neutral:#8a877f; --shadow-ink:#3a3934;
+    --ld-1:#35577f; --ld-2:#4874a6; --ld-3:#5b91cc; --ld-4:#74aae0; --ld-5:#9cc6f0; }
 }
-:root[data-theme="dark"] { color-scheme: dark;
-  --paper:#151513; --panel:#1e1e1b; --panel-2:#262622; --rule:#3a3a34;
-  --ink:#eeeee8; --ink-2:#c0c0b8; --ink-3:#8a8a80; }
+:root[data-theme="dark"] { color-scheme: dark; --paper:#141412; --panel:#1d1d1a; --panel-2:#272723; --ink:#efede8; --ink-2:#c3bfb6;
+    --ink-3:#c3bfb6; --rule:#34332e; --edge:#6b685f; --rule-strong:#6b685f;
+    --accent:#e8692c; --on-accent:#141412; --good:#2fb36a; --on-good:#0b1a10;
+    --warn:#d9a21b; --on-warn:#111111; --bad:#e5484d;
+    --series-1:#a78bfa; --series-2:#3cc8dc; --series-3:#f47fb0;
+    --float:rgba(20,20,18,.84); --float-2:rgba(39,39,35,.92); --float-edge:rgba(255,255,255,.16);
+    --float-shadow:0 6px 20px rgba(0,0,0,.35); --pop-bg:#f3f1ec; --pop-ink:#181816;
+    --climb:#e8692c; --climb-1:#b06a4a; --climb-2:#e8692c; --climb-3:#f08a55;
+    --sink:#4b8ff0; --sink-1:#4a6f9e; --sink-2:#4b8ff0; --sink-3:#86b2f5;
+    --tow:#199e70; --neutral:#8a877f; --shadow-ink:#3a3934;
+    --ld-1:#35577f; --ld-2:#4874a6; --ld-3:#5b91cc; --ld-4:#74aae0; --ld-5:#9cc6f0; }
 
-body { margin:0; background:var(--paper); color:var(--ink); font:15px/1.55
-  system-ui,-apple-system,"Segoe UI",sans-serif; }
-/* Wider than a reading column, because the charts are the page. At 1 100 px three
-   soundings came to 340 px each, which is a temperature axis 30 °C wide in 300 px and a
-   trace whose bends a reader has to lean in for. The prose does not stretch with it —
-   `.lede` keeps its 70ch — so this buys width for the only things that want it. */
-.wrap { max-width:1440px; margin:0 auto; padding:26px 18px 60px; }
-h1 { font-size:26px; margin:0 0 6px; }
-.lede { color:var(--ink-2); margin:0 0 14px; max-width:70ch; }
+body { margin:0; background:var(--paper); color:var(--ink); }
+.wrap { max-width:1240px; margin:0 auto; padding:0 28px 60px; }
+@media (max-width: 640px) { .wrap { padding:0 14px 40px; } }
 a { color: inherit; }
-button { font:inherit; padding:3px 10px; background:var(--panel);
-  color:var(--ink); border:1px solid var(--rule); border-radius:3px; cursor:pointer; }
 
-/* The three series colours, and the reason there are three of them.
-   Slots 1–3 of the design system's categorical palette — the same blue, orange and aqua
-   the report paints phases with — checked with the dataviz skill's `validate_palette.js`
-   against this page's own panel colour in both themes: all-pairs CVD ΔE 9.2 light /
-   9.4 dark, normal vision 24.0 / 20.9. **A fourth site is not a fourth colour.** The
-   documented order puts yellow next, and yellow against this orange fails the
-   normal-vision floor (ΔE 13.7) — no re-stepping is allowed and no ordering fixes an
-   all-pairs failure, so the comparison caps at three and says so on screen.
-   Light aqua and orange sit under 3:1 on the light panel, which the palette's relief
-   rule permits only with direct labels or a table: this has both. */
-:root { --series-1:#2a78d6; --series-2:#eb6834; --series-3:#1baf7a; }
-@media (prefers-color-scheme: dark) {
-  :root { --series-1:#3987e5; --series-2:#d95926; --series-3:#199e70; }
+/* The strip: the three tools, then aA, Help, the theme and the source. */
+.site-nav { display:flex; align-items:center; gap:4px; min-height:62px; margin:0 0 18px;
+  border-bottom:1px solid var(--rule); flex-wrap:wrap; }
+.site-nav > a, .site-nav > span:not(.site-sp), .site-nav > .view-tab { height:44px; display:inline-flex;
+  align-items:center; padding:0 15px; border-radius:10px; font-family:inherit; font-size:16px;
+  font-weight:600; line-height:1; color:var(--ink-2); text-decoration:none; border:0; background:none;
+  cursor:pointer; margin:0; }
+.site-nav > a:hover, .site-nav > .view-tab:hover { background:var(--panel-2); color:var(--ink); }
+.site-nav > .is-on:not(.site-sp), .site-nav > .is-on:not(.site-sp):hover { background:var(--ink); color:var(--paper); }
+.site-nav > .site-sp { flex:1; }
+.site-nav > a.tool { padding:0 13px; border:1px solid var(--edge); border-radius:999px; }
+.tool { height:44px; min-width:44px; padding:0 13px; display:inline-flex; align-items:center; justify-content:center;
+  gap:8px; border:1px solid var(--edge); border-radius:999px; background:transparent; color:var(--ink-2);
+  font-family:inherit; font-size:16px; font-weight:600; line-height:1; cursor:pointer; text-decoration:none; }
+.tool:hover { background:var(--panel-2); color:var(--ink); }
+.text-toggle { gap:1px; } .text-toggle b { font-size:19px; }
+.text-toggle[aria-pressed="true"] { background:var(--ink); color:var(--paper); border-color:var(--ink); }
+.switch { width:36px; height:21px; border-radius:11px; background:var(--edge); position:relative; flex:none; }
+.switch::after { content:""; position:absolute; left:3px; top:3px; width:15px; height:15px; border-radius:50%;
+  background:#fff; transition:left .15s; }
+.help-toggle[aria-pressed="true"] .switch { background:var(--accent); }
+.help-toggle[aria-pressed="true"] .switch::after { left:18px; }
+.theme-glyph, .theme-glyph svg { display:block; }
+.site-foot { margin:56px 0 0; padding:18px 0 0; border-top:1px solid var(--rule);
+  font-size:15px; line-height:1.55; color:var(--ink-2); display:block; }
+.site-foot a { color:var(--ink-2); }
+@media (max-width: 640px) {
+  .site-nav { gap:2px; min-height:56px; }
+  .site-nav { flex-wrap:nowrap; }
+  .site-nav > a, .site-nav > span:not(.site-sp), .site-nav > .view-tab { padding:0 8px; }
+  .site-nav > a.tool, .tool { padding:0 9px; min-width:40px; }
+  /* Help is a desktop switch: on a phone the ⓘ are there to tap, and the strip is full. */
+  .help-toggle { display:none; }
 }
-.met-head { display:flex; flex-wrap:wrap; gap:10px 18px; align-items:center;
-  margin: 0 0 12px; }
-.met-days { display:inline-flex; border:1px solid var(--rule); border-radius:3px;
-  overflow:hidden; }
-.met-days button { border:0; border-right:1px solid var(--rule); border-radius:0;
-  padding:5px 13px; background:var(--panel); }
-.met-days button:last-child { border-right:0; }
-.met-days button.is-on { background:var(--ink); color:var(--paper); }
 
-/* The chosen takeoffs, as chips. This is what replaced a 159-row list holding the top
-   left corner of the page: the list is now behind a button, and what stays on screen is
-   the three or fewer places the reader actually asked about. */
-.met-chosen { display:flex; flex-wrap:wrap; gap:8px; align-items:center;
-  margin:0 0 14px; }
-.met-chip { display:inline-flex; align-items:center; gap:8px; padding:5px 6px 5px 10px;
-  border:1px solid var(--rule); border-radius:999px; background:var(--panel);
-  font-size:13.5px; }
-.met-chip.is-focus { border-color:var(--ink-3); background:var(--panel-2); }
-.met-chip .swatch { width:10px; height:10px; border-radius:50%; flex:none; }
-.met-chip-name { background:none; border:0; padding:0; font:inherit; color:inherit;
-  cursor:pointer; }
-.met-chip-drop { border:0; background:none; padding:0 5px; line-height:1;
-  font-size:15px; color:var(--ink-3); cursor:pointer; border-radius:50%; }
+body { font-family: "Noto Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 16px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+/* aA: the page an eighth larger, the maps excepted — MapLibre reads its pointer through
+   the zoom, and a zoomed canvas blurs. */
+html[data-text="large"] body { zoom: 1.125; }
+html[data-text="large"] .view3d-panel { zoom: calc(1 / 1.125); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lnk, a.lnk { color: var(--accent); font-weight: 600; text-decoration: none; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0;
+  font-family: inherit; font-size: inherit; }
+.lnk:hover { text-decoration: underline; }
+.btn { height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--edge);
+  background: var(--panel-2); color: var(--ink); font-family: inherit; font-size: 16px; font-weight: 600;
+  line-height: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  cursor: pointer; text-decoration: none; white-space: nowrap; }
+.btn:hover { background: var(--panel); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn svg, .tool svg, .lnk svg, .chip svg { display: block; flex: none; }
+.seg { display: inline-flex; border: 1px solid var(--edge); border-radius: 11px; overflow: hidden;
+  background: var(--panel); vertical-align: middle; }
+.seg > button, .seg > span { height: 42px; padding: 0 16px; border: 0; border-radius: 0; background: none;
+  color: var(--ink-2); font-family: inherit; font-size: 16px; font-weight: 600; line-height: 1;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.seg > * + * { border-left: 1px solid var(--rule); }
+.seg > button:hover { background: var(--panel-2); color: var(--ink); }
+.seg > .is-on, .seg > [aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.seg > .is-on:hover, .seg > [aria-pressed="true"]:hover { background: var(--ink); color: var(--paper); }
+.chip { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px;
+  border-radius: 999px; border: 1px solid var(--edge); background: var(--panel); color: var(--ink);
+  font-family: inherit; font-size: 16px; font-weight: 600; line-height: 1; }
+.dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; flex: none; }
+.badge { display: inline-flex; align-items: center; padding: 3px 11px; border-radius: 999px;
+  font-weight: 600; font-size: 15px; line-height: 1.3; white-space: nowrap; }
+.badge.good { background: var(--good); color: var(--on-good); }
+.badge.warn { background: var(--warn); color: var(--on-warn); }
+.badge.bad { border: 1.5px solid var(--edge); color: var(--ink-2); }
+.badge.accent { background: var(--accent); color: var(--on-accent); }
+.legend-row { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; margin: 10px 0 0;
+  padding: 0; list-style: none; font-size: 15px; color: var(--ink-2); }
+.legend-row > * { display: inline-flex; align-items: center; gap: 7px; }
+.legend-row i { width: 14px; height: 10px; border-radius: 3px; display: inline-block; flex: none; }
+.legend-row .grad { width: 70px; height: 10px; border-radius: 5px; display: inline-block;
+  background: linear-gradient(90deg, var(--sink), var(--neutral), var(--climb)); }
+/* The ⓘ: about the cap height of the text it follows, a 44 px target for a finger. */
+.info-wrap { position: relative; display: inline-flex; align-items: center; vertical-align: 0.1em;
+  margin-left: 0.4em; font-weight: 400; text-transform: none; letter-spacing: 0; line-height: 1; }
+.info { position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: 1.3em; height: 1.3em; min-width: 13px; min-height: 13px; padding: 0; border-radius: 50%;
+  border: 1.5px solid var(--ink-2); background: none; color: var(--ink-2);
+  font: italic 700 0.66em/1 Georgia, serif; cursor: help; box-sizing: border-box; flex: none; }
+.info::after { content: ""; position: absolute; inset: -12px; }
+.info:hover, .info[aria-expanded="true"] { color: var(--ink); border-color: var(--ink); }
+.info-pop { display: none; position: absolute; z-index: 80; left: 50%; top: calc(100% + 10px);
+  transform: translateX(-50%); width: max-content; max-width: min(320px, 86vw); padding: 12px 15px;
+  background: var(--pop-bg); color: var(--pop-ink); border-radius: 14px; box-shadow: 0 10px 34px rgba(0,0,0,.35);
+  font: 400 15.5px/1.5 "Noto Sans", ui-sans-serif, system-ui, sans-serif; text-align: left;
+  white-space: normal; letter-spacing: 0; text-transform: none; }
+.info-pop a { color: inherit; }
+.info-wrap.to-left .info-pop { left: auto; right: -12px; transform: none; }
+.info-wrap.to-right .info-pop { left: -12px; transform: none; }
+@media (hover: hover) { .info-wrap:hover .info-pop { display: block; } }
+.info[aria-expanded="true"] + .info-pop { display: block; }
+html[data-help="off"] .info-wrap { display: none; }
+
+
+/* The three takeoff colours are `--series-1..3` in `common.TOKENS`: an identity palette of
+   their own (violet, cyan, pink) since the redesign, so a takeoff's dot is never the
+   accent or a verdict's green. Three, because the comparison caps at three
+   (`MAX_CHOSEN`); identity is never colour alone — the table names every row and every
+   line carries its label. */
+.meteo-article h1 { display: none; }
+/* The day, the hour and the takeoffs apply to everything below, so they stay in view. */
+.met-sticky { position: sticky; top: 0; z-index: 20; background: var(--paper);
+  padding: 14px 0 12px; border-bottom: 1px solid var(--rule); margin: -18px 0 22px; }
+.met-head { display:flex; flex-wrap:wrap; gap:12px 22px; align-items:center; margin: 0 0 14px; }
+.met-hour { display:flex; align-items:center; gap:12px; font-size:16px; color:var(--ink-2);
+  flex:1 1 300px; min-width:240px; }
+.met-hour label { display:inline-flex; align-items:center; }
+.met-hour .info-wrap { margin-left: 0.3em; }
+.met-hour input { flex:1; min-width:120px; accent-color: var(--accent); height: 28px; }
+.met-hour output { min-width:3.6em; font-size:19px; font-weight:650; color:var(--ink);
+  font-variant-numeric:tabular-nums; }
+.met-status { color:var(--ink-2); font-size:15px; margin:0; flex-basis:100%; }
+.met-status:empty { display:none; }
+
+/* The chosen takeoffs, as chips; the list of every takeoff is behind a button. */
+.met-chosen { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:0; }
+.met-chip { padding: 0 6px 0 16px; }
+.met-chip.is-focus { border-color:var(--ink); }
+.met-chip .swatch { width:11px; height:11px; border-radius:50%; flex:none; }
+.met-chip-name { background:none; border:0; padding:0; font:inherit; color:inherit; cursor:pointer; height: 100%; }
+.met-chip-drop { position: relative; width:32px; height:32px; border:0; background:none; padding:0;
+  color:var(--ink-2); cursor:pointer; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; }
+.met-chip-drop::after { content: ""; position: absolute; inset: -6px; }
 .met-chip-drop:hover { color:var(--ink); background:var(--panel-2); }
-.met-add { border-style:dashed; border-radius:999px; padding:6px 14px; }
-.met-cap { font-size:12px; color:var(--ink-3); }
+.met-add { border-style:dashed; color:var(--ink-2); cursor: pointer; }
+.met-add:disabled { opacity: .5; cursor: default; }
+.met-cap { display: none; }
 
-/* The comparison. It is also the palette's *table view*, which is what makes the two
-   light-mode series that fall under 3:1 against the panel legitimate. */
-.met-compare { width:100%; border-collapse:collapse; margin:0 0 16px;
-  font-variant-numeric:tabular-nums; }
-.met-compare th, .met-compare td { text-align:left; padding:7px 10px; font-size:13px;
-  border-bottom:1px solid var(--rule); }
-.met-compare thead th { font-size:11px; text-transform:uppercase; letter-spacing:.06em;
-  color:var(--ink-3); font-weight:600; }
+/* The comparison: the page's answer, so its largest text. It is also the palette's
+   table view, which is what lets the series colours rest on a label as well as a hue. */
+.met-compare { width:100%; border-collapse:collapse; margin:0 0 30px; font-variant-numeric:tabular-nums; }
+.met-compare th, .met-compare td { text-align:left; padding:14px; font-size:18px;
+  border-bottom:1px solid var(--rule); white-space: nowrap; }
+.met-compare thead th { font-size:15.5px; color:var(--ink-2); font-weight:600; padding: 10px 14px; }
+.met-compare thead th .info-wrap { vertical-align: 0; }
 .met-compare tbody tr { cursor:pointer; }
-.met-compare tbody tr:hover { background:var(--panel); }
-.met-compare tbody tr.is-focus { background:var(--panel-2); }
-.met-compare .site { display:flex; align-items:center; gap:8px; font-weight:600; }
-.met-compare .site .swatch { width:10px; height:10px; border-radius:50%; flex:none; }
+.met-compare tbody tr:hover { background:var(--panel-2); }
+.met-compare tbody tr.is-focus { background:var(--panel); }
+.met-compare .site { display:flex; align-items:center; gap:9px; font-weight:650; }
+.met-compare .site .swatch { width:11px; height:11px; border-radius:50%; flex:none; }
 .met-compare .best { font-weight:700; }
-@media (max-width: 620px) {
-  .met-compare .hide-narrow { display:none; }
-  /* Side by side on a phone is two 290 px charts, which is smaller than either was
-     before. A single takeoff stacks again below this width. */
-  .met-columns.is-single .met-col { display:block; }
-  .met-columns.is-single .met-canvas + .met-canvas { margin-top:8px; }
-}
+/* Verdicts: the word always, the colour beside it. */
+.met-verdict::first-letter { text-transform: uppercase; }
+.met-verdict { display:inline-block; align-items:center; padding:3px 11px; border-radius:999px;
+  font-size:15px; font-weight:600; line-height:1.3; white-space:nowrap; }
+.met-good { background:var(--good); color:var(--on-good); }
+.met-fair { background:var(--warn); color:var(--on-warn); }
+.met-poor { border:1.5px solid var(--edge); color:var(--ink-2); }
+.met-none { border:1.5px dashed var(--edge); color:var(--ink-2); }
 
-/* The picker, in a dialog: Escape closes it, the backdrop closes it, and focus stays
-   inside it — all of which a hand-rolled overlay would have to reimplement worse. */
-/* One step off the page rather than the same colour as it. `--paper` *is* the page, so
-   in the dark theme the dialog and the document behind it were the same value and a 1 px
-   rule was the whole of the separation — with a backdrop dim that has almost nothing to
-   dim. A surface and a shadow do the work in both themes. */
-.met-modal { width:min(560px, 94vw); max-height:82vh; padding:0; border:1px solid
-  var(--rule); border-radius:6px; background:var(--panel); color:var(--ink);
-  box-shadow:0 18px 44px rgba(0,0,0,0.45); }
+/* The picker, in a dialog: Escape closes it, the backdrop closes it, focus stays inside.
+   One step off the page, with a shadow, so it reads as a surface in both themes. */
+.met-modal { width:min(600px, 94vw); max-height:82vh; padding:0; border:1px solid var(--edge);
+  border-radius:14px; background:var(--panel); color:var(--ink); box-shadow:0 18px 44px rgba(0,0,0,0.45); }
 .met-modal::backdrop { background:rgba(0,0,0,0.55); }
-.met-modal-head { display:flex; gap:10px; align-items:center; padding:12px 14px;
-  border-bottom:1px solid var(--rule); }
-.met-modal-head h2 { margin:0; font-size:16px; flex:none; }
-.met-search { flex:1; font:inherit; padding:6px 10px; border:1px solid var(--rule);
-  border-radius:3px; background:var(--panel); color:var(--ink); min-width:0; }
-.met-modal-foot { display:flex; justify-content:space-between; align-items:center;
-  gap:10px; padding:10px 14px; border-top:1px solid var(--rule);
-  font-size:12.5px; color:var(--ink-3); }
+.met-modal-head { display:flex; gap:10px; align-items:center; padding:14px 16px; border-bottom:1px solid var(--rule); }
+.met-modal-head h2 { margin:0; font-size:19px; flex:none; }
+.met-search { flex:1; font:inherit; font-size:16px; height:44px; padding:0 14px; border:1px solid var(--edge);
+  border-radius:10px; background:var(--paper); color:var(--ink); min-width:0; }
+.met-modal-foot { display:flex; justify-content:space-between; align-items:center; gap:10px;
+  padding:12px 16px; border-top:1px solid var(--rule); font-size:15px; color:var(--ink-2); }
 .met-list { max-height:56vh; overflow-y:auto; }
-.met-site { display:grid; grid-template-columns: auto 1fr auto; gap:2px 10px;
-  width:100%; text-align:left; border:0; border-bottom:1px solid var(--rule);
-  border-radius:0; padding:8px 11px; background:transparent; cursor:pointer;
-  color:var(--ink); }
+.met-site { display:grid; grid-template-columns: auto 1fr auto; gap:2px 12px; width:100%; text-align:left;
+  border:0; border-bottom:1px solid var(--rule); border-radius:0; padding:12px 16px; background:transparent;
+  cursor:pointer; color:var(--ink); font: inherit; }
 .met-site:last-child { border-bottom:0; }
-.met-site:hover { background:var(--paper); }
+.met-site:hover { background:var(--panel-2); }
 .met-site.is-on { background:var(--panel-2); }
-.met-site .tick { grid-row:1 / span 2; align-self:center; width:16px; text-align:center;
-  color:var(--ink-3); }
+.met-site .tick { grid-row:1 / span 2; align-self:center; width:18px; text-align:center; color:var(--ink-2); font-size:17px; }
 .met-site.is-on .tick { color:var(--ink); }
-.met-site-name { font-weight:600; font-size:13.5px; }
-.met-site-note { grid-column:2; font-size:11.5px; color:var(--ink-3);
-  font-variant-numeric:tabular-nums; }
-.met-empty { padding:18px 14px; color:var(--ink-3); font-size:13px; }
-.met-verdict { align-self:center; font-size:11px;
-  text-transform:uppercase; letter-spacing:.06em; padding:3px 7px; border-radius:3px;
-  white-space:nowrap; }
-.met-good { background:#15803d; color:#fff; }
-.met-fair { background:#a16207; color:#fff; }
-.met-poor { background:var(--panel-2); color:var(--ink-3); }
-.met-none { background:transparent; color:var(--ink-3); border:1px dashed var(--rule); }
-.met-panel { border:1px solid var(--rule); border-radius:4px; padding:14px 16px; }
-.met-panel h3 { margin:0 0 2px; font-size:17px; }
-.met-sub { margin:0 0 12px; color:var(--ink-3); font-size:12.5px; }
-.met-strip { margin:16px 0 6px; }
-.met-strip .chart-title { font-size:11px; text-transform:uppercase; letter-spacing:.07em;
-  color:var(--ink-3); margin:0 0 4px; }
+.met-site-name { font-weight:600; font-size:16px; }
+.met-site-note { grid-column:2; font-size:15px; color:var(--ink-2); font-variant-numeric:tabular-nums; }
+.met-empty { padding:18px 16px; color:var(--ink-2); font-size:16px; }
+.met-site .met-verdict { align-self:center; }
+
+.met-panel { border:0; padding:0; }
+.met-strip, .met-keys { display:none !important; }
 
 /* Small multiples, one column per takeoff, filling the row whatever the count. The
-   columns used to be capped at 340 px, which is what three of them come to — so three
-   filled the panel and one used a third of it, leaving two thirds of the row empty
-   beside a chart the reader had asked to look at.
-
-   The cap was there to stop a sounding being "stretched past its own aspect ratio",
-   which would flatten the lapse rate it exists to show. Measured, that is not what
-   stretching a column does: these canvases carry `width`/`height` attributes and no CSS
-   height, so the box keeps its intrinsic 380:300 and a wider column makes the chart
-   bigger rather than wider — 340x268 at three takeoffs, 525x413 at two, the same 1.27
-   either way. What the cap was really protecting against is the *single* takeoff, where
-   filling the row proportionally means an 839 px sounding under a 645 px meteogram, and
-   the reader scrolls past one chart to reach the other.
-
-   So one takeoff puts its two charts side by side instead. Both stay in shape, both grow,
-   the row is full, and a lone takeoff's charts come out the same size as a pair's. */
-.met-columns { display:grid; gap:16px; margin:14px 0 0;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+   canvases carry `width`/`height` and no CSS height, so a wider column makes a chart
+   bigger rather than flatter. One takeoff puts its two charts side by side instead, so a
+   lone takeoff's charts come out the size of a pair's. */
+.met-columns { display:grid; gap:22px; margin:0; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 .met-col { min-width:0; }
-.met-col .met-canvas + .met-canvas { margin-top:8px; }
-.met-columns.is-single .met-col { display:grid; gap:0 16px; align-items:start;
+.met-col .met-canvas + .met-canvas { margin-top:10px; }
+.met-columns.is-single .met-col { display:grid; gap:0 22px; align-items:start;
   grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.met-columns.is-single .met-col-head,
-.met-columns.is-single .met-col-rose,
-.met-columns.is-single .met-col-top { grid-column:1 / -1; }
+.met-columns.is-single .met-col-head, .met-columns.is-single .met-col-rose,
+.met-columns.is-single .met-col-top, .met-columns.is-single .met-col-fly { grid-column:1 / -1; }
 .met-columns.is-single .met-canvas + .met-canvas { margin-top:0; }
-/* Side by side, the airgram takes the sounding's shape rather than its own shorter one.
-   Both charts run 0–4 km up the y axis, so equal heights put the two height scales beside
-   each other and the reader can read across — boundary layer on the left at the height
-   the trace bends on the right. Stacked, they keep their own proportions, because there
-   is nothing to read across to. */
+/* Side by side, the airgram takes the sounding's shape, so the two height scales read across. */
 .met-columns.is-single .met-col-air { aspect-ratio: 380 / 300; }
 .met-columns.is-single .met-col-airout { grid-column:1; }
-/* The airgram reads on a tap, not a drag, so it is left to scroll the page: with the
-   sounding taking vertical drags for its own readout, it is the column's strip to scroll
-   from on a phone. */
-.met-col-airout { font-size:11.5px; color:var(--ink-3); margin:3px 0 0; min-height:1.5em;
-  font-variant-numeric:tabular-nums; }
-.met-col-head { display:flex; align-items:center; gap:7px; font-size:12.5px;
-  font-weight:600; margin:0 0 5px; }
-.met-col-head i { width:10px; height:10px; border-radius:50%; flex:none; }
-.met-col-head .name { background:none; border:0; padding:0; font:inherit; color:inherit;
-  cursor:pointer; }
-.met-col-head .ground { font-weight:400; color:var(--ink-3);
-  font-variant-numeric:tabular-nums; }
-.met-col-rose { font-size:11.5px; color:var(--ink-3); margin:0 0 6px; }
-/* Two answers to one question, and the reason there are two — folded, because the
-   number is what a reader wants and the reason is for the one who asks. */
-.met-col-top { font-size:12px; color:var(--ink-2); margin:4px 0 0; }
-.met-col-top summary { cursor:pointer; }
-.met-col-top summary .why { color:var(--ink-3); text-decoration:underline dotted; }
-.met-col-top p { margin:4px 0 0; color:var(--ink-3); font-size:11.5px; max-width:60ch; }
-.met-col-rose a { color:inherit; }
-.met-col.is-focus .met-col-head .name { text-decoration:underline;
-  text-underline-offset:3px; }
-.met-canvas { width:100%; display:block; background:var(--panel); border-radius:3px; }
-/* The sounding reads a *height* from a vertical drag, which is the same gesture the page
-   scrolls with — so the browser scrolled the page and the chart read nothing. This hands
-   the gesture to the chart, and it is the same `touch-action: none` the 3D view and the
-   airspace map already use for theirs. The cost is real and bounded: a swipe that starts
-   on a sounding no longer scrolls. The airgram directly above each one is untouched,
-   so every column keeps a full-width strip to scroll from. */
+.met-col-airout { font-size:15px; color:var(--ink-2); margin:4px 0 0; min-height:1.5em; font-variant-numeric:tabular-nums; }
+.met-col-head { display:flex; align-items:baseline; gap:9px; font-size:21px; font-weight:650; margin:0 0 2px; }
+.met-col-head i { width:11px; height:11px; border-radius:50%; flex:none; align-self:center; }
+.met-col-head .name { background:none; border:0; padding:0; font:inherit; color:inherit; cursor:pointer; }
+.met-col-head .ground { font-weight:400; font-size:16px; color:var(--ink-2); font-variant-numeric:tabular-nums; }
+.met-col-rose { font-size:15.5px; color:var(--ink-2); margin:0 0 10px; }
+.met-col-rose a { color:var(--accent); font-weight:600; text-decoration:none; }
+.met-col-rose a:hover { text-decoration:underline; }
+/* The number visible, the reason one tap away. */
+.met-col-top { font-size:16.5px; color:var(--ink); margin:8px 0 14px; display:flex; align-items:center; }
+.met-col-top[hidden] { display:none; }
+.met-col.is-focus .met-col-head .name { text-decoration:underline; text-underline-offset:4px; }
+.met-canvas { width:100%; display:block; background:var(--panel); border-radius:14px; }
+/* The sounding reads a height from a vertical drag, the gesture the page scrolls with;
+   this hands it to the chart. The airgram above each one still scrolls the page. */
 .met-col-sounding { touch-action: none; }
-/* The hour is in the head, above everything, because it applies to everything: the
-   ranking, the comparison and both charts all answer "at what time". It used to sit
-   under the sounding, where it read as a control for that one chart. */
-.met-hour { display:flex; align-items:center; gap:9px; font-size:12.5px;
-  color:var(--ink-2); flex:1 1 240px; min-width:200px; }
-.met-hour input { flex:1; min-width:120px; }
-.met-hour output { min-width:3.6em; font-variant-numeric:tabular-nums; }
-.met-flymet { margin:16px 0 0; }
-.met-flymet figure { margin:0 0 18px; }
-.met-flymet figure:last-child { margin-bottom:0; }
-.met-flymet figcaption { font-size:11.5px; color:var(--ink-3); margin:5px 0 0; }
-.met-flymet .for { display:flex; align-items:center; gap:7px; font-size:12.5px;
-  font-weight:600; color:var(--ink-2); margin:0 0 2px; }
-.met-flymet .for i { width:10px; height:10px; border-radius:50%; flex:none; }
-.met-flymet > summary { font-size:12.5px; color:var(--ink-2); cursor:pointer;
-  padding:4px 0; }
-/* Its own width, not the panel's: the meteogram is 1024 px of small type and axis
-   labels, and stretched past that it is a blurred picture of a chart. */
-.met-flymet img { display:block; width:100%; max-width:1024px; border-radius:3px;
-  background:var(--panel); margin-top:6px; }
-.met-flymet p { font-size:11.5px; color:var(--ink-3); margin:5px 0 0; }
-.met-flymet a { color:inherit; }
-.met-model { color:var(--ink-3); font-size:12.5px; margin:0; }
-.met-model b { color:var(--ink-2); font-weight:600; }
-.met-status { color:var(--ink-3); font-size:13px; margin:0; flex-basis:100%; }
-.met-status:empty { display:none; }
-.met-links { margin:14px 0 0; font-size:12.5px; color:var(--ink-3); }
-.met-legend { font-size:11.5px; color:var(--ink-3); margin:6px 0 0; }
-/* Identity is never colour alone: every series in the meteogram is named here as well
-   as drawn, and the lines carry their own labels at the right-hand end. */
-.met-keys { display:flex; flex-wrap:wrap; gap:4px 16px; margin:6px 0 0; font-size:11.5px;
-  color:var(--ink-2); }
-.met-keys span { display:inline-flex; align-items:center; gap:6px; }
-.met-keys i { width:14px; height:0; border-top-width:2px; border-top-style:solid;
-  display:inline-block; }
+/* flymet's meteogram for the airfield nearest this takeoff, under its own charts. */
+.met-col-fly { margin: 0; }
+.met-col-fly img { display:block; width:100%; border-radius:14px; background:#fff; }
+.met-col-fly figcaption { display:flex; justify-content:space-between; align-items:center; gap:10px;
+  font-size:15px; color:var(--ink-2); margin:6px 0 0; }
+.met-col-fly figcaption a { color:var(--ink-2); }
+.met-col-fly .lnk { color:var(--accent); }
+.met-links { margin:30px 0 0; font-size:16px; color:var(--ink-2); }
+.met-legend { font-size:15px; color:var(--ink-2); margin:6px 0 0; }
+.met-swipe { display:none; }
+.met-flymet { display:none !important; }
 
-
-.site-nav { display:flex; gap:4px; flex-wrap:wrap; margin:0 0 18px;
-  border-bottom:1px solid var(--rule); }
-/* Direct children only. `.site-nav span` caught the glyph *inside* the theme button and
-   gave it 15 px of side padding in a 30 px circle, which pushed the moon hard against
-   the right edge — the strip styles its own items, not whatever they happen to contain. */
-.site-nav > a, .site-nav > span { font-size:15px; font-weight:600; letter-spacing:0.01em;
-  color:var(--ink-3); text-decoration:none; padding:9px 15px 8px; margin-bottom:-1px;
-  border-bottom:2px solid transparent; }
-.site-nav > a:hover { color:var(--ink-2); }
-.site-nav > .is-on { color:var(--ink); border-bottom-color:#eb6834; }
-.theme-toggle { margin:0 0 0 auto; align-self:center; border:1px solid var(--rule);
-  background:var(--panel); color:var(--ink-2); border-radius:999px; cursor:pointer;
-  width:30px; height:30px; padding:0; font-size:14px;
-  /* Grid rather than `line-height`: the glyph is a character whose ink sits high in its
-     em box (☽ higher than ☀), so a line box centres the *box* and leaves the mark
-     visibly above centre. A grid cell centres the thing that was actually drawn. */
-  display:grid; place-items:center; line-height:1; }
-.theme-toggle .theme-glyph { display:block; }
-.site-nav > a.site-source { align-self:center; margin:0 0 0 6px; padding:0; width:30px;
-  height:30px; display:grid; place-items:center; border:1px solid var(--rule);
-  border-radius:999px; background:var(--panel); color:var(--ink-2); }
-.site-foot { margin:48px 0 0; padding:14px 0 0; border-top:1px solid var(--rule);
-  font-size:12.5px; line-height:1.55; color:var(--ink-3); }
-.site-foot a { color:var(--ink-2); }
-.site-nav > a.site-source:hover { color:var(--ink); border-color:var(--ink-3); }
-.theme-toggle:hover { color:var(--ink); border-color:var(--ink-3); }
+@media (max-width: 640px) {
+  .met-sticky { margin: -18px -14px 18px; padding: 12px 14px 10px; }
+  .met-head { gap: 10px; margin-bottom: 10px; }
+  .met-hour { flex-basis: 100%; min-width: 0; }
+  .met-chosen { flex-wrap: nowrap; overflow-x: auto; margin-right: -14px; padding-right: 14px; }
+  .met-chosen > * { flex: none; }
+  /* The table keeps takeoffs as rows: name and verdict, then wind, thermal top, cloudbase. */
+  .met-compare, .met-compare thead, .met-compare tbody { display:block; }
+  .met-compare tr { display:grid; grid-template-columns: 1.35fr 1fr 1fr 1fr; align-items:center;
+    column-gap:8px; border-bottom:1px solid var(--rule); padding:8px 0; }
+  .met-compare th, .met-compare td { border:0; padding:2px 0; font-size:16px; }
+  .met-compare thead th { font-size:15px; white-space:normal; }
+  .met-compare thead th:nth-child(2), .met-compare .hide-narrow { display:none; }
+  .met-compare tbody tr > :nth-child(1) { grid-column:1; grid-row:1; }
+  .met-compare tbody tr > :nth-child(2) { grid-column:1; grid-row:2; }
+  .met-compare tr > :nth-child(3) { grid-column:2; grid-row:1 / span 2; }
+  .met-compare tr > :nth-child(4) { grid-column:3; grid-row:1 / span 2; }
+  .met-compare tr > :nth-child(5) { grid-column:4; grid-row:1 / span 2; }
+  .met-compare thead tr > :nth-child(1) { grid-row: 1 / span 2; }
+  /* One takeoff's charts at a time, side by side by a swipe. */
+  .met-swipe { display:flex; justify-content:center; margin:0 0 14px; }
+  .met-swipe .seg > button { padding:0 12px; }
+  .met-columns:not(.is-single) { display:flex; overflow-x:auto; scroll-snap-type:x mandatory; gap:14px;
+    margin:0 -14px; padding:0 14px; scrollbar-width: none; }
+  .met-columns:not(.is-single) .met-col { flex:0 0 88%; scroll-snap-align:center; }
+  .met-columns.is-single .met-col { display:block; }
+  .met-columns.is-single .met-canvas + .met-canvas { margin-top:10px; }
+}
 
 </style>
 <div class="wrap">
-<nav class="site-nav" aria-label="The tools here"><span class="is-on">Meteo</span><a href="../airspace/">Planner</a><a href="../index.html">Flights</a><button type="button" class="theme-toggle" aria-pressed="false" aria-label="Switch between the light and dark theme"><span class="theme-glyph" aria-hidden="true">☽</span></button><a class="site-source" href="https://github.com/ondrejchmelar/parainsights" rel="noreferrer" title="The source, on GitHub" aria-label="The source, on GitHub"><svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg></a></nav>
+<nav class="site-nav" aria-label="The tools here"><span class="is-on">Meteo</span><a href="../airspace/">Planner</a><a href="../index.html">Flights</a><span class="site-sp"></span><button type="button" class="tool text-toggle" aria-pressed="false" title="Larger text" aria-label="Larger text">A<b>A</b></button><button type="button" class="tool help-toggle" aria-pressed="true" title="Show or hide the explanations (ⓘ)">Help<span class="switch" aria-hidden="true"></span></button><button type="button" class="tool theme-toggle" aria-pressed="false" aria-label="Switch between the light and dark theme"><span class="theme-glyph" data-sun="<svg width=&quot;20&quot; height=&quot;20&quot; viewBox=&quot;0 0 20 20&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;1.75&quot; stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; aria-hidden=&quot;true&quot;><circle cx=&quot;10&quot; cy=&quot;10&quot; r=&quot;3.5&quot;/><path d=&quot;M10 2v2M10 16v2M2 10h2M16 10h2M4.3 4.3l1.4 1.4M14.3 14.3l1.4 1.4M4.3 15.7l1.4-1.4M14.3 5.7l1.4-1.4&quot;/></svg>" data-moon="<svg width=&quot;20&quot; height=&quot;20&quot; viewBox=&quot;0 0 20 20&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;1.75&quot; stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; aria-hidden=&quot;true&quot;><path d=&quot;M15.5 12.5A6.5 6.5 0 0 1 7.5 4.5a6.5 6.5 0 1 0 8 8z&quot;/></svg>"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.5 12.5A6.5 6.5 0 0 1 7.5 4.5a6.5 6.5 0 1 0 8 8z"/></svg></span></button><a class="tool site-source" href="https://github.com/ondrejchmelar/parainsights" rel="noreferrer" title="The source, on GitHub" aria-label="The source, on GitHub"><svg width="20" height="20" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg></a></nav>
 <article class="flight meteo-article" id="meteo-article">
-  <h1>Meteo</h1>
+  <!-- The day and the hour apply to everything below, so they stay in view. -->
+  <div class="met-sticky">
   <div class="met-head">
-    <div class="met-days" id="met-days" role="group" aria-label="Which day"></div>
+    <div class="seg met-days" id="met-days" role="group" aria-label="Which day"></div>
     <div class="met-hour">
-      <label for="met-hour-input">Hour</label>
+      <label for="met-hour-input">Hour</label><span class="info-wrap"><button type="button" class="info"
+        aria-expanded="false" aria-label="About the forecast model">i</button><span class="info-pop"
+        role="note" id="met-model">The forecast model for this hour.</span></span>
       <input type="range" id="met-hour-input" min="6" max="20" step="1" value="14"
              aria-describedby="met-hour-readout">
       <output id="met-hour-readout" for="met-hour-input">14:00</output>
     </div>
-    <p class="met-model" id="met-model"></p>
     <p class="met-status" id="met-status" role="status">Fetching the forecast…</p>
   </div>
 
   <div class="met-chosen" id="met-chosen">
-    <button type="button" class="met-add" id="met-add">+ add a takeoff</button>
+    <button type="button" class="chip met-add" id="met-add"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg><span>Add takeoff</span></button>
+  </div>
   </div>
 
   <table class="met-compare" id="met-compare" hidden
          aria-label="The chosen takeoffs at the chosen hour">
     <thead><tr>
-      <th scope="col">takeoff</th><th scope="col">verdict</th><th scope="col">wind</th>
-      <th scope="col">thermal top</th><th scope="col">cloudbase</th>
-      <th scope="col" class="hide-narrow">temp / dew</th>
-      <th scope="col" class="hide-narrow">lid</th>
-      <th scope="col" class="hide-narrow">ground</th>
+      <th scope="col">Takeoff</th><th scope="col">Verdict<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="More about this">i</button><span class="info-pop" role="note">Flyable when the forecast wind blows up a slope this takeoff works in. The verdict is about the wind only; the columns beside it say how high the day goes.</span></span></th>
+      <th scope="col">Wind</th>
+      <th scope="col">Thermal top</th><th scope="col">Cloudbase</th>
+      <th scope="col" class="hide-narrow">Temp / dew</th>
+      <th scope="col" class="hide-narrow">Lid<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="More about this">i</button><span class="info-pop" role="note">A stable layer that stops thermals — lapse under 2 °C/km — if one sits below 4 km. “inv” where the air warms with height.</span></span></th>
+      <th scope="col" class="hide-narrow">Ground</th>
     </tr></thead>
     <tbody></tbody>
   </table>
 
   <div class="met-panel" id="met-panel">
-    <h3 id="met-name">The day, takeoff by takeoff</h3>
-    <p class="met-sub" id="met-sub"></p>
+    <h3 id="met-name" hidden>The day, takeoff by takeoff</h3>
+    <p class="met-sub" id="met-sub" hidden></p>
+    <!-- The boundary layer of every takeoff on one chart. Each column draws its own now,
+         side by side, which says the same; kept for the script, not shown. -->
     <div class="met-strip" id="met-strip" hidden>
-      <p class="chart-title">Boundary layer height</p>
       <canvas class="met-canvas" id="met-band" width="960" height="170"></canvas>
       <p class="met-keys" id="met-keys"></p>
     </div>
-
-    <!-- What the prose under the charts used to say, kept where a reader who wants it
-         finds it: on the sounding itself, as its tooltip. The labels on the charts carry
-         the rest. -->
+    <!-- A phone shows one takeoff's charts at a time; this picks which, and a swipe does. -->
+    <div class="met-swipe" id="met-swipe"></div>
     <div class="met-columns" id="met-columns" data-sounding-hint="Shaded: a layer the
       thermals stop at — lapse under 2 °C/km, red where the air warms with
       height. Orange: the dry adiabat, 9.8 °C/km from the surface temperature;
       the ring is where a parcel stops. Point or drag to read every sounding at that
       height."></div>
-
-    <!-- Foldable, and open by default. It is a second opinion worth having in front of
-         the reader — but it is 700 px of someone else's chart under 300 px of ours, and
-         a page whose own answer scrolls off the top to make room for it has its
-         priorities the wrong way round. One per chosen takeoff, stacked, which is why
-         folding it matters more now than it did with one. -->
-    <details class="met-flymet" id="met-flymet" open hidden>
-      <summary id="met-flymet-summary">flymet's own meteograms</summary>
+    <!-- flymet's meteograms now sit in each takeoff's column (`drawFlymet`). -->
+    <details class="met-flymet" id="met-flymet" hidden>
+      <summary id="met-flymet-summary"></summary>
       <div id="met-flymet-list"></div>
     </details>
   </div>
@@ -338,31 +376,27 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
       <h2 id="met-modal-title">Takeoffs</h2>
       <input type="search" class="met-search" id="met-search" aria-label="Search takeoffs"
              placeholder="Search 15 takeoffs, best of the day first">
-      <button type="button" id="met-close" aria-label="Close">&times;</button>
+      <button type="button" class="tool" id="met-close" aria-label="Close"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15"/></svg></button>
     </div>
     <div class="met-list" id="met-list"></div>
     <div class="met-modal-foot">
       <span id="met-count"></span>
-      <button type="button" id="met-done">Done</button>
+      <button type="button" class="btn primary" id="met-done">Done</button>
     </div>
   </dialog>
-  <p class="met-links">Forecast from <a href="https://open-meteo.com/"
-    rel="noreferrer">Open-Meteo</a>, fetched in this page: DWD ICON-D2 (2 km) for as far
-    as it reaches, ICON-EU (7 km) after, and the boundary layer height from ECMWF IFS,
-    which ICON does not publish. Takeoffs chosen after
-    <a href="https://gfs.pgweb.cz/" rel="noreferrer">gfs.pgweb.cz</a>'s essentials.
-    Takeoffs from ParaglidingEarth, CC BY-SA, list taken 2026-09-23.
-    Meteograms by FLYMET, Meteopress, loaded from <a
-    href="https://flymet.meteopress.cz/meteogram/" rel="noreferrer">flymet</a> when you open a takeoff —
-    186 stations, matched to the nearest takeoff here.
-    <strong>A forecast is not a decision.</strong> Check the airspace, the NOTAMs and the
-    sky before you fly.</p>
+  <p class="met-links">A forecast is not a decision — check the airspace, the NOTAMs and the
+    sky.<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="Sources">i</button><span class="info-pop" role="note">Forecast from <a href="https://open-meteo.com/" rel="noreferrer">Open-Meteo</a>,
+    fetched in this page: DWD ICON-D2 (2 km) for as far as it reaches, ICON-EU (7 km) after,
+    and the boundary layer height from ECMWF IFS, which ICON does not publish. Takeoffs chosen
+    after <a href="https://gfs.pgweb.cz/" rel="noreferrer">gfs.pgweb.cz</a>'s essentials.
+    Takeoffs from ParaglidingEarth, CC BY-SA, list taken 2026-09-23. Meteograms by FLYMET, Meteopress, loaded
+    from <a href="https://flymet.meteopress.cz/meteogram/" rel="noreferrer">flymet</a> —
+    186 stations, matched to the nearest takeoff.</span></span></p>
   <script type="application/json" class="met-data">{"sites":[{"name":"Ran\u00e1","country":"CZ","lat":50.4075,"lon":13.7715,"alt":426,"winds":[2,0,0,2,2,0,0,2],"id":10099},{"name":"Krupka","country":"CZ","lat":50.6964,"lon":13.8769,"alt":644,"winds":[0,0,0,1,2,1,0,0],"id":6737},{"name":"Koz\u00e1kov","country":"CZ","lat":50.5933,"lon":15.2632,"alt":737,"winds":[0,0,0,1,2,2,2,1],"id":7197},{"name":"\u010cern\u00e1 hora","country":"CZ","lat":50.6496,"lon":15.74,"alt":1254,"winds":[0,0,0,1,2,1,0,0],"id":7188},{"name":"Doln\u00ed Morava","country":"CZ","lat":50.1544,"lon":16.8377,"alt":1228,"winds":[0,0,0,1,2,1,0,0],"id":21878},{"name":"Velk\u00fd Lopen\u00edk","country":"SK","lat":48.9152,"lon":17.7824,"alt":866,"winds":[0,0,1,2,2,2,1,0],"id":10270},{"name":"Martinsk\u00e9 hole","country":"SK","lat":49.0963,"lon":18.8238,"alt":1433,"winds":[],"id":22106},{"name":"P\u00e1lava - D\u011bv\u00edn","country":"CZ","lat":48.8674,"lon":16.6523,"alt":504,"winds":[0,0,2,2,0,0,0,0],"id":22931},{"name":"V\u0161echov","country":"CZ","lat":49.4379,"lon":14.6222,"alt":489,"winds":[1,1,1,2,1,1,1,2],"id":10333},{"name":"Doubrava","country":"CZ","lat":49.4328,"lon":13.2028,"alt":715,"winds":[0,0,0,0,0,0,2,0],"id":12436},{"name":"Hausstein","country":"DE","lat":48.8712,"lon":13.0729,"alt":880,"winds":[0,0,0,2,0,0,0,0],"id":8590},{"name":"Bassano","country":"IT","lat":45.8238,"lon":11.7694,"alt":865,"winds":[0,0,0,1,2,1,0,0],"id":9200},{"name":"Col Rodella","country":"IT","lat":46.4972,"lon":11.7535,"alt":2360,"winds":[2,1,0,1,2,2,1,1],"id":7243},{"name":"Meduno","country":"IT","lat":46.2306,"lon":12.8069,"alt":983,"winds":[0,0,0,0,1,2,1,0],"id":19791},{"name":"Kobala","country":"SI","lat":46.1805,"lon":13.7791,"alt":1061,"winds":[0,0,2,1,1,1,2,0],"id":7183}],"octants":["N","NE","E","SE","S","SW","W","NW"],"levels":[1000,975,950,925,900,850,800,700,600,500],"endpoint":"https://api.open-meteo.com/v1/forecast","attribution":"Takeoffs from ParaglidingEarth, CC BY-SA","fetched":"2026-09-23","flymet":{"near":[{"slug":"RANA","name":"Rana","km":1.5},{"slug":"USTI-NL","name":"\u00dast\u00ed n.L.","km":11.0},{"slug":"DRZKOV","name":"Drzkov","km":10.7},{"slug":"VRCHLABI","name":"Vrchlab\u00ed","km":7.3},{"slug":"KRALIKY","name":"Kraliky","km":10.0},{"slug":"TRENCIN","name":"Trencin","km":18.1},{"slug":"MARTIN","name":"Martin","km":9.9},{"slug":"BRECLAV","name":"B\u0159eclav","km":19.9},{"slug":"TABOR","name":"T\u00e1bor","km":8.5},{"slug":"KLATOVY","name":"Klatovy","km":8.7},{"slug":"DEGGENDORF","name":"Deggendorf","km":9.6},null,null,null,null],"today":"https://flymet.meteopress.cz/meteogram/{slug}.png","tomorrow":"https://flymet.meteopress.cz/meteogram2/{slug}.png","index":"https://flymet.meteopress.cz/meteogram/"}}</script>
 </article>
 <footer class="site-foot"><a href="https://github.com/ondrejchmelar/parainsights" rel="noreferrer">parainsights on GitHub</a> — the source, the issues, and how every number on these pages is worked out. Airspace © <a href="https://www.openaip.net" rel="noreferrer">openAIP</a> (CC BY-NC 4.0); imagery © Esri, Maxar, Earthstar Geographics; place names © OpenMapTiles, © OpenStreetMap contributors; terrain: AWS Open Data; weather: Open-Meteo.</footer>
 </div>
-<script>
-(function () {
+<script>(function () {
   var holder = document.querySelector('.meteo-article');
   if (!holder) return;
   var conf = JSON.parse(holder.querySelector('.met-data').textContent);
@@ -511,6 +545,12 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
     })).then(function () { state.runs = runs; drawModel(); });
   }
 
+  // The site's icons (`parainsights_common.ICONS`), for what this script draws.
+  var CLOSE_ICON = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15"/></svg>';
+  var PLUS_ICON = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg>';
+  var EXPAND_ICON = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.5 3.5h5v5M8.5 16.5h-5v-5M16.5 3.5 11 9M3.5 16.5 9 11"/></svg>';
+  function cap(text) { return text ? text.charAt(0).toUpperCase() + text.slice(1) : text; }
+
   function drawModel() {
     var box = document.getElementById('met-model');
     var surface = state.surface && state.surface[0];
@@ -546,7 +586,7 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
   function drawDays() {
     var strip = document.getElementById('met-days');
     strip.innerHTML = '';
-    var names = ['today', 'tomorrow'];
+    var names = ['Today', 'Tomorrow'];
     for (var d = 0; d < 4; d++) {
       var when = new Date();
       when.setDate(when.getDate() + d);
@@ -748,7 +788,7 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
       if (index === null) return;
       var site = conf.sites[index];
       var chip = document.createElement('span');
-      chip.className = 'met-chip' + (state.site === index ? ' is-focus' : '');
+      chip.className = 'chip met-chip' + (state.site === index ? ' is-focus' : '');
       chip.innerHTML = '<i class="swatch"></i>'
         + '<button type="button" class="met-chip-name"></button>'
         + '<button type="button" class="met-chip-drop" aria-label="Remove"></button>';
@@ -758,20 +798,15 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
       name.setAttribute('aria-pressed', state.site === index ? 'true' : 'false');
       name.onclick = function () { focus(index); };
       var close = chip.querySelector('.met-chip-drop');
-      close.textContent = '×';
+      close.innerHTML = CLOSE_ICON;
       close.setAttribute('aria-label', 'Remove ' + site.name);
       close.onclick = function () { drop(index); };
       box.insertBefore(chip, add);
     });
-    add.textContent = chosen().length ? '+ add another' : '+ add a takeoff';
-    add.disabled = false;
-    if (chosen().length >= MAX_CHOSEN) {
-      var cap = document.createElement('span');
-      cap.className = 'met-cap';
-      cap.textContent = 'three at a time';
-      box.appendChild(cap);
-      add.disabled = true;
-    }
+    add.innerHTML = PLUS_ICON + '<span>Add takeoff</span>';
+    // Three at a time, said only when it matters: on the button that stops working.
+    add.disabled = chosen().length >= MAX_CHOSEN;
+    add.title = add.disabled ? 'Three at a time — remove one to add another' : '';
   }
 
   // ---- the comparison ------------------------------------------------------------------
@@ -1101,7 +1136,7 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
     grid = grid || 1000;
     ctx.strokeStyle = ink('--rule');
     ctx.fillStyle = ink('--ink-3');
-    ctx.font = '10px ui-sans-serif, sans-serif';
+    ctx.font = '14px "Noto Sans", ui-sans-serif, sans-serif';
     ctx.lineWidth = 1;
     for (var m = 0; m <= top_m; m += grid) {
       ctx.beginPath(); ctx.moveTo(left, y(m)); ctx.lineTo(W - right, y(m)); ctx.stroke();
@@ -1123,7 +1158,7 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
     for (var i = 1; i < labels.length; i++) {
       if (labels[i].y - labels[i - 1].y < 12) labels[i].y = labels[i - 1].y + 12;
     }
-    ctx.font = '600 10px ui-sans-serif, sans-serif';
+    ctx.font = '600 14px "Noto Sans", ui-sans-serif, sans-serif';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
     labels.forEach(function (label) {
@@ -1178,13 +1213,16 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
         cell.dataset.site = index;
         cell.innerHTML = '<p class="met-col-head"><i></i><span class="name"></span>'
           + '<span class="ground"></span></p>'
-          + '<p class="met-col-rose"><span></span> <a rel="noreferrer">on PGE</a></p>'
+          + '<p class="met-col-rose"><span></span> · <a rel="noreferrer">ParaglidingEarth</a></p>'
           + '<canvas class="met-canvas met-col-air" width="380" height="270"'
           + ' aria-label="The day by hour and height: wind, cloud, boundary layer and cloudbase">'
           + '</canvas>'
           + '<canvas class="met-canvas met-col-sounding" width="380" height="300"></canvas>'
           + '<p class="met-col-airout"></p>'
-          + '<details class="met-col-top" hidden><summary></summary><p></p></details>';
+          + '<p class="met-col-top" hidden><span class="txt"></span><span class="info-wrap">'
+          + '<button type="button" class="info" aria-expanded="false" aria-label="About the thermal top">i</button>'
+          + '<span class="info-pop" role="note"></span></span></p>'
+          + '<figure class="met-col-fly" hidden></figure>';
         cell.querySelector('i').style.background = seriesColour(slotOf(index));
         cell.querySelector('.name').textContent = conf.sites[index].name;
         // Clicking a column focuses that takeoff, the same as its chip or its table row.
@@ -1197,8 +1235,8 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
           ? conf.octants.filter(function (point, i) { return site.winds[i] === 2; })
           : null;
         cell.querySelector('.met-col-rose span').textContent = good === null
-          ? 'no directions recorded, so this page will not judge it'
-          : (good.length ? 'works in ' + good.join(' ') : 'only marginal directions');
+          ? 'No directions recorded, so this page will not judge it'
+          : (good.length ? 'Works in ' + good.join(' ') : 'Only marginal directions');
         cell.querySelector('.met-col-rose a').href =
           'https://www.paraglidingearth.com/index.php?site=' + site.id;
         cell.querySelector('.met-col-sounding').title =
@@ -1208,6 +1246,7 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
                 index);
         box.appendChild(cell);
       });
+      drawSwipe(box, wanted);
     }
     Array.prototype.forEach.call(box.children, function (cell) {
       var index = Number(cell.dataset.site);
@@ -1222,6 +1261,38 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
       drawSounding(sounding, profile);
       drawAir(cell.querySelector('.met-col-air'), profile, slotOf(index));
     });
+  }
+
+  // On a phone the columns are a strip to swipe; this is its selector, and it follows the
+  // swipe. Built with the columns, because it names them.
+  function drawSwipe(box, wanted) {
+    var holder = document.getElementById('met-swipe');
+    if (!holder) return;
+    holder.textContent = '';
+    if (wanted.length < 2) return;
+    var seg = document.createElement('div');
+    seg.className = 'seg';
+    seg.setAttribute('role', 'group');
+    seg.setAttribute('aria-label', 'Show the charts for');
+    wanted.forEach(function (index, i) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = i === 0 ? 'is-on' : '';
+      b.innerHTML = '<i class="dot"></i><span></span>';
+      b.querySelector('i').style.background = seriesColour(slotOf(index));
+      b.querySelector('span').textContent = conf.sites[index].name;
+      b.onclick = function () { box.children[i].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }); };
+      seg.appendChild(b);
+    });
+    holder.appendChild(seg);
+    box.onscroll = function () {
+      var middle = box.scrollLeft + box.clientWidth / 2, best = 0;
+      Array.prototype.forEach.call(box.children, function (cell, i) {
+        if (Math.abs(cell.offsetLeft + cell.offsetWidth / 2 - middle) <
+            Math.abs(box.children[best].offsetLeft + box.children[best].offsetWidth / 2 - middle)) best = i;
+      });
+      Array.prototype.forEach.call(seg.children, function (b, i) { b.className = i === best ? 'is-on' : ''; });
+    };
   }
 
   // ---- the airgram: wind by hour and height ---------------------------------------------
@@ -1339,8 +1410,8 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
     // Each line named at its evening end, where it has stopped moving, pushed apart when
     // the two end close together — which on a blue day they do.
     var named = [];
-    if (layer && layer[1] > f.top) named.push({ y: layer[1], text: 'boundary layer', colour: seriesColour(slot) });
-    if (based && based[1] > f.top) named.push({ y: based[1], text: 'cloudbase', colour: ink('--ink') });
+    if (layer && layer[1] > f.top) named.push({ y: layer[1], text: 'Boundary layer', colour: seriesColour(slot) });
+    if (based && based[1] > f.top) named.push({ y: based[1], text: 'Cloudbase', colour: ink('--ink') });
     named.sort(function (a, b) { return a.y - b.y; });
     named.forEach(function (label, i) {
       label.y = Math.min(Math.max(label.y - 3, f.top + 26), f.H - f.bottom - 2);
@@ -1350,8 +1421,8 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
     // The key: what the shading means, on the chart rather than in a caption nobody reads
     // twice.
     var kx = f.left + 4, ky = f.top + 4;
-    ctx.font = '10px ui-sans-serif, sans-serif';
-    var label = 'wind 0 \u2192 ' + AIR_FULL + '+ m/s \u00b7 grey: cloud';
+    ctx.font = '14px "Noto Sans", ui-sans-serif, sans-serif';
+    var label = 'Wind 0 \u2192 ' + AIR_FULL + '+ m/s \u00b7 grey: cloud';
     var kw = ctx.measureText(label).width;
     ctx.globalAlpha = 0.88; ctx.fillStyle = ink('--panel');
     ctx.fillRect(kx - 2, ky - 1, kw + 52, 14); ctx.globalAlpha = 1;
@@ -1434,7 +1505,7 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
   // A label on a pad. The thermal top and the cloudbase land within a few metres of
   // each other on a lot of days, and each was then read against the other's line.
   function padded(ctx, text, x, y, colour, align) {
-    ctx.font = '10px ui-sans-serif, sans-serif';
+    ctx.font = '14px "Noto Sans", ui-sans-serif, sans-serif';
     ctx.textAlign = align;
     ctx.textBaseline = 'bottom';
     var width = ctx.measureText(text).width;
@@ -1464,38 +1535,34 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
       var low = Math.min(model, parcel), high = Math.max(model, parcel);
       if (Math.abs(model - parcel) < 50) {
         text = 'Thermal top ' + metres((model + parcel) / 2) + ' (model and parcel agree)';
-        ask = 'how is it estimated?';
+        ask = 'How is it estimated?';
         why = 'Two ways, and this hour they land together. ' + MODEL + PARCEL;
       } else {
         text = 'Thermal top ' + metres(low) + '–' + metres(high);
-        ask = 'why two numbers?';
+        ask = 'Why two numbers?';
         why = 'Two estimates of the same height. ' + MODEL + PARCEL
           + 'So the parcel usually comes out lower: read it as the cautious figure and the '
           + 'model as the generous one.';
       }
     } else if (model != null) {
       text = 'Thermal top ' + metres(model) + ' (model only)';
-      ask = 'why only one?';
+      ask = 'Why only one?';
       why = 'No dry parcel rises from the ground this hour: lifted at ' + DRY_LAPSE
         + ' °C/km, the 2 m air is already colder than the air above it, so the second '
         + 'estimate has nothing to mark. ' + MODEL + 'That is why it can still find mixing '
         + 'the parcel does not.';
     } else if (parcel != null) {
       text = 'Thermal top ' + metres(parcel) + ' (parcel only)';
-      ask = 'why only one?';
+      ask = 'Why only one?';
       why = 'ECMWF gives no boundary layer height for this hour, so only the parcel’s '
         + 'estimate is drawn. ' + PARCEL;
     }
     box.hidden = text === null;
     if (text === null || box.dataset.text === text) return;
     box.dataset.text = text;
-    var summary = box.querySelector('summary');
-    summary.textContent = text + ' · ';
-    var link = document.createElement('span');
-    link.className = 'why';
-    link.textContent = ask;
-    summary.appendChild(link);
-    box.querySelector('p').textContent = why;
+    box.querySelector('.txt').textContent = text;
+    box.querySelector('.info').setAttribute('aria-label', ask);
+    box.querySelector('.info-pop').textContent = why;
   }
 
 
@@ -1515,7 +1582,7 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
     ctx.clearRect(0, 0, W, H);
     ctx.strokeStyle = ink('--rule');
     ctx.fillStyle = ink('--ink-3');
-    ctx.font = '10px ui-sans-serif, sans-serif';
+    ctx.font = '14px "Noto Sans", ui-sans-serif, sans-serif';
     ctx.lineWidth = 1;
     for (var m = 0; m <= top_m; m += 1000) {
       ctx.beginPath(); ctx.moveTo(left, y(m)); ctx.lineTo(W - right, y(m)); ctx.stroke();
@@ -1566,10 +1633,10 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
     if (!caps.length) {
       ctx.save();
       ctx.fillStyle = ink('--ink-3');
-      ctx.font = '10px ui-sans-serif, sans-serif';
+      ctx.font = '14px "Noto Sans", ui-sans-serif, sans-serif';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
-      ctx.fillText('no lid below ' + (top_m / 1000) + ' km', left + 4, top + 2);
+      ctx.fillText('No lid below ' + (top_m / 1000) + ' km', left + 4, top + 2);
       ctx.restore();
     }
 
@@ -1595,7 +1662,7 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
       ctx.moveTo(left, y(thermalTop)); ctx.lineTo(W - right, y(thermalTop));
       ctx.stroke();
       ctx.setLineDash([]);
-      padded(ctx, 'thermal top · model', left + 4, y(thermalTop) - 2, ink('--ink-2'), 'left');
+      padded(ctx, 'Thermal top · model', left + 4, y(thermalTop) - 2, ink('--ink-2'), 'left');
       ctx.restore();
     }
 
@@ -1610,7 +1677,7 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
       ctx.moveTo(left, y(base)); ctx.lineTo(W - right, y(base));
       ctx.stroke();
       ctx.setLineDash([]);
-      padded(ctx, 'cloudbase', W - right - 3, y(base) - 2, ink('--ink-3'), 'right');
+      padded(ctx, 'Cloudbase', W - right - 3, y(base) - 2, ink('--ink-3'), 'right');
       ctx.restore();
     }
 
@@ -1648,7 +1715,7 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
         ctx.arc(x(surface - DRY_LAPSE * (parcel - ground) / 1000), y(parcel), 4, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
-        padded(ctx, 'thermal top · parcel',
+        padded(ctx, 'Thermal top · parcel',
                x(surface - DRY_LAPSE * (parcel - ground) / 1000) - 7, y(parcel) - 5,
                ink('--ink-2'), 'right');
       }
@@ -1678,8 +1745,8 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
     var dEnd = trace(levelSeries(hourly, 'dew_point'), true, '#2f6fb3');
     // Named where they end, which is where the two lines are furthest apart on any day
     // worth flying — the dew point is the one on the left.
-    if (tEnd) padded(ctx, 'temp', tEnd[0] + 4, tEnd[1] + 12, '#c2410c', 'left');
-    if (dEnd) padded(ctx, 'dew point', dEnd[0] - 4, dEnd[1] + 12, '#2f6fb3', 'right');
+    if (tEnd) padded(ctx, 'Temp', tEnd[0] + 4, tEnd[1] + 12, '#c2410c', 'left');
+    if (dEnd) padded(ctx, 'Dew point', dEnd[0] - 4, dEnd[1] + 12, '#2f6fb3', 'right');
 
     // What this chart ended up saying, for a test to assert on rather than a screenshot
     // failing to. `view3d.rose()` is the same idea and exists for the same reason: a
@@ -1731,7 +1798,7 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
       lines.push(here.speed.toFixed(1) + ' m/s from ' + compass(here.dir)
                  + ' (' + Math.round(here.dir) + '°)');
     }
-    ctx.font = '11px ui-sans-serif, sans-serif';
+    ctx.font = '15px "Noto Sans", ui-sans-serif, sans-serif';
     var width = 0;
     lines.forEach(function (line) { width = Math.max(width, ctx.measureText(line).width); });
     var boxW = width + 12, boxH = lines.length * 13 + 7;
@@ -1766,42 +1833,13 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
   // caption names flymet and links back to its own page. Two days exist — today and
   // tomorrow — so the other two days of the strip show nothing rather than yesterday's
   // picture under today's heading.
+  // flymet's own meteogram for the airfield nearest each takeoff, in that takeoff's column
+  // under its charts: side by side, three of them were 2 500 px of scrolling when they
+  // were stacked full width under the columns. A thumbnail at the column's width; the
+  // full picture is a tap away.
   function drawFlymet() {
-    var details = document.getElementById('met-flymet');
-    var list = document.getElementById('met-flymet-list');
     var template = state.day === 0 ? conf.flymet.today
       : (state.day === 1 ? conf.flymet.tomorrow : null);
-
-    // One picture per *station*, not per takeoff. Two hills 15 km apart share the
-    // nearest airfield more often than not in a country this size, and the same
-    // meteogram printed twice under two headings looks like a bug in the page — and
-    // costs flymet a second fetch to say the same thing.
-    var wanted = [];
-    chosen().forEach(function (index) {
-      var near = (conf.flymet.near || [])[index];
-      if (!near || !template) return;
-      var already = wanted.filter(function (entry) {
-        return entry.near.slug === near.slug; })[0];
-      if (already) {
-        already.sites.push(index);
-        return;
-      }
-      wanted.push({ near: near, sites: [index] });
-    });
-
-    if (!wanted.length) {
-      details.hidden = true;
-      list.textContent = '';
-      return;
-    }
-    details.hidden = false;
-    document.getElementById('met-flymet-summary').textContent =
-      wanted.length === 1
-        ? 'flymet’s own meteogram for ' + wanted[0].near.name + ', '
-          + wanted[0].near.km + ' km away'
-        : 'flymet’s own meteograms for the ' + wanted.length + ' airfields nearest these '
-          + 'takeoffs';
-
     // Stamped with the hour. flymet sends no cache lifetime, so a browser is free to
     // guess one from the file's age — and today's meteogram is regenerated through the
     // day, which makes a guessed cache an old picture under a current heading. The stamp
@@ -1809,62 +1847,48 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
     var stamp = new Date();
     var hour = stamp.getFullYear() + ('0' + (stamp.getMonth() + 1)).slice(-2)
       + ('0' + stamp.getDate()).slice(-2) + ('0' + stamp.getHours()).slice(-2);
-
-    // Rebuilt only when the set of stations changes, for the same reason the soundings
-    // are: the hour slider redraws this panel on every step, and reassigning `src` makes
-    // every picture blink on each one.
-    // The day belongs in the key. Without it, switching from today to tomorrow keeps
-    // the pictures the page already had — today's meteogram under a tomorrow heading,
-    // which is the one thing this panel must never do, and it looks exactly like it
-    // worked.
-    var key = wanted.map(function (entry) {
-      return entry.near.slug + ':' + entry.sites.join('+'); }).join(',')
-      + '|' + state.day + '|' + hour;
-    if (list.dataset.key === key) return;
-    list.dataset.key = key;
-    list.textContent = '';
-
-    wanted.forEach(function (entry) {
-      var figure = document.createElement('figure');
-      var heading = document.createElement('p');
-      heading.className = 'for';
-      entry.sites.forEach(function (index) {
-        var dot = document.createElement('i');
-        dot.style.background = seriesColour(slotOf(index));
-        heading.appendChild(dot);
-      });
-      heading.appendChild(document.createTextNode(
-        entry.sites.map(function (index) { return conf.sites[index].name; }).join(' and ')
-      ));
-      figure.appendChild(heading);
-
+    document.querySelectorAll('#met-columns .met-col').forEach(function (cell) {
+      var index = Number(cell.dataset.site);
+      var figure = cell.querySelector('.met-col-fly');
+      var near = (conf.flymet.near || [])[index];
+      if (!figure) return;
+      if (!near || !template) { figure.hidden = true; figure.textContent = ''; delete figure.dataset.key; return; }
+      // Rebuilt only when what it shows changes — the hour slider redraws this panel on
+      // every step, and reassigning `src` makes the picture blink. The day is in the key:
+      // without it, tomorrow kept today's picture under a tomorrow heading.
+      var key = near.slug + '|' + state.day + '|' + hour;
+      if (figure.dataset.key === key) return;
+      figure.dataset.key = key;
+      figure.hidden = false;
+      figure.textContent = '';
+      var url = template.replace('{slug}', encodeURIComponent(near.slug)) + '?h=' + hour;
       var image = document.createElement('img');
       image.loading = 'lazy';
-      image.alt = 'flymet meteogram for ' + entry.near.name;
-      image.src = template.replace('{slug}', encodeURIComponent(entry.near.slug))
-        + '?h=' + hour;
+      image.alt = 'flymet meteogram for ' + near.name + ', ' + (state.day === 0 ? 'today' : 'tomorrow');
+      image.src = url;
       figure.appendChild(image);
-
       var caption = document.createElement('figcaption');
+      var credit = document.createElement('span');
       var link = document.createElement('a');
       link.href = conf.flymet.index;
       link.rel = 'noreferrer';
       link.textContent = 'flymet';
-      caption.appendChild(link);
-      caption.appendChild(document.createTextNode(
-        ' — ' + entry.near.name + ', ' + entry.near.km + ' km from '
-        + (entry.sites.length > 1 ? 'these takeoffs' : 'this takeoff') + ', for '
-        + (state.day === 0 ? 'today' : 'tomorrow')
-        + '. Cloud, rain, stability with the convective cloud height, and wind by height.'
-      ));
+      credit.appendChild(link);
+      credit.appendChild(document.createTextNode(' · ' + near.name + ' · ' + near.km + ' km'));
+      caption.appendChild(credit);
+      var open = document.createElement('a');
+      open.className = 'lnk';
+      open.href = url;
+      open.target = '_blank';
+      open.rel = 'noreferrer';
+      open.innerHTML = EXPAND_ICON + 'Enlarge';
+      caption.appendChild(open);
       figure.appendChild(caption);
-
       image.onerror = function () {
         image.hidden = true;
-        caption.textContent = 'flymet has no meteogram for ' + entry.near.name
-          + ' just now.';
+        open.hidden = true;
+        credit.textContent = 'flymet has no meteogram for ' + near.name + ' just now.';
       };
-      list.appendChild(figure);
     });
   }
 
@@ -2022,8 +2046,7 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
   // Exposed for tests, and only what a test cannot reach any other way: the two rules
   // that read a sounding, the state the pointer writes into, and a redraw. Everything
   // else about this page is observable in the DOM. The alternative was a second copy of
-  // the capping rule in Python, which is exactly the drift `quicklook.py` is a warning
-  // about.
+  // the capping rule in Python, and two copies of a rule drift apart.
   window.__meteo = {
     state: state,
     // The one judgement this page makes. Exposed so a test can drive *it* rather than a
@@ -2072,8 +2095,7 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
   });
 })();
 </script>
-<script>
-(function () {
+<script>(function () {
   var root = document.documentElement;
   function dark() {
     return root.dataset.theme
@@ -2084,7 +2106,8 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
     var isDark = dark();
     button.setAttribute('aria-pressed', isDark ? 'true' : 'false');
     button.title = isDark ? 'Switch to the light theme' : 'Switch to the dark theme';
-    button.querySelector('.theme-glyph').textContent = isDark ? '☀' : '☽';
+    var glyph = button.querySelector('.theme-glyph');
+    glyph.innerHTML = isDark ? glyph.dataset.sun : glyph.dataset.moon;
   }
   var buttons = document.querySelectorAll('.theme-toggle');
   buttons.forEach(function (button) {
@@ -2098,16 +2121,6 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
       // The canvases are painted with the tokens read at draw time, so they hold the
       // old theme until something asks them to redraw. Each tool exposes its own.
       if (window.__meteo && window.__meteo.draw) window.__meteo.draw();
-      // Keyed by canvas id, not an array — `render_html` registers and deletes handles
-      // by id so a removed flight can take its DEM and its stitched image with it. An
-      // `Array.forEach` on it throws, and the throw would take the chart redraw below
-      // down with it, on the one page that has both.
-      if (window.__view3dAll) {
-        Object.keys(window.__view3dAll).forEach(function (id) {
-          var handle = window.__view3dAll[id];
-          if (handle && handle.redraw) handle.redraw();
-        });
-      }
       if (window.__drawCharts) {
         document.querySelectorAll('[data-flight-report]').forEach(window.__drawCharts);
       }
@@ -2117,5 +2130,69 @@ button { font:inherit; padding:3px 10px; background:var(--panel);
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
     if (!root.dataset.theme) buttons.forEach(label);
   });
+})();
+// aA, Help and the ⓘ — every page, beside the theme switch.
+(function () {
+  var root = document.documentElement;
+  function store(key, value) {
+    try { if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, value); }
+    catch (e) { /* private mode: it switches, it just forgets */ }
+  }
+  function paint() {
+    document.querySelectorAll('.text-toggle').forEach(function (b) {
+      b.setAttribute('aria-pressed', root.dataset.text === 'large' ? 'true' : 'false');
+    });
+    document.querySelectorAll('.help-toggle').forEach(function (b) {
+      b.setAttribute('aria-pressed', root.dataset.help === 'off' ? 'false' : 'true');
+    });
+  }
+  document.addEventListener('click', function (event) {
+    var t = event.target.closest && event.target.closest('.text-toggle, .help-toggle');
+    if (!t) return;
+    if (t.classList.contains('text-toggle')) {
+      if (root.dataset.text === 'large') { delete root.dataset.text; store('parainsights.text', null); }
+      else { root.dataset.text = 'large'; store('parainsights.text', 'large'); }
+      // The maps measure their box; a page that grew under them needs telling.
+      window.dispatchEvent(new Event('resize'));
+    } else {
+      if (root.dataset.help === 'off') { delete root.dataset.help; store('parainsights.help', null); }
+      else { root.dataset.help = 'off'; store('parainsights.help', 'off'); }
+    }
+    paint();
+  });
+  paint();
+
+  // The ⓘ. Hover shows it on a desktop (CSS); a click or tap pins it open, a second one,
+  // Esc or a click anywhere else closes it. Before it shows, it is kept on screen: a
+  // bubble centred on an ⓘ near an edge would hang off it.
+  function place(wrap) {
+    wrap.classList.remove('to-left', 'to-right');
+    var r = wrap.getBoundingClientRect(), half = Math.min(320, window.innerWidth * 0.86) / 2;
+    if (r.left + r.width / 2 + half > window.innerWidth - 8) wrap.classList.add('to-left');
+    else if (r.left + r.width / 2 - half < 8) wrap.classList.add('to-right');
+  }
+  function closeAll(except) {
+    document.querySelectorAll('.info[aria-expanded="true"]').forEach(function (b) {
+      if (b !== except) b.setAttribute('aria-expanded', 'false');
+    });
+  }
+  document.addEventListener('mouseover', function (event) {
+    var w = event.target.closest && event.target.closest('.info-wrap');
+    if (w) place(w);
+  });
+  document.addEventListener('click', function (event) {
+    var b = event.target.closest && event.target.closest('.info');
+    if (b) {
+      event.preventDefault();
+      event.stopPropagation();
+      place(b.parentNode);
+      var open = b.getAttribute('aria-expanded') !== 'true';
+      closeAll(b);
+      b.setAttribute('aria-expanded', open ? 'true' : 'false');
+      return;
+    }
+    if (!(event.target.closest && event.target.closest('.info-pop'))) closeAll(null);
+  }, true);
+  document.addEventListener('keydown', function (event) { if (event.key === 'Escape') closeAll(null); });
 })();
 </script>

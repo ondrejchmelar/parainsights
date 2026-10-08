@@ -29,194 +29,59 @@ def _font_face() -> str:
     )
 
 
-STYLE = """
-:root {
-  color-scheme: light;
-  --paper: #f2f1ed;
-  --panel: #fbfbf9;
-  --panel-2: #eceae4;
-  --rule: #d8d5cc;
-  --rule-strong: #b9b5a9;
-  --ink: #14171c;
-  --ink-2: #4a5560;
-  --ink-3: #767f8a;
-  --climb: #eb6834;
-  --climb-1: #f0a07a;
-  --climb-2: #eb6834;
-  --climb-3: #c8431a;
-  --sink: #2a78d6;
-  --sink-1: #8fb6e6;
-  --sink-2: #2a78d6;
-  --sink-3: #17508f;
-  --tow: #1baf7a;
-  --neutral: #a9a49a;
-  --shadow-ink: #c3bfb4;
-  --ld-1: #86aed8;
-  --ld-2: #5f92c9;
-  --ld-3: #3f74b4;
-  --ld-4: #2a5894;
-  --ld-5: #173d69;
-}
-@media (prefers-color-scheme: dark) {
-  :root:where(:not([data-theme="light"])) {
-    color-scheme: dark;
-    --paper: #101317;
-    --panel: #171b21;
-    --panel-2: #1e232a;
-    --rule: #2b323b;
-    --rule-strong: #414a55;
-    --ink: #eef1f4;
-    --ink-2: #a3adb8;
-    --ink-3: #737d88;
-    --climb: #d95926;
-    --climb-1: #b06a4a;
-    --climb-2: #d95926;
-    --climb-3: #f07a44;
-    --sink: #3987e5;
-    --sink-1: #4a6f9e;
-    --sink-2: #3987e5;
-    --sink-3: #7fb0ef;
-    --tow: #199e70;
-    --neutral: #6f7883;
-    --shadow-ink: #2f3741;
-    --ld-1: #35577f;
-    --ld-2: #4874a6;
-    --ld-3: #5b91cc;
-    --ld-4: #74aae0;
-    --ld-5: #9cc6f0;
-  }
-}
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --paper: #101317;
-  --panel: #171b21;
-  --panel-2: #1e232a;
-  --rule: #2b323b;
-  --rule-strong: #414a55;
-  --ink: #eef1f4;
-  --ink-2: #a3adb8;
-  --ink-3: #737d88;
-  --climb: #d95926;
-  --climb-1: #b06a4a;
-  --climb-2: #d95926;
-  --climb-3: #f07a44;
-  --sink: #3987e5;
-  --sink-1: #4a6f9e;
-  --sink-2: #3987e5;
-  --sink-3: #7fb0ef;
-  --tow: #199e70;
-  --neutral: #6f7883;
-  --shadow-ink: #2f3741;
-  --ld-1: #35577f;
-  --ld-2: #4874a6;
-  --ld-3: #5b91cc;
-  --ld-4: #74aae0;
-  --ld-5: #9cc6f0;
-}
-
+# The report's own sheet, after `common.TOKENS` and `common.STYLE` (the strip, the
+# controls, the ⓘ). Rewritten for the redesign (October 2026); the reasoning behind each
+# rule that survived is in the comments beside it and in git before that.
+STYLE = common.TOKENS + common.STYLE + """
 * { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 28px 80px; }
+.num, td.num, .mono { font-variant-numeric: tabular-nums; }
+h1, h2, h3 { margin: 0; font-weight: 650; letter-spacing: -0.01em; }
 
-body {
-  margin: 0;
-  background: var(--paper);
-  color: var(--ink);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    "DejaVu Sans", sans-serif;
-  font-size: 15px;
-  line-height: 1.55;
-  -webkit-font-smoothing: antialiased;
-}
+/* Masthead and key numbers ------------------------------------------------- */
+.masthead { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between;
+  gap: 8px 20px; margin: 28px 0 18px; }
+.masthead h1 { font-size: clamp(30px, 4.4vw, 40px); line-height: 1.1; text-wrap: balance; }
+.masthead h1 span { color: var(--ink-2); font-weight: 400; }
+.who { margin: 0; font-size: 17px; color: var(--ink-2); display: inline-flex; align-items: center; flex-wrap: wrap; }
+.who b { color: var(--ink); font-weight: 600; margin-right: 0.3em; }
+/* The certification class: outlined, a fact about the wing and not a warning about it. */
+.cert { display: inline-block; margin-left: 8px; padding: 1px 10px; border-radius: 999px;
+  border: 1.5px solid var(--edge); font-size: 15px; color: var(--ink-2); white-space: nowrap; }
+.figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); margin: 0 0 26px; }
+.fig { padding: 16px 14px 14px 0; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fig .v { font-size: 30px; font-weight: 650; line-height: 1.15; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fig .v small { font-size: 17px; font-weight: 500; margin-left: 4px; color: var(--ink-2); }
+.fig .k { font-size: 15.5px; color: var(--ink-2); display: inline-flex; align-items: center; }
+.verdict-delta { font-size: 15px; color: var(--ink-2); display: block; margin-top: 2px; }
+.verdict-delta.is-best { color: var(--accent); font-weight: 600; }
+.verdict-delta[hidden] { display: none; }
+.figs.air .v { font-size: 26px; }
 
-.wrap { max-width: 1180px; margin: 0 auto; padding: 30px 22px 80px; }
+/* Sections ------------------------------------------------------------------ */
+section { margin-top: 46px; }
+section > h2 { font-size: 24px; display: flex; align-items: center; margin-bottom: 14px; }
+.chart h3 { font-size: 19px; display: flex; align-items: center; margin: 0 0 4px; }
+.chart .sub { margin: 0 0 10px; color: var(--ink-2); font-size: 16px; }
+.chart { margin-bottom: 24px; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 26px; }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 14px; padding: 14px 16px 8px; }
+.panel.budget { padding: 18px 20px 10px; }
+.note, .caption { margin: 12px 0 0; color: var(--ink-2); font-size: 16px; display: block; }
+.chart-missing { color: var(--ink-2); font-size: 15px; padding: 16px; margin: 0; }
+.more { margin-top: 14px; }
 
-.display, .eyebrow, .stat-value, h1, h2, th, .axis-label, .axis-title,
-.budget-label, .mark-label, .endpoint-label, .point-label {
-  font-family: 'NarrowDisplay', "Liberation Sans Narrow", "DejaVu Sans Condensed",
-    ui-sans-serif, sans-serif;
-}
-
-.num, .stat-value, td.num, .mono {
-  font-variant-numeric: tabular-nums;
-  font-family: ui-monospace, "DejaVu Sans Mono", "Liberation Mono", Menlo, monospace;
-}
-
-.eyebrow {
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  font-size: 11px;
-  color: var(--ink-3);
-  margin: 0;
-}
-
-/* Masthead ---------------------------------------------------------------- */
-.masthead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 18px;
-  padding-bottom: 14px;
-  border-bottom: 2px solid var(--ink);
-}
-.masthead h1 {
-  margin: 2px 0 0;
-  font-size: clamp(30px, 5vw, 46px);
-  line-height: 1.02;
-  font-weight: 400;
-  letter-spacing: -0.015em;
-  text-wrap: balance;
-}
-.masthead h1 span { color: var(--ink-3); }
-.identity { display: flex; gap: 26px; flex-wrap: wrap; }
-.identity div { display: flex; flex-direction: column; }
-.identity dt, .identity .key {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: var(--ink-3);
-}
-.identity .val { font-size: 14px; }
-/* The certification class, as a chip on the glider's name. Outlined rather than filled:
-   it is a fact about the wing, not a warning about it, and an EN D painted red would be
-   this report telling a pilot what to fly. */
-.cert { display: inline-block; margin-left: 7px; padding: 1px 6px; border-radius: 3px;
-  border: 1px solid var(--rule); font-size: 11px; letter-spacing: .04em;
-  color: var(--ink-2); vertical-align: 1px; white-space: nowrap; cursor: help; }
-
-/* Panels ------------------------------------------------------------------ */
-section { margin-top: 34px; }
-.section-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
-  border-bottom: 1px solid var(--rule);
-  padding-bottom: 7px;
-  margin-bottom: 16px;
-}
-.section-head h2 {
-  margin: 0;
-  font-size: 19px;
-  font-weight: 400;
-  letter-spacing: 0.01em;
-}
-.section-head p { margin: 0; color: var(--ink-3); font-size: 13px; max-width: 52ch; }
-
-.panel {
-  background: var(--panel);
-  border: 1px solid var(--rule);
-  border-radius: 2px;
-}
-
-.hero { padding: 6px 4px 0; overflow: hidden; }
-/* The 3D map and the side view as one block (`.flight-map`): the chart right under the
-   map, as wide as it, on the same ground, its axis buttons and legend below the block.
-   The merged map makes the whole block full screen, so the side view goes with it. */
-.flight-map .side-view { --page: calc(100vw - var(--scrollbar, 0px)); width: var(--page);
-  margin: 0 0 0 calc(50% - var(--page) / 2); border-radius: 0; border-left: 0;
-  border-right: 0; border-top: 0; }
+/* The map and the side view, one full-width block (`.flight-map`). The merged map makes
+   the whole block full screen, so the side view goes with it. */
+.map-section { margin-top: 0; }
+.flight-map { --page: calc(100vw - var(--scrollbar, 0px)); width: var(--page); margin-left: calc(50% - var(--page) / 2); }
+.flight-map .side-view { border-radius: 0; border: 0; border-bottom: 1px solid var(--rule); padding: 0; background: var(--panel); }
 .flight-map .side-view .chart-host { max-width: 1100px; margin: 0 auto; }
-.side-controls { margin-top: 12px; }
+.side-bar { max-width: 1100px; margin: 0 auto; padding: 12px 20px 4px; display: flex; flex-wrap: wrap;
+  align-items: center; justify-content: space-between; gap: 8px 16px; }
+.side-bar .legend-row { margin: 0; }
 .flight-map:fullscreen, .flight-map.is-maximised { display: flex; flex-direction: column;
   background: var(--panel); width: 100%; height: 100%; margin: 0; }
 .flight-map.is-maximised { position: fixed; inset: 0; z-index: 60; width: auto; height: auto; }
@@ -225,524 +90,200 @@ section { margin-top: 34px; }
   flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .flight-map:fullscreen .view3d-panel, .flight-map.is-maximised .view3d-panel {
   flex: 1 1 auto; min-height: 0; width: 100%; margin: 0; }
-.flight-map:fullscreen .view3d, .flight-map.is-maximised .view3d {
-  height: 100%; aspect-ratio: auto; }
-.flight-map:fullscreen .side-view, .flight-map.is-maximised .side-view {
-  flex: 0 0 auto; width: 100%; margin: 0; }
+.flight-map:fullscreen .view3d, .flight-map.is-maximised .view3d { height: 100%; aspect-ratio: auto; }
+.flight-map:fullscreen .side-view, .flight-map.is-maximised .side-view { flex: 0 0 auto; width: 100%; margin: 0; }
+.flight-map:fullscreen .side-bar, .flight-map.is-maximised .side-bar { display: none; }
 .flight-map:fullscreen .side-view .chart-host, .flight-map.is-maximised .side-view .chart-host {
   height: 24vh; aspect-ratio: auto !important; max-width: none; }
 .flight-map:fullscreen .side-view .chart, .flight-map.is-maximised .side-view .chart { height: 100%; }
-.caption { color: var(--ink-3); font-size: 12.5px; margin: 4px 4px 10px; }
-.chart-title {
-  font-family: 'NarrowDisplay', "Liberation Sans Narrow", ui-sans-serif, sans-serif;
-  font-size: 11.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.09em;
-  color: var(--ink-2);
-  margin: 8px 8px 2px;
-}
-.chart-head { display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  flex-wrap: wrap; }
-.chart-head .chart-title { margin-bottom: 0; }
-.toggle-small { margin: 4px 6px 6px 0; }
-.toggle-small .toggle-button { font-size: 11px; padding: 4px 9px; }
+.hero { overflow: hidden; }
 
-/* Stat tiles -------------------------------------------------------------- */
-.stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
-  gap: 1px;
-  background: var(--rule);
-  border: 1px solid var(--rule);
-}
-.stat { background: var(--panel); padding: 12px 14px 13px; }
-.stat .key {
-  display: block;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: var(--ink-3);
-}
-.stat-value { font-size: 25px; line-height: 1.15; display: block; margin-top: 3px; }
-.stat-value small { font-size: 13px; color: var(--ink-3); margin-left: 2px; }
-.stat .sub { font-size: 12px; color: var(--ink-3); }
-
-.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 22px; }
-.hero-grid { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr); gap: 16px; }
-@media (max-width: 780px) { .hero-grid { grid-template-columns: 1fr; } }
-
-/* Charts ------------------------------------------------------------------ */
+/* Charts: the page's type, at least 15 px, sentence case. ------------------- */
 .chart { display: block; width: 100%; height: auto; }
-.chart .axis-label { font-size: 11px; fill: var(--ink-3); }
+svg.chart { overflow: visible; }
+.chart .axis-label, .chart .axis-title, .chart .reference-label, .chart .mark-label,
+.chart .endpoint-label, .chart-wind .wind-number, .chart-wind .wind-time, .point-label, .budget-label {
+  font-family: "Noto Sans", ui-sans-serif, system-ui, sans-serif; font-size: 15px; fill: var(--ink-2);
+  text-transform: none; letter-spacing: 0; font-variant-numeric: tabular-nums; }
 .chart .axis-y { text-anchor: end; }
 .chart .axis-x { text-anchor: middle; }
-.chart .axis-title { font-size: 11px; fill: var(--ink-3); text-anchor: middle;
-  text-transform: uppercase; letter-spacing: 0.1em; }
+.chart .axis-title { text-anchor: middle; }
 .chart .grid line { stroke: var(--rule); stroke-width: 1; }
-.chart .axes line, .chart .axis { stroke: var(--rule-strong); stroke-width: 1; }
-.chart .track polyline { fill: none; stroke-width: 2.2; stroke-linecap: round;
-  stroke-linejoin: round; }
-
+.chart .axes line, .chart .axis { stroke: var(--edge); stroke-width: 1; }
+.chart .track polyline { fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
 .chart-profile .drops line { stroke: var(--shadow-ink); stroke-width: 0.7; opacity: 0.45; }
 .chart-profile .endpoint { fill: var(--panel); stroke: var(--ink); stroke-width: 2; }
-.chart-profile .endpoint-label { font-size: 11px; fill: var(--ink-2); text-anchor: middle;
-  text-transform: uppercase; letter-spacing: 0.1em; }
+.chart-profile .endpoint-label { text-anchor: middle; }
 .chart .mark circle { stroke-width: 2; }
-.chart .mark-label { font-size: 11px; fill: var(--ink); text-anchor: middle; }
+.chart .mark-label { fill: var(--ink); text-anchor: middle; }
 .chart .mark.active circle { fill: var(--climb); stroke: var(--panel); }
-
-.chart .reference { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 6 4; }
-.chart .reference-label { font-size: 11px; fill: var(--ink-3); text-anchor: end;
-  text-transform: uppercase; letter-spacing: 0.07em; }
+.chart .reference { stroke: var(--ink-2); stroke-width: 1; stroke-dasharray: 6 4; }
+.chart .reference-label { text-anchor: end; }
 .chart .reference-label.band-label { text-anchor: start; }
-
 .chart-plan .plan-thermal { fill-opacity: 0.72; stroke: var(--panel); stroke-width: 1.2; }
 .chart-plan .plan-by-rate { display: none; }
 .chart-plan.circles-by-rate .plan-by-gain { display: none; }
 .chart-plan.circles-by-rate .plan-by-rate { display: inline; }
 .chart-plan .mark.active .plan-thermal { fill-opacity: 1; stroke: var(--ink); stroke-width: 2; }
 .chart-plan .endpoint { fill: var(--panel); stroke: var(--ink); stroke-width: 2; }
-.chart-plan .compass line, .chart-plan .compass path { stroke: var(--ink-2); stroke-width: 1.2;
-  fill: none; }
+.chart-plan .compass line, .chart-plan .compass path { stroke: var(--ink-2); stroke-width: 1.2; fill: none; }
 .chart-plan .scalebar line { stroke: var(--ink-2); stroke-width: 1.2; }
-
-/* Phase shading moved from the old standalone barogram onto the profile, so these
-   selectors are chart-agnostic now — scoping them to a class that no longer exists is
-   how the bands ended up filling black. */
-.chart .band { opacity: 0.1; }
+.chart-plan .xc-route line { stroke: var(--ink-2); stroke-width: 1; stroke-dasharray: 4 3; }
+.chart-plan .xc-route rect { fill: none; stroke: var(--ink-2); stroke-width: 1.4; }
+/* Phase shading on the profile: chart-agnostic selectors (scoped to a class that no longer
+   existed, the bands once filled black). */
+.chart .band { opacity: 0.12; }
 .chart .band-thermal { fill: var(--climb); }
 .chart .band-glide { fill: var(--sink); }
 .chart .band-tow { fill: var(--tow); }
 .chart .band-dive { fill: var(--sink-3); }
 .chart .band.active { opacity: 0.32; }
-/* Hide via CSS, not the HTML `hidden` attribute — that attribute does nothing
-   inside SVG, which leaves the crosshair parked at the origin. */
+/* Hidden via CSS: the HTML `hidden` attribute does nothing inside SVG. */
 .chart .cursor { visibility: hidden; }
 .chart .cursor.on { visibility: visible; }
 .chart .cursor-dot { fill: var(--panel); stroke: var(--ink); stroke-width: 2; }
-/* A pinned marker is drawn heavier than a hovered one, or the reader cannot tell whether
-   the moment on screen is one they chose or one the mouse is passing over. */
+/* A pinned marker is heavier than a hovered one. */
 .is-pinned .chart .cursor-dot { stroke-width: 3.5; }
 .is-pinned .chart .crosshair { stroke-dasharray: none; }
 .chart .hit { fill: transparent; cursor: crosshair; }
 .chart .crosshair { stroke: var(--ink-2); stroke-width: 1; stroke-dasharray: 3 3; }
-.panel-divide { height: 1px; background: var(--rule); margin: 2px 6px 4px; }
-
 .chart-wind .wind-dot { fill: var(--panel); stroke: var(--sink); stroke-width: 2; }
 .chart-wind .wind-arrow { stroke: var(--sink); stroke-width: 1.6; }
-.chart-wind .wind-number { font-size: 11px; fill: var(--ink); text-anchor: middle;
-  font-variant-numeric: tabular-nums; }
+.chart-wind .wind-number { fill: var(--ink); text-anchor: middle; }
 .chart-wind .wind-point.active .wind-dot { fill: var(--climb); stroke: var(--panel); }
-.chart-wind .wind-time { font-size: 11px; fill: var(--ink-3); font-variant-numeric: tabular-nums; }
-.chart-wind .model polyline { fill: none; stroke: var(--neutral); stroke-width: 2;
-  stroke-dasharray: 5 3; }
+.chart-wind .model polyline { fill: none; stroke: var(--neutral); stroke-width: 2; stroke-dasharray: 5 3; }
 .chart-wind .model .model-dot { fill: var(--neutral); }
-
 .chart-sounding .environment { fill: none; stroke: var(--climb); stroke-width: 2.2; }
 .chart-sounding .dewpoint { fill: none; stroke: var(--sink); stroke-width: 2.2; }
-.chart-sounding .adiabat { fill: none; stroke: var(--neutral); stroke-width: 1.6;
-  stroke-dasharray: 4 3; }
+.chart-sounding .adiabat { fill: none; stroke: var(--neutral); stroke-width: 1.6; stroke-dasharray: 4 3; }
 .chart-sounding .flight-band { fill: var(--climb); opacity: 0.1; }
+.point-label { text-anchor: middle; }
+.budget-label { text-anchor: middle; fill: var(--ink); }
+.panel-divide { height: 1px; background: var(--rule); margin: 2px 6px 4px; }
+.swatch { width: 12px; height: 12px; border-radius: 3px; flex: none; display: inline-block; }
+.info-pop .sw { width: 12px; height: 10px; border-radius: 3px; display: inline-block; margin: 0 4px 0 2px; vertical-align: 0; }
+.legend .legend-title { color: var(--ink-2); }
 
-.chart-plan .xc-route line { stroke: var(--ink-3); stroke-width: 1; stroke-dasharray: 4 3; }
-.chart-plan .xc-route rect { fill: none; stroke: var(--ink-2); stroke-width: 1.4; }
-.point-label { font-size: 11px; fill: var(--ink-2); text-anchor: middle;
-  font-variant-numeric: tabular-nums; }
-.budget-label { font-size: 11px; fill: var(--ink-2); text-anchor: middle;
-  text-transform: uppercase; letter-spacing: 0.08em; }
-
-.legend { display: flex; gap: 16px; flex-wrap: wrap; margin: 12px 0 0; padding: 0; list-style: none; }
-.legend li { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--ink-2); }
-.legend .legend-title { color: var(--ink-3); text-transform: uppercase; letter-spacing: 0.09em;
-  font-size: 11px; }
-
-/* Segmented control ------------------------------------------------------- */
-.toggle { display: inline-flex; margin-bottom: 12px; border: 1px solid var(--rule-strong);
-  border-radius: 3px; overflow: hidden; }
-.toggle-button {
-  font: inherit;
-  font-size: 12px;
-  font-family: 'NarrowDisplay', "Liberation Sans Narrow", ui-sans-serif, sans-serif;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  padding: 6px 14px;
-  border: 0;
-  background: var(--panel);
-  color: var(--ink-3);
-  cursor: pointer;
-}
-.toggle-button + .toggle-button { border-left: 1px solid var(--rule-strong); }
-.toggle-button:hover { color: var(--ink); }
-.toggle-button.is-on { background: var(--ink); color: var(--paper); }
-.flight[hidden] { display: none; }
-
-/* Flight picker ----------------------------------------------------------- */
-.tabs { display: flex; flex-wrap: wrap; gap: 1px; background: var(--rule);
-  border: 1px solid var(--rule); margin-bottom: 26px; }
-/* A tab is a wrapper, not a button, because it holds two: open and remove. A button
-   inside a button is invalid and browsers drop the inner one. */
-.tab { flex: 1 1 150px; position: relative; background: var(--panel); display: flex; }
-.tab-open {
-  flex: 1 1 auto;
-  min-width: 0;
-  text-align: left;
-  border: 0;
-  background: none;
-  padding: 9px 26px 10px 13px;
-  cursor: pointer;
-  color: var(--ink-2);
-  font: inherit;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-.tab-close {
-  position: absolute;
-  top: 3px;
-  right: 3px;
-  width: 19px;
-  height: 19px;
-  padding: 0;
-  border: 0;
-  border-radius: 2px;
-  background: none;
-  color: var(--ink-3);
-  font: inherit;
-  font-size: 15px;
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.12s;
-}
-.tab:hover .tab-close, .tab-close:focus-visible { opacity: 1; }
-.tab-close:hover { background: var(--climb); color: var(--paper); }
-/* Touch has no hover, so the control has to be permanently visible there.
-
-   This is the control that *removes a flight from the document*, and at 19 x 19 px it
-   was under half the minimum touch target, sitting immediately beside the control you
-   actually meant to press. The glyph stays 19 px — it is right on a desktop — and
-   `::before` grows the hit area to 44 x 44 on touch only.
-
-   Two details that are the whole fix rather than decoration. The hit area is anchored to
-   the tab's own corner and grows *inward*, because a symmetric 44 px box centred on a
-   button 3 px from the edge hangs outside the tab and starts stealing taps from the next
-   one. And because growing a target that overlaps another target makes mis-taps more
-   likely rather than less, the × is live only once its tab is active: the first tap
-   selects the flight, and only then can a second tap remove it. Enlarging the area
-   without that pairing would have made the defect worse. */
-@media (hover: none) {
-  .tab-close { opacity: 0.7; }
-  .tab-close::before {
-    content: "";
-    position: absolute;
-    top: -3px;
-    right: -3px;
-    width: 44px;
-    height: 44px;
-  }
-  .tab:not(.is-on) .tab-close { pointer-events: none; opacity: 0.3; }
-}
-.tab .tab-date {
-  font-family: ui-monospace, "DejaVu Sans Mono", monospace;
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-  color: var(--ink);
-}
-.tab .tab-meta {
-  font-family: 'NarrowDisplay', "Liberation Sans Narrow", ui-sans-serif, sans-serif;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--ink-3);
-}
-.tab .tab-stat {
-  font-family: 'NarrowDisplay', "Liberation Sans Narrow", ui-sans-serif, sans-serif;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--ink-2);
-}
+/* Flight tabs ------------------------------------------------------------------ */
+.tabs { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 0; }
+/* A tab is a wrapper, not a button, because it holds three: open, compare and remove. A
+   button inside a button is invalid and browsers drop the inner one. */
+.tab { flex: 0 1 auto; min-width: 230px; position: relative; display: flex; align-items: center;
+  background: var(--panel); border: 1px solid var(--edge); border-radius: 14px; min-height: 64px; }
+.tab-open { flex: 1 1 auto; min-width: 0; text-align: left; border: 0; background: none;
+  padding: 10px 6px 10px 16px; cursor: pointer; color: var(--ink); font: inherit;
+  display: flex; flex-direction: column; gap: 1px; border-radius: 14px; }
+.tab .tab-date { font-size: 17px; font-weight: 650; color: var(--ink); }
+.tab .tab-meta, .tab .tab-stat { font-size: 15px; color: var(--ink-2); }
 .tab:hover { background: var(--panel-2); }
-.tab.is-on { background: var(--ink); }
-.tab.is-on .tab-date, .tab.is-on .tab-meta, .tab.is-on .tab-stat
-  { color: var(--paper); }
-.tab.is-on .tab-close { color: var(--paper); }
-.tab-add { flex: 0 0 auto; border-right: 2px solid var(--climb); }
-.tab-add .tab-open { padding-right: 13px; }
-.tab-add .tab-date { font-size: 13px; }
-.swatch { width: 12px; height: 12px; border-radius: 2px; flex: none; }
+/* The open flight: the one accent ring on the page, on purpose. */
+.tab.is-on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.tab-compare, .tab-close { position: relative; width: 44px; height: 44px; flex: none; padding: 0; border: 0;
+  border-radius: 10px; background: none; color: var(--ink-2); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; }
+.tab-close { margin-right: 6px; }
+.tab-compare:hover, .tab-close:hover { background: var(--panel-2); color: var(--ink); }
+.tab-compare.is-on { background: var(--ink); color: var(--paper); }
+.tab-compare svg, .tab-close svg { display: block; }
+/* On touch, only the open tab's buttons are live: the first tap opens a flight, and only
+   then can a second remove it or add it to the comparison. */
+@media (hover: none) { .tab:not(.is-on) .tab-close, .tab:not(.is-on) .tab-compare { pointer-events: none; opacity: 0.45; } }
+.tab-add { min-width: 0; flex: none; }
+.tab-add .tab-open { flex-direction: row; align-items: center; gap: 8px; padding-right: 18px; font-weight: 600; }
+.tab-add .tab-date { font-size: 16px; font-weight: 600; }
+.tab-add .tab-meta { display: none; }
 .ramp { display: flex; gap: 2px; align-items: center; }
-.ramp span { width: 22px; height: 10px; border-radius: 1px; }
+.ramp span { width: 22px; height: 10px; border-radius: 2px; }
 
-.tooltip {
-  position: absolute;
-  pointer-events: none;
-  /* Above the map block's own layers: in full screen the tooltip is moved into it. */
-  z-index: 70;
-  background: var(--panel);
-  border: 1px solid var(--rule-strong);
-  border-radius: 3px;
-  padding: 7px 10px;
-  font-size: 12.5px;
-  line-height: 1.45;
-  box-shadow: 0 4px 14px rgb(0 0 0 / 0.14);
-  white-space: nowrap;
-  opacity: 0;
-  transition: opacity 0.1s;
-}
+.tooltip { position: absolute; pointer-events: none; z-index: 70; background: var(--panel);
+  border: 1px solid var(--edge); border-radius: 10px; padding: 8px 12px; font-size: 15px; line-height: 1.45;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.2); white-space: nowrap; opacity: 0; transition: opacity 0.1s; }
 .tooltip.on { opacity: 1; }
 .tooltip .t-time { font-variant-numeric: tabular-nums; font-weight: 600; }
 .tooltip .t-row { color: var(--ink-2); font-variant-numeric: tabular-nums; }
 
-/* Tables ------------------------------------------------------------------ */
+/* Tables -------------------------------------------------------------------------- */
 .table-scroll { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-th {
-  text-align: right;
-  font-weight: 400;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--ink-3);
-  padding: 0 9px 7px;
-  border-bottom: 1px solid var(--rule-strong);
-  white-space: nowrap;
-}
+table { width: 100%; border-collapse: collapse; font-size: 16.5px; }
+th { text-align: right; font-weight: 600; font-size: 15px; color: var(--ink-2); padding: 10px 12px;
+  border-bottom: 1px solid var(--rule); white-space: nowrap; }
 th:first-child, td:first-child { text-align: left; padding-left: 2px; }
-td { padding: 7px 9px; border-bottom: 1px solid var(--rule); text-align: right;
+td { padding: 10px 12px; border-bottom: 1px solid var(--rule); text-align: right;
   font-variant-numeric: tabular-nums; white-space: nowrap; }
+tbody tr:last-child td { border-bottom: 0; }
+td:first-child { color: var(--ink-2); }
 tbody tr { cursor: default; }
 /* A row that can drive the cursor says so, and one that cannot must not pretend to. */
 tbody tr.is-linked { cursor: pointer; }
 tbody tr:hover, tbody tr:focus-visible { background: var(--panel-2); outline: none; }
 tr.is-tow td:first-child { color: var(--tow); }
-.tag {
-  display: inline-block;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.09em;
-  padding: 1px 6px;
-  border-radius: 2px;
-  border: 1px solid currentColor;
-}
-.tag-tow { color: var(--tow); }
-/* What held a climb up. Ridge is the one that had to be argued for, so it is the one
-   that gets a colour; thermal is the ordinary case and stays quiet. */
-.tag-ridge { color: var(--climb-3); }
-.tag-thermal { color: var(--ink-3); }
+th .info-wrap { vertical-align: 0; }
+th.spark-head { text-align: left; }
+.tag { display: inline-block; font-size: 15px; }
+.tag-tow { color: var(--tow); font-weight: 600; }
+/* What held a climb up. Ridge is the one that had to be argued for, so it gets a colour. */
+.tag-ridge { color: var(--climb-3); font-weight: 600; }
+.tag-thermal { color: var(--ink-2); }
 .tag-glide { color: var(--sink); }
-.bar-cell { display: flex; align-items: center; gap: 7px; justify-content: flex-end; }
-.bar-cell .bar { height: 7px; border-radius: 1px; background: var(--climb); flex: none; }
-td.spark-cell { padding: 3px 10px 2px; }
+.bar-cell { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+.bar-cell .bar { height: 8px; border-radius: 4px; background: var(--climb); flex: none; }
+td.spark-cell { padding: 3px 4px 2px 12px; text-align: left; }
 svg.spark { display: block; }
-svg.spark .spark-zero { stroke: var(--rule-strong); stroke-width: 1; }
+svg.spark .spark-zero { stroke: var(--edge); stroke-width: 1; }
 svg.ldbar { display: block; flex: none; }
-.dir { color: var(--ink-3); }
-
-/* Notes ------------------------------------------------------------------- */
-.notes { columns: 2 300px; column-gap: 34px; color: var(--ink-2); font-size: 13.5px; }
-.notes p { margin: 0 0 11px; break-inside: avoid; }
-.notes strong { color: var(--ink); font-weight: 600; }
-code { font-family: ui-monospace, "DejaVu Sans Mono", monospace; font-size: 0.92em;
-  background: var(--panel-2); padding: 1px 4px; border-radius: 2px; }
-
-footer { margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--rule);
-  color: var(--ink-3); font-size: 12.5px; display: flex; justify-content: space-between;
-  gap: 16px; flex-wrap: wrap; }
-
-:focus-visible { outline: 2px solid var(--climb); outline-offset: 2px; }
-/* The climbs table is eight columns, not sixteen. At a true 390 px viewport the old one
-   was 1 023 px in a 340 px container — three screens of horizontal scrolling, with
-   nothing on screen to say it scrolled. `turns m/turn dir s/turn radius` are five columns
-   of circling mechanics: a whole sub-story and a specialist one, so they fold away rather
-   than being deleted — the working-band and centring findings cite them as their
-   receipts. `best m/s` went (peak of a noisy series, already eff's denominator), `wind`
-   went (the wind chart is directly above and says it better), and the `rates` sparkline
-   went (a duplicate of the big histogram at 60 px wide). */
+.dir { color: var(--ink-2); }
+/* The circling columns fold away: five columns of circling mechanics, a whole sub-story
+   and a specialist one. The longest glides show; the rest unfold. */
 .circling-detail { display: none; }
 .table-climbs.show-circling .circling-detail { display: table-cell; }
+.table-glides tr.is-extra { display: none; }
+.table-glides.show-all tr.is-extra { display: table-row; }
+code { font-family: ui-monospace, "DejaVu Sans Mono", monospace; font-size: 0.92em;
+  background: var(--panel-2); padding: 1px 4px; border-radius: 4px; }
 
-/* Verdict strip and debrief ------------------------------------------------
+/* Debrief: the cards are the point of the page, ranked by what each cost. ---------- */
+.findings { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.finding, .context .card { padding: 18px 20px; border: 1px solid var(--rule); border-radius: 14px;
+  background: var(--panel); display: flex; flex-direction: column; gap: 8px; }
+.finding h3 { font-size: 21px; line-height: 1.3; }
+.finding-body { margin: 0; font-size: 17px; line-height: 1.5; }
+.finding-cost { margin: 0; }
+.finding-foot { margin: auto 0 0; display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; font-size: 15px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.finding-link { min-height: 44px; }
+.context { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-top: 16px; }
+.context .card { gap: 2px; }
+.context b { font-size: 22px; font-weight: 650; }
+.context span { color: var(--ink-2); font-size: 16px; }
 
-   The strip sits between the masthead and the 3D view, and the cards immediately under
-   it. That ordering is the whole point: the 3D view keeps its place as the hero image,
-   but a reader used to scroll ~1 200 px before meeting a single number, and one compact
-   line at the top answers the question the report exists to answer. The cards then sit
-   next to the instrument they point into, so "show me" moves the marker in the view
-   directly above with little or no scrolling on a desktop. */
-.verdict {
-  border: 1px solid var(--rule-strong);
-  border-left: 3px solid var(--climb);
-  background: var(--panel);
-  padding: 16px 20px 14px;
-  margin: 0 0 26px;
-}
-.verdict-line {
-  margin: 0;
-  font-size: 17px;
-  line-height: 1.45;
-  color: var(--ink);
-  max-width: 68ch;
-}
-.verdict-figures { display: flex; flex-wrap: wrap; gap: 28px; margin-top: 12px; }
-.verdict-delta {
-  font-size: 11px;
-  color: var(--ink-3);
-  display: block;
-  margin-top: 1px;
-}
-.verdict-delta.is-best { color: var(--climb); }
-.verdict-delta[hidden] { display: none; }
+/* Wanted by the page-fetched air figures while they load. */
+.stat .key { color: var(--ink-2); }
 
-/* The compare control sits beside the close button and is dim until used, so a tab reads
-   as one thing rather than a row of three. */
-.tab-compare {
-  position: absolute;
-  top: 3px;
-  right: 24px;
-  width: 19px;
-  height: 19px;
-  padding: 0;
-  border: 0;
-  border-radius: 2px;
-  background: none;
-  color: var(--ink-3);
-  font: inherit;
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.12s;
-}
-.tab:hover .tab-compare, .tab-compare:focus-visible, .tab-compare.is-on { opacity: 1; }
-.tab-compare.is-on { background: var(--climb); color: var(--paper); }
-.tab-compare:hover { color: var(--ink); }
-.tab.is-on .tab-compare { color: var(--paper); }
-.tab.is-on .tab-compare.is-on { background: var(--paper); color: var(--ink); }
-@media (hover: none) {
-  .tab-compare { opacity: 0.7; }
-  .tab:not(.is-on) .tab-compare { pointer-events: none; opacity: 0.3; }
-  /* Above the close button's 44 px touch area, which grows inward over this one: a tap
-     meant to add a flight to the comparison removed the flight instead. */
-  .tab-compare { z-index: 2; }
-  .tab-close { z-index: 1; }
-}
-.verdict-figure { display: flex; flex-direction: column; gap: 1px; }
-.verdict-value {
-  font-size: 20px;
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
-}
-.verdict-label {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--ink-3);
-}
-
-/* Three across the desktop width, stacked on a phone. `auto-fit` rather than a fixed
-   three: with two findings the cards fill the row instead of leaving a hole, and with
-   one the card does not stretch to the full width and read as a banner. */
-.findings {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 14px;
-}
-.finding {
-  border: 1px solid var(--rule);
-  background: var(--panel);
-  padding: 14px 16px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
-.finding h3 {
-  margin: 0;
-  font-size: 15px;
-  line-height: 1.35;
-  color: var(--ink);
-  font-weight: 600;
-}
-.finding-body { margin: 0; font-size: 13px; line-height: 1.5; color: var(--ink-2); }
-.finding-cost {
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.09em;
-  color: var(--ink-3);
-}
-/* The dot carries the climb ramp already in the design system, so cost reads as colour
-   before it reads as text. */
-.finding-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--climb);
-  flex: none;
-}
-.finding-foot {
-  margin: auto 0 0;
-  padding-top: 6px;
-  border-top: 1px solid var(--rule);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  font-size: 11px;
-  color: var(--ink-3);
-  font-variant-numeric: tabular-nums;
-}
-.finding-link {
-  border: 0;
-  background: none;
-  padding: 4px 0;
-  color: var(--climb);
-  font: inherit;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  cursor: pointer;
-}
-.finding-link:hover { color: var(--climb-3); }
-.debrief-note { margin-top: 12px; }
-@media (hover: none) {
-  /* 44 px minimum where a finger replaces a mouse. */
-  .finding-link { padding: 12px 0; min-height: 44px; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  * { transition: none !important; animation: none !important; }
-}
-@media (max-width: 620px) {
-  .notes { columns: 1; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (max-width: 640px) {
+  .wrap { padding: 0 14px 40px; }
   .masthead h1 { font-size: 30px; }
-  /* Charts get the full width of the screen on a phone: the page padding costs more
-     than it gives when the panel is the content. */
-  .wrap { padding-left: 8px; padding-right: 8px; }
-  .hero { padding: 4px 0 0; }
-  .hero .caption, .hero .chart-title { margin-left: 8px; margin-right: 8px; }
-  .view3d-panel { margin-left: -8px; margin-right: -8px; }
-  .section-head { flex-direction: column; gap: 4px; }
-  .section-head p { max-width: none; }
-  /* 12 px floor on a phone, against 11 px on a desktop.
-
-     Most of the small type is SVG axis labels, and that makes this an accessibility
-     problem rather than only a legibility one: SVG text does not respond to the reader's
-     own font-size preference, so someone who has turned type up gets no relief from it
-     and the floor is the only thing that helps them. Where an axis ends up crowded at
-     this size, thin the ticks out — do not put the type back down. */
-  .chart .axis-label,
-  .chart .axis-title,
-  .chart .mark-label,
-  .chart .reference-label,
-  .chart-profile .endpoint-label,
-  .chart-wind .wind-number,
-  .chart-wind .wind-time { font-size: 12px; }
-  table { font-size: 14px; }
-  .notes { font-size: 14px; }
+  .figs.keys { grid-template-columns: repeat(2, 1fr); }
+  .fig { padding: 12px 8px 12px 0; }
+  .fig .v { font-size: 26px; }
+  .tabs { flex-wrap: nowrap; overflow-x: auto; margin-right: -14px; padding-right: 14px; }
+  .tab { min-width: 220px; flex: none; }
+  .tab-add { min-width: 0; }
+  .side-bar { padding: 10px 14px 4px; }
+  .panel { padding: 10px 10px 6px; }
+  table { font-size: 15.5px; }
+  th, td { padding: 10px 7px; }
+  /* Charts drawn at half width are scaled to about two thirds on a phone; their type is
+     set larger in their own units so it lands near 13 px. */
+  .two .chart .axis-label, .two .chart .axis-title, .two .chart-wind .wind-number,
+  .two .chart-wind .wind-time, .two .chart .reference-label { font-size: 19px; }
+  /* The side view is drawn at the phone's own size (`narrowOf` in page/charts.js), so its
+     type is the desktop's 15 px; the host drops the desktop's 1080:420 box for it. */
+  .flight-map .side-view .chart-host { aspect-ratio: auto !important; }
+  /* Start, top, core and lift fold away; the sparkline stays — it is the most useful
+     column on a phone. */
+  .table-climbs tr > :nth-child(2), .table-climbs tr > :nth-child(5),
+  .table-climbs tr > :nth-child(7), .table-climbs tr > :nth-child(8) { display: none; }
 }
 """
 
@@ -784,40 +325,8 @@ class Extra:
 VIEW_SCRIPT = (Path(__file__).parent / "page/view_tabs.js").read_text(encoding="utf-8")
 
 VIEW_STYLE = """
-.views { display: flex; gap: 4px; margin: 0 0 18px; border-bottom: 1px solid var(--rule);
-  padding-bottom: 0; }
-.view-tab { font: inherit; font-size: 15px; font-weight: 600; letter-spacing: 0.01em;
-  background: none; border: 0; border-bottom: 2px solid transparent; color: var(--ink-3);
-  padding: 9px 15px 8px; cursor: pointer; margin-bottom: -1px; }
-.view-tab:hover { color: var(--ink-2); }
-.view-tab.is-on { color: var(--ink); border-bottom-color: var(--climb); }
-/* The other tools are links, not buttons, and must not inherit an anchor's underline
-   or the browser's link colour — they sit in the same row as the view buttons and any
-   difference reads as a mistake rather than as a distinction. */
-a.view-tab { text-decoration: none; display: inline-block; }
-/* Pushed to the far end of whichever strip it is in. Same shape as the one the other
-   three pages get from `common.STYLE`; the report does not include that sheet, because
-   its own tokens are richer and it has never used the site strip. */
-.theme-toggle { margin:0 0 0 auto; align-self:center; border:1px solid var(--rule);
-  background:var(--panel); color:var(--ink-2); border-radius:999px; cursor:pointer;
-  width:30px; height:30px; padding:0; font-size:14px;
-  /* Grid rather than `line-height`: the glyph is a character whose ink sits high in its
-     em box (☽ higher than ☀), so a line box centres the *box* and leaves the mark
-     visibly above centre. A grid cell centres the thing that was actually drawn. */
-  display:grid; place-items:center; line-height:1; }
-.theme-toggle .theme-glyph { display:block; }
-.theme-toggle:hover { color: var(--ink); border-color: var(--rule-strong); }
-/* The source link beside it, and the page's foot: `common.strip_end` and `common.footer`. */
-a.site-source { align-self:center; margin:0 0 0 6px; padding:0; width:30px; height:30px;
-  display:grid; place-items:center; border:1px solid var(--rule); border-radius:999px;
-  background:var(--panel); color:var(--ink-2); }
-a.site-source:hover { color: var(--ink); border-color: var(--rule-strong); }
-/* `display: block`: the report lays every <footer> out as a flex row (each flight's own
-   fixes-and-timezone line), and the site footer's sentence was spread across it. */
-.site-foot { display:block; margin:28px 0 0; padding:14px 0 0; border-top:1px solid var(--rule);
-  font-size:12.5px; line-height:1.55; color:var(--ink-3); }
-.site-foot a { color: var(--ink-2); }
-.view-tab:focus-visible { outline: 2px solid var(--climb); outline-offset: -2px; }
+/* The view switch is the site strip (`common.STYLE`): its buttons look like its links. */
+.site-nav > .view-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 """
 
 
@@ -850,7 +359,7 @@ def _view_nav(extras: "list[Extra]") -> str:
         # nor the role of the chooser, because `test_a_report_with_no_extras_has_no_view
         # _switch` is right that a switch between one thing is noise — and a strip that
         # merely *looks* like one is the same noise.
-        return ('<nav class="views page-tools" aria-label="Theme">'
+        return ('<nav class="site-nav views page-tools" aria-label="Theme">'
                 f'{common.strip_end()}</nav>')
 
     # **One order across the whole site**, and it is `common.PAGES`: what is the weather,
@@ -891,7 +400,7 @@ def _view_nav(extras: "list[Extra]") -> str:
         '<button type="button" class="view-tab is-on" data-view-tab="flights" '
         'aria-pressed="true">', 1)
     return (
-        '<nav class="views" id="views" role="group" aria-label="Choose a view">'
+        '<nav class="site-nav views" id="views" role="group" aria-label="Choose a view">'
         f'{marked}{common.strip_end()}</nav>'
     )
 
@@ -913,7 +422,7 @@ def _page(title: str, bodies: list[str], tabs: str = "", extras: "list[Extra]" =
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{escape(title)}</title>
 <script>{common.THEME_BOOT}</script>
-<style>{_font_face()}{STYLE}{view3d.STYLE}{render_map.STYLE}{map3d.STYLE}{upload_panel.STYLE}{charts_client.STYLE}
+<style>{STYLE}{view3d.STYLE}{render_map.STYLE}{map3d.STYLE}{upload_panel.STYLE}{charts_client.STYLE}
 {VIEW_STYLE if extras else ""}{"".join(e.style for e in extras)}</style>
 <div class="wrap">
 {_view_nav(extras)}
@@ -951,7 +460,7 @@ def js_bundle() -> str:
 
 
 def _tab(uid: str, date: str, meta: str, stat: str = "", *, on: bool = False) -> str:
-    """One flight tab: open it, or remove it from the document."""
+    """One flight tab: open it, add it to the comparison, or remove it from the document."""
     return (
         f'<span class="tab{" is-on" if on else ""}" data-flight-tab="{uid}">'
         f'<button type="button" class="tab-open" aria-pressed="{"true" if on else "false"}">'
@@ -961,15 +470,15 @@ def _tab(uid: str, date: str, meta: str, stat: str = "", *, on: bool = False) ->
         + '</button>'
         f'<button type="button" class="tab-compare" data-compare-toggle="{uid}" '
         f'title="Add this flight to the comparison" aria-pressed="false" '
-        f'aria-label="Add this flight to the comparison">&#8646;</button>'
+        f'aria-label="Add this flight to the comparison">{common.icon(common.ICONS["swap"])}</button>'
         f'<button type="button" class="tab-close" title="Remove this flight" '
-        f'aria-label="Remove this flight">&#215;</button></span>'
+        f'aria-label="Remove this flight">{common.icon(common.ICONS["close"])}</button></span>'
     )
 
 
 ADD_TAB = (
     '<span class="tab tab-add" data-flight-tab="own">'
     '<button type="button" class="tab-open" aria-pressed="false" '
-    'title="Analyse your own track"><span class="tab-date">+ your track</span>'
+    f'title="Analyse your own track">{common.icon(common.ICONS["plus"])}<span class="tab-date">Your track</span>'
     '<span class="tab-meta">igc &middot; kml &middot; kmz</span></button></span>'
 )

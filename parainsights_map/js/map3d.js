@@ -20,11 +20,26 @@
     '<path d="M1 1 L10 6 L1 11 Z" fill="currentColor"/></svg>';
   // The replay's own button: a camera. The play triangle is the play button inside the
   // replay, and two buttons with the same triangle were one too many.
-  var CAMERA_ICON = '<svg width="16" height="12" viewBox="0 0 16 12" aria-hidden="true" fill="currentColor">' +
-    '<rect x="0.5" y="2" width="10" height="8" rx="1.5"/><path d="M11.5 5 L15.5 2.5 L15.5 9.5 L11.5 7 Z"/></svg>';
-  var RULER_ICON = '<svg width="14" height="12" viewBox="0 0 14 12" aria-hidden="true" fill="none"' +
-    ' stroke="currentColor" stroke-width="1.3"><path d="M1 8.5 8.5 1l4.5 4.5L5 13z" transform="translate(0 -1.5)"/>' +
-    '<path d="M4 5.5l1.5 1.5M6 3.5l1.5 1.5M8 1.5l1.5 1.5" transform="translate(0 -0.5)"/></svg>';
+  // The site's icon set (`parainsights_common.icon`): 20 px, a 1.75 px round stroke.
+  function icon(paths) {
+    return '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75"' +
+      ' stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths + '</svg>';
+  }
+  var CAMERA_ICON = icon('<rect x="2.5" y="5.5" width="10.5" height="9" rx="2"/><path d="M13 9l4.5-2.5v7L13 11"/>');
+  var RULER_ICON = icon('<path d="M3 13.5 13.5 3 17 6.5 6.5 17z"/><path d="M6 10.5l1.5 1.5M8.5 8l1.5 1.5M11 5.5l1.5 1.5"/>');
+  var ICON = {
+    zoomIn: icon('<path d="M10 4v12M4 10h12"/>'), zoomOut: icon('<path d="M4 10h12"/>'),
+    // Flatter is the ground seen from above, a grid; steeper the same grid in perspective.
+    flatter: icon('<rect x="3.5" y="3.5" width="13" height="13" rx="1.5"/><path d="M10 3.5v13M3.5 10h13"/>'),
+    steeper: icon('<path d="M6.5 4h7l4 12h-15z"/><path d="M10 4v12M4.5 10h11"/>'),
+    // Straight down is where the scored route is drawn, so the button is the route.
+    top: icon('<path d="M10 3.5 16.5 15.5h-13z"/><g fill="currentColor" stroke="none"><circle cx="10" cy="3.5" r="1.7"/>' +
+              '<circle cx="16.5" cy="15.5" r="1.7"/><circle cx="3.5" cy="15.5" r="1.7"/></g>'),
+    help: icon('<circle cx="10" cy="10" r="7.25"/><path d="M7.9 8a2.2 2.2 0 1 1 3.1 2c-.7.3-1 .8-1 1.5v.3"/>' +
+               '<circle cx="10" cy="14.2" r=".5" fill="currentColor"/>'),
+    fullscreen: icon('<path d="M3.5 7.5v-4h4M12.5 3.5h4v4M16.5 12.5v4h-4M7.5 16.5h-4v-4"/>'),
+    reset: icon('<path d="M4.6 11.5A5.6 5.6 0 1 0 6 6.1"/><path d="M5.6 3v3.3h3.3"/>')
+  };
   var PAUSE_ICON = '<svg width="11" height="12" viewBox="0 0 11 12" aria-hidden="true">' +
     '<path d="M1.5 1h3v10h-3zM6.5 1h3v10h-3z" fill="currentColor"/></svg>';
   function rgb(hex, alpha) {
@@ -228,41 +243,50 @@
             '<button type="button" data-m3="faster" title="Faster" aria-label="Faster">+</button>' +
           '</div>' +
           '<button type="button" data-m3="follow" aria-pressed="false" title="Follow the glider, ' +
-          'facing the way the flight was going (c)">follow</button>' +
+          'facing the way the flight was going (c)">Follow</button>' +
         '</div>' : '') +
       '<div class="view3d-controls" hidden>' +
         // One button each, naming what is on and stepping to the next: two segmented
         // groups of three were six of the bar's slots, and on a phone the bar is one row.
         '<button type="button" data-m3="ground" class="m3-cycle"></button>' +
         '<button type="button" data-m3="vertical" class="m3-cycle"></button>' +
-        (hasPhases ?
-          '<div class="view3d-seg view3d-labels" role="group" aria-label="Phase labels">' +
-          '<button type="button" data-m3-label="climb" aria-pressed="false"' +
-          ' aria-label="Label each climb with its rate and gain">climbs</button>' +
-          '<button type="button" data-m3-label="glide" aria-pressed="false"' +
-          ' aria-label="Label each glide with its ratio and distance">glides</button></div>' : '') +
         (hasAirspace ?
           '<div class="view3d-seg view3d-airspace" role="group" aria-label="Airspace">' +
           '<button type="button" data-m3="airspace" aria-pressed="false" title="' + airspaceWhy + '"' +
-          ' aria-label="' + airspaceWhy + '">airspace</button></div>' :
+          ' aria-label="' + airspaceWhy + '">Airspace</button></div>' :
          noAirspace ?
           '<div class="view3d-seg view3d-airspace" role="group" aria-label="Airspace">' +
           '<button type="button" data-m3="airspace" aria-pressed="false" disabled' +
-          ' title="' + airspaceWhy + '" aria-label="' + airspaceWhy + '">airspace</button></div>' : '') +
-        '<div class="view3d-seg view3d-zoom" role="group" aria-label="Zoom">' +
-          '<button type="button" data-m3="zoom-out" title="Zoom out" aria-label="Zoom out">&minus;</button>' +
-          '<button type="button" data-m3="zoom-in" title="Zoom in" aria-label="Zoom in">+</button></div>' +
+          ' title="' + airspaceWhy + '" aria-label="' + airspaceWhy + '">Airspace</button></div>' : '') +
         (hasTime ? '<button type="button" data-m3="replay" class="m3-icon" aria-pressed="false"' +
           ' title="Replay the flight" aria-label="Replay the flight">' + CAMERA_ICON + '</button>' : '') +
         '<button type="button" data-m3="measure" class="m3-icon" aria-pressed="false"' +
           ' title="Measure a distance (d)" aria-label="Measure a distance">' + RULER_ICON + '</button>' +
-        '<button type="button" data-m3="help" title="Controls" aria-label="How to control this view">?</button>' +
-        '<button type="button" data-m3="fullscreen" title="Full screen" aria-label="Full screen">' +
-          '<svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor"' +
-          ' stroke-width="1.5"><path d="M1 4.5V1h3.5M8.5 1H12v3.5M12 8.5V12H8.5M4.5 12H1V8.5"/></svg></button>' +
-        '<button type="button" class="view3d-reset" data-m3="reset" title="Reset view"' +
-        ' aria-label="Reset view">&#8634;</button>' +
-      '</div></div>';
+        // Shown only while the page's Help switch is on, like every ⓘ.
+        '<button type="button" data-m3="help" class="m3-icon m3-help" title="Controls" aria-label="How to control this view">' + ICON.help + '</button>' +
+        '<button type="button" data-m3="fullscreen" class="m3-icon" title="Full screen" aria-label="Full screen">' + ICON.fullscreen + '</button>' +
+        '<button type="button" class="m3-icon view3d-reset" data-m3="reset" title="Reset view"' +
+        ' aria-label="Reset view">' + ICON.reset + '</button>' +
+      '</div></div>' +
+      // Top left: the labels for the track. They used to share the bottom bar, which on a
+      // phone had no room for them.
+      (hasPhases ?
+        '<div class="m3-corner view3d-controls-extra" hidden><div class="view3d-seg view3d-labels" role="group" aria-label="Phase labels">' +
+        '<button type="button" data-m3-label="climb" aria-pressed="false"' +
+        ' aria-label="Label each climb with its rate and gain">Climbs</button>' +
+        '<button type="button" data-m3-label="glide" aria-pressed="false"' +
+        ' aria-label="Label each glide with its ratio and distance">Glides</button></div></div>' : '') +
+      // The right edge, one column: zoom, tilt, straight down.
+      '<div class="m3-rail view3d-controls-extra" hidden>' +
+        '<div class="view3d-seg view3d-zoom" role="group" aria-label="Zoom">' +
+          '<button type="button" data-m3="zoom-in" title="Zoom in" aria-label="Zoom in">' + ICON.zoomIn + '</button>' +
+          '<button type="button" data-m3="zoom-out" title="Zoom out" aria-label="Zoom out">' + ICON.zoomOut + '</button></div>' +
+        '<div class="view3d-seg view3d-tilt" role="group" aria-label="Tilt">' +
+          '<button type="button" data-m3="tilt-flatter" title="Tilt flatter" aria-label="Tilt flatter">' + ICON.flatter + '</button>' +
+          '<button type="button" data-m3="tilt-steeper" title="Tilt steeper" aria-label="Tilt steeper">' + ICON.steeper + '</button></div>' +
+        '<button type="button" data-m3="top" class="m3-top" aria-pressed="false" title="Look straight down' +
+          (hasTime ? '; shows the scored route' : '') + '" aria-label="Look straight down">' + ICON.top + '</button>' +
+      '</div>';
     panel.appendChild(view);
 
     var playing = false, frame = null, map = null;
@@ -305,6 +329,7 @@
       registerStitching();
       view.querySelector('.m3-status').hidden = true;
       view.querySelector('.view3d-controls').hidden = false;
+      view.querySelectorAll('.view3d-controls-extra').forEach(function (box) { box.hidden = false; });
       var replay = view.querySelector('.m3-replay');
       var timeRow = view.querySelector('.m3-time');
 
@@ -323,6 +348,10 @@
       // page's controls set it on that handle, and the two maps must hide the same rings.
       var airspaceFilter = handle.airspaceFilter ? handle.airspaceFilter() : null;
       var route = null;       // a planned task: { walk: [[lon, lat]…], points: [[lon, lat]…] }
+      // A flight's scored route, [[lon, lat]…] (`setScored`), drawn only while the map looks
+      // straight down: in perspective, a straight line over mountains reads as anything
+      // but the distance it is. `lastPitch` is where the top-down button returns to.
+      var scored = null, topDown = false, lastPitch = null;
       var clickers = [];
       var sunMinute = sun ? sun.at : null;
       var lines = segments(scene);
@@ -515,10 +544,12 @@
       // Credits from the sources themselves, so switching the basemap changes them.
       // Top left, after the legend of compared flights, in one row: at the bottom left the
       // (i) never lined up with the bar beside it.
-      map.addControl(new maplibregl.AttributionControl({ compact: true }), 'top-left');
+      // The credits: in the page's footer, and on the map in full screen only (`STYLE`).
+      map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
+      // The legend of compared flights goes under the labels at the top left.
       (function () {
-        var corner = view.querySelector('.maplibregl-ctrl-top-left');
-        if (corner) corner.insertBefore(view.querySelector('.m3-others'), corner.firstChild);
+        var corner = view.querySelector('.m3-corner') || view.querySelector('.maplibregl-ctrl-top-left');
+        if (corner) corner.appendChild(view.querySelector('.m3-others'));
       })();
       // Start closed: MapLibre opens a compact control on a wide map, and the credits then
       // sit over the flight until someone closes them.
@@ -854,6 +885,21 @@
             getPosition: function (d) { return [d.position[0], d.position[1], z(d.position[2])]; },
             getSize: 11, fontWeight: 700, getColor: [255, 255, 255],
             fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+            updateTriggers: { getPosition: vertical }, parameters: ON_TOP
+          }));
+        }
+        if (scored && topDown) {
+          var legs = scored.map(function (p) { return [p[0], p[1], z(ground(p[0], p[1]) + 40)]; });
+          out.push(new deck.PathLayer({
+            id: 'scored-route', data: [legs], getPath: function (d) { return d; },
+            getColor: [255, 255, 255, 235], getWidth: 3, widthUnits: 'pixels',
+            capRounded: true, jointRounded: true, billboard: true,
+            updateTriggers: { getPath: vertical }, parameters: ON_TOP
+          }));
+          out.push(new deck.ScatterplotLayer({
+            id: 'scored-corners', data: legs, getPosition: function (d) { return d; },
+            getFillColor: [226, 96, 44], getLineColor: [255, 255, 255], stroked: true,
+            lineWidthMinPixels: 2, radiusUnits: 'pixels', getRadius: 7, billboard: true,
             updateTriggers: { getPosition: vertical }, parameters: ON_TOP
           }));
         }
@@ -1765,6 +1811,16 @@
         button.classList.toggle('is-on', on);
         button.setAttribute('aria-pressed', String(on));
       }
+      // The top-down button says whether the map is looking straight down, however it got
+      // there; the scored route appears and goes with it. Redrawn only on the change.
+      map.on('pitch', function () {
+        var now = map.getPitch() < 8;
+        if (now === topDown) return;
+        topDown = now;
+        var b = view.querySelector('[data-m3="top"]');
+        if (b) toggle(b, now);
+        if (scored) refresh();
+      });
       var help = view.querySelector('[data-m3="help"].view3d-keys');
       // Full screen takes the flight's map block where the page has one (`.flight-map`:
       // the map with the side view under it), the panel alone where it does not.
@@ -1796,6 +1852,17 @@
         } else if (act === 'airspace') { airspaceOn = !airspaceOn; toggle(b, airspaceOn); refresh(); }
         else if (act === 'zoom-in') { if (following) followZoomBy(1); else map.zoomIn(); }
         else if (act === 'zoom-out') { if (following) followZoomBy(-1); else map.zoomOut(); }
+        else if (act === 'tilt-flatter' || act === 'tilt-steeper') {
+          var step = act === 'tilt-flatter' ? -15 : 15;
+          if (following) cam.pitch = Math.min(85, Math.max(0, cam.pitch + step));
+          else map.easeTo({ pitch: Math.min(85, Math.max(0, map.getPitch() + step)), duration: 300 });
+        }
+        else if (act === 'top') {
+          setFollow(false);
+          // A second press goes back to the angle the reader had.
+          if (map.getPitch() < 1 && lastPitch !== null) map.easeTo({ pitch: lastPitch, duration: 600 });
+          else { lastPitch = map.getPitch() >= 1 ? map.getPitch() : null; map.easeTo({ pitch: 0, duration: 600 }); }
+        }
         else if (act === 'help') help.hidden = !help.hidden;
         else if (act === 'measure') setMeasure(!measuring);
         else if (act === 'fullscreen') fullscreen();
@@ -1941,6 +2008,10 @@
         setFollow: setFollow, following: function () { return following; }, courseAt: courseAt,
         followCamera: function () { return following ? { zoom: cam.zoom, pitch: cam.pitch, turn: yawOffset } : null; },
         setBasemap: setBasemap, setVertical: setVertical,
+        setScored: function (points) {
+          scored = points && points.length >= 2 ? points : null;
+          refresh();
+        },
         setRoute: function (walk, points) {
           route = walk || points ? { walk: walk || [], points: points || [] } : null;
           refresh();

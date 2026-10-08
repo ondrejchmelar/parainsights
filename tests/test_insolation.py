@@ -266,9 +266,9 @@ class TestTheReportExplainsTheLabel:
 
     def test_the_thresholds_in_the_prose_are_the_ones_the_code_uses(self, tmp_path):
         html = self._report(tmp_path)
-        assert f"{K['RIDGE_SLOPE']:.0f}°, the glider stayed within" in html, (
+        assert f"steeper than {K['RIDGE_SLOPE']:.0f}°" in html, (
             "the slope threshold in the note is not the one the classifier uses")
-        assert f"{K['RIDGE_CLEARANCE']:.0f} m of it" in html, (
+        assert f"within {K['RIDGE_CLEARANCE']:.0f}&nbsp;m of the slope" in html, (
             "the clearance threshold in the note is not the one the classifier uses")
 
     def test_the_prose_reads_the_constants_rather_than_repeating_them(self):
@@ -277,8 +277,8 @@ class TestTheReportExplainsTheLabel:
         report least likely to be re-read."""
         import pathlib
         source = (pathlib.Path(js.BRIDGE).parent.parent / "tracklog_viewer" / "js" / "report.js").read_text()
-        start = source.index('"Ridge" is three measurements')
-        paragraph = source[start:source.index("</p>", start)]
+        start = source.index("Ridge only when three things agree")
+        paragraph = source[start:source.index("</th>", start)]
         assert "TV.insolation.RIDGE_SLOPE" in paragraph
         assert "TV.insolation.RIDGE_CLEARANCE" in paragraph
 

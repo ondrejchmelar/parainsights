@@ -23,9 +23,9 @@
   var PROFILE = { width: 1080, height: 420, left: 56, right: 20, top: 20, bottom: 46 };
   var PLAN = { width: 1080, pad: 26 };
   var PROFILE_MODES = {
-    flown: ['distance flown, km — always increasing, so a climb draws as a near-vertical step', 'distance flown'],
-    from_start: ['straight-line distance from launch, km — the trace doubles back on a return leg', 'distance from launch'],
-    time: ['time of day — the classic barogram: time on the ground axis, height above', 'time']
+    flown: ['Distance flown, km', 'distance flown'],
+    from_start: ['Straight-line distance from launch, km', 'distance from launch'],
+    time: ['Time of day', 'time']
   };
 
   function f1(x) { return fmt(x, 1); }
@@ -61,11 +61,14 @@
     return Math.trunc(Math.min(Math.max(np.pyRound(width * spanY / spanX) + 70, floor), ceiling));
   }
 
-  function budgetBar(a, width, height) {
-    width = width || 460; height = height || 58;
-    var fractions = Object.assign({}, a.budget.fractions);
-    var order = [['towing', 'var(--tow)', 'tow'], ['thermalling', 'var(--climb)', 'climbing'],
-                 ['gliding', 'var(--sink)', 'gliding']];
+  // The time bar's parts, in its order: key, colour, label, fraction and seconds. The
+  // article's legend under the bar reads the same list, so every segment is named even
+  // where the bar has no room for a label.
+  function budgetParts(a) {
+    var fractions = Object.assign({}, a.budget.fractions), seconds = {
+      towing: a.budget.towing, thermalling: a.budget.thermalling, gliding: a.budget.gliding, other: a.budget.other };
+    var order = [['towing', 'var(--tow)', 'Tow'], ['thermalling', 'var(--climb)', 'Climbing'],
+                 ['gliding', 'var(--sink)', 'Gliding']];
     var slice = a.other, total = a.budget.thermalling + a.budget.gliding + a.budget.diving + a.budget.towing + a.budget.other || 1;
     if (slice && slice.seconds) {
       var split = { other_sink: slice.straight_sink / total, other_scratch: slice.scratching / total,
@@ -74,11 +77,21 @@
       keys.forEach(function (k) { if (split[k] > split[biggest]) biggest = k; });
       split[biggest] += fractions.other - (split.other_sink + split.other_scratch + split.other_rising);
       Object.assign(fractions, split);
-      order = order.concat([['other_sink', 'var(--neutral)', 'sinking'], ['other_scratch', 'var(--shadow-ink)', 'scratching'],
-                            ['other_rising', 'var(--climb-1)', 'drifting up']]);
+      seconds.other_sink = slice.straight_sink; seconds.other_scratch = slice.scratching; seconds.other_rising = slice.rising;
+      order = order.concat([['other_sink', 'var(--neutral)', 'Sinking straight'], ['other_scratch', 'var(--shadow-ink)', 'Turning, no climb'],
+                            ['other_rising', 'var(--climb-1)', 'Drifting up']]);
     } else {
-      order.push(['other', 'var(--neutral)', 'other']);
+      order.push(['other', 'var(--neutral)', 'Other']);
     }
+    return order.map(function (o) {
+      return { key: o[0], colour: o[1], label: o[2], fraction: fractions[o[0]] || 0, seconds: seconds[o[0]] || 0 };
+    });
+  }
+
+  function budgetBar(a, width, height) {
+    width = width || 460; height = height || 58;
+    var fractions = {}, order = budgetParts(a).map(function (p) {
+      fractions[p.key] = p.fraction; return [p.key, p.colour, p.label]; });
     var gap = 2, barH = 26, parts = [], labels = [], x = 0.0;
     var totalGaps = gap * (order.filter(function (o) { return fractions[o[0]] > 0; }).length - 1);
     var usable = width - totalGaps;
@@ -170,9 +183,9 @@
       '    <marker id="arrow' + uid + '" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5" markerHeight="5"\n' +
       '            orient="auto"><path d="M0,1 L7,4 L0,7 z" fill="var(--sink)" /></marker>\n  </defs>\n' +
       '  <g class="grid">' + grid.join('') + '</g>\n  ' + model + '\n  <g class="axes">' + labels.join('') + '\n' +
-      '    <text x="' + f1(left + plotW / 2) + '" y="' + (height - 5) + '" class="axis-title">wind m/s</text>\n' +
+      '    <text x="' + f1(left + plotW / 2) + '" y="' + (height - 5) + '" class="axis-title">Wind, m/s</text>\n' +
       '    <text x="12" y="' + f1(top + plotH / 2) + '" class="axis-title"\n' +
-      '          transform="rotate(-90 12 ' + f1(top + plotH / 2) + ')">altitude m</text>\n  </g>\n  ' +
+      '          transform="rotate(-90 12 ' + f1(top + plotH / 2) + ')">Altitude, m</text>\n  </g>\n  ' +
       points.join('') + '\n</svg>';
   }
 
@@ -216,10 +229,10 @@
     }
     var band = '<rect class="flight-band" x="' + left + '" y="' + f1(sy(flightTop)) + '" width="' + plotW + '" height="' +
       f1(Math.max(sy(flightBottom) - sy(flightTop), 1)) + '" />' +
-      '<text x="' + (left + 6) + '" y="' + f1(sy(flightBottom) - 6) + '" class="reference-label band-label">flown ' +
+      '<text x="' + (left + 6) + '" y="' + f1(sy(flightBottom) - 6) + '" class="reference-label band-label">Flown ' +
       fmt(flightBottom, 0) + '–' + fmt(flightTop, 0) + ' m</text>';
-    var candidates = [[Met.thermalTop(meteo), 'thermal top', 'thermal-top'], [cloudbase, 'cloudbase', 'cloudbase'],
-                      [Met.boundaryLayerTop(meteo), 'bl top', 'bl-top']].filter(function (c) {
+    var candidates = [[Met.thermalTop(meteo), 'Thermal top', 'thermal-top'], [cloudbase, 'Cloudbase', 'cloudbase'],
+                      [Met.boundaryLayerTop(meteo), 'Boundary layer', 'bl-top']].filter(function (c) {
       return c[0] !== null && c[0] !== undefined && altMin <= c[0] && c[0] <= altMax;
     });
     var references = candidates.map(function (c, index) {
@@ -237,9 +250,9 @@
       '  <g clip-path="url(#clip' + uid + ')">\n    <polyline class="adiabat" points="' + adiabat.join(' ') + '" />\n' +
       '    <polyline class="dewpoint" points="' + dewpoint + '" />\n    <polyline class="environment" points="' + environment + '" />\n  </g>\n' +
       '  <g class="axes">' + labels.join('') + '\n' +
-      '    <text x="' + f1(left + plotW / 2) + '" y="' + (height - 5) + '" class="axis-title">temperature °C</text>\n' +
+      '    <text x="' + f1(left + plotW / 2) + '" y="' + (height - 5) + '" class="axis-title">Temperature, °C</text>\n' +
       '    <text x="12" y="' + f1(top + plotH / 2) + '" class="axis-title"\n' +
-      '          transform="rotate(-90 12 ' + f1(top + plotH / 2) + ')">altitude m</text>\n  </g>\n</svg>';
+      '          transform="rotate(-90 12 ' + f1(top + plotH / 2) + ')">Altitude, m</text>\n  </g>\n</svg>';
   }
 
   function climbHistogram(a, width, height) {
@@ -271,7 +284,7 @@
       '     aria-label="Minutes spent at each climb rate while thermalling">\n' +
       '  <line class="axis" x1="' + left + '" y1="' + (top + plotH) + '" x2="' + (width - right) + '" y2="' + (top + plotH) + '" />\n' +
       '  ' + bars.join('') + annotation + '\n  <g class="axes">' + labels.join('') + '\n' +
-      '    <text x="' + f1(left + plotW / 2) + '" y="' + (height - 6) + '" class="axis-title">climb rate m/s\n' +
+      '    <text x="' + f1(left + plotW / 2) + '" y="' + (height - 6) + '" class="axis-title">Climb rate, m/s\n' +
       '      (20 s average)</text>\n  </g>\n</svg>';
   }
 
@@ -326,7 +339,7 @@
     });
     var references = [];
     if (meteo) {
-      [[Met.boundaryLayerTop(meteo), 'boundary layer top'], [Met.cloudbase(meteo), 'cloudbase']].forEach(function (r) {
+      [[Met.boundaryLayerTop(meteo), 'Boundary layer top'], [Met.cloudbase(meteo), 'Cloudbase']].forEach(function (r) {
         if (r[0] !== null && r[0] !== undefined) references.push([np.pyRound(r[0]), r[1]]);
       });
     }
@@ -348,6 +361,6 @@
 
   TV.charts = { CLIMB_RAMP: CLIMB_RAMP, PROFILE: PROFILE, PLAN: PLAN, escape: escape, climbColor: climbColor,
                 WIND_SPEED_STEP: WIND_SPEED_STEP, WIND_ALT_STEP: WIND_ALT_STEP, WIND_MODEL_BAND: WIND_MODEL_BAND,
-                ldColor: ldColor, planHeight: planHeight, budgetBar: budgetBar, windProfile: windProfile,
+                ldColor: ldColor, planHeight: planHeight, budgetBar: budgetBar, budgetParts: budgetParts, windProfile: windProfile,
                 sounding: sounding, climbHistogram: climbHistogram, ldBar: ldBar, payload: payload, samplePosition: samplePosition };
 })(typeof window !== 'undefined' ? (window.TV = window.TV || {}) : (globalThis.TV = globalThis.TV || {}));

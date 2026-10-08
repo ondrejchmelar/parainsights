@@ -40,17 +40,12 @@ def _page(article: str, title: str, *, three_d: bool = False) -> str:
 <script>{common.THEME_BOOT}</script>
 <style>
 {common.TOKENS}
-body {{ margin:0; background:var(--paper); color:var(--ink); font:15px/1.55
-  system-ui,-apple-system,"Segoe UI",sans-serif; }}
-.wrap {{ max-width:1100px; margin:0 auto; padding:26px 18px 60px; }}
-h1 {{ font-size:26px; margin:0 0 6px; }}
-.lede {{ color:var(--ink-2); margin:0 0 14px; max-width:70ch; }}
-.met-links {{ margin:14px 0 0; font-size:12.5px; color:var(--ink-3); }}
+body {{ margin:0; background:var(--paper); color:var(--ink); }}
+.wrap {{ max-width:1240px; margin:0 auto; padding:0 28px 60px; }}
+@media (max-width: 640px) {{ .wrap {{ padding:0 14px 40px; }} }}
 a {{ color: inherit; }}
-button {{ font:inherit; padding:3px 10px; background:var(--panel);
-  color:var(--ink); border:1px solid var(--rule); border-radius:3px; cursor:pointer; }}
-{render_html.STYLE}
 {common.STYLE}
+{render_html.STYLE}
 {view_style}
 </style>
 <div class="wrap">

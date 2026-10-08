@@ -45,33 +45,37 @@ def media_block(css: str, query: str) -> str:
 class TestTypeFloor:
     """884 text nodes under 11 px, 757 of them at 10.5. Mostly SVG axis labels."""
 
-    def test_no_declared_font_size_is_under_eleven_pixels(self):
+    def test_no_declared_font_size_is_under_fifteen_pixels(self):
+        """The redesign's floor (October 2026): nothing a reader must read under 15 px."""
         sizes = [float(m) for m in re.findall(r"font-size:\s*([0-9.]+)px", render_html.STYLE)]
         assert sizes, "no font sizes found — has the stylesheet moved?"
-        assert min(sizes) >= 11.0, (
-            f"type floor broken: {sorted(s for s in sizes if s < 11.0)}"
+        assert min(sizes) >= 15.0, (
+            f"type floor broken: {sorted(s for s in sizes if s < 15.0)}"
         )
 
     def test_the_view3d_panel_holds_the_same_floor(self):
+        """The map's buttons are the one exception: 14 px on a phone, where seven of them
+        share one row of a 390 px screen."""
         sizes = [float(m) for m in re.findall(r"font-size:\s*([0-9.]+)px", view3d.STYLE)]
-        assert all(s >= 11.0 for s in sizes), (
-            f"type floor broken in the 3D panel: {sorted(s for s in sizes if s < 11.0)}"
+        assert all(s >= 14.0 for s in sizes), (
+            f"type floor broken in the 3D panel: {sorted(s for s in sizes if s < 14.0)}"
         )
 
-    def test_small_type_is_lifted_further_on_a_phone(self):
-        """11 px desktop, 12 px mobile — SVG text ignores the reader's own preference."""
-        phone = media_block(render_html.STYLE, "@media (max-width: 620px)")
-        assert ".chart .axis-label" in phone
-        assert "font-size: 12px" in phone
+    def test_chart_text_is_page_sized_and_lifted_on_a_phone(self):
+        """SVG text ignores the reader's own preference and shrinks with its chart: 15 px
+        on a desktop, and the half-width charts larger in their own units on a phone."""
+        assert ".chart .axis-label" in render_html.STYLE
+        phone = media_block(render_html.STYLE, "@media (max-width: 640px)")
+        assert ".two .chart .axis-label" in phone
+        assert "font-size: 19px" in phone
 
 
 class TestTabCloseButton:
     """The worst defect on the page: the control that removes a flight, at 19 x 19 px."""
 
-    def test_the_hit_area_reaches_forty_four_pixels_on_touch(self):
-        touch = media_block(render_html.STYLE, "@media (hover: none)")
-        assert ".tab-close::before" in touch
-        assert "width: 44px" in touch and "height: 44px" in touch
+    def test_the_button_is_forty_four_pixels(self):
+        """44 x 44 everywhere since the redesign, with an icon in the middle."""
+        assert ".tab-compare, .tab-close { position: relative; width: 44px; height: 44px;" in render_html.STYLE
 
     def test_an_inactive_tab_cannot_be_closed_by_accident_on_touch(self):
         """The pairing that makes the bigger target safe rather than worse.
@@ -83,9 +87,10 @@ class TestTabCloseButton:
         assert ".tab:not(.is-on) .tab-close" in touch
         assert "pointer-events: none" in touch
 
-    def test_the_glyph_itself_is_unchanged_on_a_desktop(self):
-        """19 px is right with a mouse; only the touch hit area grows."""
-        assert "width: 19px" in render_html.STYLE
+    def test_the_tab_buttons_are_icons_with_names(self):
+        tab = render_html._tab("f1", "Site", "2026-07-01")
+        assert tab.count("<svg") == 2
+        assert 'aria-label="Remove this flight"' in tab
 
 
 class TestMapButtonNames:
@@ -159,22 +164,23 @@ def rendered(tmp_path_factory):
 class TestDebriefRendering:
     """Phase 1: the layer that changes the product.
 
-    The IA is load-bearing and easy to regress: the verdict strip goes *above* the 3D
-    view and the cards *immediately below* it, so a reader meets the answer before the
-    hero image and the evidence sits next to the instrument that shows it.
+    The IA is load-bearing and easy to regress: the key numbers go *above* the 3D view
+    and the cards *immediately below* it, so a reader meets the answer before the hero
+    image and the evidence sits next to the instrument that shows it. (The verdict strip
+    and the stat tiles said the same numbers twice; since the redesign they are one band.)
     """
 
     @pytest.fixture
     def html(self, rendered):
         return rendered
 
-    def test_the_verdict_strip_precedes_the_findings(self, html):
-        assert '<div class="verdict">' in html
+    def test_the_key_numbers_precede_the_findings(self, html):
+        assert '<div class="figs keys">' in html
         assert '<div class="findings">' in html
-        assert html.index('class="verdict"') < html.index('class="findings"')
+        assert html.index('class="figs keys"') < html.index('class="findings"')
 
-    def test_the_verdict_strip_sits_under_the_masthead(self, html):
-        assert html.index("</header>") < html.index('class="verdict"')
+    def test_the_key_numbers_sit_under_the_masthead(self, html):
+        assert html.index("</header>") < html.index('class="figs keys"')
 
     def test_every_card_shows_its_cost(self, html):
         cards = html.count('class="finding"')
@@ -193,7 +199,7 @@ class TestDebriefRendering:
 
     def test_a_card_with_a_cursor_offers_show_me(self, html):
         assert "data-finding-cursor=" in html
-        assert "show me" in html
+        assert "Show on the map" in html
 
     def test_show_me_is_scoped_to_the_flight_not_the_document(self):
         """A document holds several flights; a document-level query moves the wrong one."""
@@ -215,10 +221,10 @@ class TestComparison:
 
     def test_each_flight_publishes_its_comparable_numbers(self, html):
         assert "data-compare-mean-climb=" in html
-        assert 'class="verdict-figure" data-key=' in html
+        assert 'class="fig" data-key="mean_climb"' in html
 
     def test_every_figure_has_somewhere_to_put_a_delta(self, html):
-        assert html.count("verdict-delta") == html.count('class="verdict-figure"')
+        assert html.count("verdict-delta") == html.count('class="fig" data-key=')
 
     def test_the_tab_carries_an_opt_in_control(self):
         tab = render_html._tab("f1", "2026-07-01", "Test")
@@ -260,7 +266,7 @@ class TestPageText:
         picture was drawn, so they belong with the reading rather than under the map."""
         source = REPORT_JS.read_text(encoding="utf-8")
         assert "view3d-caption" not in source
-        assert "clearanceNote(clearance) + ' ' + triggerNote(a, terrain)" in source
+        assert "contextFacts(a, clearance, terrain)" in source
         assert "debrief-context" in source
 
     def test_the_map_and_the_charts_are_neighbours(self):
@@ -268,11 +274,13 @@ class TestPageText:
         them. Asserted on the template, because whether a debrief renders at all depends
         on whether this particular day produced any findings."""
         source = REPORT_JS.read_text(encoding="utf-8")
-        layout = source[source.index("verdictStrip(result) + "):]
-        view = layout.index("view3dSection")
-        top = layout.index("<h2>Top view</h2>")
+        layout = source[source.index("figs.join('') + '</div>\\n' + mapSection"):]
+        view = layout.index("mapSection")
         debrief = layout.index("debriefSection", view)
-        assert view < top < debrief, "the debrief is back between the map and the charts"
+        # The top view, where there is one (no ground to draw a map on), comes after the
+        # tables and charts: a map looking straight down replaces it.
+        top = layout.index("topView", debrief)
+        assert view < debrief < top, "something is back between the map and the debrief"
 
     @needs_node
     def test_the_side_view_hangs_off_the_map_itself(self, tmp_path):
@@ -286,10 +294,11 @@ class TestPageText:
         assert panel - block < 300, "the 3D panel is not inside the map block"
         assert source.index("sideChart", panel) - panel < 120, (
             "the side view no longer follows the 3D panel directly")
-        assert source.index("sideControls", panel) > source.index("sideChart", panel), (
-            "the axis buttons belong below the chart")
+        chart = source.index("var sideChart")
+        assert source.index("sideBar", chart) < source.index("chart-host", chart), (
+            "the axis switch and legend sit on a bar over the chart, inside its panel")
         html = article(tmp_path, "side.igc", [(300, 2.5), (300, 2.0), (300, 1.4), (300, 0.8)])
-        assert "The flight from the side" in html
+        assert '<div class="flight-map">' in html
         # The side view is drawn in the page, so the article carries its host.
         assert 'data-chart="profile"' in html
 

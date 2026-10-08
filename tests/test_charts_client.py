@@ -249,9 +249,9 @@ class TestThePageDrawsThem:
                  pressed: a.querySelector('[data-profile="from_start"]')
                    .getAttribute('aria-pressed') };
         """)
-        assert "distance flown" in answer["before"]
-        assert "time of day" in answer["after"]
-        assert "distance from launch" in answer["fromStart"]
+        assert "distance flown" in answer["before"].lower()
+        assert "time of day" in answer["after"].lower()
+        assert "distance from launch" in answer["fromStart"].lower()
         assert answer["copies"] == 1, "a toggle that leaves copies behind is the old one"
         assert answer["pressed"] == "true"
         assert any(re.fullmatch(r"\d{2}:\d{2}", tick) for tick in answer["ticks"]), (

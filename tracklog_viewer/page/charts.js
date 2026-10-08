@@ -99,10 +99,17 @@
   // `aspect`: the host's width over its height, where its shape is not the chart's own —
   // full screen gives the side view a band a quarter of the screen tall, and drawn at its
   // usual proportions it shrank to a strip in the middle. The plot widens; text stays.
-  function profile(data, cursor, mode, compared, aspect) {
+  // `narrow`: the host's width in CSS pixels on a phone. The chart is then drawn at that
+  // size, one unit a pixel, so its 15 px type is 15 px on the screen — scaled down from
+  // 1 080 units it came out at 5 to 10 px — with fewer ticks to make the room.
+  function profile(data, cursor, mode, compared, aspect, narrow) {
     var box = data.profile;
     var left = box.left, right = box.right, top = box.top, bottom = box.bottom;
     var H = box.height, W = aspect ? Math.round(H * aspect) : box.width;
+    if (narrow) {
+      W = Math.round(narrow); H = Math.round(narrow * 0.66);
+      left = 50; right = 10; top = 14; bottom = 44;
+    }
     var plotW = W - left - right, plotH = H - top - bottom;
     var along = mode === 'from_start' ? data.d : (mode === 'time' ? cursor.t : data.s);
     var alt = cursor.alt;
@@ -146,7 +153,8 @@
 
     var grid = make('g', { 'class': 'grid' });
     var labels = [];
-    for (var level = Math.ceil(floor / 500) * 500; level <= ceiling; level += 500) {
+    var levelStep = narrow && ceiling - floor > 1500 ? 1000 : 500;
+    for (var level = Math.ceil(floor / levelStep) * levelStep; level <= ceiling; level += levelStep) {
       var y = sy(level);
       grid.appendChild(make('line', { x1: left, y1: y.toFixed(1), x2: W - right,
         y2: y.toFixed(1) }));
@@ -208,7 +216,7 @@
     ends.appendChild(make('circle', { cx: px[last].toFixed(1), cy: py[last].toFixed(1),
       r: 4.5, 'class': 'endpoint' }));
     ends.appendChild(make('text', { x: Math.min(px[last], W - right - 26).toFixed(1),
-      y: (py[last] + 20).toFixed(1), 'class': 'endpoint-label' }, 'landing'));
+      y: (py[last] + 20).toFixed(1), 'class': 'endpoint-label' }, 'Landing'));
     svg.appendChild(ends);
 
     var marks = make('g', { 'class': 'marks' });
@@ -231,7 +239,9 @@
     if (mode === 'time') {
       // The clock is Python's: it knows the flight's own timezone, and this page does
       // not and must not guess.
-      data.clockTicks.forEach(function (tick) {
+      var every = narrow ? Math.max(Math.ceil(data.clockTicks.length / 4), 1) : 1;
+      data.clockTicks.forEach(function (tick, n) {
+        if (n % every) return;
         var x = sx(tick[0]);
         if (x > left + plotW + 0.5) return;
         axes.appendChild(make('line', { 'class': 'tick', x1: x.toFixed(1), y1: baseline,
@@ -240,7 +250,7 @@
           'class': 'axis-label axis-x' }, tick[1]));
       });
     } else {
-      var stepKm = Math.max(Math.round(spanMax / 1000 / 10), 1);
+      var stepKm = Math.max(Math.round(spanMax / 1000 / (narrow ? 4 : 10)), 1);
       if (stepKm > 7) stepKm = Math.round(stepKm / 5) * 5;
       for (var km = 0; km * 1000 <= spanMax; km += stepKm) {
         var tx = sx(km * 1000);
@@ -253,10 +263,10 @@
     labels.forEach(function (label) { axes.appendChild(label); });
     axes.appendChild(make('text', { x: (left + plotW / 2).toFixed(1), y: H - 8,
       'class': 'axis-title' }, data.modes[mode][0]));
-    var side = make('text', { x: 14, y: (top + plotH / 2).toFixed(1),
+    var side = narrow ? null : make('text', { x: 14, y: (top + plotH / 2).toFixed(1),
       'class': 'axis-title',
-      transform: 'rotate(-90 14 ' + (top + plotH / 2).toFixed(1) + ')' }, 'altitude m');
-    axes.appendChild(side);
+      transform: 'rotate(-90 14 ' + (top + plotH / 2).toFixed(1) + ')' }, 'Altitude, m');
+    if (side) axes.appendChild(side);
     svg.appendChild(axes);
     return svg;
   }
@@ -381,7 +391,7 @@
     if (side) {
       var mode = side.dataset.mode || 'flown';
       side.textContent = '';
-      side.appendChild(profile(data, cursor, mode, comparedFor(article), shapeOf(side)));
+      side.appendChild(profile(data, cursor, mode, comparedFor(article), shapeOf(side), narrowOf(side)));
       watch(article, side);
     }
     var top = article.querySelector('.chart-host[data-chart="plan"]');
@@ -444,7 +454,7 @@
     host.dataset.mode = mode;
     host.textContent = '';
     host.appendChild(profile(article.__chartData, article.__cursorData, mode, comparedFor(article),
-                             shapeOf(host)));
+                             shapeOf(host), narrowOf(host)));
     // The cursor binds to the SVG that was there when it ran, so the new one has to be
     // handed back to it. Without this the toggle produces a chart the cursor cannot
     // drive, which looks exactly like the cursor being broken.
@@ -454,8 +464,14 @@
   // The host's own proportions where CSS has given it a box of its own (full screen: a
   // fixed height, `aspect-ratio: auto`); null where the chart's proportions are the box's.
   function shapeOf(host) {
-    if (getComputedStyle(host).aspectRatio !== 'auto' || !host.clientHeight) return null;
+    if (narrowOf(host) || getComputedStyle(host).aspectRatio !== 'auto' || !host.clientHeight) return null;
     return host.clientWidth / host.clientHeight;
+  }
+  // A phone's width, outside full screen (which has a shape of its own); else null.
+  function narrowOf(host) {
+    var wide = host.clientWidth;
+    if (!wide || wide >= 640 || host.closest(':fullscreen, .is-maximised')) return null;
+    return wide;
   }
   // Redrawn when the host changes shape — entering and leaving full screen.
   function watch(article, host) {
@@ -463,7 +479,8 @@
     host.__watched = true;
     var last = null, timer = null;
     new ResizeObserver(function () {
-      var shape = shapeOf(host), key = shape ? shape.toFixed(2) : 'own';
+      var shape = shapeOf(host), thin = narrowOf(host);
+      var key = thin ? 'narrow' + thin : (shape ? shape.toFixed(2) : 'own');
       if (key === last) return;
       last = key;
       clearTimeout(timer);

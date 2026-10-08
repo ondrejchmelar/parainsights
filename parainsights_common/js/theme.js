@@ -9,7 +9,8 @@
     var isDark = dark();
     button.setAttribute('aria-pressed', isDark ? 'true' : 'false');
     button.title = isDark ? 'Switch to the light theme' : 'Switch to the dark theme';
-    button.querySelector('.theme-glyph').textContent = isDark ? '☀' : '☽';
+    var glyph = button.querySelector('.theme-glyph');
+    glyph.innerHTML = isDark ? glyph.dataset.sun : glyph.dataset.moon;
   }
   var buttons = document.querySelectorAll('.theme-toggle');
   buttons.forEach(function (button) {

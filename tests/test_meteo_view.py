@@ -547,14 +547,14 @@ def test_flymet_is_shown_for_today_and_tomorrow_and_not_beyond():
     """flymet publishes two days. The third day of the strip must show nothing rather
     than yesterday's picture under a Thursday heading."""
     answer = _probe_page("""
-    var details = document.getElementById('met-flymet');
-    var list = document.getElementById('met-flymet-list');
+    // In the takeoff's own column, under its charts (the redesign).
     var seen = [];
     for (var day = 0; day < 4; day++) {
       window.__meteo.state.day = day;
       window.__meteo.draw();
+      var list = document.querySelector('.met-col-fly');
       var image = list.querySelector('img');
-      seen.push({ day: day, hidden: details.hidden,
+      seen.push({ day: day, hidden: list.hidden,
                   src: image ? image.getAttribute('src') : null,
                   // Read per day: the panel is emptied on a day flymet has nothing for,
                   // so reading it after the loop reads the empty one.
@@ -566,7 +566,7 @@ def test_flymet_is_shown_for_today_and_tomorrow_and_not_beyond():
     assert not today["hidden"] and "/meteogram/" in today["src"]
     assert not tomorrow["hidden"] and "/meteogram2/" in tomorrow["src"]
     assert third["hidden"] and fourth["hidden"]
-    assert "km from this takeoff" in today["caption"]
+    assert " km" in today["caption"] and "flymet" in today["caption"]
 
 
 # ------------------------------------------- choosing takeoffs, in a browser
@@ -1027,20 +1027,20 @@ class TestTheSoundingsAndFlymetCompareToo:
         var near = conf.flymet.near;
         var stations = {};
         m.chosen().forEach(function (i) { if (near[i]) stations[near[i].slug] = 1; });
-        return { figures: document.querySelectorAll('#met-flymet-list figure').length,
-                 images: document.querySelectorAll('#met-flymet-list img').length,
-                 stations: Object.keys(stations).length,
-                 summary: document.getElementById('met-flymet-summary').textContent };
+        var withStation = m.chosen().filter(function (i) { return near[i]; }).length;
+        return { figures: document.querySelectorAll('.met-col-fly:not([hidden])').length,
+                 images: document.querySelectorAll('.met-col-fly img').length,
+                 wanted: withStation };
         """)
-        assert answer["figures"] == answer["stations"], (
-            "one picture per station, and every chosen takeoff's station is a station")
+        assert answer["figures"] == answer["wanted"], (
+            "every chosen takeoff with a station shows its meteogram in its column")
         assert answer["images"] == answer["figures"]
 
-    def test_two_takeoffs_sharing_an_airfield_get_one_picture_naming_both(self, monkeypatch):
-        """Two hills sharing their nearest airfield: the same meteogram printed twice
-        under two headings reads as a bug in the page, and costs flymet a second fetch to
-        say the same thing. The chosen list is short enough that no two share one today,
-        so the first two are made to — a list that grows would bring the case back."""
+    def test_two_takeoffs_sharing_an_airfield_ask_flymet_once(self, monkeypatch):
+        """Two hills sharing their nearest airfield: each column shows the meteogram under
+        its own charts, side by side as the redesign wants, and both ask for the same
+        address — so flymet is fetched once and the browser shows it twice. The chosen
+        list is short enough that no two share one today, so the first two are made to."""
         real = render_html.nearest_stations
 
         def shared(*args, **kwargs):
@@ -1065,21 +1065,16 @@ class TestTheSoundingsAndFlymetCompareToo:
         m.chosen().slice().forEach(function (i) { m.drop(i); });
         m.add(pair[0]);
         m.add(pair[1]);
-        var figures = document.querySelectorAll('#met-flymet-list figure');
+        var images = document.querySelectorAll('.met-col-fly:not([hidden]) img');
         return {
           skipped: false,
-          figures: figures.length,
-          heading: figures.length ? figures[0].querySelector('.for').textContent : '',
-          dots: figures.length ? figures[0].querySelectorAll('.for i').length : 0,
-          names: [conf.sites[pair[0]].name, conf.sites[pair[1]].name]
+          figures: images.length,
+          sources: Array.prototype.map.call(images, function (i) { return i.getAttribute('src'); })
         };
         """)
         assert not answer["skipped"], "no two takeoffs share an airfield"
-        assert answer["figures"] == 1, "the same picture was printed twice"
-        for name in answer["names"]:
-            assert name in answer["heading"], (
-                f"{name} shares the picture but is not named on it")
-        assert answer["dots"] == 2, "each takeoff's colour belongs on the heading"
+        assert answer["figures"] == 2, "each column shows its meteogram"
+        assert answer["sources"][0] == answer["sources"][1], "the one picture, fetched once"
 
 
 @needs_chrome
@@ -1314,7 +1309,7 @@ def test_the_two_thermal_tops_are_named_and_the_difference_explained():
     answer = _probe_page("""
     var m = window.__meteo;
     var box = document.querySelector('.met-col-top');
-    var stable = box.querySelector('summary').textContent;
+    var stable = box.querySelector('.txt').textContent + ' ' + box.querySelector('.info').getAttribute('aria-label');
     var profile = m.state.profiles[m.chosen()[0]];
     var wanted = %s;
     Object.keys(wanted).forEach(function (level) {
@@ -1324,12 +1319,13 @@ def test_the_two_thermal_tops_are_named_and_the_difference_explained():
     m.draw();
     var canvas = document.querySelector('.met-col-sounding');
     return { drawn: canvas.__drawn, hidden: box.hidden, stable: stable,
-             summary: box.querySelector('summary').textContent,
-             why: box.querySelector('p').textContent, open: box.open };
+             summary: box.querySelector('.txt').textContent + ' ' + box.querySelector('.info').getAttribute('aria-label'),
+             why: box.querySelector('.info-pop').textContent,
+             open: box.querySelector('.info').getAttribute('aria-expanded') === 'true' };
     """ % json.dumps(temperatures))
     assert "(model only)" in answer["stable"], answer["stable"]
     assert "two numbers" not in answer["stable"], "one number, asked why there are two"
-    assert "why only one?" in answer["stable"]
+    assert "Why only one?" in answer["stable"]
     drawn = answer["drawn"]
     assert drawn["thermalTop"] and drawn["parcelTop"], drawn
     assert answer["hidden"] is False
@@ -1337,7 +1333,7 @@ def test_the_two_thermal_tops_are_named_and_the_difference_explained():
     shown = [int(n.replace(" ", "")) for n in
              re.findall(r"(\d[\d ]*) m", answer["summary"])]
     assert shown == [low, high], answer["summary"]
-    assert "why two numbers?" in answer["summary"]
+    assert "Why two numbers?" in answer["summary"]
     assert answer["open"] is False, "the reason should be folded until asked for"
     assert "ECMWF" in answer["why"] and "parcel" in answer["why"]
 

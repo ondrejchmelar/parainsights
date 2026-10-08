@@ -45,66 +45,88 @@ CLASSES = [
 
 STYLE = """
 .airspace-article .renderer-host { position: relative; }
+.airspace-article .lede { color: var(--ink-2); margin: 0 0 14px; max-width: 70ch; }
 .asp-wrap { margin: 0 0 30px; }
-.asp-map { width: 100%; aspect-ratio: 3 / 2; background: var(--panel);
-  border: 1px solid var(--rule); border-radius: 4px; touch-action: none;
-  cursor: grab; display: block; }
+.asp-map { width: 100%; aspect-ratio: 3 / 2; background: var(--panel); border: 1px solid var(--rule);
+  border-radius: 14px; touch-action: none; cursor: grab; display: block; }
 .asp-map.is-dragging { cursor: grabbing; }
-.asp-border { fill: var(--panel-2); stroke: var(--ink-3); stroke-width: 1;
-  vector-effect: non-scaling-stroke; }
-.asp-city { fill: var(--ink-3); font-size: 10px; }
-.asp-dot { fill: var(--ink-3); }
+.asp-border { fill: var(--panel-2); stroke: var(--ink-2); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.asp-city { fill: var(--ink-2); font-size: 13px; }
+.asp-dot { fill: var(--ink-2); }
 .asp-zone { vector-effect: non-scaling-stroke; }
 .asp-zone:hover { fill-opacity: 0.42; }
-.asp-controls { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center;
-  margin: 12px 0 8px; font-size: 13px; }
-.asp-controls label { display: inline-flex; align-items: center; gap: 5px;
-  cursor: pointer; }
-.asp-swatch { width: 11px; height: 11px; border-radius: 2px; display: inline-block; }
-.asp-slider { display: flex; align-items: center; gap: 8px; flex: 1 1 260px; }
-.asp-slider input { flex: 1; }
-.asp-readout { font-variant-numeric: tabular-nums; color: var(--ink-2);
-  min-width: 8.5em; }
-.asp-when-out { flex: 1 1 20em; min-width: 0; }
-.asp-controls input[type="datetime-local"] { font: inherit; padding: 2px 6px;
-  background: var(--panel); color: var(--ink); border: 1px solid var(--rule);
-  border-radius: 3px; }
-.asp-hint { font-size: 12.5px; color: var(--ink-3); margin: 6px 0 0; }
-.asp-name { position: absolute; pointer-events: none; background: var(--ink);
-  color: var(--paper); padding: 5px 8px; border-radius: 3px; font-size: 12px;
-  max-width: 320px; opacity: 0; transition: opacity 0.1s; z-index: 5; }
+.asp-controls { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; margin: 8px 0; font-size: 16px; }
+.asp-swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; flex: none; }
+.asp-classes { flex-direction: column; align-items: flex-start; gap: 0; }
+.asp-slider { display: flex; align-items: center; gap: 10px; flex: 1 1 100%; }
+.asp-slider input { flex: 1; accent-color: var(--accent); }
+.asp-readout { font-variant-numeric: tabular-nums; color: var(--ink-2); font-size: 15px; }
+.asp-when-out { flex: 1 1 100%; min-width: 0; }
+.asp-controls input[type="datetime-local"] { font: inherit; font-size: 16px; height: 44px; padding: 0 10px;
+  background: var(--panel); color: var(--ink); border: 1px solid var(--edge); border-radius: 10px; }
+.asp-name { position: absolute; pointer-events: none; background: var(--ink); color: var(--paper);
+  padding: 7px 11px; border-radius: 10px; font-size: 15px; max-width: 320px; opacity: 0;
+  transition: opacity 0.1s; z-index: 5; }
 .asp-name.is-on { opacity: 1; }
 .asp-holder { position: relative; }
-.asp-get { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px;
-  margin: 0 0 16px; padding: 13px 15px; border: 1px solid var(--rule);
-  border-left: 3px solid var(--atz, #15803d); border-radius: 4px; background: var(--panel); }
-.asp-download { display: inline-flex; flex-direction: column; gap: 1px;
-  text-decoration: none; background: var(--atz, #15803d); color: #fff; padding: 8px 15px;
-  border-radius: 3px; }
-.asp-download:hover { filter: brightness(1.12); }
-.asp-dl-label { font-weight: 600; font-size: 14px; }
-.asp-dl-note { font-size: 11.5px; opacity: 0.85; font-variant-numeric: tabular-nums; }
-.asp-get-how { margin: 0; flex: 1 1 320px; font-size: 12.5px; color: var(--ink-2); }
-.asp-get-how code { font-size: 12px; background: var(--panel-2); padding: 1px 4px;
-  border-radius: 2px; }
-.asp-warn { flex: 1 1 100%; margin: 2px 0 0; padding: 9px 12px; font-size: 12.5px;
-  line-height: 1.5; color: var(--ink-2); background: var(--panel-2);
-  border-left: 3px solid #b45309; border-radius: 3px; }
+
+/* The stage: the map as tall as the screen, everything else floating over it. */
+.asp-stage { position: relative; }
+/* The map's own layers stack among themselves, under the panels. */
+.asp-stage .asp-holder { isolation: isolate; z-index: 0; }
+.asp-stage .view3d { aspect-ratio: auto; height: calc(100vh - 80px); min-height: 560px; }
+.asp-floats { position: absolute; top: 16px; bottom: 16px; z-index: 6; width: 380px;
+  left: calc(50% - (100vw - var(--scrollbar, 0px)) / 2 + 16px);
+  display: flex; flex-direction: column; gap: 12px; pointer-events: none; }
+.float { pointer-events: auto; background: var(--float); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  border: 1px solid var(--float-edge); border-radius: 14px; box-shadow: var(--float-shadow); }
+.float h2 { font-size: 20px; margin: 0; display: flex; align-items: center; gap: 4px; }
+.plan-panel { padding: 16px 20px; overflow-y: auto; min-height: 0; flex: 0 1 auto; }
+.asp-layers { padding: 0; flex: none; max-height: 60%; overflow-y: auto; }
+.asp-layers > summary { list-style: none; display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 10px 20px; min-height: 52px; cursor: pointer; }
+.asp-layers > summary::-webkit-details-marker { display: none; }
+.asp-layers > summary svg { transition: transform .15s; margin-left: -4px; }
+.asp-layers[open] > summary svg { transform: rotate(90deg); }
+.asp-layers-count { color: var(--ink-2); font-size: 15px; }
+.asp-layers .asp-controls { padding: 0 20px; }
+.asp-layers .asp-when-row { padding-bottom: 14px; }
+.asp-get-float { margin-top: auto; flex: none; display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 8px 8px 8px 18px; font-weight: 600; }
+.asp-get-label { display: inline-flex; align-items: center; }
+.asp-sources { margin: 24px 0 0; }
+.asp-sources > summary { color: var(--accent); font-weight: 600; cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+/* The flat fallback's download box. */
+.asp-get { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin: 0 0 16px; padding: 14px 16px;
+  border: 1px solid var(--rule); border-radius: 14px; background: var(--panel); }
+.asp-download { display: inline-flex; flex-direction: column; gap: 1px; text-decoration: none; background: var(--accent);
+  color: var(--on-accent); padding: 8px 16px; border-radius: 10px; }
+.asp-dl-label { font-weight: 600; font-size: 16px; }
+.asp-dl-note { font-size: 15px; opacity: 0.9; font-variant-numeric: tabular-nums; }
+.asp-get-how { margin: 0; flex: 1 1 320px; font-size: 15px; color: var(--ink-2); }
+.asp-warn { flex: 1 1 100%; margin: 2px 0 0; padding: 10px 14px; font-size: 15px; line-height: 1.5; color: var(--ink-2);
+  background: var(--panel-2); border-left: 3px solid var(--warn); border-radius: 6px; }
 .asp-warn strong { color: var(--ink); }
-.asp-src { width: 100%; border-collapse: collapse; margin: 18px 0 0; font-size: 12.5px; }
-.asp-src caption { text-align: left; font-size: 12.5px; font-weight: 600;
-  color: var(--ink-2); padding: 0 0 6px; }
-.asp-src th { text-align: left; font-weight: 600; font-size: 11px;
-  text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-3);
-  border-bottom: 1px solid var(--rule); padding: 0 10px 5px 0; }
-.asp-src td { padding: 7px 10px 7px 0; border-bottom: 1px solid var(--rule);
-  color: var(--ink-2); vertical-align: top; }
-.asp-src a { color: inherit; text-decoration: underline;
-  text-decoration-color: var(--ink-3); text-underline-offset: 2px; }
-.asp-src a:hover { color: var(--ink); text-decoration-color: currentColor; }
+.asp-src { width: 100%; border-collapse: collapse; margin: 12px 0 0; font-size: 15px; }
+.asp-src caption { text-align: left; font-size: 16px; font-weight: 600; color: var(--ink-2); padding: 0 0 8px; }
+.asp-src th { text-align: left; font-weight: 600; font-size: 15px; color: var(--ink-2); border-bottom: 1px solid var(--rule);
+  padding: 0 10px 6px 0; }
+.asp-src td { padding: 8px 10px 8px 0; border-bottom: 1px solid var(--rule); color: var(--ink-2); vertical-align: top; }
+.asp-src a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.asp-src a:hover { color: var(--ink); }
 .asp-src-key { color: var(--ink) !important; }
 .asp-src-key .asp-swatch { margin-right: 5px; vertical-align: -1px; }
 .asp-src-when { white-space: nowrap; font-variant-numeric: tabular-nums; }
+@media (max-width: 900px) {
+  /* A phone or a narrow window: the map first, the task right under it like a sheet,
+     then the layers and the download. Over a small map the panels would hide it. */
+  .asp-stage .view3d { height: auto; min-height: 0; aspect-ratio: 3 / 4; }
+  .asp-floats { position: static; width: auto; display: flex; gap: 12px; margin-top: -14px; }
+  .float { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--panel); box-shadow: none; }
+  .plan-panel { border-radius: 14px 14px 0 0; border-top-color: var(--edge); position: relative; z-index: 7; }
+  .asp-layers { max-height: none; }
+  .asp-get-float { margin-top: 0; }
+}
 """
 
 # Shared by the flat map, the 3D map and the planner, all three of which ask the same
@@ -311,16 +333,17 @@ def when_control(note: str = "") -> str:
     """
     years = range(dt.date.today().year - 1, dt.date.today().year + 3)
     calendar = ",".join(hours.holiday_list(years))
+    import parainsights_common as common
+
     return (
-        '<div class="asp-controls">'
-        '<label for="asp-when-on"><input type="checkbox" id="asp-when-on">'
-        "Only fields open at</label>"
+        '<div class="asp-controls asp-when-row">'
+        '<label class="chk" for="asp-when-on"><input type="checkbox" id="asp-when-on">'
+        f"Only fields open at</label>{common.info(note) if note else ''}"
         f'<input type="datetime-local" id="asp-when" data-holidays="{calendar}" '
         'aria-label="date and time, Czech local">'
-        '<button type="button" id="asp-when-now">now</button>'
+        '<button type="button" class="btn" id="asp-when-now">Now</button>'
         '<span class="asp-readout asp-when-out" id="asp-when-out"></span>'
         "</div>"
-        f'<p class="asp-hint">{note}</p>'
     )
 
 
@@ -344,12 +367,12 @@ def controls(top: int, flat: bool = True) -> str:
     airspace is the wrong thing to open with.
     """
     boxes = "".join(
-        f'<label><input type="checkbox" data-asp-class="{key}" checked>'
+        f'<label class="chk"><input type="checkbox" data-asp-class="{key}" checked>'
         f'<span class="asp-swatch" style="background:{colour}"></span>{_escape(label)}</label>'
         for key, label, colour in CLASSES
     )
     return (
-        f'<div class="asp-controls">{boxes}</div>'
+        f'<div class="asp-controls asp-classes">{boxes}</div>'
         '<div class="asp-controls">'
         '<span class="asp-slider">'
         '<label for="asp-floor">Floor at or below</label>'
@@ -360,7 +383,7 @@ def controls(top: int, flat: bool = True) -> str:
         # The 3D map carries its own reset in the bar across its bottom,
         # and two buttons that both say "reset" and do different amounts is worse than
         # one. There, this button clears the filters *and* presses that one.
-        f'<button type="button" id="asp-reset">'
+        f'<button type="button" class="btn" id="asp-reset">'
         f'{"Reset view" if flat else "Reset"}</button>'
         "</div>"
         + when_control(WHEN_NOTE)
@@ -564,22 +587,67 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
                      "task</em> and click turnpoints, and the route is scored as XContest "
                      "would and checked against every zone it crosses.")
 
-    return f"""<article class="flight airspace-article" id="{uid}-article"{plan_attr}>
-  <h1>Planner</h1>
-  <p class="lede">Everything openAIP carries over Czechia, plus what no published source
-  draws: the traffic circuit at {overlay.circuit_fields} fields and ultralight strips. A
-  paraglider may fly inside an aerodrome zone but must stay out of its circuit, and no
-  instrument draws the circuit.
-  Scroll to zoom, drag to pan, hover for the name and limits.{boxes}{plan_lede}</p>
-  {controls(top, flat=scene is None)}
-  {plan_bar}
+    import parainsights_common as common
+
+    if scene is None:
+        # The flat fallback (`--flat`): no stage, the controls above the map as before.
+        return f"""<article class="flight airspace-article" id="{uid}-article"{plan_attr}>
+  <p class="lede">Czech airspace and the traffic circuits no published source draws.</p>
+  {controls(top, flat=True)}
   <div class="asp-holder">
     {_map(airspaces, project, scene, uid)}
     <div class="asp-name" id="asp-name"></div>
   </div>
-  {plan_results}
   {download}
-  {sources_table(overlay, base_version, shift)}
+  <details class="asp-sources"><summary>Sources</summary>{sources_table(overlay, base_version, shift)}</details>
+</article>"""
+
+    about = ("Everything openAIP carries over Czechia, plus what no published source draws: "
+             f"the traffic circuit at {overlay.circuit_fields} fields and ultralight strips. A "
+             "paraglider may fly inside an aerodrome zone but must stay out of its circuit, and "
+             "no instrument draws the circuit. Hover a zone for its name and limits." + boxes)
+    get = ""
+    if openair_name:
+        get = (f'<div class="float asp-get-float">'
+               f'<span class="asp-get-label">Airfield layer for XCTrack'
+               + common.info(
+                   "Aerodrome zones and traffic circuits XCTrack and XContest leave out "
+                   f"(OpenAir · {overlay.atz_count} zones, {overlay.circuits} circuits at "
+                   f"{overlay.circuit_fields} fields · {openair_size / 1024:.0f} KB). "
+                   "<strong>Not a full airspace set</strong>: load it alongside your usual "
+                   "airspace, never instead of it. Import under Preferences → Airspaces and "
+                   "obstacles → Files → Import OpenAir files, or copy it into the "
+                   "XCTrack/Airspaces folder. Provided with no guarantee — it may be out of "
+                   "date or wrong; you are responsible for the airspace you fly in.",
+                   "About the airfield layer")
+               + '</span>'
+               f'<a class="btn primary" download="{_escape((openair_href or openair_name).rsplit("/", 1)[-1])}" '
+               f'href="{_escape(openair_href or openair_name)}">'
+               f'{common.icon(common.ICONS["download"])}Download</a></div>')
+    task = ""
+    if plan_bar:
+        task = (f'<div class="float plan-panel"><h2>Task{common.info("Press Draw a task, then click the map to drop turnpoints; drag, pinch and twist still move the view. The route is scored as XContest would and checked against every zone it crosses.")}</h2>'
+                + plan_results.replace('<div class="plan-figures" id="plan-figures"></div>',
+                                       '<div class="plan-figures" id="plan-figures"></div>' + plan_bar, 1)
+                + '</div>')
+    return f"""<article class="flight airspace-article" id="{uid}-article"{plan_attr}>
+  <!-- The map is the page: everything else floats over it, and on a phone the task is a
+       sheet across its foot. -->
+  <div class="asp-stage">
+    <div class="asp-holder">
+      {_map(airspaces, project, scene, uid)}
+      <div class="asp-name" id="asp-name"></div>
+    </div>
+    <div class="asp-floats">
+      {task}
+      <details class="float asp-layers">
+        <summary><h2>{common.icon(common.ICONS["right"])}Layers{common.info(about, "About this map")}</h2><span class="asp-layers-count" id="asp-count"></span></summary>
+        {controls(top, flat=False).replace('<span class="asp-readout" id="asp-count"></span>', '', 1)}
+      </details>
+      {get}
+    </div>
+  </div>
+  <details class="asp-sources"><summary>Sources and dates</summary>{sources_table(overlay, base_version, shift)}</details>
 </article>"""
 
 

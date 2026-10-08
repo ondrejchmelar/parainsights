@@ -10,9 +10,25 @@
       node.crossOrigin = 'anonymous';
       Object.keys(attrs).forEach(function (key) { node[key] = attrs[key]; });
       node.onload = resolve;
-      node.onerror = function () { reject(new Error('could not load ' + (attrs.src || attrs.href))); };
+      node.onerror = function () {
+        node.remove();
+        reject(new Error('could not load ' + (attrs.src || attrs.href)));
+      };
       document.head.appendChild(node);
     });
+  }
+  // A CDN answers the odd request with nothing — seen as a map that never came up until
+  // the page was reloaded. Two more tries, a second and then three later.
+  function fetchLib(tag, attrs) {
+    var waits = [1000, 3000];
+    function attempt(left) {
+      return load(tag, attrs).catch(function (error) {
+        if (!left.length) throw error;
+        return new Promise(function (resolve) { setTimeout(resolve, left[0]); })
+          .then(function () { return attempt(left.slice(1)); });
+      });
+    }
+    return attempt(waits);
   }
 
   // Once per page, however many maps open.
@@ -21,9 +37,9 @@
   function libs() {
     if (!libraries) {
       libraries = Promise.all([
-        load('link', { rel: 'stylesheet', href: MAPLIBRE + '/maplibre-gl.css' }),
-        load('script', { src: MAPLIBRE + '/maplibre-gl.js' })
-      ]).then(function () { return load('script', { src: DECK }); });
+        fetchLib('link', { rel: 'stylesheet', href: MAPLIBRE + '/maplibre-gl.css' }),
+        fetchLib('script', { src: MAPLIBRE + '/maplibre-gl.js' })
+      ]).then(function () { return fetchLib('script', { src: DECK }); });
       libraries.catch(function () { libraries = null; });
     }
     return libraries;

@@ -147,6 +147,12 @@
     })).then(function () { state.runs = runs; drawModel(); });
   }
 
+  // The site's icons (`parainsights_common.ICONS`), for what this script draws.
+  var CLOSE_ICON = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15"/></svg>';
+  var PLUS_ICON = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg>';
+  var EXPAND_ICON = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.5 3.5h5v5M8.5 16.5h-5v-5M16.5 3.5 11 9M3.5 16.5 9 11"/></svg>';
+  function cap(text) { return text ? text.charAt(0).toUpperCase() + text.slice(1) : text; }
+
   function drawModel() {
     var box = document.getElementById('met-model');
     var surface = state.surface && state.surface[0];
@@ -182,7 +188,7 @@
   function drawDays() {
     var strip = document.getElementById('met-days');
     strip.innerHTML = '';
-    var names = ['today', 'tomorrow'];
+    var names = ['Today', 'Tomorrow'];
     for (var d = 0; d < 4; d++) {
       var when = new Date();
       when.setDate(when.getDate() + d);
@@ -384,7 +390,7 @@
       if (index === null) return;
       var site = conf.sites[index];
       var chip = document.createElement('span');
-      chip.className = 'met-chip' + (state.site === index ? ' is-focus' : '');
+      chip.className = 'chip met-chip' + (state.site === index ? ' is-focus' : '');
       chip.innerHTML = '<i class="swatch"></i>'
         + '<button type="button" class="met-chip-name"></button>'
         + '<button type="button" class="met-chip-drop" aria-label="Remove"></button>';
@@ -394,20 +400,15 @@
       name.setAttribute('aria-pressed', state.site === index ? 'true' : 'false');
       name.onclick = function () { focus(index); };
       var close = chip.querySelector('.met-chip-drop');
-      close.textContent = '×';
+      close.innerHTML = CLOSE_ICON;
       close.setAttribute('aria-label', 'Remove ' + site.name);
       close.onclick = function () { drop(index); };
       box.insertBefore(chip, add);
     });
-    add.textContent = chosen().length ? '+ add another' : '+ add a takeoff';
-    add.disabled = false;
-    if (chosen().length >= MAX_CHOSEN) {
-      var cap = document.createElement('span');
-      cap.className = 'met-cap';
-      cap.textContent = 'three at a time';
-      box.appendChild(cap);
-      add.disabled = true;
-    }
+    add.innerHTML = PLUS_ICON + '<span>Add takeoff</span>';
+    // Three at a time, said only when it matters: on the button that stops working.
+    add.disabled = chosen().length >= MAX_CHOSEN;
+    add.title = add.disabled ? 'Three at a time — remove one to add another' : '';
   }
 
   // ---- the comparison ------------------------------------------------------------------
@@ -737,7 +738,7 @@
     grid = grid || 1000;
     ctx.strokeStyle = ink('--rule');
     ctx.fillStyle = ink('--ink-3');
-    ctx.font = '10px ui-sans-serif, sans-serif';
+    ctx.font = '14px "Noto Sans", ui-sans-serif, sans-serif';
     ctx.lineWidth = 1;
     for (var m = 0; m <= top_m; m += grid) {
       ctx.beginPath(); ctx.moveTo(left, y(m)); ctx.lineTo(W - right, y(m)); ctx.stroke();
@@ -759,7 +760,7 @@
     for (var i = 1; i < labels.length; i++) {
       if (labels[i].y - labels[i - 1].y < 12) labels[i].y = labels[i - 1].y + 12;
     }
-    ctx.font = '600 10px ui-sans-serif, sans-serif';
+    ctx.font = '600 14px "Noto Sans", ui-sans-serif, sans-serif';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
     labels.forEach(function (label) {
@@ -814,13 +815,16 @@
         cell.dataset.site = index;
         cell.innerHTML = '<p class="met-col-head"><i></i><span class="name"></span>'
           + '<span class="ground"></span></p>'
-          + '<p class="met-col-rose"><span></span> <a rel="noreferrer">on PGE</a></p>'
+          + '<p class="met-col-rose"><span></span> · <a rel="noreferrer">ParaglidingEarth</a></p>'
           + '<canvas class="met-canvas met-col-air" width="380" height="270"'
           + ' aria-label="The day by hour and height: wind, cloud, boundary layer and cloudbase">'
           + '</canvas>'
           + '<canvas class="met-canvas met-col-sounding" width="380" height="300"></canvas>'
           + '<p class="met-col-airout"></p>'
-          + '<details class="met-col-top" hidden><summary></summary><p></p></details>';
+          + '<p class="met-col-top" hidden><span class="txt"></span><span class="info-wrap">'
+          + '<button type="button" class="info" aria-expanded="false" aria-label="About the thermal top">i</button>'
+          + '<span class="info-pop" role="note"></span></span></p>'
+          + '<figure class="met-col-fly" hidden></figure>';
         cell.querySelector('i').style.background = seriesColour(slotOf(index));
         cell.querySelector('.name').textContent = conf.sites[index].name;
         // Clicking a column focuses that takeoff, the same as its chip or its table row.
@@ -833,8 +837,8 @@
           ? conf.octants.filter(function (point, i) { return site.winds[i] === 2; })
           : null;
         cell.querySelector('.met-col-rose span').textContent = good === null
-          ? 'no directions recorded, so this page will not judge it'
-          : (good.length ? 'works in ' + good.join(' ') : 'only marginal directions');
+          ? 'No directions recorded, so this page will not judge it'
+          : (good.length ? 'Works in ' + good.join(' ') : 'Only marginal directions');
         cell.querySelector('.met-col-rose a').href =
           'https://www.paraglidingearth.com/index.php?site=' + site.id;
         cell.querySelector('.met-col-sounding').title =
@@ -844,6 +848,7 @@
                 index);
         box.appendChild(cell);
       });
+      drawSwipe(box, wanted);
     }
     Array.prototype.forEach.call(box.children, function (cell) {
       var index = Number(cell.dataset.site);
@@ -858,6 +863,38 @@
       drawSounding(sounding, profile);
       drawAir(cell.querySelector('.met-col-air'), profile, slotOf(index));
     });
+  }
+
+  // On a phone the columns are a strip to swipe; this is its selector, and it follows the
+  // swipe. Built with the columns, because it names them.
+  function drawSwipe(box, wanted) {
+    var holder = document.getElementById('met-swipe');
+    if (!holder) return;
+    holder.textContent = '';
+    if (wanted.length < 2) return;
+    var seg = document.createElement('div');
+    seg.className = 'seg';
+    seg.setAttribute('role', 'group');
+    seg.setAttribute('aria-label', 'Show the charts for');
+    wanted.forEach(function (index, i) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = i === 0 ? 'is-on' : '';
+      b.innerHTML = '<i class="dot"></i><span></span>';
+      b.querySelector('i').style.background = seriesColour(slotOf(index));
+      b.querySelector('span').textContent = conf.sites[index].name;
+      b.onclick = function () { box.children[i].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }); };
+      seg.appendChild(b);
+    });
+    holder.appendChild(seg);
+    box.onscroll = function () {
+      var middle = box.scrollLeft + box.clientWidth / 2, best = 0;
+      Array.prototype.forEach.call(box.children, function (cell, i) {
+        if (Math.abs(cell.offsetLeft + cell.offsetWidth / 2 - middle) <
+            Math.abs(box.children[best].offsetLeft + box.children[best].offsetWidth / 2 - middle)) best = i;
+      });
+      Array.prototype.forEach.call(seg.children, function (b, i) { b.className = i === best ? 'is-on' : ''; });
+    };
   }
 
   // ---- the airgram: wind by hour and height ---------------------------------------------
@@ -975,8 +1012,8 @@
     // Each line named at its evening end, where it has stopped moving, pushed apart when
     // the two end close together — which on a blue day they do.
     var named = [];
-    if (layer && layer[1] > f.top) named.push({ y: layer[1], text: 'boundary layer', colour: seriesColour(slot) });
-    if (based && based[1] > f.top) named.push({ y: based[1], text: 'cloudbase', colour: ink('--ink') });
+    if (layer && layer[1] > f.top) named.push({ y: layer[1], text: 'Boundary layer', colour: seriesColour(slot) });
+    if (based && based[1] > f.top) named.push({ y: based[1], text: 'Cloudbase', colour: ink('--ink') });
     named.sort(function (a, b) { return a.y - b.y; });
     named.forEach(function (label, i) {
       label.y = Math.min(Math.max(label.y - 3, f.top + 26), f.H - f.bottom - 2);
@@ -986,8 +1023,8 @@
     // The key: what the shading means, on the chart rather than in a caption nobody reads
     // twice.
     var kx = f.left + 4, ky = f.top + 4;
-    ctx.font = '10px ui-sans-serif, sans-serif';
-    var label = 'wind 0 \u2192 ' + AIR_FULL + '+ m/s \u00b7 grey: cloud';
+    ctx.font = '14px "Noto Sans", ui-sans-serif, sans-serif';
+    var label = 'Wind 0 \u2192 ' + AIR_FULL + '+ m/s \u00b7 grey: cloud';
     var kw = ctx.measureText(label).width;
     ctx.globalAlpha = 0.88; ctx.fillStyle = ink('--panel');
     ctx.fillRect(kx - 2, ky - 1, kw + 52, 14); ctx.globalAlpha = 1;
@@ -1070,7 +1107,7 @@
   // A label on a pad. The thermal top and the cloudbase land within a few metres of
   // each other on a lot of days, and each was then read against the other's line.
   function padded(ctx, text, x, y, colour, align) {
-    ctx.font = '10px ui-sans-serif, sans-serif';
+    ctx.font = '14px "Noto Sans", ui-sans-serif, sans-serif';
     ctx.textAlign = align;
     ctx.textBaseline = 'bottom';
     var width = ctx.measureText(text).width;
@@ -1100,38 +1137,34 @@
       var low = Math.min(model, parcel), high = Math.max(model, parcel);
       if (Math.abs(model - parcel) < 50) {
         text = 'Thermal top ' + metres((model + parcel) / 2) + ' (model and parcel agree)';
-        ask = 'how is it estimated?';
+        ask = 'How is it estimated?';
         why = 'Two ways, and this hour they land together. ' + MODEL + PARCEL;
       } else {
         text = 'Thermal top ' + metres(low) + '–' + metres(high);
-        ask = 'why two numbers?';
+        ask = 'Why two numbers?';
         why = 'Two estimates of the same height. ' + MODEL + PARCEL
           + 'So the parcel usually comes out lower: read it as the cautious figure and the '
           + 'model as the generous one.';
       }
     } else if (model != null) {
       text = 'Thermal top ' + metres(model) + ' (model only)';
-      ask = 'why only one?';
+      ask = 'Why only one?';
       why = 'No dry parcel rises from the ground this hour: lifted at ' + DRY_LAPSE
         + ' °C/km, the 2 m air is already colder than the air above it, so the second '
         + 'estimate has nothing to mark. ' + MODEL + 'That is why it can still find mixing '
         + 'the parcel does not.';
     } else if (parcel != null) {
       text = 'Thermal top ' + metres(parcel) + ' (parcel only)';
-      ask = 'why only one?';
+      ask = 'Why only one?';
       why = 'ECMWF gives no boundary layer height for this hour, so only the parcel’s '
         + 'estimate is drawn. ' + PARCEL;
     }
     box.hidden = text === null;
     if (text === null || box.dataset.text === text) return;
     box.dataset.text = text;
-    var summary = box.querySelector('summary');
-    summary.textContent = text + ' · ';
-    var link = document.createElement('span');
-    link.className = 'why';
-    link.textContent = ask;
-    summary.appendChild(link);
-    box.querySelector('p').textContent = why;
+    box.querySelector('.txt').textContent = text;
+    box.querySelector('.info').setAttribute('aria-label', ask);
+    box.querySelector('.info-pop').textContent = why;
   }
 
 
@@ -1151,7 +1184,7 @@
     ctx.clearRect(0, 0, W, H);
     ctx.strokeStyle = ink('--rule');
     ctx.fillStyle = ink('--ink-3');
-    ctx.font = '10px ui-sans-serif, sans-serif';
+    ctx.font = '14px "Noto Sans", ui-sans-serif, sans-serif';
     ctx.lineWidth = 1;
     for (var m = 0; m <= top_m; m += 1000) {
       ctx.beginPath(); ctx.moveTo(left, y(m)); ctx.lineTo(W - right, y(m)); ctx.stroke();
@@ -1202,10 +1235,10 @@
     if (!caps.length) {
       ctx.save();
       ctx.fillStyle = ink('--ink-3');
-      ctx.font = '10px ui-sans-serif, sans-serif';
+      ctx.font = '14px "Noto Sans", ui-sans-serif, sans-serif';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
-      ctx.fillText('no lid below ' + (top_m / 1000) + ' km', left + 4, top + 2);
+      ctx.fillText('No lid below ' + (top_m / 1000) + ' km', left + 4, top + 2);
       ctx.restore();
     }
 
@@ -1231,7 +1264,7 @@
       ctx.moveTo(left, y(thermalTop)); ctx.lineTo(W - right, y(thermalTop));
       ctx.stroke();
       ctx.setLineDash([]);
-      padded(ctx, 'thermal top · model', left + 4, y(thermalTop) - 2, ink('--ink-2'), 'left');
+      padded(ctx, 'Thermal top · model', left + 4, y(thermalTop) - 2, ink('--ink-2'), 'left');
       ctx.restore();
     }
 
@@ -1246,7 +1279,7 @@
       ctx.moveTo(left, y(base)); ctx.lineTo(W - right, y(base));
       ctx.stroke();
       ctx.setLineDash([]);
-      padded(ctx, 'cloudbase', W - right - 3, y(base) - 2, ink('--ink-3'), 'right');
+      padded(ctx, 'Cloudbase', W - right - 3, y(base) - 2, ink('--ink-3'), 'right');
       ctx.restore();
     }
 
@@ -1284,7 +1317,7 @@
         ctx.arc(x(surface - DRY_LAPSE * (parcel - ground) / 1000), y(parcel), 4, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
-        padded(ctx, 'thermal top · parcel',
+        padded(ctx, 'Thermal top · parcel',
                x(surface - DRY_LAPSE * (parcel - ground) / 1000) - 7, y(parcel) - 5,
                ink('--ink-2'), 'right');
       }
@@ -1314,8 +1347,8 @@
     var dEnd = trace(levelSeries(hourly, 'dew_point'), true, '#2f6fb3');
     // Named where they end, which is where the two lines are furthest apart on any day
     // worth flying — the dew point is the one on the left.
-    if (tEnd) padded(ctx, 'temp', tEnd[0] + 4, tEnd[1] + 12, '#c2410c', 'left');
-    if (dEnd) padded(ctx, 'dew point', dEnd[0] - 4, dEnd[1] + 12, '#2f6fb3', 'right');
+    if (tEnd) padded(ctx, 'Temp', tEnd[0] + 4, tEnd[1] + 12, '#c2410c', 'left');
+    if (dEnd) padded(ctx, 'Dew point', dEnd[0] - 4, dEnd[1] + 12, '#2f6fb3', 'right');
 
     // What this chart ended up saying, for a test to assert on rather than a screenshot
     // failing to. `view3d.rose()` is the same idea and exists for the same reason: a
@@ -1367,7 +1400,7 @@
       lines.push(here.speed.toFixed(1) + ' m/s from ' + compass(here.dir)
                  + ' (' + Math.round(here.dir) + '°)');
     }
-    ctx.font = '11px ui-sans-serif, sans-serif';
+    ctx.font = '15px "Noto Sans", ui-sans-serif, sans-serif';
     var width = 0;
     lines.forEach(function (line) { width = Math.max(width, ctx.measureText(line).width); });
     var boxW = width + 12, boxH = lines.length * 13 + 7;
@@ -1402,42 +1435,13 @@
   // caption names flymet and links back to its own page. Two days exist — today and
   // tomorrow — so the other two days of the strip show nothing rather than yesterday's
   // picture under today's heading.
+  // flymet's own meteogram for the airfield nearest each takeoff, in that takeoff's column
+  // under its charts: side by side, three of them were 2 500 px of scrolling when they
+  // were stacked full width under the columns. A thumbnail at the column's width; the
+  // full picture is a tap away.
   function drawFlymet() {
-    var details = document.getElementById('met-flymet');
-    var list = document.getElementById('met-flymet-list');
     var template = state.day === 0 ? conf.flymet.today
       : (state.day === 1 ? conf.flymet.tomorrow : null);
-
-    // One picture per *station*, not per takeoff. Two hills 15 km apart share the
-    // nearest airfield more often than not in a country this size, and the same
-    // meteogram printed twice under two headings looks like a bug in the page — and
-    // costs flymet a second fetch to say the same thing.
-    var wanted = [];
-    chosen().forEach(function (index) {
-      var near = (conf.flymet.near || [])[index];
-      if (!near || !template) return;
-      var already = wanted.filter(function (entry) {
-        return entry.near.slug === near.slug; })[0];
-      if (already) {
-        already.sites.push(index);
-        return;
-      }
-      wanted.push({ near: near, sites: [index] });
-    });
-
-    if (!wanted.length) {
-      details.hidden = true;
-      list.textContent = '';
-      return;
-    }
-    details.hidden = false;
-    document.getElementById('met-flymet-summary').textContent =
-      wanted.length === 1
-        ? 'flymet’s own meteogram for ' + wanted[0].near.name + ', '
-          + wanted[0].near.km + ' km away'
-        : 'flymet’s own meteograms for the ' + wanted.length + ' airfields nearest these '
-          + 'takeoffs';
-
     // Stamped with the hour. flymet sends no cache lifetime, so a browser is free to
     // guess one from the file's age — and today's meteogram is regenerated through the
     // day, which makes a guessed cache an old picture under a current heading. The stamp
@@ -1445,62 +1449,48 @@
     var stamp = new Date();
     var hour = stamp.getFullYear() + ('0' + (stamp.getMonth() + 1)).slice(-2)
       + ('0' + stamp.getDate()).slice(-2) + ('0' + stamp.getHours()).slice(-2);
-
-    // Rebuilt only when the set of stations changes, for the same reason the soundings
-    // are: the hour slider redraws this panel on every step, and reassigning `src` makes
-    // every picture blink on each one.
-    // The day belongs in the key. Without it, switching from today to tomorrow keeps
-    // the pictures the page already had — today's meteogram under a tomorrow heading,
-    // which is the one thing this panel must never do, and it looks exactly like it
-    // worked.
-    var key = wanted.map(function (entry) {
-      return entry.near.slug + ':' + entry.sites.join('+'); }).join(',')
-      + '|' + state.day + '|' + hour;
-    if (list.dataset.key === key) return;
-    list.dataset.key = key;
-    list.textContent = '';
-
-    wanted.forEach(function (entry) {
-      var figure = document.createElement('figure');
-      var heading = document.createElement('p');
-      heading.className = 'for';
-      entry.sites.forEach(function (index) {
-        var dot = document.createElement('i');
-        dot.style.background = seriesColour(slotOf(index));
-        heading.appendChild(dot);
-      });
-      heading.appendChild(document.createTextNode(
-        entry.sites.map(function (index) { return conf.sites[index].name; }).join(' and ')
-      ));
-      figure.appendChild(heading);
-
+    document.querySelectorAll('#met-columns .met-col').forEach(function (cell) {
+      var index = Number(cell.dataset.site);
+      var figure = cell.querySelector('.met-col-fly');
+      var near = (conf.flymet.near || [])[index];
+      if (!figure) return;
+      if (!near || !template) { figure.hidden = true; figure.textContent = ''; delete figure.dataset.key; return; }
+      // Rebuilt only when what it shows changes — the hour slider redraws this panel on
+      // every step, and reassigning `src` makes the picture blink. The day is in the key:
+      // without it, tomorrow kept today's picture under a tomorrow heading.
+      var key = near.slug + '|' + state.day + '|' + hour;
+      if (figure.dataset.key === key) return;
+      figure.dataset.key = key;
+      figure.hidden = false;
+      figure.textContent = '';
+      var url = template.replace('{slug}', encodeURIComponent(near.slug)) + '?h=' + hour;
       var image = document.createElement('img');
       image.loading = 'lazy';
-      image.alt = 'flymet meteogram for ' + entry.near.name;
-      image.src = template.replace('{slug}', encodeURIComponent(entry.near.slug))
-        + '?h=' + hour;
+      image.alt = 'flymet meteogram for ' + near.name + ', ' + (state.day === 0 ? 'today' : 'tomorrow');
+      image.src = url;
       figure.appendChild(image);
-
       var caption = document.createElement('figcaption');
+      var credit = document.createElement('span');
       var link = document.createElement('a');
       link.href = conf.flymet.index;
       link.rel = 'noreferrer';
       link.textContent = 'flymet';
-      caption.appendChild(link);
-      caption.appendChild(document.createTextNode(
-        ' — ' + entry.near.name + ', ' + entry.near.km + ' km from '
-        + (entry.sites.length > 1 ? 'these takeoffs' : 'this takeoff') + ', for '
-        + (state.day === 0 ? 'today' : 'tomorrow')
-        + '. Cloud, rain, stability with the convective cloud height, and wind by height.'
-      ));
+      credit.appendChild(link);
+      credit.appendChild(document.createTextNode(' · ' + near.name + ' · ' + near.km + ' km'));
+      caption.appendChild(credit);
+      var open = document.createElement('a');
+      open.className = 'lnk';
+      open.href = url;
+      open.target = '_blank';
+      open.rel = 'noreferrer';
+      open.innerHTML = EXPAND_ICON + 'Enlarge';
+      caption.appendChild(open);
       figure.appendChild(caption);
-
       image.onerror = function () {
         image.hidden = true;
-        caption.textContent = 'flymet has no meteogram for ' + entry.near.name
-          + ' just now.';
+        open.hidden = true;
+        credit.textContent = 'flymet has no meteogram for ' + near.name + ' just now.';
       };
-      list.appendChild(figure);
     });
   }
 

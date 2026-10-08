@@ -41,13 +41,13 @@
     compare.title = 'Add this flight to the comparison';
     compare.setAttribute('aria-pressed', 'false');
     compare.setAttribute('aria-label', 'Add this flight to the comparison');
-    compare.innerHTML = '&#8646;';
+    compare.innerHTML = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h12l-3-3M16 13H4l3 3"/></svg>';
     var close = document.createElement('button');
     close.type = 'button';
     close.className = 'tab-close';
     close.title = 'Remove this flight';
     close.setAttribute('aria-label', 'Remove this flight');
-    close.innerHTML = '&#215;';
+    close.innerHTML = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15"/></svg>';
     tab.appendChild(open);
     tab.appendChild(compare);
     tab.appendChild(close);

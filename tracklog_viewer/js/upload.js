@@ -105,9 +105,10 @@
     });
     var format = (options.format || '').toUpperCase();
     return {
-      html: html, uid: options.uid, label: summary.date,
-      meta: [firstName(summary.pilot), summary.site].filter(Boolean).join(' · ')
-        || (name || '').replace(/\.[^.]+$/, '').slice(0, 22) || '—',
+      // The tab: where, then when and who — the place is what a pilot remembers a flight by.
+      html: html, uid: options.uid,
+      label: summary.site || (name || '').replace(/\.[^.]+$/, '').slice(0, 22) || summary.date,
+      meta: [summary.date, firstName(summary.pilot)].filter(Boolean).join(' · '),
       stat: [route ? (route.distance / 1000).toFixed(0) + ' km' : '', shapeOf(route, analysis),
              format && format !== 'IGC' ? 'from ' + format : ''].filter(Boolean).join(' · '),
       title: summary.date + ' · ' + (summary.site || 'flight') + ' — flight review'

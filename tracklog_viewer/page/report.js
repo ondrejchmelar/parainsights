@@ -91,10 +91,14 @@
   // the 60-day archive cutoff and the cloudbase formula live.
   window.__fetchMeteo = fetchMeteo;
 
+  // The same figure the article writes (`figure` in `js/report.js`): value, label, and
+  // the detail behind an ⓘ.
   function tile(key, value, sub) {
-    return '<div class="stat"><span class="key">' + key + '</span>' +
-      '<span class="stat-value">' + value + '</span>' +
-      (sub ? '<span class="sub">' + sub + '</span>' : '') + '</div>';
+    var label = key.charAt(0).toUpperCase() + key.slice(1);
+    return '<div class="fig"><span class="v">' + value + '</span><span class="k">' + label +
+      (sub ? '<span class="info-wrap"><button type="button" class="info" aria-expanded="false" ' +
+             'aria-label="About ' + key + '">i</button><span class="info-pop" role="note">' +
+             sub.charAt(0).toUpperCase() + sub.slice(1) + '.</span></span>' : '') + '</span></div>';
   }
   function cardinal(deg) {
     var names = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW',
@@ -253,7 +257,7 @@
         'when you opened this page';
       legend.appendChild(item);
     }
-    article.querySelectorAll('.caption').forEach(function (caption) {
+    article.querySelectorAll('.caption, .info-pop').forEach(function (caption) {
       var text = caption.textContent;
       var at = text.indexOf("The day's forecast profile would be drawn behind these");
       if (at < 0) return;
@@ -483,6 +487,19 @@ function initFlight(root) {
   // holds a WebGL context, and a page of three flights was starting all three on arrival
   // for the one the reader sees — 600 requests and most of the page's memory.
   var terrainView = null;
+  // The scored route, for the map to draw while it looks straight down (`setScored` in
+  // `map3d`): the chart payload names the route's fixes, the cursor data where they are.
+  var mapPanel = root.querySelector('.view3d-panel');
+  if (mapPanel && data.cursor3d) {
+    mapPanel.addEventListener('merged-ready', function (event) {
+      var entry = event.detail, charts = root.querySelector('.chart-data');
+      if (!entry || !entry.setScored || !charts) return;
+      try {
+        var route = JSON.parse(charts.textContent).route || [];
+        entry.setScored(route.map(function (i) { return [data.cursor3d.lon[i], data.cursor3d.lat[i]]; }));
+      } catch (error) { /* no route, nothing to draw */ }
+    });
+  }
   if (typeof initView3dWhenReady === 'function') {
     whenShown(root).then(function () {
       return initView3dWhenReady(root, data.cursor3d || null);
@@ -767,6 +784,18 @@ function initFlight(root) {
       root.querySelectorAll('.table-climbs').forEach(function (table) {
         table.classList.toggle('show-circling', on);
       });
+    });
+  });
+
+  // The glides table shows the longest few; this unfolds the rest, in flight order.
+  root.querySelectorAll('[data-show-all]').forEach(function (button) {
+    var label = button.textContent;
+    button.addEventListener('click', function () {
+      var open = button.getAttribute('aria-expanded') !== 'true';
+      button.setAttribute('aria-expanded', open ? 'true' : 'false');
+      button.textContent = open ? 'Show the longest only' : label;
+      var table = button.parentNode.querySelector('.table-glides');
+      if (table) table.classList.toggle('show-all', open);
     });
   });
 

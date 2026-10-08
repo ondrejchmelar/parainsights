@@ -46,11 +46,11 @@ window.addEventListener('load', function () {
       var a = document.querySelector('[data-flight-report="up1"]'), out = { article: !!a };
       if (a) {
         out.visible = !a.hidden;
-        out.sections = Array.prototype.map.call(a.querySelectorAll('h2'), function (h) { return h.textContent; });
+        out.sections = Array.prototype.map.call(a.querySelectorAll('h2'), function (h) { return h.firstChild.textContent.trim(); });
         out.climbRows = a.querySelectorAll('.table-climbs tbody tr').length;
         out.profileDrawn = !!a.querySelector('.chart-host[data-chart="profile"] svg');
         out.planDrawn = !!a.querySelector('.chart-host[data-chart="plan"] svg');
-        out.verdict = (a.querySelector('.verdict-line') || {}).textContent || '';
+        out.figures = a.querySelectorAll('.figs.keys .fig').length;
       }
       out.status = document.getElementById('ql-status').textContent;
       out.busyWhileWorking = seen.busy;
@@ -79,12 +79,10 @@ def test_an_upload_gets_the_full_article_even_offline(tmp_path):
     assert out["article"] and out["visible"], out
     # The flight's own sections are all there; with no ground there is no 3D view, so the
     # side view carries the first section, as in a report built without --terrain.
-    assert "Debrief" in out["sections"] or out["verdict"], out
-    for heading in ("The flight from the side", "Top view", "Where the time went", "Climbs",
-                    "Glides", "How to read this, and what to distrust"):
+    assert out["figures"] >= 5, out
+    for heading in ("Top view", "How the air was used", "Climbs", "Glides"):
         assert heading in out["sections"], (heading, out["sections"])
     assert out["climbRows"] >= 2 and out["profileDrawn"] and out["planDrawn"], out
-    assert out["verdict"].startswith("A "), out
     # And it says what it could not fetch.
     assert "ground" in out["status"] and "weather" in out["status"], out["status"]
     # A spinner while it works, and none once it is done.

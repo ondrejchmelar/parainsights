@@ -52,90 +52,99 @@ def _scoring() -> SimpleNamespace:
 xc = _scoring()
 
 STYLE = """
-.plan-bar { display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center;
-  margin:12px 0 10px; font-size:13px; }
-.plan-bar .plan-hint { color:var(--ink-3); font-size:12.5px; }
-.plan-figures { display:flex; flex-wrap:wrap; gap:10px 26px; margin:12px 0 0; }
+.plan-bar { display:flex; gap:8px; margin:14px 0 10px; flex-wrap:nowrap; }
+.plan-bar .btn { padding:0 14px; }
+.plan-draw[aria-pressed="true"] { background:var(--ink); color:var(--paper); border-color:var(--ink); }
+.plan-opts { display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center; margin:0 0 6px; }
+.chk { display:inline-flex; align-items:center; gap:9px; font-size:16px; cursor:pointer; min-height:44px; }
+.chk input { width:20px; height:20px; margin:0; accent-color:var(--accent); }
+.plan-opts select.btn { height:44px; padding:0 12px; appearance:auto; }
+.sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
+.plan-hint[hidden] { display:none; }
+/* The score: the distance large, the rest as a line under it. The cells are the script's
+   (`report` in planner.js), labelled in lower case; the first letter is raised here. */
+.plan-figures { display:grid; grid-template-columns: repeat(4, auto); justify-content:start; gap:4px 18px; margin:2px 0 0; }
 .plan-figures div { display:flex; flex-direction:column; }
-.plan-figures .k { font-size:10.5px; text-transform:uppercase; letter-spacing:.07em;
-  color:var(--ink-3); }
-.plan-figures .v { font-size:19px; font-variant-numeric:tabular-nums; }
-.plan-shape { display:inline-block; padding:3px 9px; border-radius:3px; font-size:11px;
-  text-transform:uppercase; letter-spacing:.06em; background:var(--panel-2); }
-.plan-shape.is-fai { background:#15803d; color:#fff; }
-.plan-shape.is-flat { background:#a16207; color:#fff; }
-.plan-legs { margin:12px 0 0; font-size:12.5px; color:var(--ink-2);
-  font-variant-numeric:tabular-nums; }
+.plan-figures div:first-child { grid-column: 1 / -1; }
+.plan-figures div:first-child .v { font-size:38px; font-weight:700; line-height:1.1; }
+.plan-figures div:first-child .k { display:none; }
+.plan-figures .k { font-size:15px; color:var(--ink-2); }
+.plan-figures .k::first-letter, .plan-shape::first-letter { text-transform:uppercase; }
+.plan-figures .v { font-size:17px; font-weight:600; font-variant-numeric:tabular-nums; }
+.plan-shape { display:inline-block; padding:2px 10px; border-radius:999px; font-size:15px; font-weight:600;
+  border:1.5px solid var(--edge); color:var(--ink-2); }
+.plan-shape.is-fai { background:var(--good); border-color:var(--good); color:var(--on-good); }
+.plan-shape.is-flat { background:var(--warn); border-color:var(--warn); color:var(--on-warn); }
+.plan-legs { margin:8px 0 0; font-size:15px; color:var(--ink-2); font-variant-numeric:tabular-nums; }
+.plan-legs:empty { display:none; }
 .plan-legs span { margin-right:14px; white-space:nowrap; }
-.plan-airspace { margin:16px 0 0; }
-.plan-crossed-head { margin:0 0 6px; font-size:12px; text-transform:uppercase;
-  letter-spacing:.07em; color:var(--ink-3); }
-.plan-clear { margin:0; font-size:12.5px; color:var(--ink-3); }
-.plan-crossed { list-style:none; margin:0; padding:0; border:1px solid var(--rule);
-  border-radius:4px; max-height:15em; overflow-y:auto; }
-.plan-crossed li { display:flex; align-items:baseline; gap:9px; padding:6px 11px;
-  border-bottom:1px solid var(--rule); font-size:13px; }
-.plan-crossed li:last-child { border-bottom:0; }
-.plan-swatch { width:10px; height:10px; border-radius:2px; flex:none;
-  transform:translateY(1px); }
+.plan-airspace { margin:10px 0 0; }
+.plan-crossed-head { margin:0 0 4px; font-size:15px; color:var(--ink-2); }
+.plan-crossed-head::first-letter { text-transform:uppercase; }
+.plan-clear { margin:0; font-size:15px; color:var(--ink-2); }
+.plan-crossed { list-style:none; margin:0; padding:0; max-height:12em; overflow-y:auto; }
+.plan-crossed li { display:flex; align-items:baseline; gap:9px; padding:9px 0; border-top:1px solid var(--rule); font-size:16px; }
+.plan-swatch { width:11px; height:11px; border-radius:50%; flex:none; transform:translateY(1px); }
 .plan-crossed-name { flex:1; min-width:0; }
-.plan-crossed-km { color:var(--ink-3); font-size:12px; white-space:nowrap;
-  font-variant-numeric:tabular-nums; }
-.plan-crossed li.is-shut .plan-crossed-name { color:var(--ink-3); }
-.plan-when { font-size:10.5px; text-transform:uppercase; letter-spacing:.06em;
-  padding:2px 6px; border-radius:3px; white-space:nowrap; flex:none; }
-.plan-when.is-open { background:#15803d; color:#fff; }
-.plan-when.is-shut { background:var(--panel-2); color:var(--ink-3); }
-.plan-draw[aria-pressed="true"] { background:var(--ink); color:var(--paper);
-  border-color:var(--ink); }
-.plan-section { margin:18px 0 0; }
-.plan-section h2 { font-size:17px; margin:0 0 4px; }
+.plan-crossed-km { color:var(--ink-2); font-size:15px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.plan-crossed li.is-shut .plan-crossed-name { color:var(--ink-2); }
+.plan-when { font-size:15px; font-weight:600; padding:1px 9px; border-radius:999px; white-space:nowrap; flex:none; }
+.plan-when::first-letter { text-transform:uppercase; }
+.plan-when.is-open { background:var(--good); color:var(--on-good); }
+.plan-when.is-shut { border:1.5px solid var(--edge); color:var(--ink-2); }
+.plan-section { margin:0; }
+.plan-note { margin:12px 0 0; font-size:15px; color:var(--ink-2); }
 [data-planner][data-drawing="on"] .maplibregl-canvas-container.maplibregl-interactive { cursor:crosshair; }
 """
 
 
 def controls() -> str:
-    """The bar over the map. Drawing is a mode, off until asked for: the same map is the
-    airspace map, where a tap on a phone names the zone under the finger, and a tap that
-    also dropped a turnpoint would make the one gesture mean two things."""
+    """The task tools, in the Task panel over the map. Drawing is a mode, off until asked
+    for: the same map is the airspace map, where a tap on a phone names the zone under the
+    finger, and a tap that also dropped a turnpoint would make the one gesture mean two."""
+    import parainsights_common as common
+
     return (
         '<div class="plan-bar">'
-        '<button type="button" class="plan-draw" id="plan-draw" aria-pressed="false">'
+        f'<button type="button" class="btn primary plan-draw" id="plan-draw" aria-pressed="false">'
         "Draw a task</button>"
-        '<button type="button" id="plan-undo">Undo point</button>'
-        '<button type="button" id="plan-clear">Clear</button>'
-        '<label><input type="checkbox" id="plan-close"> closed course</label>'
-        '<label title="XContest world: closing within 20%, flat ×1.2, FAI ×1.4. ČPP (the Czech '
-        'cup): closing within 5%, and in the Central European zone — V4, Austria, Germany '
-        'north of 48.5° — flat ×1.8, FAI ×2.2">rules <select id="plan-rules">'
-        '<option value="world">XContest world</option>'
-        '<option value="cpp">ČPP (Czech)</option></select></label>'
-        '<label title="Where each turnpoint can go for an FAI triangle (every side at least '
-        '28% of the perimeter), the other two staying put: turnpoint 1 green, 2 blue, 3 red. '
-        'Yellow: where a closed course must finish"><input type="checkbox" id="plan-fai" '
-        'checked> FAI areas</label>'
-        '<span class="plan-hint" id="plan-hint">Press <em>Draw a task</em>, then click the '
-        "map to drop turnpoints. Drag, pinch and twist still move the view — a click that "
-        "moved is a drag, not a point.</span>"
+        '<button type="button" class="btn" id="plan-undo">Undo</button>'
+        '<button type="button" class="btn" id="plan-clear">Clear</button>'
         "</div>"
+        '<div class="plan-opts">'
+        '<label class="chk"><input type="checkbox" id="plan-close"> Closed</label>'
+        '<label class="chk"><input type="checkbox" id="plan-fai" checked> FAI areas'
+        + common.info("Where each turnpoint can go for an FAI triangle (every side at least "
+                      "28% of the perimeter), the other two staying put: turnpoint 1 green, "
+                      "2 blue, 3 red. Yellow: where a closed course must finish.")
+        + '</label>'
+        '<label class="plan-rules-label"><span class="sr">Rules</span><select id="plan-rules" class="btn">'
+        '<option value="world">XContest</option>'
+        '<option value="cpp">ČPP (Czech)</option></select></label>'
+        "</div>"
+        # Said only before the first point: the button itself turns into "Drawing — click
+        # the map" once pressed.
+        '<span class="plan-hint" id="plan-hint" hidden></span>'
     )
 
 
 def results() -> str:
-    """What the drawn route is worth and what it crosses, under the map."""
+    """What the drawn route is worth and what it crosses, in the Task panel."""
+    import parainsights_common as common
+
+    rules = (f"Scored with the same rules as the flight report: every side at least "
+             f"{xc.FAI_MIN_SIDE:.0%} of the perimeter for FAI, a closing gap under "
+             f"{xc.MAX_CLOSING:.0%} of it for a closed course, multipliers "
+             f"{xc.MULTIPLIER['open']:g}&thinsp;/&thinsp;{xc.MULTIPLIER['flat']:g}&thinsp;/&thinsp;{xc.MULTIPLIER['fai']:g}. "
+             "With ČPP chosen, the Czech cup's: closing under 5%, and in the Central European "
+             "zone 1&thinsp;/&thinsp;1.8&thinsp;/&thinsp;2.2 "
+             '(<a href="https://www.xcontest.org/cesko/pravidla/" rel="noreferrer">rules</a>). '
+             "Airspace is drawn for Czechia only.")
     return f"""<section class="plan-section" aria-label="The task">
     <div class="plan-figures" id="plan-figures"></div>
     <p class="plan-legs" id="plan-legs"></p>
     <div class="plan-airspace" id="plan-airspace"></div>
-    <p class="met-links">Scored with the same rules as the flight report:
-    every side at least {xc.FAI_MIN_SIDE:.0%} of the perimeter for FAI, a closing gap under
-    {xc.MAX_CLOSING:.0%} of it for a closed course, multipliers
-    {xc.MULTIPLIER['open']:g}&thinsp;/&thinsp;{xc.MULTIPLIER['flat']:g}&thinsp;/&thinsp;{xc.MULTIPLIER['fai']:g}.
-    With <em>ČPP</em> chosen, the Czech cup's: closing under 5%, and in the Central European
-    zone 1&thinsp;/&thinsp;1.8&thinsp;/&thinsp;2.2
-    (<a href="https://www.xcontest.org/cesko/pravidla/" rel="noreferrer">rules</a>).
-    Airspace is drawn for Czechia only.
-    <strong>This is a plan, not a clearance.</strong> Check the airspace and the NOTAMs.</p>
+    <p class="plan-note">A plan, not a clearance.{common.info(rules, "How the task is scored")}</p>
     <script type="application/json" id="plan-coverage">{_coverage()}</script>
   </section>"""
 

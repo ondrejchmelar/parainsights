@@ -375,7 +375,7 @@ class TestWindShearNote:
             segments = [climb(1000 + 500 * i, v) for i, v in enumerate(speeds)]
             return js.run("return TV.report.parts.windShearNote({ segments: input.segments });",
                           segments=segments)
-        assert note([3.0, 3.2, 3.4, 3.5]).startswith("about 3.1 m/s throughout")
+        assert note([3.0, 3.2, 3.4, 3.5]).startswith("About 3.1 m/s throughout")
         note = note([2.0, 2.2, 4.0, 4.4])
         assert "km/h" not in note and note.endswith("2.1 m/s stronger with height."), note
 

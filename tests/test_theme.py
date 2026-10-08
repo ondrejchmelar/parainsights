@@ -103,15 +103,18 @@ def test_the_switch_flips_remembers_and_relabels():
     button.click();
     var flipped = dark();
     var stored = localStorage.getItem('parainsights.theme');
-    var glyph = button.querySelector('.theme-glyph').textContent;
+    var glyph = button.querySelector('.theme-glyph').innerHTML;
+    var title = button.title;
     button.click();
     return { was: was, flipped: flipped, back: dark(), stored: stored,
-             glyph: glyph, pressed: button.getAttribute('aria-pressed'),
+             glyph: glyph, title: title, pressed: button.getAttribute('aria-pressed'),
              errors: errors };
     """)
     assert answer["flipped"] != answer["was"], "the button did not change the theme"
     assert answer["back"] == answer["was"], "a second press did not switch back"
     assert answer["stored"] in ("dark", "light")
     assert answer["errors"] == [], f"the handler threw: {answer['errors']}"
-    # The glyph says what the next press gives you, which is the convention everywhere.
-    assert answer["glyph"] in ("☀", "☽")
+    # The icon says what the next press gives you, which is the convention everywhere:
+    # the site's stroked sun or moon (`common.ICONS`), and the title says it in words.
+    assert "svg" in answer["glyph"]  # escaped by the DOM dump the probe reads
+    assert answer["title"] in ("Switch to the light theme", "Switch to the dark theme")

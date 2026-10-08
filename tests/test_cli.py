@@ -46,11 +46,13 @@ def test_the_page_is_written_by_the_uploads_javascript(tmp_path, capsys):
     # The label override reached the article and the tab, not only one of them.
     assert "Ana Bell" in articles["f0"] and "Ridge" in articles["f0"]
     tabs = re.search(r'<nav class="tabs".*?</nav>', text, re.S).group(0)
-    assert "Ana · Ridge" in tabs
+    # The tab names the place first, then the date and the pilot.
+    assert "Ridge" in tabs and "· Ana" in tabs
     assert "TV.upload" in text, "the page carries the same JavaScript for an upload"
     assert (page.parent / "gliders.json").exists()
     # One line a flight on the console, from the JavaScript's own tab text.
-    assert "Ana · Ridge" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "Ridge" in out and "· Ana" in out
 
 
 def test_a_file_the_javascript_refuses_stops_the_build(tmp_path, capsys):
