@@ -320,42 +320,69 @@
     var c = Math.hypot(bx - ax, by - ay);
     if (c < 200) return [];
     var ux = (bx - ax) / c, uy = (by - ay) / c;
-    function fai(x, y) {
+    // How far inside the FAI rule a point is: positive inside, zero on the edge.
+    function margin(x, y) {
       var sa = Math.hypot(x - bx, y - by), sb = Math.hypot(x - ax, y - ay);
-      return Math.min(sa, sb, c) >= FAI_MIN_SIDE * (sa + sb + c);
+      return Math.min(sa, sb, c) - FAI_MIN_SIDE * (sa + sb + c);
     }
     function lonlat(x, y) { return [lon0 + x / kx, lat0 + y / ky]; }
+    var top = 4 * c;
+    // Along the ray at angle `t`: where the margin peaks. Sampled, then narrowed down, so a
+    // band thinner than any sample step — the lobe's ends — is still found. Fixed steps
+    // alone missed it, and the lobe stopped short of its corner by the first turnpoint.
+    function ray(side, t) {
+      var vx = -uy * side, vy = ux * side;
+      var dx = Math.cos(t) * vx + Math.sin(t) * ux, dy = Math.cos(t) * vy + Math.sin(t) * uy;
+      var steps = 400, best = 1, bestM = -Infinity;
+      for (var i = 1; i < steps; i++) {
+        var m = margin(dx * top * i / steps, dy * top * i / steps);
+        if (m > bestM) { bestM = m; best = i; }
+      }
+      var lo = top * (best - 1) / steps, hi = top * (best + 1) / steps;
+      for (var k = 0; k < 40; k++) {
+        var m1 = lo + (hi - lo) / 3, m2 = hi - (hi - lo) / 3;
+        if (margin(dx * m1, dy * m1) < margin(dx * m2, dy * m2)) lo = m1; else hi = m2;
+      }
+      var r = (lo + hi) / 2;
+      return { dx: dx, dy: dy, r: r, m: margin(dx * r, dy * r) };
+    }
+    // Where the margin crosses zero between `inside` and `outside`, along the ray.
+    function edge(q, inside, outside) {
+      for (var k = 0; k < 24; k++) {
+        var mid = (inside + outside) / 2;
+        if (margin(q.dx * mid, q.dy * mid) >= 0) inside = mid; else outside = mid;
+      }
+      return (inside + outside) / 2;
+    }
+    // The lobe's end between an angle with a band and one without: the angle where the
+    // band closes, and the point it closes at.
+    function tip(side, tIn, tOut) {
+      for (var k = 0; k < 24; k++) {
+        var mid = (tIn + tOut) / 2;
+        if (ray(side, mid).m >= 0) tIn = mid; else tOut = mid;
+      }
+      var q = ray(side, tIn);
+      return lonlat(q.dx * q.r, q.dy * q.r);
+    }
     var shapes = [], sides = [1, -1];
     if (towards) {
       var tx = (towards[0] - lon0) * kx, ty = (towards[1] - lat0) * ky;
       sides = [(-uy * tx + ux * ty) >= 0 ? 1 : -1];
     }
     sides.forEach(function (side) {
-      var vx = -uy * side, vy = ux * side, outer = [], inner = [];
-      for (var deg = -85; deg <= 85; deg += 1) {
-        var t = deg * Math.PI / 180;
-        var dx = Math.cos(t) * vx + Math.sin(t) * ux, dy = Math.cos(t) * vy + Math.sin(t) * uy;
-        var steps = 240, top = 4 * c, first = -1, last = -1;
-        for (var i = 1; i <= steps; i++) {
-          var r = top * i / steps;
-          if (fai(dx * r, dy * r)) { if (first < 0) first = i; last = i; }
-        }
-        if (first < 0) continue;
-        function edge(lo, hi) {      // lo inside, hi outside, or the other way round
-          var inLo = fai(dx * lo, dy * lo);
-          for (var k = 0; k < 16; k++) {
-            var mid = (lo + hi) / 2;
-            if (fai(dx * mid, dy * mid) === inLo) lo = mid; else hi = mid;
-          }
-          return (lo + hi) / 2;
-        }
-        var near = edge(top * first / steps, top * (first - 1) / steps);
-        var far = edge(top * last / steps, top * (last + 1) / steps);
-        inner.push(lonlat(dx * near, dy * near));
-        outer.push(lonlat(dx * far, dy * far));
+      var outer = [], inner = [], start = null, end = null, prevT = null, prevIn = false;
+      for (var deg = -89; deg <= 89; deg += 1) {
+        var t = deg * Math.PI / 180, q = ray(side, t), inside = q.m >= 0;
+        if (inside && prevT !== null && !prevIn && !start) start = tip(side, t, prevT);
+        if (!inside && prevIn && !end) end = tip(side, prevT, t);
+        prevT = t; prevIn = inside;
+        if (!inside || end) continue;
+        var near = edge(q, q.r, 0), far = edge(q, q.r, top);
+        inner.push(lonlat(q.dx * near, q.dy * near));
+        outer.push(lonlat(q.dx * far, q.dy * far));
       }
       if (outer.length < 3) return;
-      var ring = outer.concat(inner.reverse());
+      var ring = (start ? [start] : []).concat(outer, end ? [end] : [], inner.reverse());
       ring.push(ring[0]);
       shapes.push({ type: 'Feature', properties: { colour: colour, opacity: 0.45 },
                     geometry: { type: 'Polygon', coordinates: [ring] } });

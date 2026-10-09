@@ -52,7 +52,7 @@ def _scoring() -> SimpleNamespace:
 xc = _scoring()
 
 STYLE = """
-.plan-bar { display:flex; gap:8px; margin:14px 0 10px; flex-wrap:nowrap; }
+.plan-bar { display:flex; gap:8px; margin:14px 0 10px; flex-wrap:wrap; }
 .plan-bar .btn { padding:0 14px; }
 .plan-draw[aria-pressed="true"] { background:var(--ink); color:var(--paper); border-color:var(--ink); }
 .plan-opts { display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center; margin:0 0 6px; }

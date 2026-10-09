@@ -83,6 +83,8 @@ STYLE = """
 .float h2 { font-size: 20px; margin: 0; display: flex; align-items: center; gap: 4px; }
 .plan-panel { position: relative; padding: 16px 20px; overflow-y: auto; min-height: 0; flex: 0 1 auto; }
 .asp-layers { padding: 0; flex: none; max-height: 60%; overflow-y: auto; }
+/* Folded, nothing to scroll, and the ⓘ's bubble must hang out below it, not be cut off. */
+.asp-layers:not([open]) { overflow: visible; }
 .asp-layers > summary { list-style: none; display: flex; align-items: center; justify-content: space-between;
   gap: 10px; padding: 10px 20px; min-height: 52px; cursor: pointer; }
 .asp-layers > summary::-webkit-details-marker { display: none; }
