@@ -17,7 +17,9 @@
   // where it is across it — the readout follows the pointer sideways but reads the
   // profile, so what it says never depends on which temperature you happen to be over.
   var MAX_CHOSEN = __MAX_CHOSEN__;
-  var state = { day: 0, hour: 14, slots: [null, null, null], site: null,
+  var noSlots = [];
+  for (var n = 0; n < MAX_CHOSEN; n++) noSlots.push(null);
+  var state = { day: 0, hour: 14, slots: noSlots, site: null,
                 surface: null, profile: null, profiles: {}, search: '',
                 probe: null, probeX: 0 };
 
@@ -33,7 +35,7 @@
     return ink('--series-' + (slot + 1)) || '#888';
   }
 
-  // Three takeoffs, remembered. A pilot checks the same two or three hills all season,
+  // The chosen takeoffs, remembered. A pilot checks the same two or three hills all season,
   // and making them pick them again every morning is the kind of small rudeness that
   // makes a tool feel like a demo. Wrapped because a page opened from a file:// URL in
   // some browsers throws on even reading localStorage, and a page that fails to load
@@ -333,11 +335,9 @@
     }
     var free = state.slots.indexOf(null);
     if (free < 0) {
-      // Refuse rather than silently evicting the oldest: three lines is the palette's
-      // limit, and a reader who has just added a fourth takeoff and had one of their
-      // own disappear has no way to know which or why.
-      say('Three at a time — drop one first. A fourth line could not be told from the '
-          + 'other three.');
+      // Refuse rather than silently evicting the oldest: a reader who has just added one
+      // more takeoff and had one of their own disappear has no way to know which or why.
+      say(MAX_CHOSEN + ' at a time — drop one first.');
       return;
     }
     state.slots[free] = index;
@@ -406,9 +406,9 @@
       box.insertBefore(chip, add);
     });
     add.innerHTML = PLUS_ICON + '<span>Add takeoff</span>';
-    // Three at a time, said only when it matters: on the button that stops working.
+    // The cap, said only when it matters: on the button that stops working.
     add.disabled = chosen().length >= MAX_CHOSEN;
-    add.title = add.disabled ? 'Three at a time — remove one to add another' : '';
+    add.title = add.disabled ? MAX_CHOSEN + ' at a time — remove one to add another' : '';
   }
 
   // ---- the comparison ------------------------------------------------------------------
@@ -1111,6 +1111,9 @@
     ctx.textAlign = align;
     ctx.textBaseline = 'bottom';
     var width = ctx.measureText(text).width;
+    // Never past the chart's left edge: a label hung to the left of a trace near it was
+    // cut off there. It turns to hang right of the point instead.
+    if (align === 'right' && x - width < 4) { align = 'left'; ctx.textAlign = 'left'; x = Math.max(x + 8, 4); }
     ctx.globalAlpha = 0.85;
     ctx.fillStyle = ink('--panel');
     ctx.fillRect(align === 'right' ? x - width - 3 : x - 3, y - 10, width + 6, 12);
@@ -1178,6 +1181,16 @@
     var left = 34, right = 10, top = SOUND_TOP, bottom = SOUND_BOTTOM;
     var top_m = ceilingFor(ground), minT = -20, maxT = 35;
     canvas.__ceiling = top_m;
+    // Wide enough for the coldest reading in the column: a dry day's dew point aloft, at
+    // −30 °C and below, was drawn off the chart's left edge.
+    var heights = levelSeries(hourly, 'geopotential_height');
+    ['temperature', 'dew_point'].forEach(function (name) {
+      levelSeries(hourly, name).forEach(function (series, l) {
+        var value = series ? series[at] : null, height = heights[l] ? heights[l][at] : null;
+        if (value == null || height == null || height < ground || height > top_m) return;
+        minT = Math.min(minT, Math.floor(value / 10) * 10);
+      });
+    });
     function x(celsius) { return left + (celsius - minT) / (maxT - minT) * (W - left - right); }
     function y(metres) { return top + (1 - metres / top_m) * (H - top - bottom); }
 
@@ -1192,7 +1205,10 @@
       ctx.fillText(m / 1000 + 'k', left - 4, y(m));
     }
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-    for (var c = -20; c <= 30; c += 10) {
+    // Every 10° on the usual range; every 20° when it reaches far below freezing, where
+    // ten labels crowded into each other.
+    var tick = maxT - minT > 60 ? 20 : 10;
+    for (var c = Math.ceil(minT / tick) * tick; c <= 30; c += tick) {
       ctx.beginPath(); ctx.moveTo(x(c), top); ctx.lineTo(x(c), H - bottom); ctx.stroke();
       ctx.fillText(c + '°', x(c), H - bottom + 4);
     }
@@ -1323,7 +1339,6 @@
       }
     }
 
-    var heights = levelSeries(hourly, 'geopotential_height');
     // Returns where the trace ends at the top, for its label.
     function trace(values, dashed, colour) {
       ctx.save();

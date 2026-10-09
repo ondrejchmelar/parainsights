@@ -49,21 +49,20 @@ CAP_LAPSE = 2.0
 # once in the script, and `tests/test_meteo_view.py` holds the two to the same number.
 DRY_LAPSE = 9.8
 
-# How many takeoffs can be compared at once, and it is a number the *palette* chose.
-# Slots 1–3 of the design system's categorical order validate all-pairs in both themes;
-# the fourth slot is yellow, and yellow against this orange fails the normal-vision floor
-# (ΔE 13.7 against a 15 floor). Re-stepping a documented palette is not allowed and no
-# reordering fixes an all-pairs failure, so the honest cap is three — see the comment at
-# the top of `STYLE`. It is also about the number of hills a pilot really chooses between
-# on a Saturday morning, which is why it does not feel like a limitation.
-MAX_CHOSEN = 3
+# How many takeoffs can be compared at once. Three was the palette's limit — the slots
+# that validate all-pairs in both themes — until the reader asked for more (October
+# 2026). Six now: slots 4–6 (amber-brown, slate, olive) are told apart from the first three
+# and from each other less surely by colour alone, which the page allows because no
+# takeoff is ever told by colour alone: the table names every row, every line carries
+# its label, and each column is headed by its name.
+MAX_CHOSEN = 6
 
 STYLE = """
-/* The three takeoff colours are `--series-1..3` in `common.TOKENS`: an identity palette of
-   their own (violet, cyan, pink) since the redesign, so a takeoff's dot is never the
-   accent or a verdict's green. Three, because the comparison caps at three
-   (`MAX_CHOSEN`); identity is never colour alone — the table names every row and every
-   line carries its label. */
+/* The takeoff colours are `--series-1..6` in `common.TOKENS`: an identity palette of
+   their own (violet, cyan, pink, then amber-brown, slate, olive), so a takeoff's dot is
+   never the accent or a verdict's green. Six, the comparison's cap (`MAX_CHOSEN`);
+   identity is never colour alone — the table names every row and every line carries
+   its label. */
 .meteo-article h1 { display: none; }
 /* The day, the hour and the takeoffs apply to everything below, so they stay in view. */
 .met-sticky { position: sticky; top: 0; z-index: 20; background: var(--paper);

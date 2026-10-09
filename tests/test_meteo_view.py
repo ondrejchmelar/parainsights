@@ -629,14 +629,14 @@ class TestChoosingTakeoffs:
         assert answer["narrowed"] == ["Raná"], "searching for a real takeoff found nothing"
         assert answer["empty"] == 1, "a search with no hits must say so"
 
-    def test_three_takeoffs_can_be_compared_and_a_fourth_is_refused(self):
-        """Three is the palette's limit, not a whim — the fourth categorical slot fails
-        the normal-vision floor against the third. What matters here is that the refusal
-        is explicit rather than an eviction the reader cannot see."""
+    def test_six_takeoffs_can_be_compared_and_a_seventh_is_refused(self):
+        """Six at a time since October 2026 (three was the first palette's limit). What
+        matters here is that the refusal is explicit rather than an eviction the reader
+        cannot see."""
         answer = _probe_page("""
         var m = window.__meteo;
         var picked = [];
-        for (var i = 0; i < 5 && picked.length < 5; i++) {
+        for (var i = 0; i < 9 && picked.length < 8; i++) {
           if (m.chosen().indexOf(i) < 0) { m.add(i); picked.push(i); }
         }
         return { chosen: m.chosen().length,
@@ -645,11 +645,11 @@ class TestChoosingTakeoffs:
                  hidden: document.getElementById('met-compare').hidden,
                  status: document.getElementById('met-status').textContent };
         """)
-        assert answer["chosen"] == 3
-        assert answer["chips"] == 3
+        assert answer["chosen"] == 6
+        assert answer["chips"] == 6
         assert answer["hidden"] is False
-        assert answer["rows"] == 3
-        assert "Three at a time" in answer["status"]
+        assert answer["rows"] == 6
+        assert "6 at a time" in answer["status"]
 
     def test_the_comparison_appears_only_with_something_to_compare(self):
         answer = _probe_page("""
