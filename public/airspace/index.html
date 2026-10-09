@@ -189,6 +189,16 @@ html[data-help="off"] .info-wrap { display: none; }
 /* The map's own layers stack among themselves, under the panels. */
 .asp-stage .asp-holder { isolation: isolate; z-index: 0; }
 .asp-stage .view3d { aspect-ratio: auto; height: calc(100vh - 80px); min-height: 560px; }
+/* Full screen takes the whole stage, the task and layers panels floating over the map as
+   they do on a desktop (the map's own button, `fullscreen` in map3d). */
+.asp-stage:fullscreen, .asp-stage.is-maximised { background: var(--paper); width: 100%; height: 100%; }
+.asp-stage.is-maximised { position: fixed; inset: 0; z-index: 60; width: auto; height: auto; }
+.asp-stage::backdrop { background: var(--paper); }
+.asp-stage:fullscreen .asp-holder, .asp-stage.is-maximised .asp-holder,
+.asp-stage:fullscreen .renderer-host, .asp-stage.is-maximised .renderer-host,
+.asp-stage:fullscreen .view3d-panel, .asp-stage.is-maximised .view3d-panel { height: 100%; margin: 0; }
+.asp-stage:fullscreen .view3d, .asp-stage.is-maximised .view3d { height: 100%; min-height: 0; aspect-ratio: auto; }
+.asp-stage:fullscreen .asp-floats, .asp-stage.is-maximised .asp-floats { left: 16px; }
 .asp-floats { position: absolute; top: 16px; bottom: 16px; z-index: 6; width: 380px;
   left: calc(50% - (100vw - var(--scrollbar, 0px)) / 2 + 16px);
   display: flex; flex-direction: column; gap: 12px; pointer-events: none; }
@@ -252,6 +262,15 @@ html[data-help="off"] .info-wrap { display: none; }
   /* The dates wrap between themselves; at one line each the table ran off a phone. */
   .asp-src-when { white-space: normal; }
   .asp-layers { max-height: none; }
+  /* Full screen on a phone: the map on the top part, the panels scrolling under it — not
+     over it, where they hid the map's own bar and the button that leaves full screen. */
+  .asp-stage:fullscreen .asp-holder, .asp-stage.is-maximised .asp-holder { height: 58%; }
+  .asp-stage:fullscreen .asp-floats, .asp-stage.is-maximised .asp-floats {
+    position: absolute; left: 0; right: 0; top: 58%; bottom: 0; width: auto;
+    overflow-y: auto; margin: 0; padding: 0 14px 14px; background: var(--panel);
+    pointer-events: auto; border-top: 1px solid var(--rule); }
+  .asp-stage:fullscreen .asp-floats > *, .asp-stage.is-maximised .asp-floats > * {
+    flex: none; overflow: visible; }
   .asp-get-float { margin-top: 16px; }
 }
 
@@ -3431,7 +3450,8 @@ function initView3d(root, cursorTrack, preset) {
       // Full screen takes the flight's map block where the page has one (`.flight-map`:
       // the map with the side view under it), the panel alone where it does not.
       function fullscreen() {
-        var target = panel.closest('.flight-map') || panel;
+        // The planner's stage (`.asp-stage`) takes its task and layers panels with it.
+        var target = panel.closest('.flight-map, .asp-stage') || panel;
         var maximise = function () {
           target.classList.toggle('is-maximised');
           setTimeout(function () { map.resize(); }, 0);

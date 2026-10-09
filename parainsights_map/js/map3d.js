@@ -2050,7 +2050,8 @@
       // Full screen takes the flight's map block where the page has one (`.flight-map`:
       // the map with the side view under it), the panel alone where it does not.
       function fullscreen() {
-        var target = panel.closest('.flight-map') || panel;
+        // The planner's stage (`.asp-stage`) takes its task and layers panels with it.
+        var target = panel.closest('.flight-map, .asp-stage') || panel;
         var maximise = function () {
           target.classList.toggle('is-maximised');
           setTimeout(function () { map.resize(); }, 0);
