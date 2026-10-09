@@ -872,11 +872,21 @@ html[data-help="off"] .m3-help { display: none; }
   // The ⓘ. Hover shows it on a desktop (CSS); a click or tap pins it open, a second one,
   // Esc or a click anywhere else closes it. Before it shows, it is kept on screen: a
   // bubble centred on an ⓘ near an edge would hang off it.
+  // Centred on the ⓘ, then moved just enough to stay 8 px inside the window. Hanging it
+  // to the ⓘ's left or right (the first version) failed in the middle of a phone, where a
+  // bubble 320 px wide does not fit on either side of it.
   function place(wrap) {
+    var pop = wrap.querySelector('.info-pop');
+    if (!pop) return;
     wrap.classList.remove('to-left', 'to-right');
-    var r = wrap.getBoundingClientRect(), half = Math.min(320, window.innerWidth * 0.86) / 2;
-    if (r.left + r.width / 2 + half > window.innerWidth - 8) wrap.classList.add('to-left');
-    else if (r.left + r.width / 2 - half < 8) wrap.classList.add('to-right');
+    pop.style.left = pop.style.right = pop.style.transform = '';
+    var r = wrap.getBoundingClientRect(), W = document.documentElement.clientWidth;
+    // Its own width once it shows; before, the widest it can be.
+    var width = pop.getBoundingClientRect().width || Math.min(320, W * 0.86);
+    var left = Math.max(8, Math.min(r.left + r.width / 2 - width / 2, W - 8 - width));
+    pop.style.left = (left - r.left) + 'px';
+    pop.style.right = 'auto';
+    pop.style.transform = 'none';
   }
   function closeAll(except) {
     document.querySelectorAll('.info[aria-expanded="true"]').forEach(function (b) {
@@ -892,10 +902,10 @@ html[data-help="off"] .m3-help { display: none; }
     if (b) {
       event.preventDefault();
       event.stopPropagation();
-      place(b.parentNode);
       var open = b.getAttribute('aria-expanded') !== 'true';
       closeAll(b);
       b.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (open) place(b.parentNode);   // shown now, so measured at its own width
       return;
     }
     if (!(event.target.closest && event.target.closest('.info-pop'))) closeAll(null);
