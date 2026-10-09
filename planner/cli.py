@@ -1,4 +1,7 @@
-"""Command line: write the redirect where the planner page used to be.
+"""Command line: write the redirect where the planner page used to be (`airspace/`).
+
+Since October 2026 the planner and airspace page is published at `planner/`, the name in
+the nav strip; this writes `public/airspace/index.html`, which sends old links there.
 
 The planner is a section of the airspace page now (`airspaces.render_html.body`) — it
 always drew on the airspace map, and two tabs over the same map were one too many. A
@@ -16,12 +19,12 @@ from pathlib import Path
 
 import parainsights_common as common
 
-TARGET = "../airspace/"
+TARGET = "../planner/"
 
 
 def page() -> str:
-    return common.redirect(TARGET, "The planner has moved",
-                           f'The task planner is now part of the <a href="{TARGET}">airspace page</a>.')
+    return common.redirect(TARGET, "The airspace map has moved",
+                           f'The airspace map and the task planner are now at <a href="{TARGET}">planner/</a>.')
 
 
 def main(argv=None) -> int:

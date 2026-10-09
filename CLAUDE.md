@@ -5,9 +5,9 @@ Tools for paragliding. One repository, four tools, answering a question each:
 | tool | the question | published at |
 |---|---|---|
 | **tracklog viewer** | how did that flight go? | `public/flights/index.html` (the root redirects there) |
-| **airspaces** | what is above me, and what does my instrument not know? | `public/airspace/` |
+| **airspaces** | what is above me, and what does my instrument not know? | `public/planner/` (`airspace/` redirects there) |
 | **meteo** | is it worth driving anywhere today, and where? | `public/meteo/` |
-| **planner** | what is that task worth, and what does it cross? | `public/airspace/`, on the airspace map |
+| **planner** | what is that task worth, and what does it cross? | `public/planner/`, on the airspace map |
 
 ```
 parainsights/
@@ -159,7 +159,7 @@ ceiling in the label, because drawn true they hide everything a paraglider meets
 is the community airspace database, CC BY-NC 4.0 — fine for this non-commercial site,
 credited wherever it is drawn. Its API needs a key and a key in a page is anyone's, so
 the pages never call it: `airspaces/openaip.py` fetches 45 European countries (the Alps,
-Turkey) and writes one file each into `public/airspace/layers/` with an `index.json` of
+Turkey) and writes one file each into `public/planner/layers/` with an `index.json` of
 their boxes — 6.5 MB, 1.2 MB gzipped, France and Italy the largest at ~840 KB.
 `.github/workflows/airspace.yml` refetches on the 3rd of every month with the repository
 secret `OPENAIP_API_KEY`, commits only files whose airspace changed (a new date on the
@@ -272,7 +272,7 @@ GitLab project is deprecated, and `.gitlab-ci.yml` now publishes only redirect s
 
 ```bash
 uv run python -m tracklog_viewer.cli FLIGHT.igc --terrain --meteo \
-  --airspace ../airspace/ --html public/flights/index.html
+  --airspace ../planner/ --html public/flights/index.html
 git add public/flights && git commit -m "Publish flight" && git push
 ```
 
@@ -1218,7 +1218,7 @@ Still wanted:
     ~/Downloads/2018-09-28-XCT-OND-01.igc \
     ~/Downloads/2022-05-07-XCT-KVR-01.igc \
     ~/Downloads/flight-2026-06-16-04-46-04.igc \
-    --terrain --meteo --airspace ../airspace/ \
+    --terrain --meteo --airspace ../planner/ \
     --label '' --label '' --label 'Antoine Girard|PK Hunza|OZONE Zeolite 2' \
     --html public/flights/index.html
   ```

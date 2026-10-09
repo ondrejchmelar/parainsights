@@ -139,9 +139,9 @@ jobs:
       # else's CSV is unreachable is the wrong trade. Loud, and not fatal. The 3D map's
       # ground is fetched by the page, so a build cannot lose it and fall back to the flat
       # map — which is what the first green deploy once did, with the build's own fetch.
-      - run: uv run python -m airspaces.cli --html public/airspace/index.html || echo "::warning::the airspace page could not be rebuilt, publishing the committed copy - check airspaces/sources.py"
-      # The planner is part of the airspace page now; this is the redirect for old links.
-      - run: uv run python -m planner.cli --html public/planner/index.html
+      - run: uv run python -m airspaces.cli --html public/planner/index.html || echo "::warning::the airspace page could not be rebuilt, publishing the committed copy - check airspaces/sources.py"
+      # The planner and airspace page lives at planner/; airspace/ is the redirect for old links.
+      - run: uv run python -m planner.cli --html public/airspace/index.html
       # The report lives in `flights/` since October 2026; the root sends old links there.
       - run: uv run python -c "import parainsights_common as c; open('public/index.html', 'w', encoding='utf-8').write(c.root_redirect())"
       # The airspace page links its OpenAir file by name and the name carries the AIRAC
@@ -152,7 +152,7 @@ jobs:
       # Every page in the nav strip, because the strip links to all of them from all of
       # them: a missing sibling is not a smaller site, it is three dead links on every
       # page that is there.
-      - run: for page in flights airspace meteo planner; do test -f "public/$page/index.html" || (echo "no public/$page/index.html — the nav strip on every other page links to it" && exit 1); done
+      - run: for page in flights planner meteo airspace; do test -f "public/$page/index.html" || (echo "no public/$page/index.html — the nav strip on every other page links to it" && exit 1); done
       - run: echo "publishing $(du -sh public | cut -f1)"
       - uses: actions/upload-pages-artifact@v5
         with:

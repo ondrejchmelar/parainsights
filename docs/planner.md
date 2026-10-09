@@ -298,7 +298,7 @@ sentence each:
 The planner is a section of the airspace page now, built with it:
 
 ```bash
-uv run python -m airspaces.cli --html public/airspace/index.html
+uv run python -m airspaces.cli --html public/planner/index.html
 uv run python -m planner.cli --html public/planner/index.html   # the redirect for old links
 ```
 

@@ -54,13 +54,13 @@ uv run python -m airspaces.cli --report                     # what built, what d
 `--html` writes **two** files: the page, and the OpenAir file next to it that the page's
 download button links to. Publish them together or the button is dead.
 
-The published copy lives at `public/airspace/`, deployed by
+The published copy lives at `public/planner/` (`public/airspace/` redirects there since October 2026), deployed by
 `.github/workflows/pages.yml` along with the rest of the site. `public/flights/index.html` is the tracklog
 viewer's report and must not be overwritten — the airspace map is a sibling, not the
 front page:
 
 ```bash
-uv run python -m airspaces.cli --html public/airspace/index.html
+uv run python -m airspaces.cli --html public/planner/index.html
 ```
 
 The same map is also a **view in the report**, reached by the switch at the very top of
@@ -69,7 +69,7 @@ download sits relative to the report:
 
 ```bash
 uv run python -m tracklog_viewer.cli FLIGHT.igc [...] --terrain --meteo \
-  --airspace ../airspace/ --html public/flights/index.html
+  --airspace ../planner/ --html public/flights/index.html
 ```
 
 Every source is cached under `~/.cache/parainsights/airspace`; `--refresh` re-fetches.
@@ -426,7 +426,7 @@ rectangles, two per circuit), 197 KB of OpenAir; the map renders all 743 airspac
 boxes between their published limits, with class, floor and operating-hours filters, and
 offers the OpenAir file for download. 68 of
 the 82 aerodromes carry their published hours, in the airspace name and on the map.
-Published at `public/airspace/` and as a view in the report. 102 tests; four drive a real
+Published at `public/planner/` and as a view in the report. 102 tests; four drive a real
 browser, and none touches the network.
 
 The map ships two ways: as a standalone page (`airspaces.cli --html`) and as a top-level

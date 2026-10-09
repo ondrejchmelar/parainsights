@@ -62,7 +62,7 @@ def main(argv: list[str] | None = None) -> int:
         "--airspace", metavar="HREF", nargs="?", const="",
         help="add the Planner view (airspace and task planner) and the airspace over each "
              "flight's map. Needs the network. HREF is where the OpenAir download sits "
-             "relative to the page: '../airspace/' for the published page, public/flights/index.html.",
+             "relative to the page: '../planner/' for the published page, public/flights/index.html.",
     )
     args = parser.parse_args(argv)
 

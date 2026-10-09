@@ -8,7 +8,7 @@
 # this repository's history; this is the same rule for the one link that is not in the nav.
 set -eu
 
-PAGE=public/airspace/index.html
+PAGE=public/planner/index.html
 test -f "$PAGE" || { echo "download-link.sh: no $PAGE" >&2; exit 1; }
 
 linked=$(grep -o 'href="CZ_airfield_zones_[0-9]*\.txt"' "$PAGE" | cut -d'"' -f2 | sort -u)
@@ -18,9 +18,9 @@ if [ -z "$linked" ]; then
 fi
 
 for file in $linked; do
-    if [ ! -f "public/airspace/$file" ]; then
+    if [ ! -f "public/planner/$file" ]; then
         echo "download-link.sh: the airspace page links $file, which is not beside it" >&2
         exit 1
     fi
-    echo "download-link.sh: $file is there, $(wc -c < "public/airspace/$file") bytes"
+    echo "download-link.sh: $file is there, $(wc -c < "public/planner/$file") bytes"
 done

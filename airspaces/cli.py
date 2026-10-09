@@ -107,7 +107,7 @@ def main(argv=None) -> int:
     # The base airspace is openAIP's, from the committed layer file the monthly refresh
     # writes (`openaip.py`) — no key and no network here. Its version goes in the OpenAir
     # header's currency warning, so it is needed even when only the file is written.
-    layers = (args.html.parent if args.html else Path("public/airspace")) / "layers"
+    layers = (args.html.parent if args.html else Path("public/planner")) / "layers"
     base, base_version = openaip.base(layers)
     text = build.to_openair(overlay, corrected=not args.raw, base_version=base_version)
     name = overlay.filename

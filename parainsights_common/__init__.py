@@ -10,10 +10,10 @@ The links are relative and assume the published layout, which is the only layout
 `pages` job produces:
 
     public/flights/          the flight report      → `flights/`
-    public/airspace/         the airspace map       → `airspace/`
+    public/planner/          the planner and airspace map, with its layers → `planner/`
     public/meteo/            the day's forecast     → `meteo/`
     public/index.html        a redirect to `flights/` (`redirect`), for old links
-    public/planner/          a redirect to the airspace page, where the planner is now
+    public/airspace/         a redirect to `planner/`, the page's address until October 2026
 
 Every tool is one level down, its own address (October 2026: the report was the site's
 root, the one page without a name of its own).
@@ -34,7 +34,7 @@ from pathlib import Path
 # tabs over the same map were one too many. `public/planner/` only redirects.
 PAGES = [
     ("meteo", "Meteo", "meteo/"),
-    ("airspace", "Planner", "airspace/"),
+    ("airspace", "Planner", "planner/"),
     ("flights", "Flights", "flights/"),
 ]
 
