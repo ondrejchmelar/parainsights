@@ -454,9 +454,12 @@ html[data-help="off"] .m3-help { display: none; }
 .plan-hint[hidden] { display:none; }
 /* The score: the distance large, the rest as a line under it. The cells are the script's
    (`report` in planner.js), labelled in lower case; the first letter is raised here. */
-.plan-figures { display:grid; grid-template-columns: repeat(4, auto); justify-content:start; gap:4px 18px; margin:2px 0 0; }
+/* The task's length on a line of its own, then score, multiplier, turnpoints and shape,
+   each kept whole and wrapping as whole figures where a phone runs out of width. */
+.plan-figures { display:flex; flex-wrap:wrap; gap:4px 18px; margin:2px 0 0; }
 .plan-figures div { display:flex; flex-direction:column; }
-.plan-figures div:first-child { grid-column: 1 / -1; }
+.plan-figures div:first-child { flex-basis:100%; }
+.plan-figures .v, .plan-shape { white-space:nowrap; }
 .plan-figures div:first-child .v { font-size:38px; font-weight:700; line-height:1.1; }
 .plan-figures div:first-child .k { display:none; }
 .plan-figures .k { font-size:15px; color:var(--ink-2); }
@@ -466,9 +469,12 @@ html[data-help="off"] .m3-help { display: none; }
   border:1.5px solid var(--edge); color:var(--ink-2); }
 .plan-shape.is-fai { background:var(--good); border-color:var(--good); color:var(--on-good); }
 .plan-shape.is-flat { background:var(--warn); border-color:var(--warn); color:var(--on-warn); }
-.plan-legs { margin:8px 0 0; font-size:15px; color:var(--ink-2); font-variant-numeric:tabular-nums; }
+/* A wrapping row: the sides are spans with nothing between them, so as inline text the
+   line had nowhere to break and ran off a phone. */
+.plan-legs { margin:8px 0 0; font-size:15px; color:var(--ink-2); font-variant-numeric:tabular-nums;
+  display:flex; flex-wrap:wrap; gap:2px 14px; }
 .plan-legs:empty { display:none; }
-.plan-legs span { margin-right:14px; white-space:nowrap; }
+.plan-legs span { white-space:nowrap; }
 .plan-airspace { margin:10px 0 0; }
 .plan-crossed-head { margin:0 0 4px; font-size:15px; color:var(--ink-2); }
 .plan-crossed-head::first-letter { text-transform:uppercase; }
