@@ -46,12 +46,21 @@ class TestTypeFloor:
     """884 text nodes under 11 px, 757 of them at 10.5. Mostly SVG axis labels."""
 
     def test_no_declared_font_size_is_under_fifteen_pixels(self):
-        """The redesign's floor (October 2026): nothing a reader must read under 15 px."""
-        sizes = [float(m) for m in re.findall(r"font-size:\s*([0-9.]+)px", render_html.STYLE)]
+        """The redesign's floor (October 2026): nothing a reader must read under 15 px.
+        The one exception is the numbers inside the climbs' circles on the side view and
+        the wind chart: at 15 px two digits overflowed the circle, and the reader chose
+        smaller numbers over bigger circles (October 2026). The climbs table says the same."""
+        rules = re.findall(r"([^{}]+)\{([^{}]*)\}", render_html.STYLE)
+        sizes, numbers = [], []
+        for selector, body in rules:
+            for m in re.findall(r"font-size:\s*([0-9.]+)px", body):
+                in_circle = selector.split("*/")[-1].strip() in (".chart .mark-label", ".chart-wind .wind-number")
+                (numbers if in_circle else sizes).append(float(m))
         assert sizes, "no font sizes found — has the stylesheet moved?"
         assert min(sizes) >= 15.0, (
             f"type floor broken: {sorted(s for s in sizes if s < 15.0)}"
         )
+        assert numbers and min(numbers) >= 11, f"circle numbers too small: {numbers}"
 
     def test_the_view3d_panel_holds_the_same_floor(self):
         """The map's buttons are the one exception: 14 px on a phone, where seven of them

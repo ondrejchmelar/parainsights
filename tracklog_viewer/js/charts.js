@@ -156,9 +156,9 @@
       var speed = speeds[position], altitude = altitudes[position];
       var x = sx(speed), y = sy(altitude), angle = np.mod(seg.wind.direction + 180, 360) * np.DEG;
       var ux = Math.sin(angle), uy = -Math.cos(angle);
-      var startX = x + ux * 9, startY = y + uy * 9, dx = ux * 22, dy = uy * 22, timeLabel = '';
+      var startX = x + ux * 9, startY = y + uy * 9, dx = ux * 26, dy = uy * 26, timeLabel = '';
       if (position === 0 || position === th.length - 1) {
-        var anchor = x > left + plotW * 0.6 ? 'end' : 'start', offset = anchor === 'end' ? -13 : 13;
+        var anchor = x > left + plotW * 0.6 ? 'end' : 'start', offset = anchor === 'end' ? -16 : 16;
         timeLabel = '<text x="' + f1(x + offset) + '" y="' + f1(y + 3.5) + '" class="wind-time" text-anchor="' + anchor + '">' +
           escape(seg.start_time.slice(0, 5)) + '</text>';
       }
@@ -167,8 +167,8 @@
         fmt(altitude, 0) + '" data-dir="' + fmt(seg.wind.direction, 0) + '">' +
         '<line x1="' + f1(startX) + '" y1="' + f1(startY) + '" x2="' + f1(x + dx) + '" y2="' + f1(y + dy) +
         '" class="wind-arrow" marker-end="url(#arrow' + uid + ')" />' +
-        '<circle cx="' + f1(x) + '" cy="' + f1(y) + '" r="8.5" class="wind-dot" />' +
-        '<text x="' + f1(x) + '" y="' + f1(y + 3.4) + '" class="wind-number">' + n + '</text>' + timeLabel +
+        '<circle cx="' + f1(x) + '" cy="' + f1(y) + '" r="9" class="wind-dot" />' +
+        '<text x="' + f1(x) + '" y="' + f1(y) + '" class="wind-number">' + n + '</text>' + timeLabel +
         '<title>climb ' + n + ' at ' + escape(seg.start_time) + ' — ' + f1(speed) + ' m/s from ' +
         escape(seg.wind.cardinal) + ' at ' + fmt(altitude, 0) + ' m</title></g>';
     });

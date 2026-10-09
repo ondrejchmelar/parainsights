@@ -115,7 +115,12 @@ svg.chart { overflow: visible; }
 .chart-profile .endpoint { fill: var(--panel); stroke: var(--ink); stroke-width: 2; }
 .chart-profile .endpoint-label { text-anchor: middle; }
 .chart .mark circle { stroke-width: 2; }
-.chart .mark-label { fill: var(--ink); text-anchor: middle; }
+/* The numbers in the climbs' circles: smaller than the rest of the chart's type, so two
+   digits fit inside, and centred on the font's middle rather than nudged by hand. The
+   side view's and the wind chart's circles come out the same size on screen: about
+   7.5 px across the radius, 11 px numbers (the wind chart is drawn at 620 wide and
+   shown at about 0.83 of that on a desktop, 0.58 on a phone — see the phone rules). */
+.chart .mark-label { fill: var(--ink); text-anchor: middle; dominant-baseline: central; font-size: 11px; }
 .chart .mark.active circle { fill: var(--climb); stroke: var(--panel); }
 .chart .reference { stroke: var(--ink-2); stroke-width: 1; stroke-dasharray: 6 4; }
 .chart .reference-label { text-anchor: end; }
@@ -150,7 +155,7 @@ svg.chart { overflow: visible; }
 .chart .replay-dim { fill: var(--panel); opacity: 0.7; pointer-events: none; }
 .chart-wind .wind-dot { fill: var(--panel); stroke: var(--sink); stroke-width: 2; }
 .chart-wind .wind-arrow { stroke: var(--sink); stroke-width: 1.6; }
-.chart-wind .wind-number { fill: var(--ink); text-anchor: middle; }
+.chart-wind .wind-number { fill: var(--ink); text-anchor: middle; dominant-baseline: central; font-size: 13px; }
 .chart-wind .wind-point.active .wind-dot { fill: var(--climb); stroke: var(--panel); }
 .chart-wind .model polyline { fill: none; stroke: var(--neutral); stroke-width: 2; stroke-dasharray: 5 3; }
 .chart-wind .model .model-dot { fill: var(--neutral); }
@@ -196,12 +201,14 @@ svg.chart { overflow: visible; }
 .ramp { display: flex; gap: 2px; align-items: center; }
 .ramp span { width: 22px; height: 10px; border-radius: 2px; }
 
-.tooltip { position: absolute; pointer-events: none; z-index: 70; background: var(--panel);
-  border: 1px solid var(--edge); border-radius: 10px; padding: 8px 12px; font-size: 15px; line-height: 1.45;
+/* The ⓘ bubbles' colours, the page's inverted: in the panel's own colour it vanished into
+   the dark chart under it, where its shadow does not show. */
+.tooltip { position: absolute; pointer-events: none; z-index: 70; background: var(--pop-bg); color: var(--pop-ink);
+  border: 1px solid var(--pop-bg); border-radius: 10px; padding: 8px 12px; font-size: 15px; line-height: 1.45;
   box-shadow: 0 6px 20px rgb(0 0 0 / 0.2); white-space: nowrap; opacity: 0; transition: opacity 0.1s; }
 .tooltip.on { opacity: 1; }
 .tooltip .t-time { font-variant-numeric: tabular-nums; font-weight: 600; }
-.tooltip .t-row { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.tooltip .t-row { color: color-mix(in srgb, var(--pop-ink) 78%, var(--pop-bg)); font-variant-numeric: tabular-nums; }
 
 /* Tables -------------------------------------------------------------------------- */
 .table-scroll { overflow-x: auto; }
@@ -276,8 +283,10 @@ code { font-family: ui-monospace, "DejaVu Sans Mono", monospace; font-size: 0.92
   th, td { padding: 10px 7px; }
   /* Charts drawn at half width are scaled to about two thirds on a phone; their type is
      set larger in their own units so it lands near 13 px. */
-  .two .chart .axis-label, .two .chart .axis-title, .two .chart-wind .wind-number,
+  .two .chart .axis-label, .two .chart .axis-title,
   .two .chart-wind .wind-time, .two .chart .reference-label { font-size: 19px; }
+  .two .chart-wind .wind-dot { r: 13px; }
+  .two .chart-wind .wind-number { font-size: 19px; }
   /* The side view is drawn at the phone's own size (`narrowOf` in page/charts.js), so its
      type is the desktop's 15 px; the host drops the desktop's 1080:420 box for it. */
   .flight-map .side-view .chart-host { aspect-ratio: auto !important; }

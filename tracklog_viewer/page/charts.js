@@ -223,9 +223,9 @@
     data.marks.forEach(function (mark) {
       var mx = sx(along[mark.at]), my = sy(alt[mark.at]);
       var group = make('g', { 'class': 'mark', 'data-segment': mark.segment });
-      group.appendChild(make('circle', { cx: mx.toFixed(1), cy: my.toFixed(1), r: 9,
+      group.appendChild(make('circle', { cx: mx.toFixed(1), cy: my.toFixed(1), r: 7.5,
         fill: 'var(--panel)', stroke: mark.tow ? 'var(--tow)' : 'var(--climb)' }));
-      group.appendChild(make('text', { x: mx.toFixed(1), y: (my + 3.4).toFixed(1),
+      group.appendChild(make('text', { x: mx.toFixed(1), y: my.toFixed(1),
         'class': 'mark-label' }, mark.label));
       marks.appendChild(group);
     });

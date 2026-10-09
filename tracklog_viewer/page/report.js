@@ -166,7 +166,7 @@
         if (dot) { dot.setAttribute('cx', x.toFixed(1)); dot.setAttribute('cy', y.toFixed(1)); }
         if (number) {
           number.setAttribute('x', x.toFixed(1));
-          number.setAttribute('y', (y + 3.4).toFixed(1));
+          number.setAttribute('y', y.toFixed(1));
         }
         if (arrow) {
           // The tail points downwind — `direction` is where the air comes *from*, and
@@ -175,12 +175,12 @@
           var ux = Math.sin(angle), uy = -Math.cos(angle);
           arrow.setAttribute('x1', (x + ux * 9).toFixed(1));
           arrow.setAttribute('y1', (y + uy * 9).toFixed(1));
-          arrow.setAttribute('x2', (x + ux * 22).toFixed(1));
-          arrow.setAttribute('y2', (y + uy * 22).toFixed(1));
+          arrow.setAttribute('x2', (x + ux * 26).toFixed(1));
+          arrow.setAttribute('y2', (y + uy * 26).toFixed(1));
         }
         if (time) {
           var anchor = time.getAttribute('text-anchor');
-          time.setAttribute('x', (x + (anchor === 'end' ? -13 : 13)).toFixed(1));
+          time.setAttribute('x', (x + (anchor === 'end' ? -16 : 16)).toFixed(1));
           time.setAttribute('y', (y + 3.5).toFixed(1));
         }
       });
