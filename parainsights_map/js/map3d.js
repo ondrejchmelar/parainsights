@@ -702,7 +702,10 @@
       var phaseLabels = (scene.phases || []).map(function (p) {
         return phaseLabel(p, [flownAt(p.lon[0], p.lat[0]), flownAt(p.lon[1], p.lat[1])]);
       });
-      var boxes = (hasAirspace || alwaysAirspace) ? scene.airspaces.map(function (ring) {
+      // Each zone as the map draws it: the ring, its floor and top in metres (measured
+      // from the ground where its limits are), its colour. Rebuilt from another list by
+      // `setAirspaces` — the planner's zones near its task.
+      function boxesFrom(list) { return list.map(function (ring) {
         var low = Infinity, high = -Infinity;
         if (ring.g || ring.fu !== undefined || ring.cu !== undefined) {
           ring.lon.forEach(function (lon, i) {
@@ -715,7 +718,11 @@
         return { space: ring, name: ring.n, colour: (scene.airspaceColours || {})[ring.k] || '#888888',
                  ring: ring.lon.map(function (lon, i) { return [lon, ring.lat[i]]; }),
                  floor: floor, top: Math.max(top, floor + 30), capped: !!ring.t };
-      }) : [];
+      }); }
+      // A planner on the page draws only the zones near its task (`drawnAirspaces`), and
+      // none before there is one: started from those, not flashed in full first.
+      var boxes = (hasAirspace || alwaysAirspace)
+        ? boxesFrom(handle.drawnAirspaces ? handle.drawnAirspaces() : scene.airspaces) : [];
 
       // ---- compared flights ----------------------------------------------------------
       // Handed in by the page's comparison (`setOthers`, from `render_html`): the other
@@ -2314,6 +2321,11 @@
         setBasemap: setBasemap, setVertical: setVertical,
         setScored: function (points) {
           scored = points && points.length >= 2 ? points : null;
+          refresh();
+        },
+        // The zones to draw instead of the scene's own: the planner's, near its task.
+        setAirspaces: function (list) {
+          boxes = boxesFrom(list || []);
           refresh();
         },
         setRoute: function (walk, points) {

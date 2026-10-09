@@ -130,7 +130,7 @@
   }
 
   function crossings() {
-    var rings = handle.scene().airspaces || [];
+    var rings = allRings();
     if (!rings.length || points.length < 2) return [];
     var walk = course(), legs = [];
     for (var i = 1; i < walk.length; i++) legs.push([walk[i - 1], walk[i]]);
@@ -167,14 +167,142 @@
   // How much of the route runs where the map has no airspace to check it against.
   var coverage = JSON.parse(
     (document.getElementById('plan-coverage') || {}).textContent || 'null');
+  // Checked where the route is inside Czechia (this page's own zones) or inside a
+  // country whose layer has been loaded for it (`loadNear`); measured on 100 points a leg.
   function uncheckedMetres() {
     if (!coverage) return 0;
-    var walk = course(), metres = 0;
+    var walk = course(), metres = 0, boxes = loadedBoxes();
     for (var i = 1; i < walk.length; i++) {
-      metres += (1 - fractionInside(walk[i - 1], walk[i], coverage))
-        * distance(walk[i - 1], walk[i]);
+      var a = walk[i - 1], b = walk[i], length = distance(a, b), missing = 0, n = 100;
+      for (var k = 0; k < n; k++) {
+        var p = [a[0] + (b[0] - a[0]) * (k + 0.5) / n, a[1] + (b[1] - a[1]) * (k + 0.5) / n];
+        if (pointIn(coverage, p)) continue;
+        if (boxes.some(function (bb) { return p[0] >= bb[0] && p[0] <= bb[1] && p[1] >= bb[2] && p[1] <= bb[3]; })) continue;
+        missing++;
+      }
+      metres += missing / n * length;
     }
     return metres;
+  }
+  function pointIn(ring, p) {
+    var inside = false, n = ring.lon.length;
+    for (var i = 0, j = n - 1; i < n; j = i++) {
+      var yi = ring.lat[i], yj = ring.lat[j];
+      if ((yi > p[1]) !== (yj > p[1]) &&
+          p[0] < (ring.lon[j] - ring.lon[i]) * (p[1] - yi) / (yj - yi) + ring.lon[i]) inside = !inside;
+    }
+    return inside;
+  }
+
+  // ---- the airspace near the task -----------------------------------------------------
+  //
+  // The map starts empty and draws only the zones within NEAR of the task's legs (October
+  // 2026): the whole of Czechia's 763 zones over the map hid the ground a task is planned
+  // on, and the zones a task does not go near say nothing about it. Not only Czechia's:
+  // where the task reaches another country, that country's layer (`airspaces/openaip.py`,
+  // the same files a flight's map loads, `view3d.loadAirspace`) is fetched for it.
+  // Czechia's own come from this page, which carries more than its layer — the circuits.
+  var NEAR = 5000;
+  var LAYERS = ((document.querySelector('meta[name="airspace-layers"]') || {}).content) || 'layers/';
+  var OWN_FILES = /^(CZ|cz-circuits)\.json$/;
+  var remote = {};          // file name -> { bbox: [w, e, s, n], rings }
+  function loadedBoxes() {
+    return Object.keys(remote).map(function (name) { return remote[name].bbox; })
+      .filter(function (bb) { return bb; });
+  }
+  function allRings() {
+    var out = (handle.scene().airspaces || []).slice();
+    Object.keys(remote).forEach(function (name) { out = out.concat(remote[name].rings); });
+    return out;
+  }
+  function decodeRing(ring) {
+    if (!ring.enc) return ring;
+    var lon = [], lat = [], x = 0, y = 0;
+    for (var i = 0; i < ring.lon.length; i++) {
+      x += ring.lon[i]; y += ring.lat[i];
+      lon.push(x / ring.enc); lat.push(y / ring.enc);
+    }
+    var out = {};
+    Object.keys(ring).forEach(function (k) { if (k !== 'enc') out[k] = ring[k]; });
+    out.lon = lon; out.lat = lat;
+    return out;
+  }
+  // The task's box, NEAR wider all round, as [w, e, s, n].
+  function taskBox() {
+    var walk = course(), w = Infinity, e = -Infinity, so = Infinity, n = -Infinity;
+    walk.forEach(function (p) { w = Math.min(w, p[0]); e = Math.max(e, p[0]); so = Math.min(so, p[1]); n = Math.max(n, p[1]); });
+    var my = NEAR / 111320, mx = NEAR / (111320 * Math.cos((so + n) / 2 * Math.PI / 180));
+    return [w - mx, e + mx, so - my, n + my];
+  }
+  // Fetch the layers of the countries the task's box reaches and has not yet loaded.
+  // Resolves true when something new arrived.
+  function loadNear() {
+    if (points.length < 2 || typeof airspaceJson !== 'function') return Promise.resolve(false);
+    var bb = taskBox();
+    return airspaceJson(LAYERS + 'index.json').then(function (index) {
+      var files = index.files || {};
+      var wanted = Object.keys(files).filter(function (name) {
+        var f = files[name].bbox;
+        return !OWN_FILES.test(name) && !remote[name] && f &&
+          !(f[1] < bb[0] || f[0] > bb[1] || f[3] < bb[2] || f[2] > bb[3]);
+      });
+      if (!wanted.length) return false;
+      return Promise.all(wanted.map(function (name) {
+        return airspaceJson(LAYERS + name).then(function (file) {
+          remote[name] = { bbox: files[name].bbox, rings: (file.airspaces || []).map(decodeRing) };
+        }, function () { remote[name] = { bbox: null, rings: [] }; });
+      })).then(function () { return true; });
+    }, function () { return false; });
+  }
+  // Metres from a point to a ring: 0 inside, else to its nearest edge.
+  function metresTo(ring, p) {
+    var kx = 111320 * Math.cos(p[1] * Math.PI / 180), ky = 111320, best = Infinity, n = ring.lon.length;
+    for (var a = 0, b = n - 1; a < n; b = a++) {
+      var ax = (ring.lon[a] - p[0]) * kx, ay = (ring.lat[a] - p[1]) * ky;
+      var bx = (ring.lon[b] - p[0]) * kx, by = (ring.lat[b] - p[1]) * ky;
+      var dx = bx - ax, dy = by - ay, len = dx * dx + dy * dy;
+      var t = len ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len)) : 0;
+      best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
+    }
+    return pointIn(ring, p) ? 0 : best;
+  }
+  // The zones within NEAR of the task: its legs sampled every kilometre.
+  var nearNow = [];
+  function nearTask() {
+    if (points.length < 2) return [];
+    var walk = course(), samples = [];
+    for (var i = 1; i < walk.length; i++) {
+      var a = walk[i - 1], b = walk[i], n = Math.max(1, Math.ceil(distance(a, b) / 1000));
+      for (var k = 0; k <= n; k++) samples.push([a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n]);
+    }
+    return allRings().filter(function (ring) {
+      var box = ringBox(ring), my = NEAR / 111320;
+      var mx = NEAR / (111320 * Math.cos((box.south + box.north) / 2 * Math.PI / 180));
+      for (var s = 0; s < samples.length; s++) {
+        var p = samples[s];
+        if (p[0] < box.west - mx || p[0] > box.east + mx || p[1] < box.south - my || p[1] > box.north + my) continue;
+        if (metresTo(ring, p) <= NEAR) return true;
+      }
+      return false;
+    });
+  }
+  function showNear() {
+    nearNow = nearTask();
+    var merged = mergedEntry();
+    if (merged && merged.setAirspaces) merged.setAirspaces(nearNow);
+    if (window.__aspRefilter) window.__aspRefilter();
+  }
+  // What the airspace page's Layers panel counts: these, not the page's whole payload.
+  handle.drawnAirspaces = function () { return nearNow; };
+  handle.planned = function () { return points.length >= 2; };
+  var loading = null;
+  function refreshAirspace() {
+    showNear();
+    if (loading) return;
+    loading = loadNear().then(function (arrived) {
+      loading = null;
+      if (arrived) { showNear(); reportAirspace(); refreshAirspace(); }
+    });
   }
 
   function reportAirspace() {
@@ -299,6 +427,7 @@
       merged.setRoute(walk, points);
       if (merged.setShapes) merged.setShapes(faiShapes());
     }
+    refreshAirspace();
     report();
     reportAirspace();
   }
@@ -448,6 +577,7 @@
     });
     entry.setRoute(course(), points);
     if (entry.setShapes) entry.setShapes(faiShapes());
+    showNear();
   }
   panel.addEventListener('merged-ready', function (event) { hookMerged(event.detail); });
   hookMerged(mergedEntry());

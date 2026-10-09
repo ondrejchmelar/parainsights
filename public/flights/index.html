@@ -1260,11 +1260,11 @@ html[data-help="off"] .m3-help { display: none; }
     <div class="plan-figures" id="plan-figures"></div><div class="plan-bar"><button type="button" class="btn primary plan-draw" id="plan-draw" aria-pressed="false">Draw a task</button><button type="button" class="btn" id="plan-undo">Undo</button><button type="button" class="btn" id="plan-clear">Clear</button></div><div class="plan-opts"><label class="chk"><input type="checkbox" id="plan-close"> Closed</label><label class="chk"><input type="checkbox" id="plan-fai" checked> FAI areas<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="More about this">i</button><span class="info-pop" role="note">Where each turnpoint can go for an FAI triangle (every side at least 28% of the perimeter), the other two staying put: turnpoint 1 green, 2 blue, 3 red. Yellow: where a closed course must finish.</span></span></label><label class="plan-rules-label"><span class="sr">Rules</span><select id="plan-rules" class="btn"><option value="world">XContest</option><option value="cpp">ČPP (Czech)</option></select></label></div><span class="plan-hint" id="plan-hint" hidden></span>
     <p class="plan-legs" id="plan-legs"></p>
     <div class="plan-airspace" id="plan-airspace"></div>
-    <p class="plan-note">A plan, not a clearance.<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="How the task is scored">i</button><span class="info-pop" role="note">Scored with the same rules as the flight report: every side at least 28% of the perimeter for FAI, a closing gap under 20% of it for a closed course, multipliers 1&thinsp;/&thinsp;1.2&thinsp;/&thinsp;1.4. With ČPP chosen, the Czech cup's: closing under 5%, and in the Central European zone 1&thinsp;/&thinsp;1.8&thinsp;/&thinsp;2.2 (<a href="https://www.xcontest.org/cesko/pravidla/" rel="noreferrer">rules</a>). Airspace is drawn for Czechia only.</span></span></p>
+    <p class="plan-note">A plan, not a clearance.<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="How the task is scored">i</button><span class="info-pop" role="note">Scored with the same rules as the flight report: every side at least 28% of the perimeter for FAI, a closing gap under 20% of it for a closed course, multipliers 1&thinsp;/&thinsp;1.2&thinsp;/&thinsp;1.4. With ČPP chosen, the Czech cup's: closing under 5%, and in the Central European zone 1&thinsp;/&thinsp;1.8&thinsp;/&thinsp;2.2 (<a href="https://www.xcontest.org/cesko/pravidla/" rel="noreferrer">rules</a>). The map draws the airspace within 5&nbsp;km of the task, and none before there is one: Czechia's from this page, with its traffic circuits; any other European country's from openAIP once the task reaches it.</span></span></p>
     <script type="application/json" id="plan-coverage">{"name":"Czechia","lon":[18.832,18.75,18.596,18.416,18.365,18.161,18.11,18.086,18.051,17.913,17.893,17.758,17.625,17.483,17.188,17.136,17.063,16.985,16.953,16.884,16.713,16.544,16.478,16.367,16.057,15.825,15.701,15.403,15.311,15.162,15.14,15.067,14.993,14.972,14.923,14.822,14.786,14.707,14.691,14.489,14.431,14.368,14.19,14.049,13.989,13.815,13.77,13.548,13.441,13.401,13.339,13.289,13.228,13.141,12.917,12.813,12.681,12.5,12.391,12.498,12.512,12.458,12.276,12.208,12.175,12.09,12.09,12.135,12.175,12.277,12.453,12.549,12.706,12.765,12.943,12.967,13.016,13.181,13.238,13.306,13.375,13.436,13.473,13.527,13.557,13.701,13.899,14.202,14.369,14.377,14.299,14.256,14.283,14.32,14.507,14.546,14.595,14.624,14.614,14.723,14.767,14.809,14.896,14.983,14.994,15.259,15.277,15.354,15.731,15.894,15.949,16.007,16.066,16.282,16.36,16.42,16.379,16.283,16.21,16.231,16.334,16.488,16.597,16.639,16.679,16.842,16.99,16.993,16.869,16.88,17.152,17.415,17.555,17.655,17.702,17.72,17.735,17.709,17.589,17.627,17.681,17.831,17.875,17.984,18.028,18.099,18.205,18.305,18.348,18.516,18.562,18.595,18.807,18.832],"lat":[49.511,49.494,49.491,49.391,49.336,49.257,49.18,49.065,49.037,48.999,48.971,48.888,48.842,48.828,48.861,48.841,48.781,48.677,48.599,48.704,48.734,48.796,48.8,48.739,48.755,48.864,48.86,48.957,48.974,48.946,48.969,48.998,49.001,48.984,48.771,48.774,48.747,48.672,48.599,48.626,48.616,48.576,48.579,48.602,48.692,48.767,48.816,48.96,48.956,48.978,49.061,49.097,49.112,49.158,49.33,49.329,49.415,49.64,49.74,49.853,49.896,49.956,50.042,50.098,50.176,50.269,50.302,50.311,50.288,50.181,50.35,50.393,50.409,50.431,50.406,50.416,50.49,50.51,50.577,50.586,50.622,50.601,50.617,50.693,50.705,50.717,50.761,50.861,50.899,50.914,50.953,51.002,51.029,51.038,51.01,50.994,50.919,50.915,50.856,50.815,50.818,50.859,50.861,50.887,51.014,50.959,50.883,50.812,50.74,50.677,50.67,50.612,50.63,50.656,50.621,50.574,50.517,50.483,50.424,50.394,50.367,50.248,50.122,50.102,50.097,50.187,50.237,50.26,50.415,50.427,50.378,50.255,50.264,50.284,50.307,50.299,50.231,50.194,50.157,50.116,50.101,49.983,49.972,49.999,50.035,49.993,49.965,49.914,49.93,49.902,49.879,49.758,49.614,49.511]}</script>
   </section></div>
       <details class="float asp-layers">
-        <summary><h2><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5.5l4.5 4.5L8 14.5"/></svg>Layers<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="About this map">i</button><span class="info-pop" role="note">Everything openAIP carries over Czechia, plus what no published source draws: the traffic circuit at 157 fields and ultralight strips. A paraglider may fly inside an aerodrome zone but must stay out of its circuit, and no instrument draws the circuit. Hover a zone for its name and limits. Each zone is the box it really is — floor to ceiling — so drag with the right button to tilt and see what sits over what. <strong>The vertical is exaggerated five times</strong>, which the × buttons under the map set: at true scale, across 500 km of country, a 300 m traffic circuit is a third of a pixel tall and every box here is two rings on top of each other. ×1 is one press away, and the limits in each label are the real ones whichever setting you are on. The 37 that run above 4 km are cut off at a dashed lid, which is a cap and not their ceiling; the label says how high they go.</span></span></h2><span class="asp-layers-count" id="asp-count"></span></summary>
+        <summary><h2><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5.5l4.5 4.5L8 14.5"/></svg>Layers<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="About this map">i</button><span class="info-pop" role="note">Drawn only within 5 km of a planned task, and nothing before there is one. Over Czechia: everything openAIP carries, plus what no published source draws: the traffic circuit at 157 fields and ultralight strips. A paraglider may fly inside an aerodrome zone but must stay out of its circuit, and no instrument draws the circuit. Elsewhere in Europe: openAIP's zones for the country the task reaches. Hover a zone for its name and limits. Each zone is the box it really is — floor to ceiling — so drag with the right button to tilt and see what sits over what. <strong>The vertical is exaggerated five times</strong>, which the × buttons under the map set: at true scale, across 500 km of country, a 300 m traffic circuit is a third of a pixel tall and every box here is two rings on top of each other. ×1 is one press away, and the limits in each label are the real ones whichever setting you are on. The 37 that run above 4 km are cut off at a dashed lid, which is a cap and not their ceiling; the label says how high they go.</span></span></h2><span class="asp-layers-count" id="asp-count"></span></summary>
         <div class="asp-controls asp-classes"><label class="chk"><input type="checkbox" data-asp-class="base" checked><span class="asp-swatch" style="background:#c2410c"></span>Controlled (CTR/TMA/CTA)</label><label class="chk"><input type="checkbox" data-asp-class="restricted" checked><span class="asp-swatch" style="background:#b91c1c"></span>Restricted, danger, prohibited</label><label class="chk"><input type="checkbox" data-asp-class="gliding" checked><span class="asp-swatch" style="background:#a16207"></span>Gliding, dropzones, PGZ</label><label class="chk"><input type="checkbox" data-asp-class="atz" checked><span class="asp-swatch" style="background:#15803d"></span>Aerodrome zone</label><label class="chk"><input type="checkbox" data-asp-class="circuit" checked><span class="asp-swatch" style="background:#ea580c"></span>Traffic circuit (okruh)</label></div><div class="asp-controls"><span class="asp-slider"><label for="asp-floor">Floor at or below</label><input type="range" id="asp-floor" min="0" max="3850" step="50" value="3850" data-top="3850"><span class="asp-readout" id="asp-readout"></span></span><button type="button" class="btn" id="asp-reset">Reset</button></div><div class="asp-controls asp-when-row"><label class="chk" for="asp-when-on"><input type="checkbox" id="asp-when-on">Only fields open at</label><span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="More about this">i</button><span class="info-pop" role="note">Czech local time. Aerodrome hours are published for 68 of the 82 aerodromes and for <strong>none</strong> of the 74 ultralight strips, and nothing else on this map carries hours at all — so this hides part of one layer, not the map. <strong>Outside published hours is not “closed”</strong>: almost every field adds “otherwise on request”, and a tow launch needs no published hour.</span></span><input type="datetime-local" id="asp-when" data-holidays="2025-01-01,2025-04-18,2025-04-21,2025-05-01,2025-05-08,2025-07-05,2025-07-06,2025-09-28,2025-10-28,2025-11-17,2025-12-24,2025-12-25,2025-12-26,2026-01-01,2026-04-03,2026-04-06,2026-05-01,2026-05-08,2026-07-05,2026-07-06,2026-09-28,2026-10-28,2026-11-17,2026-12-24,2026-12-25,2026-12-26,2027-01-01,2027-03-26,2027-03-29,2027-05-01,2027-05-08,2027-07-05,2027-07-06,2027-09-28,2027-10-28,2027-11-17,2027-12-24,2027-12-25,2027-12-26,2028-01-01,2028-04-14,2028-04-17,2028-05-01,2028-05-08,2028-07-05,2028-07-06,2028-09-28,2028-10-28,2028-11-17,2028-12-24,2028-12-25,2028-12-26" aria-label="date and time, Czech local"><button type="button" class="btn" id="asp-when-now">Now</button><span class="asp-readout asp-when-out" id="asp-when-out"></span></div>
       </details>
       <div class="float asp-get-float"><span class="asp-get-label">Airfield layer for XCTrack<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="About the airfield layer">i</button><span class="info-pop" role="note">Aerodrome zones and traffic circuits XCTrack and XContest leave out (OpenAir · 82 zones, 206 circuits at 157 fields · 208 KB). <strong>Not a full airspace set</strong>: load it alongside your usual airspace, never instead of it. Import under Preferences → Airspaces and obstacles → Files → Import OpenAir files, or copy it into the XCTrack/Airspaces folder. Provided with no guarantee — it may be out of date or wrong; you are responsible for the airspace you fly in.</span></span></span><a class="btn primary" download="CZ_airfield_zones_20261001.txt" href="../airspace/CZ_airfield_zones_20261001.txt"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3v10M6 9l4 4 4-4M4 16.5h12"/></svg>Download</a></div>
@@ -2430,7 +2430,10 @@ function initView3d(root, cursorTrack, preset) {
       var phaseLabels = (scene.phases || []).map(function (p) {
         return phaseLabel(p, [flownAt(p.lon[0], p.lat[0]), flownAt(p.lon[1], p.lat[1])]);
       });
-      var boxes = (hasAirspace || alwaysAirspace) ? scene.airspaces.map(function (ring) {
+      // Each zone as the map draws it: the ring, its floor and top in metres (measured
+      // from the ground where its limits are), its colour. Rebuilt from another list by
+      // `setAirspaces` — the planner's zones near its task.
+      function boxesFrom(list) { return list.map(function (ring) {
         var low = Infinity, high = -Infinity;
         if (ring.g || ring.fu !== undefined || ring.cu !== undefined) {
           ring.lon.forEach(function (lon, i) {
@@ -2443,7 +2446,11 @@ function initView3d(root, cursorTrack, preset) {
         return { space: ring, name: ring.n, colour: (scene.airspaceColours || {})[ring.k] || '#888888',
                  ring: ring.lon.map(function (lon, i) { return [lon, ring.lat[i]]; }),
                  floor: floor, top: Math.max(top, floor + 30), capped: !!ring.t };
-      }) : [];
+      }); }
+      // A planner on the page draws only the zones near its task (`drawnAirspaces`), and
+      // none before there is one: started from those, not flashed in full first.
+      var boxes = (hasAirspace || alwaysAirspace)
+        ? boxesFrom(handle.drawnAirspaces ? handle.drawnAirspaces() : scene.airspaces) : [];
 
       // ---- compared flights ----------------------------------------------------------
       // Handed in by the page's comparison (`setOthers`, from `render_html`): the other
@@ -4042,6 +4049,11 @@ function initView3d(root, cursorTrack, preset) {
         setBasemap: setBasemap, setVertical: setVertical,
         setScored: function (points) {
           scored = points && points.length >= 2 ? points : null;
+          refresh();
+        },
+        // The zones to draw instead of the scene's own: the planner's, near its task.
+        setAirspaces: function (list) {
+          boxes = boxesFrom(list || []);
           refresh();
         },
         setRoute: function (walk, points) {
@@ -10549,13 +10561,17 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
       return !when || window.aspHours.activeAt(space.w, when, holidays);
     }
     var shown = 0, dimmed = 0;
-    var spaces = handle.scene().airspaces || [];
+    // What the map draws: with a planner, the zones near its task — and before there is a
+    // task, nothing, while the hours line still speaks for every field on the page.
+    var planned = handle.planned ? handle.planned() : true;
+    var spaces = ((planned && handle.drawnAirspaces) ? handle.drawnAirspaces()
+                                                     : handle.scene().airspaces) || [];
     for (var i = 0; i < spaces.length; i++) {
       if (on[spaces[i].k] === false || spaces[i].f > limit) continue;
       if (open(spaces[i])) shown++; else dimmed++;
     }
     var count = document.getElementById('asp-count');
-    if (count) count.textContent = shown + ' shown';
+    if (count) count.textContent = planned ? shown + ' shown' : 'drawn along a task';
     var says = document.getElementById('asp-when-out');
     if (says) {
       says.textContent = !when ? ''
@@ -10590,6 +10606,7 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
   });
 
   refilter();
+  window.__aspRefilter = refilter;
 
   if (window.__openMap) window.__openMap(panel.closest('.renderer-host'));
   }
@@ -10726,7 +10743,7 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
   }
 
   function crossings() {
-    var rings = handle.scene().airspaces || [];
+    var rings = allRings();
     if (!rings.length || points.length < 2) return [];
     var walk = course(), legs = [];
     for (var i = 1; i < walk.length; i++) legs.push([walk[i - 1], walk[i]]);
@@ -10763,14 +10780,142 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
   // How much of the route runs where the map has no airspace to check it against.
   var coverage = JSON.parse(
     (document.getElementById('plan-coverage') || {}).textContent || 'null');
+  // Checked where the route is inside Czechia (this page's own zones) or inside a
+  // country whose layer has been loaded for it (`loadNear`); measured on 100 points a leg.
   function uncheckedMetres() {
     if (!coverage) return 0;
-    var walk = course(), metres = 0;
+    var walk = course(), metres = 0, boxes = loadedBoxes();
     for (var i = 1; i < walk.length; i++) {
-      metres += (1 - fractionInside(walk[i - 1], walk[i], coverage))
-        * distance(walk[i - 1], walk[i]);
+      var a = walk[i - 1], b = walk[i], length = distance(a, b), missing = 0, n = 100;
+      for (var k = 0; k < n; k++) {
+        var p = [a[0] + (b[0] - a[0]) * (k + 0.5) / n, a[1] + (b[1] - a[1]) * (k + 0.5) / n];
+        if (pointIn(coverage, p)) continue;
+        if (boxes.some(function (bb) { return p[0] >= bb[0] && p[0] <= bb[1] && p[1] >= bb[2] && p[1] <= bb[3]; })) continue;
+        missing++;
+      }
+      metres += missing / n * length;
     }
     return metres;
+  }
+  function pointIn(ring, p) {
+    var inside = false, n = ring.lon.length;
+    for (var i = 0, j = n - 1; i < n; j = i++) {
+      var yi = ring.lat[i], yj = ring.lat[j];
+      if ((yi > p[1]) !== (yj > p[1]) &&
+          p[0] < (ring.lon[j] - ring.lon[i]) * (p[1] - yi) / (yj - yi) + ring.lon[i]) inside = !inside;
+    }
+    return inside;
+  }
+
+  // ---- the airspace near the task -----------------------------------------------------
+  //
+  // The map starts empty and draws only the zones within NEAR of the task's legs (October
+  // 2026): the whole of Czechia's 763 zones over the map hid the ground a task is planned
+  // on, and the zones a task does not go near say nothing about it. Not only Czechia's:
+  // where the task reaches another country, that country's layer (`airspaces/openaip.py`,
+  // the same files a flight's map loads, `view3d.loadAirspace`) is fetched for it.
+  // Czechia's own come from this page, which carries more than its layer — the circuits.
+  var NEAR = 5000;
+  var LAYERS = ((document.querySelector('meta[name="airspace-layers"]') || {}).content) || 'layers/';
+  var OWN_FILES = /^(CZ|cz-circuits)\.json$/;
+  var remote = {};          // file name -> { bbox: [w, e, s, n], rings }
+  function loadedBoxes() {
+    return Object.keys(remote).map(function (name) { return remote[name].bbox; })
+      .filter(function (bb) { return bb; });
+  }
+  function allRings() {
+    var out = (handle.scene().airspaces || []).slice();
+    Object.keys(remote).forEach(function (name) { out = out.concat(remote[name].rings); });
+    return out;
+  }
+  function decodeRing(ring) {
+    if (!ring.enc) return ring;
+    var lon = [], lat = [], x = 0, y = 0;
+    for (var i = 0; i < ring.lon.length; i++) {
+      x += ring.lon[i]; y += ring.lat[i];
+      lon.push(x / ring.enc); lat.push(y / ring.enc);
+    }
+    var out = {};
+    Object.keys(ring).forEach(function (k) { if (k !== 'enc') out[k] = ring[k]; });
+    out.lon = lon; out.lat = lat;
+    return out;
+  }
+  // The task's box, NEAR wider all round, as [w, e, s, n].
+  function taskBox() {
+    var walk = course(), w = Infinity, e = -Infinity, so = Infinity, n = -Infinity;
+    walk.forEach(function (p) { w = Math.min(w, p[0]); e = Math.max(e, p[0]); so = Math.min(so, p[1]); n = Math.max(n, p[1]); });
+    var my = NEAR / 111320, mx = NEAR / (111320 * Math.cos((so + n) / 2 * Math.PI / 180));
+    return [w - mx, e + mx, so - my, n + my];
+  }
+  // Fetch the layers of the countries the task's box reaches and has not yet loaded.
+  // Resolves true when something new arrived.
+  function loadNear() {
+    if (points.length < 2 || typeof airspaceJson !== 'function') return Promise.resolve(false);
+    var bb = taskBox();
+    return airspaceJson(LAYERS + 'index.json').then(function (index) {
+      var files = index.files || {};
+      var wanted = Object.keys(files).filter(function (name) {
+        var f = files[name].bbox;
+        return !OWN_FILES.test(name) && !remote[name] && f &&
+          !(f[1] < bb[0] || f[0] > bb[1] || f[3] < bb[2] || f[2] > bb[3]);
+      });
+      if (!wanted.length) return false;
+      return Promise.all(wanted.map(function (name) {
+        return airspaceJson(LAYERS + name).then(function (file) {
+          remote[name] = { bbox: files[name].bbox, rings: (file.airspaces || []).map(decodeRing) };
+        }, function () { remote[name] = { bbox: null, rings: [] }; });
+      })).then(function () { return true; });
+    }, function () { return false; });
+  }
+  // Metres from a point to a ring: 0 inside, else to its nearest edge.
+  function metresTo(ring, p) {
+    var kx = 111320 * Math.cos(p[1] * Math.PI / 180), ky = 111320, best = Infinity, n = ring.lon.length;
+    for (var a = 0, b = n - 1; a < n; b = a++) {
+      var ax = (ring.lon[a] - p[0]) * kx, ay = (ring.lat[a] - p[1]) * ky;
+      var bx = (ring.lon[b] - p[0]) * kx, by = (ring.lat[b] - p[1]) * ky;
+      var dx = bx - ax, dy = by - ay, len = dx * dx + dy * dy;
+      var t = len ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len)) : 0;
+      best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
+    }
+    return pointIn(ring, p) ? 0 : best;
+  }
+  // The zones within NEAR of the task: its legs sampled every kilometre.
+  var nearNow = [];
+  function nearTask() {
+    if (points.length < 2) return [];
+    var walk = course(), samples = [];
+    for (var i = 1; i < walk.length; i++) {
+      var a = walk[i - 1], b = walk[i], n = Math.max(1, Math.ceil(distance(a, b) / 1000));
+      for (var k = 0; k <= n; k++) samples.push([a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n]);
+    }
+    return allRings().filter(function (ring) {
+      var box = ringBox(ring), my = NEAR / 111320;
+      var mx = NEAR / (111320 * Math.cos((box.south + box.north) / 2 * Math.PI / 180));
+      for (var s = 0; s < samples.length; s++) {
+        var p = samples[s];
+        if (p[0] < box.west - mx || p[0] > box.east + mx || p[1] < box.south - my || p[1] > box.north + my) continue;
+        if (metresTo(ring, p) <= NEAR) return true;
+      }
+      return false;
+    });
+  }
+  function showNear() {
+    nearNow = nearTask();
+    var merged = mergedEntry();
+    if (merged && merged.setAirspaces) merged.setAirspaces(nearNow);
+    if (window.__aspRefilter) window.__aspRefilter();
+  }
+  // What the airspace page's Layers panel counts: these, not the page's whole payload.
+  handle.drawnAirspaces = function () { return nearNow; };
+  handle.planned = function () { return points.length >= 2; };
+  var loading = null;
+  function refreshAirspace() {
+    showNear();
+    if (loading) return;
+    loading = loadNear().then(function (arrived) {
+      loading = null;
+      if (arrived) { showNear(); reportAirspace(); refreshAirspace(); }
+    });
   }
 
   function reportAirspace() {
@@ -10895,6 +11040,7 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
       merged.setRoute(walk, points);
       if (merged.setShapes) merged.setShapes(faiShapes());
     }
+    refreshAirspace();
     report();
     reportAirspace();
   }
@@ -11044,6 +11190,7 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
     });
     entry.setRoute(course(), points);
     if (entry.setShapes) entry.setShapes(faiShapes());
+    showNear();
   }
   panel.addEventListener('merged-ready', function (event) { hookMerged(event.detail); });
   hookMerged(mergedEntry());

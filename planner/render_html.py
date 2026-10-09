@@ -149,7 +149,9 @@ def results() -> str:
              "With ČPP chosen, the Czech cup's: closing under 5%, and in the Central European "
              "zone 1&thinsp;/&thinsp;1.8&thinsp;/&thinsp;2.2 "
              '(<a href="https://www.xcontest.org/cesko/pravidla/" rel="noreferrer">rules</a>). '
-             "Airspace is drawn for Czechia only.")
+             "The map draws the airspace within 5&nbsp;km of the task, and none before "
+             "there is one: Czechia's from this page, with its traffic circuits; any other "
+             "European country's from openAIP once the task reaches it.")
     return f"""<section class="plan-section" aria-label="The task">
     <div class="plan-figures" id="plan-figures"></div>
     <p class="plan-legs" id="plan-legs"></p>

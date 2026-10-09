@@ -55,13 +55,17 @@
       return !when || window.aspHours.activeAt(space.w, when, holidays);
     }
     var shown = 0, dimmed = 0;
-    var spaces = handle.scene().airspaces || [];
+    // What the map draws: with a planner, the zones near its task — and before there is a
+    // task, nothing, while the hours line still speaks for every field on the page.
+    var planned = handle.planned ? handle.planned() : true;
+    var spaces = ((planned && handle.drawnAirspaces) ? handle.drawnAirspaces()
+                                                     : handle.scene().airspaces) || [];
     for (var i = 0; i < spaces.length; i++) {
       if (on[spaces[i].k] === false || spaces[i].f > limit) continue;
       if (open(spaces[i])) shown++; else dimmed++;
     }
     var count = document.getElementById('asp-count');
-    if (count) count.textContent = shown + ' shown';
+    if (count) count.textContent = planned ? shown + ' shown' : 'drawn along a task';
     var says = document.getElementById('asp-when-out');
     if (says) {
       says.textContent = !when ? ''
@@ -96,6 +100,7 @@
   });
 
   refilter();
+  window.__aspRefilter = refilter;
 
   if (window.__openMap) window.__openMap(panel.closest('.renderer-host'));
   }

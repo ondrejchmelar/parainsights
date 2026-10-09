@@ -639,10 +639,12 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
   <details class="asp-sources"><summary>Sources</summary>{sources_table(overlay, base_version, shift)}</details>
 </article>"""
 
-    about = ("Everything openAIP carries over Czechia, plus what no published source draws: "
+    about = ("Drawn only within 5 km of a planned task, and nothing before there is one. "
+             "Over Czechia: everything openAIP carries, plus what no published source draws: "
              f"the traffic circuit at {overlay.circuit_fields} fields and ultralight strips. A "
              "paraglider may fly inside an aerodrome zone but must stay out of its circuit, and "
-             "no instrument draws the circuit. Hover a zone for its name and limits." + boxes)
+             "no instrument draws the circuit. Elsewhere in Europe: openAIP's zones for the country "
+             "the task reaches. Hover a zone for its name and limits." + boxes)
     get = ""
     if openair_name:
         get = (f'<div class="float asp-get-float">'
