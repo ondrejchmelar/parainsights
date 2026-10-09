@@ -269,7 +269,8 @@ class TestTheSiteStrip:
 
         strip = common.nav("airspace", depth=1)
         assert 'href="../meteo/"' in strip
-        assert 'href="../index.html"' in strip
+        # The report has its own address since October 2026, one level down like the rest.
+        assert 'href="../flights/"' in strip
 
     def test_the_report_at_the_top_level_does_not_climb(self):
         import parainsights_common as common

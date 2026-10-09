@@ -20,22 +20,8 @@ TARGET = "../airspace/"
 
 
 def page() -> str:
-    return f"""<!doctype html>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The planner has moved</title>
-<meta name="robots" content="noindex">
-<link rel="canonical" href="{TARGET}">
-<meta http-equiv="refresh" content="0; url={TARGET}">
-<script>{common.THEME_BOOT}
-location.replace('{TARGET}' + location.search + location.hash);</script>
-<style>{common.TOKENS}
-body {{ margin:0; background:var(--paper); color:var(--ink); font:15px/1.55
-  system-ui,-apple-system,"Segoe UI",sans-serif; padding:26px 18px; }}
-a {{ color:inherit; }}</style>
-<p>The task planner is now part of the
-<a href="{TARGET}">airspace page</a>.</p>
-"""
+    return common.redirect(TARGET, "The planner has moved",
+                           f'The task planner is now part of the <a href="{TARGET}">airspace page</a>.')
 
 
 def main(argv=None) -> int:

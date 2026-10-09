@@ -366,8 +366,9 @@ def _view_nav(extras: "list[Extra]") -> str:
     a link, because those pages are separate files and a button that navigated would be
     lying about what it does.
 
-    The links assume the published layout under `public/`, and only ever appear on a
-    report that has extras, which is the same report that is published there.
+    The links assume the published layout under `public/` — the report in `flights/` —
+    and only ever appear on a report that has extras, which is the same report that is
+    published there.
     """
     if not extras:
         # No other views, but the reader still gets the theme switch: it is furniture,
@@ -403,7 +404,8 @@ def _view_nav(extras: "list[Extra]") -> str:
                 f'<button type="button" class="view-tab" data-view-tab="{extra.uid}" '
                 f'aria-pressed="false">{escape(extra.label)}</button>')
         else:
-            items.append(f'<a class="view-tab" href="{where}">{label}</a>')
+            # The report is published in `public/flights/`, one level down like the rest.
+            items.append(f'<a class="view-tab" href="../{where}">{label}</a>')
     # An extra this site has no page for still gets a tab, after the ones it does.
     items += [
         f'<button type="button" class="view-tab" data-view-tab="{e.uid}" '

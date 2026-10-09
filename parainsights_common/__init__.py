@@ -9,10 +9,14 @@ another tool about.
 The links are relative and assume the published layout, which is the only layout the
 `pages` job produces:
 
-    public/index.html        the flight report      → `.`
+    public/flights/          the flight report      → `flights/`
     public/airspace/         the airspace map       → `airspace/`
     public/meteo/            the day's forecast     → `meteo/`
+    public/index.html        a redirect to `flights/` (`redirect`), for old links
     public/planner/          a redirect to the airspace page, where the planner is now
+
+Every tool is one level down, its own address (October 2026: the report was the site's
+root, the one page without a name of its own).
 
 `depth` is how far below `public/` the page being written lives, because a page in
 `airspace/` has to reach its siblings through `../`. It is passed in rather than guessed
@@ -31,7 +35,7 @@ from pathlib import Path
 PAGES = [
     ("meteo", "Meteo", "meteo/"),
     ("airspace", "Planner", "airspace/"),
-    ("flights", "Flights", ""),
+    ("flights", "Flights", "flights/"),
 ]
 
 # The tokens every tool's page draws on, in one place because they were in three —
@@ -330,6 +334,34 @@ def footer() -> str:
     )
 
 
+def redirect(target: str, title: str, says: str) -> str:
+    """A page that sends its reader on to `target`, keeping the query and the anchor, with
+    a link for a reader without JavaScript. Themed (`TOKENS`), because it may be on screen
+    for a frame. Where a page used to be: the root, now that the report is in `flights/`;
+    the planner's old address."""
+    return f"""<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title}</title>
+<meta name="robots" content="noindex">
+<link rel="canonical" href="{target}">
+<meta http-equiv="refresh" content="0; url={target}">
+<script>{THEME_BOOT}
+location.replace('{target}' + location.search + location.hash);</script>
+<style>{TOKENS}
+body {{ margin:0; background:var(--paper); color:var(--ink); font:15px/1.55
+  system-ui,-apple-system,"Segoe UI",sans-serif; padding:26px 18px; }}
+a {{ color:inherit; }}</style>
+<p>{says}</p>
+"""
+
+
+def root_redirect() -> str:
+    """`public/index.html`: the site's root, sending a reader on to the flights."""
+    return redirect("flights/", "parainsights",
+                    'The flights are at <a href="flights/">flights/</a>.')
+
+
 def nav(current: str, depth: int = 0) -> str:
     """The strip, with `current` marked and not linked.
 
@@ -343,6 +375,6 @@ def nav(current: str, depth: int = 0) -> str:
         if key == current:
             parts.append(f'<span class="is-on">{label}</span>')
         else:
-            parts.append(f'<a href="{up}{where or "index.html"}">{label}</a>')
+            parts.append(f'<a href="{up}{where}">{label}</a>')
     parts.append(strip_end())
     return f'<nav class="site-nav" aria-label="The tools here">{"".join(parts)}</nav>'

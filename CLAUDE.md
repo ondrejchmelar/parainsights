@@ -4,7 +4,7 @@ Tools for paragliding. One repository, four tools, answering a question each:
 
 | tool | the question | published at |
 |---|---|---|
-| **tracklog viewer** | how did that flight go? | `public/index.html` |
+| **tracklog viewer** | how did that flight go? | `public/flights/index.html` (the root redirects there) |
 | **airspaces** | what is above me, and what does my instrument not know? | `public/airspace/` |
 | **meteo** | is it worth driving anywhere today, and where? | `public/meteo/` |
 | **planner** | what is that task worth, and what does it cross? | `public/airspace/`, on the airspace map |
@@ -272,8 +272,8 @@ GitLab project is deprecated, and `.gitlab-ci.yml` now publishes only redirect s
 
 ```bash
 uv run python -m tracklog_viewer.cli FLIGHT.igc --terrain --meteo \
-  --html public/index.html
-git add public/index.html && git commit -m "Publish flight" && git push
+  --airspace ../airspace/ --html public/flights/index.html
+git add public/flights && git commit -m "Publish flight" && git push
 ```
 
 Nothing server-side is involved — it is static files. Opened over `file://` the page
@@ -1170,7 +1170,7 @@ Still wanted:
   **Three are still uncalibrated and are listed as such** rather than reported as fine:
   `low_clearance` and `ground_margin` want a DEM per flight, `ceiling_used` a sounding
   per flight (and ERA5 is surface-only past 60 days), `near_close` a scored triangle.
-- **`public/index.html` is a committed build artifact — the report needs the IGC files
+- **`public/flights/index.html` is a committed build artifact — the report needs the IGC files
   and flight tracks stay out of this repository.** That is the trade, and it failed in a
   specific way: the renderer changed, nobody rebuilt, and the site sat weeks out of date
   behind a wall of green pipelines, because the deploy job only checked the file
@@ -1218,9 +1218,9 @@ Still wanted:
     ~/Downloads/2018-09-28-XCT-OND-01.igc \
     ~/Downloads/2022-05-07-XCT-KVR-01.igc \
     ~/Downloads/flight-2026-06-16-04-46-04.igc \
-    --terrain --meteo --airspace airspace/ \
+    --terrain --meteo --airspace ../airspace/ \
     --label '' --label '' --label 'Antoine Girard|PK Hunza|OZONE Zeolite 2' \
-    --html public/index.html
+    --html public/flights/index.html
   ```
   — one `--label` per flight, in order, empty where the file already says it, and
   `--airspace` is where the OpenAir download sits *relative to the report*. Without

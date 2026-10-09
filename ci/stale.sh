@@ -1,7 +1,7 @@
 #!/bin/sh
 # Refuse to publish a report older than the code that renders it.
 #
-# `public/index.html` is a committed build artifact: building it needs the IGC files, and
+# `public/flights/index.html` is a committed build artifact: building it needs the IGC files, and
 # flight tracks stay out of this repository. That is a defensible trade, and it failed in
 # a specific way — the renderer changed, nobody rebuilt, and the site sat weeks out of
 # date behind a wall of green pipelines, because the `pages` job checked only that the
@@ -19,7 +19,7 @@
 # The rebuild is in the "Known gaps" section of CLAUDE.md.
 set -eu
 
-PAGE=public/index.html
+PAGE=public/flights/index.html
 
 # Everything whose output ends up inside that file. `airspaces`, `parainsights_common` and
 # `parainsights_map` are in the list for the same reason as the viewer: the report carries

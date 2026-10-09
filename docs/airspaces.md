@@ -55,7 +55,7 @@ uv run python -m airspaces.cli --report                     # what built, what d
 download button links to. Publish them together or the button is dead.
 
 The published copy lives at `public/airspace/`, deployed by
-`.github/workflows/pages.yml` along with the rest of the site. `public/index.html` is the tracklog
+`.github/workflows/pages.yml` along with the rest of the site. `public/flights/index.html` is the tracklog
 viewer's report and must not be overwritten — the airspace map is a sibling, not the
 front page:
 
@@ -69,7 +69,7 @@ download sits relative to the report:
 
 ```bash
 uv run python -m tracklog_viewer.cli FLIGHT.igc [...] --terrain --meteo \
-  --airspace airspace/ --html public/index.html
+  --airspace ../airspace/ --html public/flights/index.html
 ```
 
 Every source is cached under `~/.cache/parainsights/airspace`; `--refresh` re-fetches.
