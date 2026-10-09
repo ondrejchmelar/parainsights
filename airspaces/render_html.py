@@ -81,7 +81,7 @@ STYLE = """
 .float { pointer-events: auto; background: var(--float); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   border: 1px solid var(--float-edge); border-radius: 14px; box-shadow: var(--float-shadow); }
 .float h2 { font-size: 20px; margin: 0; display: flex; align-items: center; gap: 4px; }
-.plan-panel { padding: 16px 20px; overflow-y: auto; min-height: 0; flex: 0 1 auto; }
+.plan-panel { position: relative; padding: 16px 20px; overflow-y: auto; min-height: 0; flex: 0 1 auto; }
 .asp-layers { padding: 0; flex: none; max-height: 60%; overflow-y: auto; }
 .asp-layers > summary { list-style: none; display: flex; align-items: center; justify-content: space-between;
   gap: 10px; padding: 10px 20px; min-height: 52px; cursor: pointer; }

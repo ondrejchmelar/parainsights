@@ -69,6 +69,10 @@ STYLE = """
 .plan-figures div { display:flex; flex-direction:column; }
 .plan-figures div:first-child { flex-basis:100%; }
 .plan-figures .v, .plan-shape { white-space:nowrap; }
+/* The shape: a pill at the panel's top right, beside "Task", not a fifth figure. */
+.plan-figures .plan-shape-cell { position:absolute; top:16px; right:20px; }
+.plan-figures .plan-shape-cell .k { display:none; }
+@media (max-width: 900px) { .plan-figures .plan-shape-cell { right:14px; } }
 .plan-figures div:first-child .v { font-size:38px; font-weight:700; line-height:1.1; }
 .plan-figures div:first-child .k { display:none; }
 .plan-figures .k { font-size:15px; color:var(--ink-2); }

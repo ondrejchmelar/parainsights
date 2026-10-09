@@ -195,7 +195,7 @@ html[data-help="off"] .info-wrap { display: none; }
 .float { pointer-events: auto; background: var(--float); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   border: 1px solid var(--float-edge); border-radius: 14px; box-shadow: var(--float-shadow); }
 .float h2 { font-size: 20px; margin: 0; display: flex; align-items: center; gap: 4px; }
-.plan-panel { padding: 16px 20px; overflow-y: auto; min-height: 0; flex: 0 1 auto; }
+.plan-panel { position: relative; padding: 16px 20px; overflow-y: auto; min-height: 0; flex: 0 1 auto; }
 .asp-layers { padding: 0; flex: none; max-height: 60%; overflow-y: auto; }
 .asp-layers > summary { list-style: none; display: flex; align-items: center; justify-content: space-between;
   gap: 10px; padding: 10px 20px; min-height: 52px; cursor: pointer; }
@@ -460,6 +460,10 @@ html[data-help="off"] .m3-help { display: none; }
 .plan-figures div { display:flex; flex-direction:column; }
 .plan-figures div:first-child { flex-basis:100%; }
 .plan-figures .v, .plan-shape { white-space:nowrap; }
+/* The shape: a pill at the panel's top right, beside "Task", not a fifth figure. */
+.plan-figures .plan-shape-cell { position:absolute; top:16px; right:20px; }
+.plan-figures .plan-shape-cell .k { display:none; }
+@media (max-width: 900px) { .plan-figures .plan-shape-cell { right:14px; } }
 .plan-figures div:first-child .v { font-size:38px; font-weight:700; line-height:1.1; }
 .plan-figures div:first-child .k { display:none; }
 .plan-figures .k { font-size:15px; color:var(--ink-2); }
@@ -4289,7 +4293,9 @@ function initView3d(root, cursorTrack, preset) {
       cell.querySelector('.v').textContent = pair[1];
       figures.appendChild(cell);
     });
+    // Last in the figures, shown at the panel's top right, level with its heading (CSS).
     var shape = document.createElement('div');
+    shape.className = 'plan-shape-cell';
     shape.innerHTML = '<span class="k">shape</span>'
       + '<span class="v"><span class="plan-shape"></span></span>';
     var chip = shape.querySelector('.plan-shape');
@@ -4321,7 +4327,9 @@ function initView3d(root, cursorTrack, preset) {
     holder.dataset.drawing = on ? 'on' : 'off';
     if (drawButton) {
       drawButton.setAttribute('aria-pressed', on ? 'true' : 'false');
-      drawButton.textContent = on ? 'Drawing — click the map' : 'Draw a task';
+      // Pressed, it says what pressing again does; "Drawing — click the map" pushed Clear off
+      // the desktop's panel. How to drop turnpoints is in the Task ⓘ.
+      drawButton.textContent = on ? 'Done drawing' : 'Draw a task';
     }
   }
   if (drawButton) drawButton.addEventListener('click', function () {

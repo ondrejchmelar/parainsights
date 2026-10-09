@@ -454,7 +454,9 @@
       cell.querySelector('.v').textContent = pair[1];
       figures.appendChild(cell);
     });
+    // Last in the figures, shown at the panel's top right, level with its heading (CSS).
     var shape = document.createElement('div');
+    shape.className = 'plan-shape-cell';
     shape.innerHTML = '<span class="k">shape</span>'
       + '<span class="v"><span class="plan-shape"></span></span>';
     var chip = shape.querySelector('.plan-shape');
@@ -486,7 +488,9 @@
     holder.dataset.drawing = on ? 'on' : 'off';
     if (drawButton) {
       drawButton.setAttribute('aria-pressed', on ? 'true' : 'false');
-      drawButton.textContent = on ? 'Drawing — click the map' : 'Draw a task';
+      // Pressed, it says what pressing again does; "Drawing — click the map" pushed Clear off
+      // the desktop's panel. How to drop turnpoints is in the Task ⓘ.
+      drawButton.textContent = on ? 'Done drawing' : 'Draw a task';
     }
   }
   if (drawButton) drawButton.addEventListener('click', function () {
