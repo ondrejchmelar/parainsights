@@ -284,7 +284,7 @@ html[data-help="off"] .info-wrap { display: none; }
   justify-content: flex-end; z-index: 3; }
 .m3-corner { position: absolute; left: 10px; top: 10px; z-index: 3; flex-direction: column; align-items: flex-start; gap: 8px; }
 .m3-rail { position: absolute; right: 10px; top: 10px; z-index: 3; flex-direction: column; gap: 8px; }
-.m3-rose:not([hidden]) ~ .m3-rail { top: 76px; }
+.m3-rose:not([hidden]) ~ .m3-rail { top: 80px; }
 .m3-corner[hidden], .m3-rail[hidden] { display: none; }
 .view3d-seg { display: flex; gap: 0; border-radius: 10px; box-shadow: var(--float-shadow); }
 .m3-rail .view3d-seg { flex-direction: column; }
@@ -323,7 +323,6 @@ html[data-help="off"] .m3-help { display: none; }
   .view3d-controls button { padding: 0 8px; font-size: 14px; }
   .view3d-controls .m3-icon { padding: 0; width: 34px; min-width: 34px; }
   .view3d-reset { display: none; }
-  .m3-rose:not([hidden]) ~ .m3-rail { top: 70px; }
 }
 /* The help list, over the controls: the one overlay a reader opens deliberately. The
    panel clips its overflow, so the list is capped to the box and scrolls. */
@@ -2582,6 +2581,16 @@ function initView3d(root, cursorTrack, preset) {
         if (said !== roseText) rose.querySelector('.m3-rose-text').innerHTML = roseText = said;
       }
       map.on('rotate', drawRose);
+      // The zoom and tilt buttons sit under the rose, which grows by a line for each height
+      // the replay shows: placed from its size whenever that changes, never per frame.
+      var rail = view.querySelector('.m3-rail');
+      if (window.ResizeObserver && rail) {
+        var underRose = new ResizeObserver(function () {
+          rail.style.top = rose.hidden ? '' : (rose.offsetTop + rose.offsetHeight + 8) + 'px';
+        });
+        underRose.observe(rose);
+        watchers.push(underRose);
+      }
 
       // ---- the linked cursor's mark ----------------------------------------------------
       // The chart cursor's place on the map: a dot at the glider and a stem down to the
@@ -3306,7 +3315,7 @@ function initView3d(root, cursorTrack, preset) {
       var GROUNDS = styles.concat(['off']);
       var VERTICALS = offered.length ? offered : [1, 2, 4];
       function groundName(key) {
-        return key === 'off' ? 'relief' : ((tiles[key] || {}).label || key);
+        return key === 'off' ? 'Relief' : ((tiles[key] || {}).label || key);
       }
       function label() {
         var g = view.querySelector('[data-m3="ground"]'), v = view.querySelector('[data-m3="vertical"]');

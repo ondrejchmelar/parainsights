@@ -419,6 +419,7 @@
       try {
         var scene = readScene(node);
         scenes[uid] = { track: scene.track, start: scene.start, climbs: scene.climbs || [],
+                        phases: scene.phases || [],
                         name: article.getAttribute('data-compare-name') || uid };
       } catch (error) { /* a flight without a scene is compared by its figures only */ }
     }
@@ -441,7 +442,7 @@
       }
       var scene = sceneOf(article);
       if (scene) out.others.push({ name: scene.name, track: scene.track, start: scene.start,
-                                   climbs: scene.climbs, colour: colour });
+                                   climbs: scene.climbs, phases: scene.phases, colour: colour });
     });
     return out;
   };

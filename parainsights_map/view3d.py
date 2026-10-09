@@ -117,7 +117,7 @@ STYLE = """
   justify-content: flex-end; z-index: 3; }
 .m3-corner { position: absolute; left: 10px; top: 10px; z-index: 3; flex-direction: column; align-items: flex-start; gap: 8px; }
 .m3-rail { position: absolute; right: 10px; top: 10px; z-index: 3; flex-direction: column; gap: 8px; }
-.m3-rose:not([hidden]) ~ .m3-rail { top: 76px; }
+.m3-rose:not([hidden]) ~ .m3-rail { top: 80px; }
 .m3-corner[hidden], .m3-rail[hidden] { display: none; }
 .view3d-seg { display: flex; gap: 0; border-radius: 10px; box-shadow: var(--float-shadow); }
 .m3-rail .view3d-seg { flex-direction: column; }
@@ -156,7 +156,6 @@ html[data-help="off"] .m3-help { display: none; }
   .view3d-controls button { padding: 0 8px; font-size: 14px; }
   .view3d-controls .m3-icon { padding: 0; width: 34px; min-width: 34px; }
   .view3d-reset { display: none; }
-  .m3-rose:not([hidden]) ~ .m3-rail { top: 70px; }
 }
 /* The help list, over the controls: the one overlay a reader opens deliberately. The
    panel clips its overflow, so the list is capped to the box and scrolls. */

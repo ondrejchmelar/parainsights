@@ -692,13 +692,15 @@
       var marks = (scene.climbs || []).map(function (c) {
         return { label: c.label, tow: c.tow, position: [c.lon, c.lat, c.alt], t: flownAt(c.lon, c.lat) };
       });
-      var phaseLabels = (scene.phases || []).map(function (p) {
-        return { kind: p.kind, text: p.text,
-                 t: [flownAt(p.lon[0], p.lat[0]), flownAt(p.lon[1], p.lat[1])],
+      function phaseLabel(p, t) {
+        return { kind: p.kind, text: p.text, t: t,
                  colour: p.kind === 'climb' ? [235, 104, 52, 242] : [42, 120, 214, 242],
                  ends: [[p.lon[0], p.lat[0], p.alt[0]], [p.lon[1], p.lat[1], p.alt[1]]],
                  position: [(p.lon[0] + p.lon[1]) / 2, (p.lat[0] + p.lat[1]) / 2,
                             (p.alt[0] + p.alt[1]) / 2] };
+      }
+      var phaseLabels = (scene.phases || []).map(function (p) {
+        return phaseLabel(p, [flownAt(p.lon[0], p.lat[0]), flownAt(p.lon[1], p.lat[1])]);
       });
       var boxes = (hasAirspace || alwaysAirspace) ? scene.airspaces.map(function (ring) {
         var low = Infinity, high = -Infinity;
@@ -760,16 +762,25 @@
             var far = box.west === undefined ? false
               : (e < box.west - mx || w > box.east + mx || n2 < box.south - my || s2 > box.north + my);
             var sameDay = scene.start && o.start && Math.abs(o.start - scene.start) < 12 * 3600;
-            // Each climb at the time of the fix nearest it, so the replay can window it.
-            var climbs = (o.climbs || []).map(function (c) {
+            // Each climb, and each end of a climb or glide label, at the time of the fix
+            // nearest it, so the replay can window them.
+            function flown(lon, lat) {
               var best = 0, bestD = Infinity;
               for (var i = 0; i < tr2.lon.length; i++) {
-                var d = (tr2.lon[i] - c.lon) * (tr2.lon[i] - c.lon) + (tr2.lat[i] - c.lat) * (tr2.lat[i] - c.lat);
+                var d = (tr2.lon[i] - lon) * (tr2.lon[i] - lon) + (tr2.lat[i] - lat) * (tr2.lat[i] - lat);
                 if (d < bestD) { bestD = d; best = i; }
               }
-              return { lon: c.lon, lat: c.lat, alt: c.alt, t: tr2.t ? tr2.t[best] : best };
+              return tr2.t ? tr2.t[best] : best;
+            }
+            var climbs = (o.climbs || []).map(function (c) {
+              return { lon: c.lon, lat: c.lat, alt: c.alt, t: flown(c.lon, c.lat) };
+            });
+            // The Climbs and Glides buttons label the compared flights' phases as this one's.
+            var phases = (o.phases || []).map(function (p) {
+              return phaseLabel(p, [flown(p.lon[0], p.lat[0]), flown(p.lon[1], p.lat[1])]);
             });
             return { name: o.name, colour: o.colour, lon: tr2.lon, lat: tr2.lat, alt: tr2.alt, climbs: climbs,
+                     phases: phases,
                      t: tr2.t || tr2.lon.map(function (_, i) { return i; }), far: far,
                      offset: sameDay ? o.start - scene.start : 0, sameDay: !!sameDay };
           });
@@ -1029,9 +1040,21 @@
           lineWidthMinPixels: 2, radiusUnits: 'pixels', getRadius: 6, billboard: true,
           updateTriggers: { getPosition: vertical }, parameters: ON_TOP
         }));
-        var shown = same('phases', phaseLabels.filter(function (p) {
+        // This flight's phases and, comparing, every compared one's near enough to draw:
+        // inside the replay's window on each one's own clock, as their climbs are.
+        var replayOpen = hasTime && replay && !replay.hidden;
+        var phasesNow = phaseLabels.filter(function (p) {
           return labels[p.kind] && inWindow(p.t[0]) && inWindow(p.t[1]);
-        }));
+        });
+        others.forEach(function (o) {
+          if (o.far) return;
+          o.phases.forEach(function (p) {
+            if (!labels[p.kind]) return;
+            if (replayOpen && !(p.t[0] >= from - o.offset - 1 && p.t[1] <= cutoff - o.offset + 1)) return;
+            phasesNow.push(p);
+          });
+        });
+        var shown = same('phases', phasesNow);
         if (shown.length) {
           var lift = function (p) { return [p[0], p[1], z(p[2])]; };
           out.push(new deck.PathLayer({
@@ -1236,6 +1259,16 @@
         if (said !== roseText) rose.querySelector('.m3-rose-text').innerHTML = roseText = said;
       }
       map.on('rotate', drawRose);
+      // The zoom and tilt buttons sit under the rose, which grows by a line for each height
+      // the replay shows: placed from its size whenever that changes, never per frame.
+      var rail = view.querySelector('.m3-rail');
+      if (window.ResizeObserver && rail) {
+        var underRose = new ResizeObserver(function () {
+          rail.style.top = rose.hidden ? '' : (rose.offsetTop + rose.offsetHeight + 8) + 'px';
+        });
+        underRose.observe(rose);
+        watchers.push(underRose);
+      }
 
       // ---- the linked cursor's mark ----------------------------------------------------
       // The chart cursor's place on the map: a dot at the glider and a stem down to the
@@ -1960,7 +1993,7 @@
       var GROUNDS = styles.concat(['off']);
       var VERTICALS = offered.length ? offered : [1, 2, 4];
       function groundName(key) {
-        return key === 'off' ? 'relief' : ((tiles[key] || {}).label || key);
+        return key === 'off' ? 'Relief' : ((tiles[key] || {}).label || key);
       }
       function label() {
         var g = view.querySelector('[data-m3="ground"]'), v = view.querySelector('[data-m3="vertical"]');
