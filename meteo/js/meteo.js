@@ -370,7 +370,8 @@
     drawSite();
   }
 
-  function focus(index) {
+  // `fromSwipe`: the columns were swiped to it, so they are not swiped again.
+  function focus(index, fromSwipe) {
     if (slotOf(index) < 0 || state.site === index) return;
     state.site = index;
     state.profile = state.profiles[index] || null;
@@ -378,6 +379,45 @@
     drawCompare();
     drawSite();
     if (!state.profile) loadProfiles();
+    if (!fromSwipe) swipeTo(index);
+  }
+
+  // On a phone the takeoffs' columns swipe sideways (`.met-columns`), under the chips.
+  // The two follow each other: a swipe that settles on a takeoff focuses it and brings
+  // its chip into the middle of the chips' row, and a chip pressed swipes to its column.
+  // The chips' row stood still while the columns moved under it.
+  var columnsBox = document.getElementById('met-columns');
+  function swiping() { return columnsBox && columnsBox.scrollWidth > columnsBox.clientWidth + 1; }
+  function swipeTo(index) {
+    if (!swiping()) return;
+    var cell = columnsBox.querySelector('.met-col[data-site="' + index + '"]');
+    if (!cell) return;
+    var box = columnsBox.getBoundingClientRect(), r = cell.getBoundingClientRect();
+    columnsBox.scrollTo({ left: columnsBox.scrollLeft + r.left - box.left - (box.width - r.width) / 2,
+                          behavior: 'smooth' });
+  }
+  function chipIntoView() {
+    var row = document.getElementById('met-chosen'), chip = row && row.querySelector('.met-chip.is-focus');
+    if (!chip || row.scrollWidth <= row.clientWidth + 1) return;
+    var box = row.getBoundingClientRect(), r = chip.getBoundingClientRect();
+    row.scrollTo({ left: row.scrollLeft + r.left - box.left - (box.width - r.width) / 2, behavior: 'smooth' });
+  }
+  if (columnsBox) {
+    var settle = null;
+    columnsBox.addEventListener('scroll', function () {
+      if (!swiping()) return;
+      clearTimeout(settle);
+      settle = setTimeout(function () {
+        var box = columnsBox.getBoundingClientRect(), mid = box.left + box.width / 2;
+        var best = null, bestD = Infinity;
+        columnsBox.querySelectorAll('.met-col').forEach(function (cell) {
+          var r = cell.getBoundingClientRect(), d = Math.abs(r.left + r.width / 2 - mid);
+          if (d < bestD) { bestD = d; best = cell; }
+        });
+        if (best) focus(Number(best.dataset.site), true);
+        chipIntoView();
+      }, 140);
+    }, { passive: true });
   }
 
   // ---- the chips ----------------------------------------------------------------------

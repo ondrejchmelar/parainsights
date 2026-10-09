@@ -2240,7 +2240,20 @@ function initView3d(root, cursorTrack, preset) {
         refresh();
       }
       var framedFor = '';
-      // This flight and every compared one near enough to draw, as [[w, s], [e, n]].
+      // Room around what is framed: the map's own buttons, and on the planner's page the
+      // task and layers panels where they float over the map's left side.
+      function framePadding() {
+        var pad = { top: 70, bottom: 110, left: 50, right: 90 };
+        var stage = panel.closest('.asp-stage'), floats = stage && stage.querySelector('.asp-floats');
+        if (floats && getComputedStyle(floats).position === 'absolute') {
+          var over = floats.getBoundingClientRect().right - map.getContainer().getBoundingClientRect().left;
+          if (over > 0 && over < map.getContainer().clientWidth * 0.6) pad.left = over + 40;
+        }
+        return pad;
+      }
+      // This flight and every compared one near enough to draw, and a planned task (the
+      // planner's map has no flight, and looking straight down it framed nothing), as
+      // [[w, s], [e, n]].
       function flightBounds() {
         var w = Infinity, e = -Infinity, s = Infinity, n = -Infinity;
         [tr].concat(others.filter(function (o) { return !o.far; })).forEach(function (o) {
@@ -2248,6 +2261,9 @@ function initView3d(root, cursorTrack, preset) {
             w = Math.min(w, o.lon[i]); e = Math.max(e, o.lon[i]);
             s = Math.min(s, o.lat[i]); n = Math.max(n, o.lat[i]);
           }
+        });
+        if (route) route.walk.concat(route.points).forEach(function (p) {
+          w = Math.min(w, p[0]); e = Math.max(e, p[0]); s = Math.min(s, p[1]); n = Math.max(n, p[1]);
         });
         return w < e || s < n ? [[w, s], [e, n]] : null;
       }
@@ -3506,7 +3522,7 @@ function initView3d(root, cursorTrack, preset) {
               : null;
             var bounds = flightBounds();
             if (bounds) {
-              map.fitBounds(bounds, { padding: { top: 70, bottom: 110, left: 50, right: 90 },
+              map.fitBounds(bounds, { padding: framePadding(),
                                       pitch: 0, bearing: map.getBearing(), duration: 600 });
             } else map.easeTo({ pitch: 0, duration: 600 });
           }

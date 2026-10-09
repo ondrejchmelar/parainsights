@@ -1178,13 +1178,15 @@ def test_the_sounding_owns_the_vertical_gesture():
     same gesture, so the browser scrolled and the chart read nothing — the one bug a
     caption saying "drag a finger up it" cannot survive.
 
-    `touch-action: none` is what actually stops it: a `preventDefault` on a move the
-    browser has already begun scrolling with is too late. Same declaration the 3D view
-    and the airspace map use for their gestures. Deliberately *not* on the airgram
-    above it, so every column keeps a full-width strip to scroll the page from.
+    `touch-action` is what actually stops it: a `preventDefault` on a move the
+    browser has already begun scrolling with is too late. `pan-x`, not `none` (October
+    2026): the vertical drag is the chart's, a sideways swipe is still the columns' — on
+    a phone they swipe, and with `none` a swipe over a sounding moved nothing. Deliberately
+    *not* on the airgram above it, so every column keeps a full-width strip to scroll the
+    page from.
     """
     style = render_html.STYLE
-    assert ".met-col-sounding { touch-action: none; }" in style
+    assert ".met-col-sounding { touch-action: pan-x; }" in style
     assert ".met-col-air { touch-action" not in style
 
 
@@ -1205,7 +1207,7 @@ def test_a_touch_on_the_sounding_is_taken_by_the_chart():
              action: getComputedStyle(canvas).touchAction };
     """)
     assert answer["prevented"] is True, "the browser keeps its own gesture"
-    assert answer["action"] == "none"
+    assert answer["action"] == "pan-x"
     assert answer["probe"] is not None, "the touch read no height"
 
 

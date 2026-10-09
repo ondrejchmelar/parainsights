@@ -171,8 +171,10 @@ STYLE = """
 .met-col.is-focus .met-col-head .name { text-decoration:underline; text-underline-offset:4px; }
 .met-canvas { width:100%; display:block; background:var(--panel); border-radius:14px; }
 /* The sounding reads a height from a vertical drag, the gesture the page scrolls with;
-   this hands it to the chart. The airgram above each one still scrolls the page. */
-.met-col-sounding { touch-action: none; }
+   this hands it to the chart. A sideways swipe is still the columns' (on a phone they
+   swipe): with `none` it was neither, and a swipe over a sounding moved nothing. The
+   airgram above each one still scrolls the page. */
+.met-col-sounding { touch-action: pan-x; }
 /* flymet's meteogram for the airfield nearest this takeoff, under its own charts. */
 .met-col-fly { margin: 0; }
 .met-col-fly img { display:block; width:100%; border-radius:14px; background:#fff; }
