@@ -281,6 +281,7 @@ STYLE = """
 .site-foot { margin:56px 0 0; padding:18px 0 0; border-top:1px solid var(--rule);
   font-size:15px; line-height:1.55; color:var(--ink-2); display:block; }
 .site-foot a { color:var(--ink-2); }
+.site-foot .gh { vertical-align: -2px; margin-right: 6px; }
 @media (max-width: 640px) {
   .site-nav { gap:2px; min-height:56px; }
   .site-nav { flex-wrap:nowrap; }
@@ -294,8 +295,9 @@ STYLE = """
 
 
 SOURCE = "https://github.com/ondrejchmelar/parainsights"
+# GitHub's mark, small, beside the source link in the foot of every page.
 _GITHUB_MARK = (
-    '<svg width="20" height="20" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor">'
+    '<svg class="gh" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor">'
     '<path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01'
     '-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53'
     '.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89'
@@ -306,17 +308,16 @@ _GITHUB_MARK = (
 
 
 def strip_end() -> str:
-    """What closes every page's strip: aA, Help, the theme switch and the source."""
-    return ('<span class="site-sp"></span>' + text_button() + help_button() + theme_button()
-            + f'<a class="tool site-source" href="{SOURCE}" rel="noreferrer" '
-              f'title="The source, on GitHub" aria-label="The source, on GitHub">{_GITHUB_MARK}</a>')
+    """What closes every page's strip: aA, Help and the theme switch. The source is linked
+    from the foot of the page (`footer`), with GitHub's mark beside it."""
+    return '<span class="site-sp"></span>' + text_button() + help_button() + theme_button()
 
 
 def footer() -> str:
     """The foot of every page: what this is, where its source is, and who to credit."""
     return (
         '<footer class="site-foot">'
-        f'<a href="{SOURCE}" rel="noreferrer">parainsights on GitHub</a> — the source, the '
+        f'<a href="{SOURCE}" rel="noreferrer">{_GITHUB_MARK}parainsights on GitHub</a> — the source, the '
         "issues, and how every number on these pages is worked out. Airspace © "
         '<a href="https://www.openaip.net" rel="noreferrer">openAIP</a> (CC BY-NC 4.0); '
         "imagery © Esri, Maxar, Earthstar Geographics; place names © OpenMapTiles, "
