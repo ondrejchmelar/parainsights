@@ -194,6 +194,8 @@ STYLE = """
   .met-chosen > * { flex: none; }
   /* The table keeps takeoffs as rows: name and verdict, then wind, thermal top, cloudbase. */
   .met-compare, .met-compare thead, .met-compare tbody { display:block; }
+  /* One takeoff: no comparison, and no empty header standing in for one. */
+  .met-compare[hidden] { display:none; }
   .met-compare tr { display:grid; grid-template-columns: 1.35fr 1fr 1fr 1fr; align-items:center;
     column-gap:8px; border-bottom:1px solid var(--rule); padding:8px 0; }
   .met-compare th, .met-compare td { border:0; padding:2px 0; font-size:16px; }

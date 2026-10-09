@@ -228,15 +228,26 @@ html[data-help="off"] .info-wrap { display: none; }
 .asp-src-key { color: var(--ink) !important; }
 .asp-src-key .asp-swatch { margin-right: 5px; vertical-align: -1px; }
 .asp-src-when { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.asp-nw { white-space: nowrap; }
 @media (max-width: 900px) {
   /* A phone or a narrow window: the map first, the task right under it like a sheet,
      then the layers and the download. Over a small map the panels would hide it. */
   .asp-stage .view3d { height: auto; min-height: 0; aspect-ratio: 3 / 4; }
-  .asp-floats { position: static; width: auto; display: flex; gap: 12px; margin-top: -14px; }
+  /* The task right under the map and as wide as it, flat, as the side view sits under a
+     flight's map: an inset card under an edge-to-edge map read as the wrong width, and the
+     sheet that overlapped the map's edge covered its buttons. The layers likewise, one
+     band after it; the download alone stays a card. */
+  .asp-floats { position: static; width: auto; display: flex; gap: 0; margin-top: 0; }
   .float { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--panel); box-shadow: none; }
-  .plan-panel { border-radius: 14px 14px 0 0; border-top-color: var(--edge); position: relative; z-index: 7; }
+  .plan-panel, .asp-layers { position: relative; margin: 0 -14px; border-radius: 0;
+    border-width: 0 0 1px; border-color: var(--rule); }
+  .plan-panel { z-index: 7; padding: 16px 14px; }
+  .asp-layers > summary { padding: 10px 14px; }
+  .asp-layers .asp-controls { padding: 0 14px; }
+  /* The dates wrap between themselves; at one line each the table ran off a phone. */
+  .asp-src-when { white-space: normal; }
   .asp-layers { max-height: none; }
-  .asp-get-float { margin-top: 0; }
+  .asp-get-float { margin-top: 16px; }
 }
 
 
@@ -503,7 +514,7 @@ html[data-help="off"] .m3-help { display: none; }
       <div class="float asp-get-float"><span class="asp-get-label">Airfield layer for XCTrack<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="About the airfield layer">i</button><span class="info-pop" role="note">Aerodrome zones and traffic circuits XCTrack and XContest leave out (OpenAir · 82 zones, 206 circuits at 157 fields · 208 KB). <strong>Not a full airspace set</strong>: load it alongside your usual airspace, never instead of it. Import under Preferences → Airspaces and obstacles → Files → Import OpenAir files, or copy it into the XCTrack/Airspaces folder. Provided with no guarantee — it may be out of date or wrong; you are responsible for the airspace you fly in.</span></span></span><a class="btn primary" download="CZ_airfield_zones_20261001.txt" href="CZ_airfield_zones_20261001.txt"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3v10M6 9l4 4 4-4M4 16.5h12"/></svg>Download</a></div>
     </div>
   </div>
-  <details class="asp-sources"><summary>Sources and dates</summary><table class="asp-src"><caption>What is on this map, and where it came from</caption><thead><tr><th>Layer</th><th>Source</th><th>Effective</th></tr></thead><tbody><tr><td class='asp-src-key'><span class="asp-swatch" style="background:#c2410c"></span><span class="asp-swatch" style="background:#b91c1c"></span>Controlled, restricted, danger, prohibited</td><td><a href="https://www.openaip.net" rel="noreferrer">openAIP</a> — CC BY-NC 4.0</td><td class='asp-src-when'>openAIP 2026-10-05</td></tr><tr><td class='asp-src-key'><span class="asp-swatch" style="background:#a16207"></span>Gliding areas, dropzones, PGZ</td><td><a href="https://www.openaip.net" rel="noreferrer">openAIP</a> — CC BY-NC 4.0</td><td class='asp-src-when'>openAIP 2026-10-05</td></tr><tr><td class='asp-src-key'><span class="asp-swatch" style="background:#15803d"></span>Aerodrome zones on the map — openAIP's. The download's are this site's own: 82 public aerodromes, 5 500 m radius, ground to 4 000 ft (the AIP calls these ATZ), 15 clipped by an overlying CTR or TMA; positions corrected by 108 m. <strong>An ultralight strip has no zone of its own</strong>, so those 74 fields carry only their traffic circuit</td><td>map: <a href="https://www.openaip.net" rel="noreferrer">openAIP</a> — CC BY-NC 4.0; download: <a href="https://aim.rlp.cz/" rel="noreferrer">ŘLP ČR</a> — UAS zones, <a href="https://aim.rlp.cz/data/uas/2026_10_01/actual/LKR315A.json" rel="noreferrer">LKR315A</a>, <a href="https://aim.rlp.cz/data/uas/2026_10_01/actual/LKR315B.json" rel="noreferrer">LKR315B</a></td><td class='asp-src-when'>openAIP 2026-10-05; 2026-10-01</td></tr><tr><td class='asp-src-key'><span class="asp-swatch" style="background:#ea580c"></span>Traffic circuits (okruhy) — <strong>drawn by this tool, not a published boundary.</strong> Shape scaled off the AIP's VOC charts (±10%); altitude published where stated, otherwise 1 000 ft above the field (measured mean 993 ft over five, spread 820–1 150). At an SLZ strip the runway itself is reconstructed from the reference point and a heading rounded to 10°, so those are marked <code>est</code></td><td>circuit drawn from the <a href="https://aim.rlp.cz/vfrmanual/actual/ad/lkcast_voc.jpg" rel="noreferrer">VOC charts</a>, altitudes and runway tables from the <a href="https://aim.rlp.cz/vfrmanual/actual/lkta_text_en.html" rel="noreferrer">AIP VFR manual</a>, thresholds from <a href="https://ourairports.com/countries/CZ/" rel="noreferrer">OurAirports</a></td><td class='asp-src-when'>—</td></tr></tbody></table></details>
+  <details class="asp-sources"><summary>Sources and dates</summary><table class="asp-src"><caption>What is on this map, and where it came from</caption><thead><tr><th>Layer</th><th>Source</th><th>Effective</th></tr></thead><tbody><tr><td class='asp-src-key'><span class="asp-swatch" style="background:#c2410c"></span><span class="asp-swatch" style="background:#b91c1c"></span>Controlled, restricted, danger, prohibited</td><td><a href="https://www.openaip.net" rel="noreferrer">openAIP</a> — CC BY-NC 4.0</td><td class='asp-src-when'>openAIP <span class="asp-nw">2026-10-05</span></td></tr><tr><td class='asp-src-key'><span class="asp-swatch" style="background:#a16207"></span>Gliding areas, dropzones, PGZ</td><td><a href="https://www.openaip.net" rel="noreferrer">openAIP</a> — CC BY-NC 4.0</td><td class='asp-src-when'>openAIP <span class="asp-nw">2026-10-05</span></td></tr><tr><td class='asp-src-key'><span class="asp-swatch" style="background:#15803d"></span>Aerodrome zones on the map — openAIP's. The download's are this site's own: 82 public aerodromes, 5 500 m radius, ground to 4 000 ft (the AIP calls these ATZ), 15 clipped by an overlying CTR or TMA; positions corrected by 108 m. <strong>An ultralight strip has no zone of its own</strong>, so those 74 fields carry only their traffic circuit</td><td>map: <a href="https://www.openaip.net" rel="noreferrer">openAIP</a> — CC BY-NC 4.0; download: <a href="https://aim.rlp.cz/" rel="noreferrer">ŘLP ČR</a> — UAS zones, <a href="https://aim.rlp.cz/data/uas/2026_10_01/actual/LKR315A.json" rel="noreferrer">LKR315A</a>, <a href="https://aim.rlp.cz/data/uas/2026_10_01/actual/LKR315B.json" rel="noreferrer">LKR315B</a></td><td class='asp-src-when'>openAIP <span class="asp-nw">2026-10-05</span>; <span class="asp-nw">2026-10-01</span></td></tr><tr><td class='asp-src-key'><span class="asp-swatch" style="background:#ea580c"></span>Traffic circuits (okruhy) — <strong>drawn by this tool, not a published boundary.</strong> Shape scaled off the AIP's VOC charts (±10%); altitude published where stated, otherwise 1 000 ft above the field (measured mean 993 ft over five, spread 820–1 150). At an SLZ strip the runway itself is reconstructed from the reference point and a heading rounded to 10°, so those are marked <code>est</code></td><td>circuit drawn from the <a href="https://aim.rlp.cz/vfrmanual/actual/ad/lkcast_voc.jpg" rel="noreferrer">VOC charts</a>, altitudes and runway tables from the <a href="https://aim.rlp.cz/vfrmanual/actual/lkta_text_en.html" rel="noreferrer">AIP VFR manual</a>, thresholds from <a href="https://ourairports.com/countries/CZ/" rel="noreferrer">OurAirports</a></td><td class='asp-src-when'>—</td></tr></tbody></table></details>
 </article>
 <footer class="site-foot"><a href="https://github.com/ondrejchmelar/parainsights" rel="noreferrer">parainsights on GitHub</a> — the source, the issues, and how every number on these pages is worked out. Airspace © <a href="https://www.openaip.net" rel="noreferrer">openAIP</a> (CC BY-NC 4.0); imagery © Esri, Maxar, Earthstar Geographics; place names © OpenMapTiles, © OpenStreetMap contributors; terrain: AWS Open Data; weather: Open-Meteo.</footer>
 </div>
@@ -2037,13 +2048,15 @@ function initView3d(root, cursorTrack, preset) {
       var marks = (scene.climbs || []).map(function (c) {
         return { label: c.label, tow: c.tow, position: [c.lon, c.lat, c.alt], t: flownAt(c.lon, c.lat) };
       });
-      var phaseLabels = (scene.phases || []).map(function (p) {
-        return { kind: p.kind, text: p.text,
-                 t: [flownAt(p.lon[0], p.lat[0]), flownAt(p.lon[1], p.lat[1])],
+      function phaseLabel(p, t) {
+        return { kind: p.kind, text: p.text, t: t,
                  colour: p.kind === 'climb' ? [235, 104, 52, 242] : [42, 120, 214, 242],
                  ends: [[p.lon[0], p.lat[0], p.alt[0]], [p.lon[1], p.lat[1], p.alt[1]]],
                  position: [(p.lon[0] + p.lon[1]) / 2, (p.lat[0] + p.lat[1]) / 2,
                             (p.alt[0] + p.alt[1]) / 2] };
+      }
+      var phaseLabels = (scene.phases || []).map(function (p) {
+        return phaseLabel(p, [flownAt(p.lon[0], p.lat[0]), flownAt(p.lon[1], p.lat[1])]);
       });
       var boxes = (hasAirspace || alwaysAirspace) ? scene.airspaces.map(function (ring) {
         var low = Infinity, high = -Infinity;
@@ -2105,16 +2118,25 @@ function initView3d(root, cursorTrack, preset) {
             var far = box.west === undefined ? false
               : (e < box.west - mx || w > box.east + mx || n2 < box.south - my || s2 > box.north + my);
             var sameDay = scene.start && o.start && Math.abs(o.start - scene.start) < 12 * 3600;
-            // Each climb at the time of the fix nearest it, so the replay can window it.
-            var climbs = (o.climbs || []).map(function (c) {
+            // Each climb, and each end of a climb or glide label, at the time of the fix
+            // nearest it, so the replay can window them.
+            function flown(lon, lat) {
               var best = 0, bestD = Infinity;
               for (var i = 0; i < tr2.lon.length; i++) {
-                var d = (tr2.lon[i] - c.lon) * (tr2.lon[i] - c.lon) + (tr2.lat[i] - c.lat) * (tr2.lat[i] - c.lat);
+                var d = (tr2.lon[i] - lon) * (tr2.lon[i] - lon) + (tr2.lat[i] - lat) * (tr2.lat[i] - lat);
                 if (d < bestD) { bestD = d; best = i; }
               }
-              return { lon: c.lon, lat: c.lat, alt: c.alt, t: tr2.t ? tr2.t[best] : best };
+              return tr2.t ? tr2.t[best] : best;
+            }
+            var climbs = (o.climbs || []).map(function (c) {
+              return { lon: c.lon, lat: c.lat, alt: c.alt, t: flown(c.lon, c.lat) };
+            });
+            // The Climbs and Glides buttons label the compared flights' phases as this one's.
+            var phases = (o.phases || []).map(function (p) {
+              return phaseLabel(p, [flown(p.lon[0], p.lat[0]), flown(p.lon[1], p.lat[1])]);
             });
             return { name: o.name, colour: o.colour, lon: tr2.lon, lat: tr2.lat, alt: tr2.alt, climbs: climbs,
+                     phases: phases,
                      t: tr2.t || tr2.lon.map(function (_, i) { return i; }), far: far,
                      offset: sameDay ? o.start - scene.start : 0, sameDay: !!sameDay };
           });
@@ -2374,9 +2396,21 @@ function initView3d(root, cursorTrack, preset) {
           lineWidthMinPixels: 2, radiusUnits: 'pixels', getRadius: 6, billboard: true,
           updateTriggers: { getPosition: vertical }, parameters: ON_TOP
         }));
-        var shown = same('phases', phaseLabels.filter(function (p) {
+        // This flight's phases and, comparing, every compared one's near enough to draw:
+        // inside the replay's window on each one's own clock, as their climbs are.
+        var replayOpen = hasTime && replay && !replay.hidden;
+        var phasesNow = phaseLabels.filter(function (p) {
           return labels[p.kind] && inWindow(p.t[0]) && inWindow(p.t[1]);
-        }));
+        });
+        others.forEach(function (o) {
+          if (o.far) return;
+          o.phases.forEach(function (p) {
+            if (!labels[p.kind]) return;
+            if (replayOpen && !(p.t[0] >= from - o.offset - 1 && p.t[1] <= cutoff - o.offset + 1)) return;
+            phasesNow.push(p);
+          });
+        });
+        var shown = same('phases', phasesNow);
         if (shown.length) {
           var lift = function (p) { return [p[0], p[1], z(p[2])]; };
           out.push(new deck.PathLayer({
@@ -3553,7 +3587,70 @@ function initView3d(root, cursorTrack, preset) {
       handle.__mergedFilterHooks = (handle.__mergedFilterHooks || []).concat([filterHook]);
       // A click that is not a drag, as a place on the ground: what the planner drops a
       // turnpoint with. MapLibre's own `click` already refuses a pointer that moved.
+      // A turnpoint dragged to a new place (`onDragPoint`, the planner's): a press near one
+      // takes it instead of panning the map, it follows the pointer over the ground, and
+      // letting go is not also a click that drops a new one. Near means 18 px with a mouse,
+      // 26 with a finger.
+      var draggers = [], dragging = null, justDragged = false;
+      function pointNear(event) {
+        if (!route || !route.points.length || !draggers.length) return -1;
+        var box = map.getCanvas().getBoundingClientRect();
+        var x = event.clientX - box.left, y = event.clientY - box.top;
+        var reach = event.pointerType === 'touch' ? 26 : 18, best = -1, bestD = reach;
+        route.points.forEach(function (p, i) {
+          var at = screenAt(p[0], p[1], z(ground(p[0], p[1]) + 60));
+          if (!at) return;
+          var d = Math.hypot(at[0] - x, at[1] - y);
+          if (d <= bestD) { bestD = d; best = i; }
+        });
+        return best;
+      }
+      function dragTo(event, done) {
+        var box = map.getCanvas().getBoundingClientRect();
+        var at = map.unproject([event.clientX - box.left, event.clientY - box.top]);
+        var index = dragging.index;
+        draggers.forEach(function (fn) { fn(index, [at.lng, at.lat], done); });
+      }
+      view.addEventListener('pointerdown', function (event) {
+        if (measuring || event.button > 0 || !map.getCanvasContainer().contains(event.target)) return;
+        var index = pointNear(event);
+        if (index < 0) return;
+        dragging = { index: index, id: event.pointerId, moved: false };
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        map.dragPan.disable();
+      }, true);
+      // MapLibre's own gestures start from these; while a turnpoint is held they stop here.
+      ['mousedown', 'touchstart', 'touchmove'].forEach(function (type) {
+        view.addEventListener(type, function (event) {
+          if (!dragging) return;
+          if (event.cancelable) event.preventDefault();
+          event.stopImmediatePropagation();
+        }, { capture: true, passive: false });
+      });
+      window.addEventListener('pointermove', function (event) {
+        if (!dragging || event.pointerId !== dragging.id) return;
+        dragging.moved = true;
+        dragTo(event, false);
+      }, true);
+      function letGo(event) {
+        if (!dragging || event.pointerId !== dragging.id) return;
+        if (dragging.moved) { dragTo(event, true); justDragged = true; }
+        dragging = null;
+        map.dragPan.enable();
+        // The click that may follow a release lands on the next task; this one is done.
+        setTimeout(function () { justDragged = false; }, 0);
+      }
+      window.addEventListener('pointerup', letGo, true);
+      window.addEventListener('pointercancel', letGo, true);
+      map.getCanvas().addEventListener('pointermove', function (event) {
+        if (dragging || !draggers.length) return;
+        map.getCanvas().style.cursor = pointNear(event) >= 0 ? 'grab' : (measuring ? 'crosshair' : '');
+      });
+
       map.on('click', function (event) {
+        // A press on a turnpoint took it; the click it ends in is not a new one.
+        if (justDragged || (dragging && dragging.moved)) return;
         var at = [event.lngLat.lng, event.lngLat.lat];
         // Measuring takes the click: it is not also a turnpoint.
         if (measuring) { measurePoints.push(at); showMeasure(); return; }
@@ -3579,6 +3676,8 @@ function initView3d(root, cursorTrack, preset) {
           refresh();
         },
         onClick: function (fn) { clickers.push(fn); },
+        // fn(index, [lon, lat], done) while a turnpoint is dragged; done on letting go.
+        onDragPoint: function (fn) { draggers.push(fn); },
         // What deck.gl draws now, as ids and depth parameters: for the tests, which cannot
         // tell a hidden track from a missing one by looking.
         layers: function () {
@@ -4126,6 +4225,15 @@ function initView3d(root, cursorTrack, preset) {
     entry.onClick(function (at) {
       if (holder.dataset.drawing !== 'on') return;
       addPoint(at);
+    });
+    // A turnpoint dragged on the map moves; the task, its distance and the FAI areas follow.
+    // Redrawn once a frame at most: the airspace along the task is checked on each redraw.
+    var moved = null;
+    if (entry.onDragPoint) entry.onDragPoint(function (index, at, done) {
+      if (!points[index]) return;
+      points[index] = [Math.round(at[0] * 100000) / 100000, Math.round(at[1] * 100000) / 100000];
+      if (done) { if (moved) cancelAnimationFrame(moved); moved = null; redraw(); return; }
+      if (!moved) moved = requestAnimationFrame(function () { moved = null; redraw(); });
     });
     entry.setRoute(course(), points);
     if (entry.setShapes) entry.setShapes(faiShapes());

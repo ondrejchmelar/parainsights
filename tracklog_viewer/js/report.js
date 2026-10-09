@@ -475,7 +475,9 @@
         (curve && curve.best_glide && curve.monotone ? ' Your best glides came at about ' + fmt(curve.best_glide[0], 0) + ' km/h, where the wing returned ' +
          fmt(curve.best_glide[1], 1) + ':1.' : '')));
     }
-    figs.push(figure('Wind', a.wind ? fmt(a.wind.speed, 1) : '—', ' m/s',
+    // Where it came from in the label, as a forecast says it: the speed alone left the
+    // direction in the ⓘ.
+    figs.push(figure(a.wind ? 'Wind from ' + a.wind.cardinal : 'Wind', a.wind ? fmt(a.wind.speed, 1) : '—', ' m/s',
       a.wind ? 'From ' + a.wind.cardinal + ', averaged over ' + withWind + ' climbs. Inferred, not measured: while circling the glider\'s own airspeed averages out and the track drifts with the air. Climbs flown fewer than two full turns, or in both directions, are left out.' : 'Too few circled climbs to sound the wind.'));
     if (tow) {
       figs.push(figure('Off tow at', spaced(tow.finish_altitude), ' m',
@@ -484,8 +486,9 @@
         '. Kept out of the thermal statistics and the wind estimate.'));
     }
 
-    // The side view: its axis switch and legend on a bar above the chart, inside the
-    // map's block (`.flight-map`), so both go full screen with the map.
+    // The side view: its axis switch and legend on a bar under the chart, so the chart
+    // sits right under the map, inside the map's block (`.flight-map`), so both go full
+    // screen with the map.
     var sideBar = '      <div class="side-bar">\n' +
       '        <div class="seg toggle" role="group" aria-label="Ground axis for the side view">' +
       '<button type="button" class="toggle-button is-on" data-profile="flown" aria-pressed="true">Distance</button>' +
@@ -495,9 +498,9 @@
       info('The trace is coloured by climb rate, from &minus;4 m/s to +4 m/s; the bands behind it are the phases. Distance is distance flown, always increasing, so a climb draws as a near-vertical step.') + '</li>' +
       '<li><i style="background:var(--climb);opacity:.5"></i>Climbing</li><li><i style="background:var(--sink);opacity:.5"></i>Gliding</li>' +
       (tow ? '<li><i style="background:var(--tow);opacity:.5"></i>Tow</li>' : '') + '</ul>\n      </div>\n';
-    var sideChart = '\n    <div class="panel hero side-view">\n' + sideBar +
+    var sideChart = '\n    <div class="panel hero side-view">\n' +
       '      <div class="profile chart-host" data-chart="profile" data-mode="flown"\n           style="aspect-ratio:' + Ch.PROFILE.width + '/' + Ch.PROFILE.height + '">\n' +
-      '        <p class="chart-missing">The side view is drawn in this page. It needs JavaScript.</p>\n      </div>\n    </div>\n';
+      '        <p class="chart-missing">The side view is drawn in this page. It needs JavaScript.</p>\n      </div>\n' + sideBar + '    </div>\n';
 
     var mapSection, clearance = null, valley = null, topView = '';
     if (terrain) {

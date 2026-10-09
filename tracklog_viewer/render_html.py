@@ -79,7 +79,7 @@ p.note, p.caption { margin: 12px 0 0; color: var(--ink-2); font-size: 16px; disp
 .flight-map { --page: calc(100vw - var(--scrollbar, 0px)); width: var(--page); margin-left: calc(50% - var(--page) / 2); }
 .flight-map .side-view { border-radius: 0; border: 0; border-bottom: 1px solid var(--rule); padding: 0; background: var(--panel); }
 .flight-map .side-view .chart-host { max-width: 1100px; margin: 0 auto; }
-.side-bar { max-width: 1100px; margin: 0 auto; padding: 12px 20px 4px; display: flex; flex-wrap: wrap;
+.side-bar { max-width: 1100px; margin: 0 auto; padding: 4px 20px 12px; display: flex; flex-wrap: wrap;
   align-items: center; justify-content: space-between; gap: 8px 16px; }
 .side-bar .legend-row { margin: 0; }
 .flight-map:fullscreen, .flight-map.is-maximised { display: flex; flex-direction: column;
@@ -274,10 +274,17 @@ code { font-family: ui-monospace, "DejaVu Sans Mono", monospace; font-size: 0.92
   .figs.keys { grid-template-columns: repeat(2, 1fr); }
   .fig { padding: 12px 8px 12px 0; }
   .fig .v { font-size: 26px; }
-  .tabs { flex-wrap: nowrap; overflow-x: auto; margin-right: -14px; padding-right: 14px; }
-  .tab { min-width: 220px; flex: none; }
-  .tab-add { min-width: 0; }
-  .side-bar { padding: 10px 14px 4px; }
+  /* The flights swipe sideways, and the next one shows at the edge so the strip reads as
+     more than one: at full width each the second flight was out of sight and the strip
+     looked like the only one there. "Your track" is its + alone here (the label stays
+     for screen readers, the tooltip says it). */
+  .tabs { flex-wrap: nowrap; overflow-x: auto; margin-right: -14px; padding-right: 14px;
+    scroll-snap-type: x proximity; scroll-padding-left: 0; }
+  .tab { width: calc(100vw - 130px); min-width: 0; flex: none; scroll-snap-align: start; }
+  .tab-add { width: auto; }
+  .tab-add .tab-open { padding: 0 16px; }
+  .tab-add .tab-date { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .side-bar { padding: 4px 14px 10px; }
   .panel { padding: 10px 10px 6px; }
   table { font-size: 15.5px; }
   th, td { padding: 10px 7px; }

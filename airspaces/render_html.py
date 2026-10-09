@@ -117,15 +117,26 @@ STYLE = """
 .asp-src-key { color: var(--ink) !important; }
 .asp-src-key .asp-swatch { margin-right: 5px; vertical-align: -1px; }
 .asp-src-when { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.asp-nw { white-space: nowrap; }
 @media (max-width: 900px) {
   /* A phone or a narrow window: the map first, the task right under it like a sheet,
      then the layers and the download. Over a small map the panels would hide it. */
   .asp-stage .view3d { height: auto; min-height: 0; aspect-ratio: 3 / 4; }
-  .asp-floats { position: static; width: auto; display: flex; gap: 12px; margin-top: -14px; }
+  /* The task right under the map and as wide as it, flat, as the side view sits under a
+     flight's map: an inset card under an edge-to-edge map read as the wrong width, and the
+     sheet that overlapped the map's edge covered its buttons. The layers likewise, one
+     band after it; the download alone stays a card. */
+  .asp-floats { position: static; width: auto; display: flex; gap: 0; margin-top: 0; }
   .float { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--panel); box-shadow: none; }
-  .plan-panel { border-radius: 14px 14px 0 0; border-top-color: var(--edge); position: relative; z-index: 7; }
+  .plan-panel, .asp-layers { position: relative; margin: 0 -14px; border-radius: 0;
+    border-width: 0 0 1px; border-color: var(--rule); }
+  .plan-panel { z-index: 7; padding: 16px 14px; }
+  .asp-layers > summary { padding: 10px 14px; }
+  .asp-layers .asp-controls { padding: 0 14px; }
+  /* The dates wrap between themselves; at one line each the table ran off a phone. */
+  .asp-src-when { white-space: normal; }
   .asp-layers { max-height: none; }
-  .asp-get-float { margin-top: 0; }
+  .asp-get-float { margin-top: 16px; }
 }
 """
 
@@ -417,6 +428,11 @@ def _link(href: str, text: str) -> str:
     return f'<a href="{_escape(href)}" rel="noreferrer">{_escape(text)}</a>'
 
 
+def _dates_whole(text: str) -> str:
+    """Each date kept on one line, so a narrow column wraps between dates, not inside one."""
+    return re.sub(r"(\d{4}-\d{2}-\d{2})", r'<span class="asp-nw">\1</span>', text)
+
+
 def sources_table(overlay, base_version: str, shift: float) -> str:
     """Which layer on the map came from where. State, not explanation.
 
@@ -473,7 +489,7 @@ def sources_table(overlay, base_version: str, shift: float) -> str:
             f'<span class="asp-swatch" style="background:{colour[k]}"></span>'
             for k in keys
         )
-        + f"{label}</td><td>{source}</td><td class='asp-src-when'>{when}</td></tr>"
+        + f"{label}</td><td>{source}</td><td class='asp-src-when'>{_dates_whole(when)}</td></tr>"
         for keys, label, source, when in rows
     )
     return (

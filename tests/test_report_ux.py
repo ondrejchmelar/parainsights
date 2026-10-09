@@ -304,8 +304,10 @@ class TestPageText:
         assert source.index("sideChart", panel) - panel < 120, (
             "the side view no longer follows the 3D panel directly")
         chart = source.index("var sideChart")
-        assert source.index("sideBar", chart) < source.index("chart-host", chart), (
-            "the axis switch and legend sit on a bar over the chart, inside its panel")
+        # Under the chart since October 2026: the chart right under the map, its axis
+        # switch and legend after it, still inside its panel.
+        assert source.index("chart-host", chart) < source.index("sideBar", chart), (
+            "the axis switch and legend sit on a bar under the chart, inside its panel")
         html = article(tmp_path, "side.igc", [(300, 2.5), (300, 2.0), (300, 1.4), (300, 0.8)])
         assert '<div class="flight-map">' in html
         # The side view is drawn in the page, so the article carries its host.

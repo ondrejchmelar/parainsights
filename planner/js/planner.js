@@ -410,6 +410,15 @@
       if (holder.dataset.drawing !== 'on') return;
       addPoint(at);
     });
+    // A turnpoint dragged on the map moves; the task, its distance and the FAI areas follow.
+    // Redrawn once a frame at most: the airspace along the task is checked on each redraw.
+    var moved = null;
+    if (entry.onDragPoint) entry.onDragPoint(function (index, at, done) {
+      if (!points[index]) return;
+      points[index] = [Math.round(at[0] * 100000) / 100000, Math.round(at[1] * 100000) / 100000];
+      if (done) { if (moved) cancelAnimationFrame(moved); moved = null; redraw(); return; }
+      if (!moved) moved = requestAnimationFrame(function () { moved = null; redraw(); });
+    });
     entry.setRoute(course(), points);
     if (entry.setShapes) entry.setShapes(faiShapes());
   }

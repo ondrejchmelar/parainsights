@@ -2231,7 +2231,70 @@
       handle.__mergedFilterHooks = (handle.__mergedFilterHooks || []).concat([filterHook]);
       // A click that is not a drag, as a place on the ground: what the planner drops a
       // turnpoint with. MapLibre's own `click` already refuses a pointer that moved.
+      // A turnpoint dragged to a new place (`onDragPoint`, the planner's): a press near one
+      // takes it instead of panning the map, it follows the pointer over the ground, and
+      // letting go is not also a click that drops a new one. Near means 18 px with a mouse,
+      // 26 with a finger.
+      var draggers = [], dragging = null, justDragged = false;
+      function pointNear(event) {
+        if (!route || !route.points.length || !draggers.length) return -1;
+        var box = map.getCanvas().getBoundingClientRect();
+        var x = event.clientX - box.left, y = event.clientY - box.top;
+        var reach = event.pointerType === 'touch' ? 26 : 18, best = -1, bestD = reach;
+        route.points.forEach(function (p, i) {
+          var at = screenAt(p[0], p[1], z(ground(p[0], p[1]) + 60));
+          if (!at) return;
+          var d = Math.hypot(at[0] - x, at[1] - y);
+          if (d <= bestD) { bestD = d; best = i; }
+        });
+        return best;
+      }
+      function dragTo(event, done) {
+        var box = map.getCanvas().getBoundingClientRect();
+        var at = map.unproject([event.clientX - box.left, event.clientY - box.top]);
+        var index = dragging.index;
+        draggers.forEach(function (fn) { fn(index, [at.lng, at.lat], done); });
+      }
+      view.addEventListener('pointerdown', function (event) {
+        if (measuring || event.button > 0 || !map.getCanvasContainer().contains(event.target)) return;
+        var index = pointNear(event);
+        if (index < 0) return;
+        dragging = { index: index, id: event.pointerId, moved: false };
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        map.dragPan.disable();
+      }, true);
+      // MapLibre's own gestures start from these; while a turnpoint is held they stop here.
+      ['mousedown', 'touchstart', 'touchmove'].forEach(function (type) {
+        view.addEventListener(type, function (event) {
+          if (!dragging) return;
+          if (event.cancelable) event.preventDefault();
+          event.stopImmediatePropagation();
+        }, { capture: true, passive: false });
+      });
+      window.addEventListener('pointermove', function (event) {
+        if (!dragging || event.pointerId !== dragging.id) return;
+        dragging.moved = true;
+        dragTo(event, false);
+      }, true);
+      function letGo(event) {
+        if (!dragging || event.pointerId !== dragging.id) return;
+        if (dragging.moved) { dragTo(event, true); justDragged = true; }
+        dragging = null;
+        map.dragPan.enable();
+        // The click that may follow a release lands on the next task; this one is done.
+        setTimeout(function () { justDragged = false; }, 0);
+      }
+      window.addEventListener('pointerup', letGo, true);
+      window.addEventListener('pointercancel', letGo, true);
+      map.getCanvas().addEventListener('pointermove', function (event) {
+        if (dragging || !draggers.length) return;
+        map.getCanvas().style.cursor = pointNear(event) >= 0 ? 'grab' : (measuring ? 'crosshair' : '');
+      });
+
       map.on('click', function (event) {
+        // A press on a turnpoint took it; the click it ends in is not a new one.
+        if (justDragged || (dragging && dragging.moved)) return;
         var at = [event.lngLat.lng, event.lngLat.lat];
         // Measuring takes the click: it is not also a turnpoint.
         if (measuring) { measurePoints.push(at); showMeasure(); return; }
@@ -2257,6 +2320,8 @@
           refresh();
         },
         onClick: function (fn) { clickers.push(fn); },
+        // fn(index, [lon, lat], done) while a turnpoint is dragged; done on letting go.
+        onDragPoint: function (fn) { draggers.push(fn); },
         // What deck.gl draws now, as ids and depth parameters: for the tests, which cannot
         // tell a hidden track from a missing one by looking.
         layers: function () {
