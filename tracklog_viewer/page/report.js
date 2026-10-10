@@ -418,7 +418,8 @@
     if (node && typeof readScene === 'function') {
       try {
         var scene = readScene(node);
-        scenes[uid] = { track: scene.track, start: scene.start, climbs: scene.climbs || [],
+        scenes[uid] = { track: scene.track, start: scene.start, utcOffset: scene.utcOffset,
+                        climbs: scene.climbs || [],
                         phases: scene.phases || [],
                         name: article.getAttribute('data-compare-name') || uid };
       } catch (error) { /* a flight without a scene is compared by its figures only */ }
@@ -437,11 +438,12 @@
       var name = article.getAttribute('data-compare-name') || '';
       if (article.getAttribute('data-flight-report') === uid) {
         var mine = sceneOf(article);
-        out.own = { name: name, colour: colour, start: mine ? mine.start : null };
+        out.own = { name: name, colour: colour, start: mine ? mine.start : null,
+                    utcOffset: mine ? mine.utcOffset : undefined };
         return;
       }
       var scene = sceneOf(article);
-      if (scene) out.others.push({ name: scene.name, track: scene.track, start: scene.start,
+      if (scene) out.others.push({ name: scene.name, track: scene.track, start: scene.start, utcOffset: scene.utcOffset,
                                    climbs: scene.climbs, phases: scene.phases, colour: colour });
     });
     return out;
@@ -453,7 +455,7 @@
       if (entry && entry.setOthers) entry.setOthers(window.__compareFor(article.getAttribute('data-flight-report')));
       // The side view draws the compared flights too.
       var host = article.querySelector('.chart-host[data-chart="profile"]');
-      if (host && window.__drawProfile) window.__drawProfile(article, host.dataset.mode || 'flown');
+      if (host && window.__drawProfile) window.__drawProfile(article);
     });
   }
   // Flights come and go (uploads, the × on a tab); re-settle when they do.
@@ -831,20 +833,6 @@ function initFlight(root) {
       .forEach(function (node) { node.classList.add('active'); });
   }
 
-  root.querySelectorAll('.toggle-button[data-profile]').forEach(function (button) {
-    button.addEventListener('click', function () {
-      var wanted = button.dataset.profile;
-      root.querySelectorAll('.toggle-button[data-profile]').forEach(function (other) {
-        var on = other === button;
-        other.classList.toggle('is-on', on);
-        other.setAttribute('aria-pressed', on ? 'true' : 'false');
-      });
-      // The side view is drawn in the page now, so this redraws it rather than
-      // unhiding one of three copies the document used to carry.
-      if (window.__drawProfile) window.__drawProfile(root, wanted);
-    });
-  });
-
   // The circling columns fold away by default. A single button rather than a two-state
   // pair, because there is nothing to compare against: it is showing five extra columns
   // or not showing them.
@@ -925,6 +913,7 @@ document.querySelectorAll('[data-flight-report]').forEach(initFlight);
 // flight the reader drops in later.
 var flightTabs = (function () {
   var strip = document.getElementById('flight-tabs');
+  var firstTitle = document.title;
 
   function show(key) {
     document.querySelectorAll('.tab[data-flight-tab]').forEach(function (tab) {
@@ -933,9 +922,14 @@ var flightTabs = (function () {
       var open = tab.querySelector('.tab-open');
       if (open) open.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
+    var titled = null;
     document.querySelectorAll('[data-flight-report]').forEach(function (report) {
       report.hidden = report.dataset.flightReport !== key;
+      if (!report.hidden && report.dataset.title) titled = report.dataset.title;
     });
+    // The tab's flight names the page (a browser tab, a bookmark, the history); the drop
+    // panel, with no flight yet, says what it is for.
+    document.title = titled || (key === 'own' ? 'Your track — parainsights' : firstTitle);
     window.scrollTo({ top: 0, behavior: 'auto' });
   }
 

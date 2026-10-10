@@ -17,6 +17,7 @@ try {
   --accent:#c2410c; --on-accent:#ffffff; --good:#13803f; --on-good:#ffffff;
   --warn:#8f6200; --on-warn:#ffffff; --bad:#b42318;
   --series-1:#7c3aed; --series-2:#0e7f93; --series-3:#c42a72;
+  --series-4:#a16207; --series-5:#475569; --series-6:#4d7c0f;
   --float:rgba(255,255,255,.92); --float-2:rgba(238,236,230,.96); --float-edge:rgba(0,0,0,.16);
   --float-shadow:0 6px 20px rgba(0,0,0,.18); --pop-bg:#1d1d1a; --pop-ink:#f2f0ea;
   --climb:#eb6834; --climb-1:#f0a07a; --climb-2:#eb6834; --climb-3:#c8431a;
@@ -29,6 +30,7 @@ try {
     --accent:#e8692c; --on-accent:#141412; --good:#2fb36a; --on-good:#0b1a10;
     --warn:#d9a21b; --on-warn:#111111; --bad:#e5484d;
     --series-1:#a78bfa; --series-2:#3cc8dc; --series-3:#f47fb0;
+    --series-4:#e0a458; --series-5:#a8b3c4; --series-6:#9bc25b;
     --float:rgba(20,20,18,.84); --float-2:rgba(39,39,35,.92); --float-edge:rgba(255,255,255,.16);
     --float-shadow:0 6px 20px rgba(0,0,0,.35); --pop-bg:#f3f1ec; --pop-ink:#181816;
     --climb:#e8692c; --climb-1:#b06a4a; --climb-2:#e8692c; --climb-3:#f08a55;
@@ -41,6 +43,7 @@ try {
     --accent:#e8692c; --on-accent:#141412; --good:#2fb36a; --on-good:#0b1a10;
     --warn:#d9a21b; --on-warn:#111111; --bad:#e5484d;
     --series-1:#a78bfa; --series-2:#3cc8dc; --series-3:#f47fb0;
+    --series-4:#e0a458; --series-5:#a8b3c4; --series-6:#9bc25b;
     --float:rgba(20,20,18,.84); --float-2:rgba(39,39,35,.92); --float-edge:rgba(255,255,255,.16);
     --float-shadow:0 6px 20px rgba(0,0,0,.35); --pop-bg:#f3f1ec; --pop-ink:#181816;
     --climb:#e8692c; --climb-1:#b06a4a; --climb-2:#e8692c; --climb-3:#f08a55;
@@ -69,6 +72,8 @@ a { color: inherit; }
   font-family:inherit; font-size:16px; font-weight:600; line-height:1; cursor:pointer; text-decoration:none; }
 .tool:hover { background:var(--panel-2); color:var(--ink); }
 .text-toggle { gap:1px; } .text-toggle b { font-size:19px; }
+/* aA and the theme: the same circle, side by side at the end of the strip. */
+.tool.text-toggle, .tool.theme-toggle { width:44px; min-width:44px; padding:0; }
 .text-toggle[aria-pressed="true"] { background:var(--ink); color:var(--paper); border-color:var(--ink); }
 .switch { width:36px; height:21px; border-radius:11px; background:var(--edge); position:relative; flex:none; }
 .switch::after { content:""; position:absolute; left:3px; top:3px; width:15px; height:15px; border-radius:50%;
@@ -79,6 +84,7 @@ a { color: inherit; }
 .site-foot { margin:56px 0 0; padding:18px 0 0; border-top:1px solid var(--rule);
   font-size:15px; line-height:1.55; color:var(--ink-2); display:block; }
 .site-foot a { color:var(--ink-2); }
+.site-foot .gh { vertical-align: -2px; margin-right: 6px; }
 @media (max-width: 640px) {
   .site-nav { gap:2px; min-height:56px; }
   .site-nav { flex-wrap:nowrap; }
@@ -155,11 +161,11 @@ html[data-text="large"] .view3d-panel { zoom: calc(1 / 1.125); }
 html[data-help="off"] .info-wrap { display: none; }
 
 
-/* The three takeoff colours are `--series-1..3` in `common.TOKENS`: an identity palette of
-   their own (violet, cyan, pink) since the redesign, so a takeoff's dot is never the
-   accent or a verdict's green. Three, because the comparison caps at three
-   (`MAX_CHOSEN`); identity is never colour alone — the table names every row and every
-   line carries its label. */
+/* The takeoff colours are `--series-1..6` in `common.TOKENS`: an identity palette of
+   their own (violet, cyan, pink, then amber-brown, slate, olive), so a takeoff's dot is
+   never the accent or a verdict's green. Six, the comparison's cap (`MAX_CHOSEN`);
+   identity is never colour alone — the table names every row and every line carries
+   its label. */
 .meteo-article h1 { display: none; }
 /* The day, the hour and the takeoffs apply to everything below, so they stay in view. */
 .met-sticky { position: sticky; top: 0; z-index: 20; background: var(--paper);
@@ -239,11 +245,16 @@ html[data-help="off"] .info-wrap { display: none; }
 .met-panel { border:0; padding:0; }
 .met-strip, .met-keys { display:none !important; }
 
-/* Small multiples, one column per takeoff, filling the row whatever the count. The
+/* Small multiples, one column per takeoff: a strip that scrolls sideways, as a phone's
+   swipes, three columns to the row at most and two filling it when there are two. The
    canvases carry `width`/`height` and no CSS height, so a wider column makes a chart
    bigger rather than flatter. One takeoff puts its two charts side by side instead, so a
    lone takeoff's charts come out the size of a pair's. */
-.met-columns { display:grid; gap:22px; margin:0; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.met-columns { display:flex; gap:22px; margin:0; overflow-x:auto; scroll-snap-type:x mandatory;
+  overscroll-behavior-x:contain; scrollbar-width:thin; padding-bottom:6px; }
+.met-columns:not(.is-single) .met-col { flex:0 0 calc((100% - 44px) / 3); scroll-snap-align:start; }
+.met-columns.is-two .met-col { flex-basis:calc((100% - 22px) / 2); }
+.met-columns.is-single { display:block; overflow:visible; padding-bottom:0; }
 .met-col { min-width:0; }
 .met-col .met-canvas + .met-canvas { margin-top:10px; }
 .met-columns.is-single .met-col { display:grid; gap:0 22px; align-items:start;
@@ -259,17 +270,26 @@ html[data-help="off"] .info-wrap { display: none; }
 .met-col-head i { width:11px; height:11px; border-radius:50%; flex:none; align-self:center; }
 .met-col-head .name { background:none; border:0; padding:0; font:inherit; color:inherit; cursor:pointer; }
 .met-col-head .ground { font-weight:400; font-size:16px; color:var(--ink-2); font-variant-numeric:tabular-nums; }
+/* The takeoff's ParaglidingEarth page, and its place in the order, at the head's end. */
+.met-col-tools { margin-left:auto; display:inline-flex; align-items:center; gap:2px; align-self:center; }
+.met-col-tools a, .met-col-move { width:34px; height:34px; border:0; background:none; padding:0;
+  color:var(--ink-2); border-radius:50%; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; }
+.met-col-tools a:hover, .met-col-move:hover:not(:disabled) { color:var(--ink); background:var(--panel-2); }
+.met-col-move:disabled { opacity:.3; cursor:default; }
+.met-columns.is-single .met-col-move { display:none; }
+.met-chip[draggable="true"] { cursor:grab; }
+.met-chip.is-dragged { opacity:.5; }
 .met-col-rose { font-size:15.5px; color:var(--ink-2); margin:0 0 10px; }
-.met-col-rose a { color:var(--accent); font-weight:600; text-decoration:none; }
-.met-col-rose a:hover { text-decoration:underline; }
 /* The number visible, the reason one tap away. */
 .met-col-top { font-size:16.5px; color:var(--ink); margin:8px 0 14px; display:flex; align-items:center; }
 .met-col-top[hidden] { display:none; }
 .met-col.is-focus .met-col-head .name { text-decoration:underline; text-underline-offset:4px; }
 .met-canvas { width:100%; display:block; background:var(--panel); border-radius:14px; }
 /* The sounding reads a height from a vertical drag, the gesture the page scrolls with;
-   this hands it to the chart. The airgram above each one still scrolls the page. */
-.met-col-sounding { touch-action: none; }
+   this hands it to the chart. A sideways swipe is still the columns' (on a phone they
+   swipe): with `none` it was neither, and a swipe over a sounding moved nothing. The
+   airgram above each one still scrolls the page. */
+.met-col-sounding { touch-action: pan-x; }
 /* flymet's meteogram for the airfield nearest this takeoff, under its own charts. */
 .met-col-fly { margin: 0; }
 .met-col-fly img { display:block; width:100%; border-radius:14px; background:#fff; }
@@ -290,6 +310,8 @@ html[data-help="off"] .info-wrap { display: none; }
   .met-chosen > * { flex: none; }
   /* The table keeps takeoffs as rows: name and verdict, then wind, thermal top, cloudbase. */
   .met-compare, .met-compare thead, .met-compare tbody { display:block; }
+  /* One takeoff: no comparison, and no empty header standing in for one. */
+  .met-compare[hidden] { display:none; }
   .met-compare tr { display:grid; grid-template-columns: 1.35fr 1fr 1fr 1fr; align-items:center;
     column-gap:8px; border-bottom:1px solid var(--rule); padding:8px 0; }
   .met-compare th, .met-compare td { border:0; padding:2px 0; font-size:16px; }
@@ -304,16 +326,17 @@ html[data-help="off"] .info-wrap { display: none; }
   /* One takeoff's charts at a time, side by side by a swipe. */
   .met-swipe { display:flex; justify-content:center; margin:0 0 14px; }
   .met-swipe .seg > button { padding:0 12px; }
-  .met-columns:not(.is-single) { display:flex; overflow-x:auto; scroll-snap-type:x mandatory; gap:14px;
-    margin:0 -14px; padding:0 14px; scrollbar-width: none; }
-  .met-columns:not(.is-single) .met-col { flex:0 0 88%; scroll-snap-align:center; }
+  /* The swipe uses the screen's full width: a column at a time, edge to edge. */
+  .met-columns:not(.is-single) { gap:14px; margin:0 -14px; padding:0 14px; scroll-padding:0 14px;
+    scrollbar-width: none; }
+  .met-columns:not(.is-single) .met-col, .met-columns.is-two .met-col { flex:0 0 100%; scroll-snap-align:center; }
   .met-columns.is-single .met-col { display:block; }
   .met-columns.is-single .met-canvas + .met-canvas { margin-top:10px; }
 }
 
 </style>
 <div class="wrap">
-<nav class="site-nav" aria-label="The tools here"><span class="is-on">Meteo</span><a href="../airspace/">Planner</a><a href="../index.html">Flights</a><span class="site-sp"></span><button type="button" class="tool text-toggle" aria-pressed="false" title="Larger text" aria-label="Larger text">A<b>A</b></button><button type="button" class="tool help-toggle" aria-pressed="true" title="Show or hide the explanations (ⓘ)">Help<span class="switch" aria-hidden="true"></span></button><button type="button" class="tool theme-toggle" aria-pressed="false" aria-label="Switch between the light and dark theme"><span class="theme-glyph" data-sun="<svg width=&quot;20&quot; height=&quot;20&quot; viewBox=&quot;0 0 20 20&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;1.75&quot; stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; aria-hidden=&quot;true&quot;><circle cx=&quot;10&quot; cy=&quot;10&quot; r=&quot;3.5&quot;/><path d=&quot;M10 2v2M10 16v2M2 10h2M16 10h2M4.3 4.3l1.4 1.4M14.3 14.3l1.4 1.4M4.3 15.7l1.4-1.4M14.3 5.7l1.4-1.4&quot;/></svg>" data-moon="<svg width=&quot;20&quot; height=&quot;20&quot; viewBox=&quot;0 0 20 20&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;1.75&quot; stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; aria-hidden=&quot;true&quot;><path d=&quot;M15.5 12.5A6.5 6.5 0 0 1 7.5 4.5a6.5 6.5 0 1 0 8 8z&quot;/></svg>"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.5 12.5A6.5 6.5 0 0 1 7.5 4.5a6.5 6.5 0 1 0 8 8z"/></svg></span></button><a class="tool site-source" href="https://github.com/ondrejchmelar/parainsights" rel="noreferrer" title="The source, on GitHub" aria-label="The source, on GitHub"><svg width="20" height="20" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg></a></nav>
+<nav class="site-nav" aria-label="The tools here"><span class="is-on">Meteo</span><a href="../planner/">Planner</a><a href="../flights/">Flights</a><span class="site-sp"></span><button type="button" class="tool text-toggle" aria-pressed="false" title="Larger text" aria-label="Larger text">A<b>A</b></button><button type="button" class="tool help-toggle" aria-pressed="true" title="Show or hide the explanations (ⓘ)">Help<span class="switch" aria-hidden="true"></span></button><button type="button" class="tool theme-toggle" aria-pressed="false" aria-label="Switch between the light and dark theme"><span class="theme-glyph" data-sun="<svg width=&quot;20&quot; height=&quot;20&quot; viewBox=&quot;0 0 20 20&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;1.75&quot; stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; aria-hidden=&quot;true&quot;><circle cx=&quot;10&quot; cy=&quot;10&quot; r=&quot;3.5&quot;/><path d=&quot;M10 2v2M10 16v2M2 10h2M16 10h2M4.3 4.3l1.4 1.4M14.3 14.3l1.4 1.4M4.3 15.7l1.4-1.4M14.3 5.7l1.4-1.4&quot;/></svg>" data-moon="<svg width=&quot;20&quot; height=&quot;20&quot; viewBox=&quot;0 0 20 20&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;1.75&quot; stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; aria-hidden=&quot;true&quot;><path d=&quot;M15.5 12.5A6.5 6.5 0 0 1 7.5 4.5a6.5 6.5 0 1 0 8 8z&quot;/></svg>"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.5 12.5A6.5 6.5 0 0 1 7.5 4.5a6.5 6.5 0 1 0 8 8z"/></svg></span></button></nav>
 <article class="flight meteo-article" id="meteo-article">
   <!-- The day and the hour apply to everything below, so they stay in view. -->
   <div class="met-sticky">
@@ -394,7 +417,7 @@ html[data-help="off"] .info-wrap { display: none; }
     186 stations, matched to the nearest takeoff.</span></span></p>
   <script type="application/json" class="met-data">{"sites":[{"name":"Ran\u00e1","country":"CZ","lat":50.4075,"lon":13.7715,"alt":426,"winds":[2,0,0,2,2,0,0,2],"id":10099},{"name":"Krupka","country":"CZ","lat":50.6964,"lon":13.8769,"alt":644,"winds":[0,0,0,1,2,1,0,0],"id":6737},{"name":"Koz\u00e1kov","country":"CZ","lat":50.5933,"lon":15.2632,"alt":737,"winds":[0,0,0,1,2,2,2,1],"id":7197},{"name":"\u010cern\u00e1 hora","country":"CZ","lat":50.6496,"lon":15.74,"alt":1254,"winds":[0,0,0,1,2,1,0,0],"id":7188},{"name":"Doln\u00ed Morava","country":"CZ","lat":50.1544,"lon":16.8377,"alt":1228,"winds":[0,0,0,1,2,1,0,0],"id":21878},{"name":"Velk\u00fd Lopen\u00edk","country":"SK","lat":48.9152,"lon":17.7824,"alt":866,"winds":[0,0,1,2,2,2,1,0],"id":10270},{"name":"Martinsk\u00e9 hole","country":"SK","lat":49.0963,"lon":18.8238,"alt":1433,"winds":[],"id":22106},{"name":"P\u00e1lava - D\u011bv\u00edn","country":"CZ","lat":48.8674,"lon":16.6523,"alt":504,"winds":[0,0,2,2,0,0,0,0],"id":22931},{"name":"V\u0161echov","country":"CZ","lat":49.4379,"lon":14.6222,"alt":489,"winds":[1,1,1,2,1,1,1,2],"id":10333},{"name":"Doubrava","country":"CZ","lat":49.4328,"lon":13.2028,"alt":715,"winds":[0,0,0,0,0,0,2,0],"id":12436},{"name":"Hausstein","country":"DE","lat":48.8712,"lon":13.0729,"alt":880,"winds":[0,0,0,2,0,0,0,0],"id":8590},{"name":"Bassano","country":"IT","lat":45.8238,"lon":11.7694,"alt":865,"winds":[0,0,0,1,2,1,0,0],"id":9200},{"name":"Col Rodella","country":"IT","lat":46.4972,"lon":11.7535,"alt":2360,"winds":[2,1,0,1,2,2,1,1],"id":7243},{"name":"Meduno","country":"IT","lat":46.2306,"lon":12.8069,"alt":983,"winds":[0,0,0,0,1,2,1,0],"id":19791},{"name":"Kobala","country":"SI","lat":46.1805,"lon":13.7791,"alt":1061,"winds":[0,0,2,1,1,1,2,0],"id":7183}],"octants":["N","NE","E","SE","S","SW","W","NW"],"levels":[1000,975,950,925,900,850,800,700,600,500],"endpoint":"https://api.open-meteo.com/v1/forecast","attribution":"Takeoffs from ParaglidingEarth, CC BY-SA","fetched":"2026-09-23","flymet":{"near":[{"slug":"RANA","name":"Rana","km":1.5},{"slug":"USTI-NL","name":"\u00dast\u00ed n.L.","km":11.0},{"slug":"DRZKOV","name":"Drzkov","km":10.7},{"slug":"VRCHLABI","name":"Vrchlab\u00ed","km":7.3},{"slug":"KRALIKY","name":"Kraliky","km":10.0},{"slug":"TRENCIN","name":"Trencin","km":18.1},{"slug":"MARTIN","name":"Martin","km":9.9},{"slug":"BRECLAV","name":"B\u0159eclav","km":19.9},{"slug":"TABOR","name":"T\u00e1bor","km":8.5},{"slug":"KLATOVY","name":"Klatovy","km":8.7},{"slug":"DEGGENDORF","name":"Deggendorf","km":9.6},null,null,null,null],"today":"https://flymet.meteopress.cz/meteogram/{slug}.png","tomorrow":"https://flymet.meteopress.cz/meteogram2/{slug}.png","index":"https://flymet.meteopress.cz/meteogram/"}}</script>
 </article>
-<footer class="site-foot"><a href="https://github.com/ondrejchmelar/parainsights" rel="noreferrer">parainsights on GitHub</a> — the source, the issues, and how every number on these pages is worked out. Airspace © <a href="https://www.openaip.net" rel="noreferrer">openAIP</a> (CC BY-NC 4.0); imagery © Esri, Maxar, Earthstar Geographics; place names © OpenMapTiles, © OpenStreetMap contributors; terrain: AWS Open Data; weather: Open-Meteo.</footer>
+<footer class="site-foot"><a href="https://github.com/ondrejchmelar/parainsights" rel="noreferrer"><svg class="gh" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>parainsights on GitHub</a> — the source, the issues, and how every number on these pages is worked out. Airspace © <a href="https://www.openaip.net" rel="noreferrer">openAIP</a> (CC BY-NC 4.0); imagery © Esri, Maxar, Earthstar Geographics; place names © OpenMapTiles, © OpenStreetMap contributors; terrain: AWS Open Data; weather: Open-Meteo.</footer>
 </div>
 <script>(function () {
   var holder = document.querySelector('.meteo-article');
@@ -414,24 +437,31 @@ html[data-help="off"] .info-wrap { display: none; }
   // `probe` is the height the pointer is at in the sounding, in metres, and `probeX`
   // where it is across it — the readout follows the pointer sideways but reads the
   // profile, so what it says never depends on which temperature you happen to be over.
-  var MAX_CHOSEN = 3;
-  var state = { day: 0, hour: 14, slots: [null, null, null], site: null,
+  var MAX_CHOSEN = 6;
+  var noSlots = [];
+  for (var n = 0; n < MAX_CHOSEN; n++) noSlots.push(null);
+  var state = { day: 0, hour: 14, slots: noSlots, order: [], site: null,
                 surface: null, profile: null, profiles: {}, search: '',
                 probe: null, probeX: 0 };
 
   var status = document.getElementById('met-status');
   function say(text) { status.textContent = text; }
 
-  // The chosen takeoffs in slot order, skipping the empty slots.
+  // The chosen takeoffs in the reader's order (`state.order`, set by moving a column or
+  // dragging a chip), skipping the empty slots. The slot is the colour and the order is
+  // only where it stands, so a takeoff moved keeps its colour.
   function chosen() {
-    return state.slots.filter(function (index) { return index !== null; });
+    var picked = state.slots.filter(function (index) { return index !== null; });
+    var out = state.order.filter(function (index) { return picked.indexOf(index) >= 0; });
+    picked.forEach(function (index) { if (out.indexOf(index) < 0) out.push(index); });
+    return out;
   }
   function slotOf(index) { return state.slots.indexOf(index); }
   function seriesColour(slot) {
     return ink('--series-' + (slot + 1)) || '#888';
   }
 
-  // Three takeoffs, remembered. A pilot checks the same two or three hills all season,
+  // The chosen takeoffs, remembered. A pilot checks the same two or three hills all season,
   // and making them pick them again every morning is the kind of small rudeness that
   // makes a tool feel like a demo. Wrapped because a page opened from a file:// URL in
   // some browsers throws on even reading localStorage, and a page that fails to load
@@ -440,6 +470,7 @@ html[data-help="off"] .info-wrap { display: none; }
   function remember() {
     try {
       window.localStorage.setItem(REMEMBER, JSON.stringify(state.slots));
+      window.localStorage.setItem(REMEMBER + '.order', JSON.stringify(chosen()));
     } catch (error) { /* private mode, file://, or a full quota: forget instead */ }
   }
   function recall() {
@@ -452,6 +483,10 @@ html[data-help="off"] .info-wrap { display: none; }
         // an index saved against an older one could point anywhere, or nowhere.
         state.slots[s] = (typeof index === 'number' && conf.sites[index]) ? index : null;
       }
+      var order = JSON.parse(window.localStorage.getItem(REMEMBER + '.order') || '[]');
+      state.order = Array.isArray(order) ? order.filter(function (index) {
+        return typeof index === 'number' && conf.sites[index];
+      }) : [];
       state.site = chosen().length ? chosen()[0] : null;
     } catch (error) { /* nothing remembered, which is the normal first visit */ }
   }
@@ -547,6 +582,9 @@ html[data-help="off"] .info-wrap { display: none; }
 
   // The site's icons (`parainsights_common.ICONS`), for what this script draws.
   var CLOSE_ICON = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15"/></svg>';
+  var LINK_ICON = '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.5 3.5h5v5M16.5 3.5 9 11M14 11.5v5H3.5V6h5"/></svg>';
+  var LEFT_ICON = '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5.5 7.5 10l4.5 4.5"/></svg>';
+  var RIGHT_ICON = '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5.5l4.5 4.5L8 14.5"/></svg>';
   var PLUS_ICON = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg>';
   var EXPAND_ICON = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.5 3.5h5v5M8.5 16.5h-5v-5M16.5 3.5 11 9M3.5 16.5 9 11"/></svg>';
   function cap(text) { return text ? text.charAt(0).toUpperCase() + text.slice(1) : text; }
@@ -731,14 +769,13 @@ html[data-help="off"] .info-wrap { display: none; }
     }
     var free = state.slots.indexOf(null);
     if (free < 0) {
-      // Refuse rather than silently evicting the oldest: three lines is the palette's
-      // limit, and a reader who has just added a fourth takeoff and had one of their
-      // own disappear has no way to know which or why.
-      say('Three at a time — drop one first. A fourth line could not be told from the '
-          + 'other three.');
+      // Refuse rather than silently evicting the oldest: a reader who has just added one
+      // more takeoff and had one of their own disappear has no way to know which or why.
+      say(MAX_CHOSEN + ' at a time — drop one first.');
       return;
     }
     state.slots[free] = index;
+    state.order = chosen();
     if (state.site === null) state.site = index;
     remember();
     drawChosen();
@@ -768,7 +805,23 @@ html[data-help="off"] .info-wrap { display: none; }
     drawSite();
   }
 
-  function focus(index) {
+  // A takeoff moved to `to` in the order, by its column's arrows or a dragged chip:
+  // the chips, the table and the columns all follow, and its colour stays its own.
+  function moveTo(index, to) {
+    var list = chosen(), at = list.indexOf(index);
+    if (at < 0 || to < 0 || to >= list.length || to === at) return;
+    list.splice(at, 1);
+    list.splice(to, 0, index);
+    state.order = list;
+    remember();
+    drawChosen();
+    drawCompare();
+    drawSite();
+    swipeTo(index);
+  }
+
+  // `fromSwipe`: the columns were swiped to it, so they are not swiped again.
+  function focus(index, fromSwipe) {
     if (slotOf(index) < 0 || state.site === index) return;
     state.site = index;
     state.profile = state.profiles[index] || null;
@@ -776,6 +829,55 @@ html[data-help="off"] .info-wrap { display: none; }
     drawCompare();
     drawSite();
     if (!state.profile) loadProfiles();
+    if (!fromSwipe) swipeTo(index);
+  }
+
+  // On a phone the takeoffs' columns swipe sideways (`.met-columns`), under the chips.
+  // The two follow each other: a swipe that settles on a takeoff focuses it and brings
+  // its chip into the middle of the chips' row, and a chip pressed swipes to its column.
+  // The chips' row stood still while the columns moved under it.
+  var columnsBox = document.getElementById('met-columns');
+  // On a desktop the same strip shows three columns at a time and scrolls sideways past
+  // them, so a column already in view is left where it is, and one out of view is
+  // brought in at the nearer edge.
+  function swiping() { return columnsBox && columnsBox.scrollWidth > columnsBox.clientWidth + 1; }
+  function oneAtATime() {
+    var cell = columnsBox && columnsBox.querySelector('.met-col');
+    return !!cell && cell.getBoundingClientRect().width > columnsBox.clientWidth * 0.6;
+  }
+  function swipeTo(index) {
+    if (!swiping()) return;
+    var cell = columnsBox.querySelector('.met-col[data-site="' + index + '"]');
+    if (!cell) return;
+    var box = columnsBox.getBoundingClientRect(), r = cell.getBoundingClientRect(), by;
+    if (oneAtATime()) by = r.left - box.left - (box.width - r.width) / 2;
+    else if (r.left < box.left - 1) by = r.left - box.left;
+    else if (r.right > box.right + 1) by = r.right - box.right;
+    else return;
+    columnsBox.scrollTo({ left: columnsBox.scrollLeft + by, behavior: 'smooth' });
+  }
+  function chipIntoView() {
+    var row = document.getElementById('met-chosen'), chip = row && row.querySelector('.met-chip.is-focus');
+    if (!chip || row.scrollWidth <= row.clientWidth + 1) return;
+    var box = row.getBoundingClientRect(), r = chip.getBoundingClientRect();
+    row.scrollTo({ left: row.scrollLeft + r.left - box.left - (box.width - r.width) / 2, behavior: 'smooth' });
+  }
+  if (columnsBox) {
+    var settle = null;
+    columnsBox.addEventListener('scroll', function () {
+      if (!swiping() || !oneAtATime()) return;
+      clearTimeout(settle);
+      settle = setTimeout(function () {
+        var box = columnsBox.getBoundingClientRect(), mid = box.left + box.width / 2;
+        var best = null, bestD = Infinity;
+        columnsBox.querySelectorAll('.met-col').forEach(function (cell) {
+          var r = cell.getBoundingClientRect(), d = Math.abs(r.left + r.width / 2 - mid);
+          if (d < bestD) { bestD = d; best = cell; }
+        });
+        if (best) focus(Number(best.dataset.site), true);
+        chipIntoView();
+      }, 140);
+    }, { passive: true });
   }
 
   // ---- the chips ----------------------------------------------------------------------
@@ -784,9 +886,8 @@ html[data-help="off"] .info-wrap { display: none; }
     var add = document.getElementById('met-add');
     Array.prototype.slice.call(box.querySelectorAll('.met-chip, .met-cap'))
       .forEach(function (node) { node.remove(); });
-    state.slots.forEach(function (index, slot) {
-      if (index === null) return;
-      var site = conf.sites[index];
+    chosen().forEach(function (index) {
+      var slot = slotOf(index), site = conf.sites[index];
       var chip = document.createElement('span');
       chip.className = 'chip met-chip' + (state.site === index ? ' is-focus' : '');
       chip.innerHTML = '<i class="swatch"></i>'
@@ -801,12 +902,27 @@ html[data-help="off"] .info-wrap { display: none; }
       close.innerHTML = CLOSE_ICON;
       close.setAttribute('aria-label', 'Remove ' + site.name);
       close.onclick = function () { drop(index); };
+      // Dragged onto another chip, it takes that chip's place in the order.
+      chip.draggable = true;
+      chip.dataset.site = index;
+      chip.addEventListener('dragstart', function (event) {
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', String(index));
+        chip.classList.add('is-dragged');
+      });
+      chip.addEventListener('dragend', function () { chip.classList.remove('is-dragged'); });
+      chip.addEventListener('dragover', function (event) { event.preventDefault(); });
+      chip.addEventListener('drop', function (event) {
+        event.preventDefault();
+        var moved = Number(event.dataTransfer.getData('text/plain'));
+        if (slotOf(moved) >= 0) moveTo(moved, chosen().indexOf(index));
+      });
       box.insertBefore(chip, add);
     });
     add.innerHTML = PLUS_ICON + '<span>Add takeoff</span>';
-    // Three at a time, said only when it matters: on the button that stops working.
+    // The cap, said only when it matters: on the button that stops working.
     add.disabled = chosen().length >= MAX_CHOSEN;
-    add.title = add.disabled ? 'Three at a time — remove one to add another' : '';
+    add.title = add.disabled ? MAX_CHOSEN + ' at a time — remove one to add another' : '';
   }
 
   // ---- the comparison ------------------------------------------------------------------
@@ -1200,6 +1316,7 @@ html[data-help="off"] .info-wrap { display: none; }
     // Set before anything is drawn: `fit()` measures the canvas box, so a layout change
     // applied after the draw leaves every chart drawn for the width it used to have.
     box.classList.toggle('is-single', wanted.length === 1);
+    box.classList.toggle('is-two', wanted.length === 2);
     // Rebuilt only when the set changes: canvases recreated on every hour step lose
     // their backing stores and their pointer handlers, and the slider steps a lot.
     var have = Array.prototype.map.call(box.children, function (cell) {
@@ -1212,8 +1329,12 @@ html[data-help="off"] .info-wrap { display: none; }
         cell.className = 'met-col';
         cell.dataset.site = index;
         cell.innerHTML = '<p class="met-col-head"><i></i><span class="name"></span>'
-          + '<span class="ground"></span></p>'
-          + '<p class="met-col-rose"><span></span> · <a rel="noreferrer">ParaglidingEarth</a></p>'
+          + '<span class="ground"></span><span class="met-col-tools">'
+          + '<a class="met-col-pge" rel="noreferrer" target="_blank">' + LINK_ICON + '</a>'
+          + '<button type="button" class="met-col-move" data-by="-1">' + LEFT_ICON + '</button>'
+          + '<button type="button" class="met-col-move" data-by="1">' + RIGHT_ICON + '</button>'
+          + '</span></p>'
+          + '<p class="met-col-rose"><span></span></p>'
           + '<canvas class="met-canvas met-col-air" width="380" height="270"'
           + ' aria-label="The day by hour and height: wind, cloud, boundary layer and cloudbase">'
           + '</canvas>'
@@ -1237,8 +1358,20 @@ html[data-help="off"] .info-wrap { display: none; }
         cell.querySelector('.met-col-rose span').textContent = good === null
           ? 'No directions recorded, so this page will not judge it'
           : (good.length ? 'Works in ' + good.join(' ') : 'Only marginal directions');
-        cell.querySelector('.met-col-rose a').href =
-          'https://www.paraglidingearth.com/index.php?site=' + site.id;
+        // The takeoff's own page, as an icon by its name: the source of its directions.
+        var link = cell.querySelector('.met-col-pge');
+        link.href = 'https://www.paraglidingearth.com/index.php?site=' + site.id;
+        link.title = site.name + ' on ParaglidingEarth';
+        link.setAttribute('aria-label', link.title);
+        // Moved a place left or right; the end a column cannot go past is disabled.
+        var at = wanted.indexOf(index);
+        cell.querySelectorAll('.met-col-move').forEach(function (button) {
+          var by = Number(button.dataset.by);
+          button.title = by < 0 ? 'Move ' + site.name + ' left' : 'Move ' + site.name + ' right';
+          button.setAttribute('aria-label', button.title);
+          button.disabled = at + by < 0 || at + by >= wanted.length;
+          button.onclick = function () { moveTo(index, chosen().indexOf(index) + by); };
+        });
         cell.querySelector('.met-col-sounding').title =
           box.dataset.soundingHint.replace(/\s+/g, ' ');
         bindProbe(cell.querySelector('.met-col-sounding'));
@@ -1509,6 +1642,9 @@ html[data-help="off"] .info-wrap { display: none; }
     ctx.textAlign = align;
     ctx.textBaseline = 'bottom';
     var width = ctx.measureText(text).width;
+    // Never past the chart's left edge: a label hung to the left of a trace near it was
+    // cut off there. It turns to hang right of the point instead.
+    if (align === 'right' && x - width < 4) { align = 'left'; ctx.textAlign = 'left'; x = Math.max(x + 8, 4); }
     ctx.globalAlpha = 0.85;
     ctx.fillStyle = ink('--panel');
     ctx.fillRect(align === 'right' ? x - width - 3 : x - 3, y - 10, width + 6, 12);
@@ -1576,6 +1712,16 @@ html[data-help="off"] .info-wrap { display: none; }
     var left = 34, right = 10, top = SOUND_TOP, bottom = SOUND_BOTTOM;
     var top_m = ceilingFor(ground), minT = -20, maxT = 35;
     canvas.__ceiling = top_m;
+    // Wide enough for the coldest reading in the column: a dry day's dew point aloft, at
+    // −30 °C and below, was drawn off the chart's left edge.
+    var heights = levelSeries(hourly, 'geopotential_height');
+    ['temperature', 'dew_point'].forEach(function (name) {
+      levelSeries(hourly, name).forEach(function (series, l) {
+        var value = series ? series[at] : null, height = heights[l] ? heights[l][at] : null;
+        if (value == null || height == null || height < ground || height > top_m) return;
+        minT = Math.min(minT, Math.floor(value / 10) * 10);
+      });
+    });
     function x(celsius) { return left + (celsius - minT) / (maxT - minT) * (W - left - right); }
     function y(metres) { return top + (1 - metres / top_m) * (H - top - bottom); }
 
@@ -1590,7 +1736,10 @@ html[data-help="off"] .info-wrap { display: none; }
       ctx.fillText(m / 1000 + 'k', left - 4, y(m));
     }
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-    for (var c = -20; c <= 30; c += 10) {
+    // Every 10° on the usual range; every 20° when it reaches far below freezing, where
+    // ten labels crowded into each other.
+    var tick = maxT - minT > 60 ? 20 : 10;
+    for (var c = Math.ceil(minT / tick) * tick; c <= 30; c += tick) {
       ctx.beginPath(); ctx.moveTo(x(c), top); ctx.lineTo(x(c), H - bottom); ctx.stroke();
       ctx.fillText(c + '°', x(c), H - bottom + 4);
     }
@@ -1721,7 +1870,6 @@ html[data-help="off"] .info-wrap { display: none; }
       }
     }
 
-    var heights = levelSeries(hourly, 'geopotential_height');
     // Returns where the trace ends at the top, for its label.
     function trace(values, dashed, colour) {
       ctx.save();
@@ -2065,6 +2213,7 @@ html[data-help="off"] .info-wrap { display: none; }
     drop: drop,
     focus: focus,
     chosen: chosen,
+    move: moveTo,
     at: function () { return indexFor(state.profile.hourly.time, state.day, state.hour); }
   };
 
@@ -2165,11 +2314,21 @@ html[data-help="off"] .info-wrap { display: none; }
   // The ⓘ. Hover shows it on a desktop (CSS); a click or tap pins it open, a second one,
   // Esc or a click anywhere else closes it. Before it shows, it is kept on screen: a
   // bubble centred on an ⓘ near an edge would hang off it.
+  // Centred on the ⓘ, then moved just enough to stay 8 px inside the window. Hanging it
+  // to the ⓘ's left or right (the first version) failed in the middle of a phone, where a
+  // bubble 320 px wide does not fit on either side of it.
   function place(wrap) {
+    var pop = wrap.querySelector('.info-pop');
+    if (!pop) return;
     wrap.classList.remove('to-left', 'to-right');
-    var r = wrap.getBoundingClientRect(), half = Math.min(320, window.innerWidth * 0.86) / 2;
-    if (r.left + r.width / 2 + half > window.innerWidth - 8) wrap.classList.add('to-left');
-    else if (r.left + r.width / 2 - half < 8) wrap.classList.add('to-right');
+    pop.style.left = pop.style.right = pop.style.transform = '';
+    var r = wrap.getBoundingClientRect(), W = document.documentElement.clientWidth;
+    // Its own width once it shows; before, the widest it can be.
+    var width = pop.getBoundingClientRect().width || Math.min(320, W * 0.86);
+    var left = Math.max(8, Math.min(r.left + r.width / 2 - width / 2, W - 8 - width));
+    pop.style.left = (left - r.left) + 'px';
+    pop.style.right = 'auto';
+    pop.style.transform = 'none';
   }
   function closeAll(except) {
     document.querySelectorAll('.info[aria-expanded="true"]').forEach(function (b) {
@@ -2185,10 +2344,10 @@ html[data-help="off"] .info-wrap { display: none; }
     if (b) {
       event.preventDefault();
       event.stopPropagation();
-      place(b.parentNode);
       var open = b.getAttribute('aria-expanded') !== 'true';
       closeAll(b);
       b.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (open) place(b.parentNode);   // shown now, so measured at its own width
       return;
     }
     if (!(event.target.closest && event.target.closest('.info-pop'))) closeAll(null);

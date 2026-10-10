@@ -11,7 +11,7 @@
  */
 (function (TV) {
   'use strict';
-  var np = TV.np, geo = TV.geo, igc = TV.igc, Met = TV.meteo, fmt = np.fmt;
+  var np = TV.np, igc = TV.igc, Met = TV.meteo, fmt = np.fmt;
 
   var CLIMB_RAMP = [
     [-4.0, 'var(--sink-3)'], [-2.0, 'var(--sink-2)'], [-0.7, 'var(--sink-1)'], [0.7, 'var(--neutral)'],
@@ -22,11 +22,6 @@
                   [Infinity, 'var(--ld-5)']];
   var PROFILE = { width: 1080, height: 420, left: 56, right: 20, top: 20, bottom: 46 };
   var PLAN = { width: 1080, pad: 26 };
-  var PROFILE_MODES = {
-    flown: ['Distance flown, km', 'distance flown'],
-    from_start: ['Straight-line distance from launch, km', 'distance from launch'],
-    time: ['Time of day', 'time']
-  };
 
   function f1(x) { return fmt(x, 1); }
   function escape(text) {
@@ -324,7 +319,6 @@
   }
   function payload(a, meteo, route, sample, planH) {
     var s = a.series, f = a.flight;
-    var fromStart = f.lat.map(function (lat, i) { return geo.distance(f.lat[0], f.lon[0], lat, f.lon[i]); });
     var bands = a.segments.map(function (seg) {
       return [samplePosition(sample, seg.start), samplePosition(sample, seg.stop - 1), seg.phase, seg.start];
     });
@@ -348,8 +342,6 @@
     var altMax = np.max(s.alt);
     return {
       profile: Object.assign({}, PROFILE), plan: Object.assign({}, PLAN, { height: planH }), ramp: ramp,
-      modes: JSON.parse(JSON.stringify(PROFILE_MODES)),
-      s: sample.map(function (i) { return Math.trunc(s.s[i]); }), d: sample.map(function (i) { return Math.trunc(fromStart[i]); }),
       x: sample.map(function (i) { return Math.trunc(s.x[i]); }), y: sample.map(function (i) { return Math.trunc(s.y[i]); }),
       bands: bands, marks: marks, references: references,
       route: legs.map(function (i) { return samplePosition(sample, i); }),

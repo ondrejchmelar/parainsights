@@ -64,7 +64,7 @@ class TestThePayload:
         under the pointer."""
         data = _payload(flight)
         n = len(flight.cursor["alt"])
-        for key in ("s", "d", "x", "y"):
+        for key in ("x", "y"):
             assert len(data[key]) == n, f"{key} is {len(data[key])} against {n} samples"
 
     def test_it_does_not_repeat_what_the_cursor_payload_carries(self, flight):
@@ -73,13 +73,9 @@ class TestThePayload:
         for key in ("alt", "climb", "t", "clock", "speed"):
             assert key not in data, f"{key} is shipped twice"
 
-    def test_distance_flown_never_goes_backwards(self, flight):
-        data = _payload(flight)
-        assert list(data["s"]) == sorted(data["s"])
-
     def test_bands_and_marks_are_sample_positions(self, flight):
         data = _payload(flight)
-        n = len(data["s"])
+        n = len(data["x"])
         for start, stop, _phase, _segment in data["bands"]:
             assert 0 <= start <= stop < n
         for mark in data["marks"]:
@@ -233,36 +229,29 @@ class TestThePageDrawsThem:
         """)
         assert answer["points"] == answer["samples"]
 
-    def test_the_axis_toggle_redraws_rather_than_unhides(self, flight):
+    def test_the_side_view_runs_on_the_clock_alone(self, flight):
+        """Time of day, labelled as a clock (13:30) — no distance axis and no switch."""
         answer = _probe(flight, """
         var a = document.querySelector('[data-flight-report]');
-        var before = a.querySelector('svg.chart-profile .axis-title').textContent;
-        a.querySelector('[data-profile="time"]').click();
-        var after = a.querySelector('svg.chart-profile .axis-title').textContent;
         var ticks = Array.prototype.map.call(
           a.querySelectorAll('svg.chart-profile .axis-x'),
           function (n) { return n.textContent; });
-        a.querySelector('[data-profile="from_start"]').click();
-        return { before: before, after: after, ticks: ticks,
-                 fromStart: a.querySelector('svg.chart-profile .axis-title').textContent,
-                 copies: a.querySelectorAll('svg.chart-profile').length,
-                 pressed: a.querySelector('[data-profile="from_start"]')
-                   .getAttribute('aria-pressed') };
+        return { title: a.querySelector('svg.chart-profile .axis-title').textContent,
+                 ticks: ticks, toggles: a.querySelectorAll('[data-profile]').length,
+                 copies: a.querySelectorAll('svg.chart-profile').length };
         """)
-        assert "distance flown" in answer["before"].lower()
-        assert "time of day" in answer["after"].lower()
-        assert "distance from launch" in answer["fromStart"].lower()
-        assert answer["copies"] == 1, "a toggle that leaves copies behind is the old one"
-        assert answer["pressed"] == "true"
+        assert "time of day" in answer["title"].lower()
+        assert answer["toggles"] == 0
+        assert answer["copies"] == 1
         assert any(re.fullmatch(r"\d{2}:\d{2}", tick) for tick in answer["ticks"]), (
             "the time axis lost its clock labels")
 
     def test_the_cursor_still_works_after_a_redraw(self, flight):
-        """The failure this could most easily have shipped: the toggle produces a chart
+        """The failure this could most easily have shipped: a redraw produces a chart
         the cursor cannot drive, which looks exactly like the cursor being broken."""
         answer = _probe(flight, """
         var a = document.querySelector('[data-flight-report]');
-        a.querySelector('[data-profile="time"]').click();
+        window.__drawProfile(a);
         var hit = a.querySelector('svg.chart-profile .hit');
         var box = hit.getBoundingClientRect();
         hit.dispatchEvent(new MouseEvent('mousemove', {

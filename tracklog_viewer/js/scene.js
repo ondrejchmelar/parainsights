@@ -32,6 +32,12 @@
   var RAMP_RGB = [[-4.0, [23, 80, 143]], [-2.0, [42, 120, 214]], [-0.7, [143, 182, 230]], [0.7, [169, 164, 154]],
                   [2.0, [240, 160, 122]], [4.0, [235, 104, 52]], [Infinity, [200, 67, 26]]];
 
+  function utcOffset(seconds, zone) {
+    var p = igc.localParts(seconds, zone);
+    var local = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) / 1000;
+    return Math.round((local - Math.floor(seconds)) / 60) * 60;
+  }
+
   function colourIndex(value) {
     for (var i = 0; i < RAMP_RGB.length; i++) if (value < RAMP_RGB[i][0]) return i;
     return null;
@@ -94,6 +100,9 @@
       sun: sun.forFlight(f),
       // The first fix, UTC seconds: compared flights' replays run on one clock from it.
       start: Math.round(f.time[0]),
+      // Its wall clock's offset from UTC there and then, seconds: a compared flight from
+      // another day labels the side view's time axis with its own clock as well.
+      utcOffset: utcOffset(f.time[0], f.timezone),
       wind: a.wind ? { ms: R(a.wind.speed, 1), from: R(a.wind.direction, 1), cardinal: a.wind.cardinal } : null
     };
     if (options.airspaceRemote) {

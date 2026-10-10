@@ -912,6 +912,22 @@
             material: false, parameters: GLASS,
             updateTriggers: { getPolygon: vertical, getElevation: vertical }
           }));
+          // The floor and the lid, tinted as the walls are: the extruded layer leaves its
+          // ends open, so seen from above or below a zone was an empty frame. A zone drawn
+          // capped at 4 000 m keeps its lid open — it goes on up.
+          out.push(new deck.SolidPolygonLayer({
+            id: 'airspace-caps', data: kept('airspace-caps', [drawn], function () {
+              return drawn.reduce(function (all, d) {
+                all.push({ box: d, at: d.floor });
+                if (!d.capped) all.push({ box: d, at: d.top });
+                return all;
+              }, []);
+            }),
+            pickable: true,
+            getPolygon: function (c) { return c.box.ring.map(function (p) { return [p[0], p[1], z(c.at)]; }); },
+            getFillColor: function (c) { return rgb(c.box.colour, 32); },
+            parameters: GLASS, updateTriggers: { getPolygon: vertical }
+          }));
           out.push(new deck.PathLayer({
             id: 'airspace-edges', data: kept('airspace-edges', [drawn, vertical], function () {
               return drawn.reduce(function (all, d) {
@@ -1178,7 +1194,8 @@
         // over the map, everything showed through the mountains.
         interleaved: true, layers: layers(),
         onHover: function (info) {
-          var box = info && info.layer && info.layer.id === 'airspace' && info.object;
+          var box = info && info.layer && info.object &&
+            (info.layer.id === 'airspace' ? info.object : info.layer.id === 'airspace-caps' ? info.object.box : null);
           if (!box) { asp.hidden = true; return; }
           asp.hidden = false;
           asp.textContent = box.name + (box.capped ? ' — drawn to 4 000 m' : '');

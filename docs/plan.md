@@ -369,8 +369,12 @@ Open-Meteo for `wind_speed_unit=ms` and there is no conversion left anywhere to 
 
 ## The profile view: distance, not projection
 
-The hero chart plots altitude against **distance flown**, with a toggle to **distance
-from launch**. Both were arrived at by discarding something worse:
+The hero chart plots altitude against **the time of day** (13:30), and nothing else —
+the pilot's call, October 2026: the distance axes and their toggle are gone. Compared
+flights from another day run from their own launch, and each adds a row of its own clock
+under the axis in its colour. What the distance axes were, and why, for the record —
+they plotted altitude against **distance flown**, with a toggle to **distance from
+launch**. Both were arrived at by discarding something worse:
 
 - An *oblique projection* of east/north/altitude looks like a 3D view but folds the
   trace back over itself on every return leg, which reads as a drawing bug rather than

@@ -142,11 +142,16 @@ STYLE = """
 .met-panel { border:0; padding:0; }
 .met-strip, .met-keys { display:none !important; }
 
-/* Small multiples, one column per takeoff, filling the row whatever the count. The
+/* Small multiples, one column per takeoff: a strip that scrolls sideways, as a phone's
+   swipes, three columns to the row at most and two filling it when there are two. The
    canvases carry `width`/`height` and no CSS height, so a wider column makes a chart
    bigger rather than flatter. One takeoff puts its two charts side by side instead, so a
    lone takeoff's charts come out the size of a pair's. */
-.met-columns { display:grid; gap:22px; margin:0; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.met-columns { display:flex; gap:22px; margin:0; overflow-x:auto; scroll-snap-type:x mandatory;
+  overscroll-behavior-x:contain; scrollbar-width:thin; padding-bottom:6px; }
+.met-columns:not(.is-single) .met-col { flex:0 0 calc((100% - 44px) / 3); scroll-snap-align:start; }
+.met-columns.is-two .met-col { flex-basis:calc((100% - 22px) / 2); }
+.met-columns.is-single { display:block; overflow:visible; padding-bottom:0; }
 .met-col { min-width:0; }
 .met-col .met-canvas + .met-canvas { margin-top:10px; }
 .met-columns.is-single .met-col { display:grid; gap:0 22px; align-items:start;
@@ -162,9 +167,16 @@ STYLE = """
 .met-col-head i { width:11px; height:11px; border-radius:50%; flex:none; align-self:center; }
 .met-col-head .name { background:none; border:0; padding:0; font:inherit; color:inherit; cursor:pointer; }
 .met-col-head .ground { font-weight:400; font-size:16px; color:var(--ink-2); font-variant-numeric:tabular-nums; }
+/* The takeoff's ParaglidingEarth page, and its place in the order, at the head's end. */
+.met-col-tools { margin-left:auto; display:inline-flex; align-items:center; gap:2px; align-self:center; }
+.met-col-tools a, .met-col-move { width:34px; height:34px; border:0; background:none; padding:0;
+  color:var(--ink-2); border-radius:50%; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; }
+.met-col-tools a:hover, .met-col-move:hover:not(:disabled) { color:var(--ink); background:var(--panel-2); }
+.met-col-move:disabled { opacity:.3; cursor:default; }
+.met-columns.is-single .met-col-move { display:none; }
+.met-chip[draggable="true"] { cursor:grab; }
+.met-chip.is-dragged { opacity:.5; }
 .met-col-rose { font-size:15.5px; color:var(--ink-2); margin:0 0 10px; }
-.met-col-rose a { color:var(--accent); font-weight:600; text-decoration:none; }
-.met-col-rose a:hover { text-decoration:underline; }
 /* The number visible, the reason one tap away. */
 .met-col-top { font-size:16.5px; color:var(--ink); margin:8px 0 14px; display:flex; align-items:center; }
 .met-col-top[hidden] { display:none; }
@@ -211,9 +223,10 @@ STYLE = """
   /* One takeoff's charts at a time, side by side by a swipe. */
   .met-swipe { display:flex; justify-content:center; margin:0 0 14px; }
   .met-swipe .seg > button { padding:0 12px; }
-  .met-columns:not(.is-single) { display:flex; overflow-x:auto; scroll-snap-type:x mandatory; gap:14px;
-    margin:0 -14px; padding:0 14px; scrollbar-width: none; }
-  .met-columns:not(.is-single) .met-col { flex:0 0 88%; scroll-snap-align:center; }
+  /* The swipe uses the screen's full width: a column at a time, edge to edge. */
+  .met-columns:not(.is-single) { gap:14px; margin:0 -14px; padding:0 14px; scroll-padding:0 14px;
+    scrollbar-width: none; }
+  .met-columns:not(.is-single) .met-col, .met-columns.is-two .met-col { flex:0 0 100%; scroll-snap-align:center; }
   .met-columns.is-single .met-col { display:block; }
   .met-columns.is-single .met-canvas + .met-canvas { margin-top:10px; }
 }

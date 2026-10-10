@@ -71,29 +71,35 @@
   }
 
   // ---- the side view -------------------------------------------------------------
-  // A compared flight's trace on this chart's ground axis, from its 3D scene's track:
-  // distance flown or from its launch on the sphere, or time — on this flight's clock when
-  // flown the same day (as the 3D replay), from its own launch otherwise. Thinned to
-  // about 1 500 points: it is a line to compare against, not one to read fixes off.
-  function comparedTrace(o, own, mode) {
+  // A compared flight's trace against time, from its 3D scene's track: on this flight's
+  // clock when flown the same day (as the 3D replay), from its own launch otherwise.
+  // Thinned to about 1 500 points: it is a line to compare against, not one to read
+  // fixes off.
+  function comparedTrace(o, own) {
     var tr = o.track, n = tr.lon.length, step = Math.max(Math.ceil(n / 1500), 1);
-    var R = 6371000, rad = Math.PI / 180, flown = 0, xs = [], ys = [];
-    function metres(i, j) {
-      var dLat = (tr.lat[j] - tr.lat[i]) * rad, dLon = (tr.lon[j] - tr.lon[i]) * rad;
-      var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(tr.lat[i] * rad) *
-              Math.cos(tr.lat[j] * rad) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-      return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
-    }
-    var offset = own && own.start && o.start && Math.abs(o.start - own.start) < 12 * 3600
-      ? o.start - own.start : 0;
-    var last = 0;
+    var xs = [], ys = [];
+    var sameDay = !!(own && own.start && o.start && Math.abs(o.start - own.start) < 12 * 3600);
+    var offset = sameDay ? o.start - own.start : 0;
     for (var i = 0; i < n; i += step) {
-      if (mode === 'flown') { flown += metres(last, i); last = i; }
-      xs.push(mode === 'time' ? (tr.t ? tr.t[i] : i) + offset
-              : mode === 'from_start' ? metres(0, i) : flown);
+      xs.push((tr.t ? tr.t[i] : i) + offset);
       ys.push(tr.alt[i]);
     }
-    return { x: xs, y: ys, colour: o.colour };
+    return { x: xs, y: ys, colour: o.colour, sameDay: sameDay, start: o.start, utcOffset: o.utcOffset };
+  }
+
+  // Clock labels for the time axis, `x` in seconds from this flight's launch: a quarter,
+  // half or whole hour apart, as many as fit. `base` is the UTC second `x` = 0 stands for
+  // on this row's clock, `offset` that clock's distance from UTC.
+  function clockRow(base, offset, spanMin, spanMax, narrow) {
+    var wanted = narrow ? 4 : 10, step = 900;
+    [900, 1800, 3600, 7200, 10800].some(function (s) { step = s; return (spanMax - spanMin) / s <= wanted; });
+    var out = [], zero = base + offset;
+    function two(n) { return (n < 10 ? '0' : '') + n; }
+    for (var x = Math.ceil((zero + spanMin) / step) * step - zero; x <= spanMax; x += step) {
+      var day = ((Math.round(zero + x) % 86400) + 86400) % 86400;
+      out.push([x, two(Math.floor(day / 3600)) + ':' + two(Math.floor(day % 3600 / 60))]);
+    }
+    return out;
   }
 
   // `aspect`: the host's width over its height, where its shape is not the chart's own —
@@ -102,7 +108,7 @@
   // `narrow`: the host's width in CSS pixels on a phone. The chart is then drawn at that
   // size, one unit a pixel, so its 15 px type is 15 px on the screen — scaled down from
   // 1 080 units it came out at 5 to 10 px — with fewer ticks to make the room.
-  function profile(data, cursor, mode, compared, aspect, narrow) {
+  function profile(data, cursor, compared, aspect, narrow) {
     var box = data.profile;
     var left = box.left, right = box.right, top = box.top, bottom = box.bottom;
     var H = box.height, W = aspect ? Math.round(H * aspect) : box.width;
@@ -111,14 +117,14 @@
       left = 50; right = 10; top = 14; bottom = 44;
     }
     var plotW = W - left - right, plotH = H - top - bottom;
-    var along = mode === 'from_start' ? data.d : (mode === 'time' ? cursor.t : data.s);
+    var along = cursor.t;
     var alt = cursor.alt;
     var spanMax = Math.max(along[along.length - 1], 1), spanMin = 0;
     for (var i = 0; i < along.length; i++) spanMax = Math.max(spanMax, along[i]);
     var floor = data.floor, ceiling = data.ceiling;
     // Comparing: every compared flight on the same axes, which grow to hold them all.
     var traces = compared && compared.others ? compared.others.map(function (o) {
-      return comparedTrace(o, compared.own, mode);
+      return comparedTrace(o, compared.own);
     }) : [];
     traces.forEach(function (t) {
       for (var k = 0; k < t.x.length; k++) {
@@ -127,6 +133,24 @@
         ceiling = Math.max(ceiling, Math.ceil(t.y[k] / 250) * 250);
       }
     });
+
+    // The time axis while comparing: one row of clock labels for all the flights flown
+    // the same day, which share this flight's clock; one more, each in its flight's
+    // colour, for every one flown on another day — drawn from its own launch, so the
+    // same place on the axis is a different time of day on its clock.
+    var clocks = [];
+    if (traces.length && compared.own && compared.own.utcOffset !== undefined) {
+      clocks.push({ base: compared.own.start, offset: compared.own.utcOffset, colour: compared.own.colour });
+      traces.forEach(function (t) {
+        if (!t.sameDay && t.start && t.utcOffset !== undefined) {
+          clocks.push({ base: t.start, offset: t.utcOffset, colour: t.colour });
+        }
+      });
+      if (clocks.length === 1) clocks[0].colour = null;
+    }
+    var extraRows = Math.max(clocks.length - 1, 0) * 16;
+    H += extraRows; bottom += extraRows;
+    plotH = H - top - bottom;
 
     function sx(value) { return left + plotW * (value - spanMin) / Math.max(spanMax - spanMin, 1); }
     function sy(value) {
@@ -137,7 +161,7 @@
 
     var svg = make('svg', {
       viewBox: '0 0 ' + W + ' ' + H, 'class': 'chart chart-profile', role: 'img',
-      'aria-label': 'Altitude against ' + data.modes[mode][1]
+      'aria-label': 'Altitude against the time of day'
         + ', coloured by climb rate, with climbs numbered'
     });
 
@@ -236,12 +260,30 @@
 
     var axes = make('g', { 'class': 'axes' });
     axes.appendChild(make('line', { x1: left, y1: baseline, x2: W - right, y2: baseline }));
-    if (mode === 'time') {
+    if (clocks.length) {
+      clocks.forEach(function (row, r) {
+        clockRow(row.base, row.offset, spanMin, spanMax, narrow).forEach(function (tick) {
+          var x = sx(tick[0]);
+          axes.appendChild(make('line', { 'class': 'tick', x1: x.toFixed(1), y1: baseline,
+            x2: x.toFixed(1), y2: baseline + 4, stroke: row.colour || undefined }));
+          var text = make('text', { x: x.toFixed(1), y: baseline + 17 + r * 16,
+            'class': 'axis-label axis-x' }, tick[1]);
+          if (row.colour) text.setAttribute('style', 'fill:' + row.colour);
+          axes.appendChild(text);
+        });
+      });
+    } else {
       // The clock is Python's: it knows the flight's own timezone, and this page does
       // not and must not guess.
-      var every = narrow ? Math.max(Math.ceil(data.clockTicks.length / 4), 1) : 1;
-      data.clockTicks.forEach(function (tick, n) {
-        if (n % every) return;
+      // A quarter-hour apart, thinned to a half, whole or two hours as the flight
+      // lengthens, on the round times: ten labels across at most, four on a phone.
+      var wanted = narrow ? 4 : 10, minutes = 15;
+      [15, 30, 60, 120, 180].some(function (m) {
+        minutes = m; return data.clockTicks.length * 15 / m <= wanted;
+      });
+      data.clockTicks.forEach(function (tick) {
+        var hm = tick[1].split(':');
+        if ((Number(hm[0]) * 60 + Number(hm[1])) % minutes) return;
         var x = sx(tick[0]);
         if (x > left + plotW + 0.5) return;
         axes.appendChild(make('line', { 'class': 'tick', x1: x.toFixed(1), y1: baseline,
@@ -249,20 +291,10 @@
         axes.appendChild(make('text', { x: x.toFixed(1), y: baseline + 17,
           'class': 'axis-label axis-x' }, tick[1]));
       });
-    } else {
-      var stepKm = Math.max(Math.round(spanMax / 1000 / (narrow ? 4 : 10)), 1);
-      if (stepKm > 7) stepKm = Math.round(stepKm / 5) * 5;
-      for (var km = 0; km * 1000 <= spanMax; km += stepKm) {
-        var tx = sx(km * 1000);
-        axes.appendChild(make('line', { 'class': 'tick', x1: tx.toFixed(1), y1: baseline,
-          x2: tx.toFixed(1), y2: baseline + 4 }));
-        axes.appendChild(make('text', { x: tx.toFixed(1), y: baseline + 17,
-          'class': 'axis-label axis-x' }, String(km)));
-      }
     }
     labels.forEach(function (label) { axes.appendChild(label); });
     axes.appendChild(make('text', { x: (left + plotW / 2).toFixed(1), y: H - 8,
-      'class': 'axis-title' }, data.modes[mode][0]));
+      'class': 'axis-title' }, 'Time of day'));
     var side = narrow ? null : make('text', { x: 14, y: (top + plotH / 2).toFixed(1),
       'class': 'axis-title',
       transform: 'rotate(-90 14 ' + (top + plotH / 2).toFixed(1) + ')' }, 'Altitude, m');
@@ -370,9 +402,8 @@
 
   // ---- drawing them into the page --------------------------------------------------
   //
-  // Every flight article carries one payload and one host per chart. The side view is
-  // redrawn on a mode change rather than three copies being hidden and shown, which is
-  // the other two thirds of what the old document was spending its bytes on.
+  // Every flight article carries one payload and one host per chart, drawn here rather
+  // than shipped as SVG.
   function draw(article) {
     var holder = article.querySelector('.chart-data');
     var cursorNode = article.querySelector('.cursor-data');
@@ -389,9 +420,8 @@
 
     var side = article.querySelector('.chart-host[data-chart="profile"]');
     if (side) {
-      var mode = side.dataset.mode || 'flown';
       side.textContent = '';
-      side.appendChild(profile(data, cursor, mode, comparedFor(article), shapeOf(side), narrowOf(side)));
+      side.appendChild(profile(data, cursor, comparedFor(article), shapeOf(side), narrowOf(side)));
       watch(article, side);
     }
     var top = article.querySelector('.chart-host[data-chart="plan"]');
@@ -442,21 +472,15 @@
     });
   }
 
-  // The axis toggle stays where it was — in the report's own handler, with the button
-  // states it already manages — and calls this. Two handlers on one button is how a
-  // control ends up half-toggled: the classes say one thing and the chart another.
-  //
-  // It used to unhide one of three SVGs the document already carried. Redrawing one is a
-  // few milliseconds and 380 KB.
-  function redraw(article, mode) {
+  // Redrawn when its shape changes and when the flights compared with it do.
+  function redraw(article) {
     var host = article.querySelector('.chart-host[data-chart="profile"]');
     if (!host || !article.__chartData) return;
-    host.dataset.mode = mode;
     host.textContent = '';
-    host.appendChild(profile(article.__chartData, article.__cursorData, mode, comparedFor(article),
+    host.appendChild(profile(article.__chartData, article.__cursorData, comparedFor(article),
                              shapeOf(host), narrowOf(host)));
     // The cursor binds to the SVG that was there when it ran, so the new one has to be
-    // handed back to it. Without this the toggle produces a chart the cursor cannot
+    // handed back to it. Without this a redraw produces a chart the cursor cannot
     // drive, which looks exactly like the cursor being broken.
     if (article.__relinkCharts) article.__relinkCharts();
   }
@@ -484,7 +508,7 @@
       if (key === last) return;
       last = key;
       clearTimeout(timer);
-      timer = setTimeout(function () { redraw(article, host.dataset.mode || 'flown'); }, 60);
+      timer = setTimeout(function () { redraw(article); }, 60);
     }).observe(host);
   }
 

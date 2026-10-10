@@ -875,6 +875,47 @@ def test_the_charts_fill_the_row_however_many_takeoffs_are_chosen():
 
 
 @needs_chrome
+def test_past_three_takeoffs_the_columns_scroll_and_can_be_reordered():
+    """Three columns to the row at most; a fourth is scrolled to, not squeezed in. A
+    takeoff moved keeps its colour, and the chips, the table and the columns follow."""
+    answer = _probe_page("""
+    var m = window.__meteo;
+    var free = [];
+    for (var i = 0; i < 20 && m.chosen().length + free.length < 4; i++)
+      if (m.chosen().indexOf(i) < 0) free.push(i);
+    free.forEach(function (i) { m.add(i); });
+    var box = document.getElementById('met-columns');
+    var cells = document.querySelectorAll('.met-col');
+    var shown = Array.prototype.filter.call(cells, function (cell) {
+      var r = cell.getBoundingClientRect(), b = box.getBoundingClientRect();
+      return r.left >= b.left - 1 && r.right <= b.right + 1;
+    }).length;
+    function order() {
+      return { cols: Array.prototype.map.call(document.querySelectorAll('.met-col'),
+                 function (c) { return Number(c.dataset.site); }),
+               chips: Array.prototype.map.call(document.querySelectorAll('.met-chip'),
+                 function (c) { return Number(c.dataset.site); }) };
+    }
+    var before = order();
+    var last = before.cols[before.cols.length - 1];
+    var colour = document.querySelector('.met-col[data-site="' + last + '"] .met-col-head i').style.background;
+    m.move(last, 0);
+    var after = order();
+    return { columns: cells.length, shown: shown, scrolls: box.scrollWidth > box.clientWidth,
+             before: before, after: after, colour: colour,
+             colourAfter: document.querySelector('.met-col[data-site="' + last + '"] .met-col-head i').style.background,
+             leftDisabled: document.querySelector('.met-col .met-col-move[data-by="-1"]').disabled };
+    """)
+    assert answer["columns"] == 4
+    assert answer["shown"] == 3 and answer["scrolls"]
+    moved = answer["before"]["cols"][-1]
+    assert answer["after"]["cols"] == [moved] + answer["before"]["cols"][:-1]
+    assert answer["after"]["chips"] == answer["after"]["cols"]
+    assert answer["colourAfter"] == answer["colour"]
+    assert answer["leftDisabled"] is True
+
+
+@needs_chrome
 def test_the_day_applies_to_everything_the_hour_does():
     """The day and the hour are one setting with two controls, and the two controls each
     carried their own hand-written list of redraws. They drifted: the hour repainted the
@@ -1138,7 +1179,7 @@ class TestEachChartMeansOneThing:
             return { name: cell.querySelector('.name').textContent,
                      wanted: conf.sites[i].name,
                      rose: cell.querySelector('.met-col-rose span').textContent,
-                     href: cell.querySelector('.met-col-rose a').getAttribute('href'),
+                     href: cell.querySelector('.met-col-head a.met-col-pge').getAttribute('href'),
                      id: String(conf.sites[i].id) };
           });
         """)

@@ -19,16 +19,21 @@
   var MAX_CHOSEN = __MAX_CHOSEN__;
   var noSlots = [];
   for (var n = 0; n < MAX_CHOSEN; n++) noSlots.push(null);
-  var state = { day: 0, hour: 14, slots: noSlots, site: null,
+  var state = { day: 0, hour: 14, slots: noSlots, order: [], site: null,
                 surface: null, profile: null, profiles: {}, search: '',
                 probe: null, probeX: 0 };
 
   var status = document.getElementById('met-status');
   function say(text) { status.textContent = text; }
 
-  // The chosen takeoffs in slot order, skipping the empty slots.
+  // The chosen takeoffs in the reader's order (`state.order`, set by moving a column or
+  // dragging a chip), skipping the empty slots. The slot is the colour and the order is
+  // only where it stands, so a takeoff moved keeps its colour.
   function chosen() {
-    return state.slots.filter(function (index) { return index !== null; });
+    var picked = state.slots.filter(function (index) { return index !== null; });
+    var out = state.order.filter(function (index) { return picked.indexOf(index) >= 0; });
+    picked.forEach(function (index) { if (out.indexOf(index) < 0) out.push(index); });
+    return out;
   }
   function slotOf(index) { return state.slots.indexOf(index); }
   function seriesColour(slot) {
@@ -44,6 +49,7 @@
   function remember() {
     try {
       window.localStorage.setItem(REMEMBER, JSON.stringify(state.slots));
+      window.localStorage.setItem(REMEMBER + '.order', JSON.stringify(chosen()));
     } catch (error) { /* private mode, file://, or a full quota: forget instead */ }
   }
   function recall() {
@@ -56,6 +62,10 @@
         // an index saved against an older one could point anywhere, or nowhere.
         state.slots[s] = (typeof index === 'number' && conf.sites[index]) ? index : null;
       }
+      var order = JSON.parse(window.localStorage.getItem(REMEMBER + '.order') || '[]');
+      state.order = Array.isArray(order) ? order.filter(function (index) {
+        return typeof index === 'number' && conf.sites[index];
+      }) : [];
       state.site = chosen().length ? chosen()[0] : null;
     } catch (error) { /* nothing remembered, which is the normal first visit */ }
   }
@@ -151,6 +161,9 @@
 
   // The site's icons (`parainsights_common.ICONS`), for what this script draws.
   var CLOSE_ICON = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15"/></svg>';
+  var LINK_ICON = '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.5 3.5h5v5M16.5 3.5 9 11M14 11.5v5H3.5V6h5"/></svg>';
+  var LEFT_ICON = '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5.5 7.5 10l4.5 4.5"/></svg>';
+  var RIGHT_ICON = '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 5.5l4.5 4.5L8 14.5"/></svg>';
   var PLUS_ICON = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4v12M4 10h12"/></svg>';
   var EXPAND_ICON = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.5 3.5h5v5M8.5 16.5h-5v-5M16.5 3.5 11 9M3.5 16.5 9 11"/></svg>';
   function cap(text) { return text ? text.charAt(0).toUpperCase() + text.slice(1) : text; }
@@ -341,6 +354,7 @@
       return;
     }
     state.slots[free] = index;
+    state.order = chosen();
     if (state.site === null) state.site = index;
     remember();
     drawChosen();
@@ -370,6 +384,21 @@
     drawSite();
   }
 
+  // A takeoff moved to `to` in the order, by its column's arrows or a dragged chip:
+  // the chips, the table and the columns all follow, and its colour stays its own.
+  function moveTo(index, to) {
+    var list = chosen(), at = list.indexOf(index);
+    if (at < 0 || to < 0 || to >= list.length || to === at) return;
+    list.splice(at, 1);
+    list.splice(to, 0, index);
+    state.order = list;
+    remember();
+    drawChosen();
+    drawCompare();
+    drawSite();
+    swipeTo(index);
+  }
+
   // `fromSwipe`: the columns were swiped to it, so they are not swiped again.
   function focus(index, fromSwipe) {
     if (slotOf(index) < 0 || state.site === index) return;
@@ -387,14 +416,24 @@
   // its chip into the middle of the chips' row, and a chip pressed swipes to its column.
   // The chips' row stood still while the columns moved under it.
   var columnsBox = document.getElementById('met-columns');
+  // On a desktop the same strip shows three columns at a time and scrolls sideways past
+  // them, so a column already in view is left where it is, and one out of view is
+  // brought in at the nearer edge.
   function swiping() { return columnsBox && columnsBox.scrollWidth > columnsBox.clientWidth + 1; }
+  function oneAtATime() {
+    var cell = columnsBox && columnsBox.querySelector('.met-col');
+    return !!cell && cell.getBoundingClientRect().width > columnsBox.clientWidth * 0.6;
+  }
   function swipeTo(index) {
     if (!swiping()) return;
     var cell = columnsBox.querySelector('.met-col[data-site="' + index + '"]');
     if (!cell) return;
-    var box = columnsBox.getBoundingClientRect(), r = cell.getBoundingClientRect();
-    columnsBox.scrollTo({ left: columnsBox.scrollLeft + r.left - box.left - (box.width - r.width) / 2,
-                          behavior: 'smooth' });
+    var box = columnsBox.getBoundingClientRect(), r = cell.getBoundingClientRect(), by;
+    if (oneAtATime()) by = r.left - box.left - (box.width - r.width) / 2;
+    else if (r.left < box.left - 1) by = r.left - box.left;
+    else if (r.right > box.right + 1) by = r.right - box.right;
+    else return;
+    columnsBox.scrollTo({ left: columnsBox.scrollLeft + by, behavior: 'smooth' });
   }
   function chipIntoView() {
     var row = document.getElementById('met-chosen'), chip = row && row.querySelector('.met-chip.is-focus');
@@ -405,7 +444,7 @@
   if (columnsBox) {
     var settle = null;
     columnsBox.addEventListener('scroll', function () {
-      if (!swiping()) return;
+      if (!swiping() || !oneAtATime()) return;
       clearTimeout(settle);
       settle = setTimeout(function () {
         var box = columnsBox.getBoundingClientRect(), mid = box.left + box.width / 2;
@@ -426,9 +465,8 @@
     var add = document.getElementById('met-add');
     Array.prototype.slice.call(box.querySelectorAll('.met-chip, .met-cap'))
       .forEach(function (node) { node.remove(); });
-    state.slots.forEach(function (index, slot) {
-      if (index === null) return;
-      var site = conf.sites[index];
+    chosen().forEach(function (index) {
+      var slot = slotOf(index), site = conf.sites[index];
       var chip = document.createElement('span');
       chip.className = 'chip met-chip' + (state.site === index ? ' is-focus' : '');
       chip.innerHTML = '<i class="swatch"></i>'
@@ -443,6 +481,21 @@
       close.innerHTML = CLOSE_ICON;
       close.setAttribute('aria-label', 'Remove ' + site.name);
       close.onclick = function () { drop(index); };
+      // Dragged onto another chip, it takes that chip's place in the order.
+      chip.draggable = true;
+      chip.dataset.site = index;
+      chip.addEventListener('dragstart', function (event) {
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', String(index));
+        chip.classList.add('is-dragged');
+      });
+      chip.addEventListener('dragend', function () { chip.classList.remove('is-dragged'); });
+      chip.addEventListener('dragover', function (event) { event.preventDefault(); });
+      chip.addEventListener('drop', function (event) {
+        event.preventDefault();
+        var moved = Number(event.dataTransfer.getData('text/plain'));
+        if (slotOf(moved) >= 0) moveTo(moved, chosen().indexOf(index));
+      });
       box.insertBefore(chip, add);
     });
     add.innerHTML = PLUS_ICON + '<span>Add takeoff</span>';
@@ -842,6 +895,7 @@
     // Set before anything is drawn: `fit()` measures the canvas box, so a layout change
     // applied after the draw leaves every chart drawn for the width it used to have.
     box.classList.toggle('is-single', wanted.length === 1);
+    box.classList.toggle('is-two', wanted.length === 2);
     // Rebuilt only when the set changes: canvases recreated on every hour step lose
     // their backing stores and their pointer handlers, and the slider steps a lot.
     var have = Array.prototype.map.call(box.children, function (cell) {
@@ -854,8 +908,12 @@
         cell.className = 'met-col';
         cell.dataset.site = index;
         cell.innerHTML = '<p class="met-col-head"><i></i><span class="name"></span>'
-          + '<span class="ground"></span></p>'
-          + '<p class="met-col-rose"><span></span> · <a rel="noreferrer">ParaglidingEarth</a></p>'
+          + '<span class="ground"></span><span class="met-col-tools">'
+          + '<a class="met-col-pge" rel="noreferrer" target="_blank">' + LINK_ICON + '</a>'
+          + '<button type="button" class="met-col-move" data-by="-1">' + LEFT_ICON + '</button>'
+          + '<button type="button" class="met-col-move" data-by="1">' + RIGHT_ICON + '</button>'
+          + '</span></p>'
+          + '<p class="met-col-rose"><span></span></p>'
           + '<canvas class="met-canvas met-col-air" width="380" height="270"'
           + ' aria-label="The day by hour and height: wind, cloud, boundary layer and cloudbase">'
           + '</canvas>'
@@ -879,8 +937,20 @@
         cell.querySelector('.met-col-rose span').textContent = good === null
           ? 'No directions recorded, so this page will not judge it'
           : (good.length ? 'Works in ' + good.join(' ') : 'Only marginal directions');
-        cell.querySelector('.met-col-rose a').href =
-          'https://www.paraglidingearth.com/index.php?site=' + site.id;
+        // The takeoff's own page, as an icon by its name: the source of its directions.
+        var link = cell.querySelector('.met-col-pge');
+        link.href = 'https://www.paraglidingearth.com/index.php?site=' + site.id;
+        link.title = site.name + ' on ParaglidingEarth';
+        link.setAttribute('aria-label', link.title);
+        // Moved a place left or right; the end a column cannot go past is disabled.
+        var at = wanted.indexOf(index);
+        cell.querySelectorAll('.met-col-move').forEach(function (button) {
+          var by = Number(button.dataset.by);
+          button.title = by < 0 ? 'Move ' + site.name + ' left' : 'Move ' + site.name + ' right';
+          button.setAttribute('aria-label', button.title);
+          button.disabled = at + by < 0 || at + by >= wanted.length;
+          button.onclick = function () { moveTo(index, chosen().indexOf(index) + by); };
+        });
         cell.querySelector('.met-col-sounding').title =
           box.dataset.soundingHint.replace(/\s+/g, ' ');
         bindProbe(cell.querySelector('.met-col-sounding'));
@@ -1722,6 +1792,7 @@
     drop: drop,
     focus: focus,
     chosen: chosen,
+    move: moveTo,
     at: function () { return indexFor(state.profile.hourly.time, state.day, state.hour); }
   };
 

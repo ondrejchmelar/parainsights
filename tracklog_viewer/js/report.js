@@ -486,20 +486,16 @@
         '. Kept out of the thermal statistics and the wind estimate.'));
     }
 
-    // The side view: its axis switch and legend on a bar under the chart, so the chart
-    // sits right under the map, inside the map's block (`.flight-map`), so both go full
-    // screen with the map.
+    // The side view, altitude against the time of day: its legend on a bar under the
+    // chart, so the chart sits right under the map, inside the map's block
+    // (`.flight-map`), so both go full screen with the map.
     var sideBar = '      <div class="side-bar">\n' +
-      '        <div class="seg toggle" role="group" aria-label="Ground axis for the side view">' +
-      '<button type="button" class="toggle-button is-on" data-profile="flown" aria-pressed="true">Distance</button>' +
-      '<button type="button" class="toggle-button" data-profile="from_start" aria-pressed="false">From launch</button>' +
-      '<button type="button" class="toggle-button" data-profile="time" aria-pressed="false">Time</button></div>\n' +
       '        <ul class="legend legend-row"><li>Sink <span class="grad"></span> Climb' +
-      info('The trace is coloured by climb rate, from &minus;4 m/s to +4 m/s; the bands behind it are the phases. Distance is distance flown, always increasing, so a climb draws as a near-vertical step.') + '</li>' +
+      info('The trace is coloured by climb rate, from &minus;4 m/s to +4 m/s; the bands behind it are the phases. Time is the time of day there; compared flights from other days run from their own launch, each with its own clock under the axis in its colour.') + '</li>' +
       '<li><i style="background:var(--climb);opacity:.5"></i>Climbing</li><li><i style="background:var(--sink);opacity:.5"></i>Gliding</li>' +
       (tow ? '<li><i style="background:var(--tow);opacity:.5"></i>Tow</li>' : '') + '</ul>\n      </div>\n';
     var sideChart = '\n    <div class="panel hero side-view">\n' +
-      '      <div class="profile chart-host" data-chart="profile" data-mode="flown"\n           style="aspect-ratio:' + Ch.PROFILE.width + '/' + Ch.PROFILE.height + '">\n' +
+      '      <div class="profile chart-host" data-chart="profile"\n           style="aspect-ratio:' + Ch.PROFILE.width + '/' + Ch.PROFILE.height + '">\n' +
       '        <p class="chart-missing">The side view is drawn in this page. It needs JavaScript.</p>\n      </div>\n' + sideBar + '    </div>\n';
 
     var mapSection, clearance = null, valley = null, topView = '';
@@ -545,7 +541,10 @@
     var ldLegend = 'Glide ratio over the ground, so it carries the wind as well as the wing; the wing\'s own is the key number above. Bar colours: ' +
       ['under 5', '5–7', '7–9', '9–12', 'over 12'].map(function (t, i) { return '<span class="sw" style="background:var(--ld-' + (i + 1) + ')"></span>' + t; }).join(', ') + '.';
 
-    return '<article class="flight" data-flight-report="' + uid + '"' + compare + ' data-compare-name="' + compareName + '"' + (options.hidden ? ' hidden' : '') + '>\n' +
+    // The page's title while this flight is the one shown (`flightTabs.show`, page/report.js).
+    var pageTitle = summary.date + ' · ' + (summary.site || 'flight') + ' — flight review';
+    return '<article class="flight" data-flight-report="' + uid + '"' + compare + ' data-compare-name="' + compareName + '"' +
+      ' data-title="' + esc(pageTitle) + '"' + (options.hidden ? ' hidden' : '') + '>\n' +
       '  <header class="masthead">\n    <h1>' + esc(summary.site || 'Flight') + ' <span>' + esc(summary.date) + '</span></h1>\n' +
       '    <p class="who"><b>' + esc(summary.pilot || '—') + '</b> · ' + esc(summary.glider || '—') + chip + '</p>\n  </header>\n' +
       '  <div class="figs keys">' + figs.join('') + '</div>\n' + mapSection + '\n' + debriefSection + '\n\n' +
