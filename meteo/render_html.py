@@ -78,17 +78,27 @@ STYLE = """
 .met-status { color:var(--ink-2); font-size:15px; margin:0; flex-basis:100%; }
 .met-status:empty { display:none; }
 
-/* The chosen takeoffs, as chips; the list of every takeoff is behind a button. */
-.met-chosen { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:0; }
-.met-chip { padding: 0 6px 0 16px; }
-.met-chip.is-focus { border-color:var(--ink); }
-.met-chip .swatch { width:11px; height:11px; border-radius:50%; flex:none; }
-.met-chip-name { background:none; border:0; padding:0; font:inherit; color:inherit; cursor:pointer; height: 100%; }
-.met-chip-drop { position: relative; width:32px; height:32px; border:0; background:none; padding:0;
-  color:var(--ink-2); cursor:pointer; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; }
-.met-chip-drop::after { content: ""; position: absolute; inset: -6px; }
-.met-chip-drop:hover { color:var(--ink); background:var(--panel-2); }
-.met-add { border-style:dashed; color:var(--ink-2); cursor: pointer; }
+/* The chosen takeoffs, as one switcher, then +; the list of every takeoff is behind +.
+   Wider than its row the switcher scrolls, and an end with more takeoffs past it fades
+   out under a ‹ or ›, so it reads as a strip to scroll rather than a cropped control. */
+.met-chosen { display:flex; flex-wrap:nowrap; gap:10px; align-items:center; margin:0; }
+.met-picks { position:relative; display:flex; min-width:0; flex:0 1 auto; }
+.met-picks[hidden] { display:none; }
+.met-picks .seg { position:relative; max-width:100%; overflow-x:auto; scrollbar-width:none;
+  overscroll-behavior-x:contain; }
+.met-picks .seg::-webkit-scrollbar { display:none; }
+.met-picks .seg > button { flex:none; white-space:nowrap; display:inline-flex; align-items:center; gap:8px; padding:0 14px; }
+.met-picks .dot { width:11px; height:11px; border-radius:50%; flex:none; }
+.met-pick[draggable="true"] { cursor:pointer; }
+.met-pick.is-dragged { opacity:.5; }
+.met-more { position:absolute; top:1px; bottom:1px; z-index:2; width:46px; display:flex; align-items:center;
+  font-size:21px; font-weight:600; color:var(--ink); pointer-events:none; opacity:0; transition:opacity .15s; }
+.met-more-l { left:1px; padding-left:9px; border-radius:10px 0 0 10px;
+  background:linear-gradient(to left, transparent, var(--panel) 65%); }
+.met-more-r { right:1px; padding-right:9px; justify-content:flex-end; border-radius:0 10px 10px 0;
+  background:linear-gradient(to right, transparent, var(--panel) 65%); }
+.met-picks.more-l .met-more-l, .met-picks.more-r .met-more-r { opacity:1; }
+.met-add { border-style:dashed; color:var(--ink-2); cursor: pointer; flex:none; }
 .met-add:disabled { opacity: .5; cursor: default; }
 .met-cap { display: none; }
 
@@ -169,13 +179,12 @@ STYLE = """
 .met-col-head .ground { font-weight:400; font-size:16px; color:var(--ink-2); font-variant-numeric:tabular-nums; }
 /* The takeoff's ParaglidingEarth page, and its place in the order, at the head's end. */
 .met-col-tools { margin-left:auto; display:inline-flex; align-items:center; gap:2px; align-self:center; }
-.met-col-tools a, .met-col-move { width:34px; height:34px; border:0; background:none; padding:0;
+.met-col-tools a, .met-col-move, .met-col-drop { width:34px; height:34px; border:0; background:none; padding:0;
   color:var(--ink-2); border-radius:50%; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; }
-.met-col-tools a:hover, .met-col-move:hover:not(:disabled) { color:var(--ink); background:var(--panel-2); }
+.met-col-tools a:hover, .met-col-move:hover:not(:disabled), .met-col-drop:hover { color:var(--ink); background:var(--panel-2); }
 .met-col-move:disabled { opacity:.3; cursor:default; }
 .met-columns.is-single .met-col-move { display:none; }
-.met-chip[draggable="true"] { cursor:grab; }
-.met-chip.is-dragged { opacity:.5; }
+
 .met-col-rose { font-size:15.5px; color:var(--ink-2); margin:0 0 10px; }
 /* The number visible, the reason one tap away. */
 .met-col-top { font-size:16.5px; color:var(--ink); margin:8px 0 14px; display:flex; align-items:center; }
@@ -196,15 +205,21 @@ STYLE = """
 .met-col-fly .lnk { color:var(--accent); }
 .met-links { margin:30px 0 0; font-size:16px; color:var(--ink-2); }
 .met-legend { font-size:15px; color:var(--ink-2); margin:6px 0 0; }
-.met-swipe { display:none; }
 .met-flymet { display:none !important; }
 
 @media (max-width: 640px) {
   .met-sticky { margin: -18px -14px 18px; padding: 12px 14px 10px; }
   .met-head { gap: 10px; margin-bottom: 10px; }
   .met-hour { flex-basis: 100%; min-width: 0; }
-  .met-chosen { flex-wrap: nowrap; overflow-x: auto; margin-right: -14px; padding-right: 14px; }
-  .met-chosen > * { flex: none; }
+  /* The head on one line: the name gives way (…) before the height or the tools do. */
+  .met-col-head { font-size:19px; gap:7px; }
+  .met-col-head .name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .met-col-head .ground { white-space:nowrap; flex:none; }
+  .met-col-tools { flex:none; gap:0; }
+  .met-col-tools a, .met-col-move, .met-col-drop { width:32px; height:32px; }
+  /* + alone on a phone: the switcher gets the room. */
+  .met-add { padding:0; width:44px; justify-content:center; }
+  .met-add span { display:none; }
   /* The table keeps takeoffs as rows: name and verdict, then wind, thermal top, cloudbase. */
   .met-compare, .met-compare thead, .met-compare tbody { display:block; }
   /* One takeoff: no comparison, and no empty header standing in for one. */
@@ -220,13 +235,6 @@ STYLE = """
   .met-compare tr > :nth-child(4) { grid-column:3; grid-row:1 / span 2; }
   .met-compare tr > :nth-child(5) { grid-column:4; grid-row:1 / span 2; }
   .met-compare thead tr > :nth-child(1) { grid-row: 1 / span 2; }
-  /* One takeoff's charts at a time, side by side by a swipe. */
-  /* Wider than the screen with four or more takeoffs: it scrolls, and follows the swipe
-     (`drawSwipe`). It was clipped, the takeoffs past the edge out of reach. */
-  .met-swipe { display:flex; justify-content:safe center; margin:0 0 14px; }
-  .met-swipe .seg { position:relative; max-width:100%; overflow-x:auto; scrollbar-width:none; overscroll-behavior-x:contain; }
-  .met-swipe .seg::-webkit-scrollbar { display:none; }
-  .met-swipe .seg > button { padding:0 12px; flex:none; white-space:nowrap; }
   /* The swipe uses the screen's full width: a column at a time, edge to edge. */
   .met-columns:not(.is-single) { gap:14px; margin:0 -14px; padding:0 14px; scroll-padding:0 14px;
     scrollbar-width: none; }
@@ -325,8 +333,6 @@ def body(uid: str = "meteo") -> str:
       <canvas class="met-canvas" id="met-band" width="960" height="170"></canvas>
       <p class="met-keys" id="met-keys"></p>
     </div>
-    <!-- A phone shows one takeoff's charts at a time; this picks which, and a swipe does. -->
-    <div class="met-swipe" id="met-swipe"></div>
     <div class="met-columns" id="met-columns" data-sounding-hint="Shaded: a layer the
       thermals stop at — lapse under {CAP_LAPSE:.0f} °C/km, red where the air warms with
       height. Orange: the dry adiabat, {DRY_LAPSE:.1f} °C/km from the surface temperature;

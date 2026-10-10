@@ -588,7 +588,7 @@ class TestChoosingTakeoffs:
         var m = window.__meteo;
         return { chosen: m.chosen().length, focused: m.state.site,
                  panel: document.getElementById('met-panel').hidden,
-                 chips: document.querySelectorAll('.met-chip').length };
+                 chips: document.querySelectorAll('.met-pick').length };
         """)
         assert answer["chosen"] == 1
         assert answer["focused"] is not None
@@ -641,7 +641,7 @@ class TestChoosingTakeoffs:
           if (m.chosen().indexOf(i) < 0) { m.add(i); picked.push(i); }
         }
         return { chosen: m.chosen().length,
-                 chips: document.querySelectorAll('.met-chip').length,
+                 chips: document.querySelectorAll('.met-pick').length,
                  rows: document.querySelectorAll('.met-compare tbody tr').length,
                  hidden: document.getElementById('met-compare').hidden,
                  status: document.getElementById('met-status').textContent };
@@ -702,7 +702,7 @@ class TestChoosingTakeoffs:
                  column: column ? column.querySelector('.name').textContent : null,
                  heading: document.getElementById('met-name').textContent,
                  focusedRows: document.querySelectorAll('.met-compare tr.is-focus').length,
-                 focusedChips: document.querySelectorAll('.met-chip.is-focus').length,
+                 focusedChips: document.querySelectorAll('.met-pick.is-on').length,
                  focusedCols: document.querySelectorAll('.met-col.is-focus').length };
         """)
         assert answer["column"] == answer["wanted"]
@@ -893,7 +893,7 @@ def test_past_three_takeoffs_the_columns_scroll_and_can_be_reordered():
     function order() {
       return { cols: Array.prototype.map.call(document.querySelectorAll('.met-col'),
                  function (c) { return Number(c.dataset.site); }),
-               chips: Array.prototype.map.call(document.querySelectorAll('.met-chip'),
+               chips: Array.prototype.map.call(document.querySelectorAll('.met-pick'),
                  function (c) { return Number(c.dataset.site); }) };
     }
     var before = order();
@@ -913,6 +913,32 @@ def test_past_three_takeoffs_the_columns_scroll_and_can_be_reordered():
     assert answer["after"]["chips"] == answer["after"]["cols"]
     assert answer["colourAfter"] == answer["colour"]
     assert answer["leftDisabled"] is True
+
+
+@needs_chrome
+def test_one_switcher_and_a_takeoff_is_removed_from_its_column():
+    """The chosen takeoffs are one switcher in the sticky row — no chips, no second
+    switcher over the columns — and a takeoff is removed by the × under its own name."""
+    answer = _probe_page("""
+    var m = window.__meteo;
+    for (var i = 0; i < 20 && m.chosen().length < 3; i++) if (m.chosen().indexOf(i) < 0) m.add(i);
+    var before = m.chosen().slice();
+    var gone = before[1];
+    var pick = document.querySelector('.met-pick[data-site="' + before[2] + '"]');
+    pick.click();
+    var focused = m.state.site;
+    document.querySelector('.met-col[data-site="' + gone + '"] .met-col-drop').click();
+    return { switchers: document.querySelectorAll('.met-sticky .met-picks .seg').length,
+             chips: document.querySelectorAll('.met-chip, #met-swipe').length,
+             focused: focused, wanted: before[2], gone: gone, after: m.chosen(),
+             picks: document.querySelectorAll('.met-pick').length,
+             cols: document.querySelectorAll('.met-col').length };
+    """)
+    assert answer["switchers"] == 1
+    assert answer["chips"] == 0
+    assert answer["focused"] == answer["wanted"]
+    assert answer["gone"] not in answer["after"] and len(answer["after"]) == 2
+    assert answer["picks"] == 2 and answer["cols"] == 2
 
 
 @needs_chrome

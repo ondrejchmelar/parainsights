@@ -435,12 +435,6 @@
     else return;
     columnsBox.scrollTo({ left: columnsBox.scrollLeft + by, behavior: 'smooth' });
   }
-  function chipIntoView() {
-    var row = document.getElementById('met-chosen'), chip = row && row.querySelector('.met-chip.is-focus');
-    if (!chip || row.scrollWidth <= row.clientWidth + 1) return;
-    var box = row.getBoundingClientRect(), r = chip.getBoundingClientRect();
-    row.scrollTo({ left: row.scrollLeft + r.left - box.left - (box.width - r.width) / 2, behavior: 'smooth' });
-  }
   if (columnsBox) {
     var settle = null;
     columnsBox.addEventListener('scroll', function () {
@@ -454,55 +448,85 @@
           if (d < bestD) { bestD = d; best = cell; }
         });
         if (best) focus(Number(best.dataset.site), true);
-        chipIntoView();
       }, 140);
     }, { passive: true });
   }
 
-  // ---- the chips ----------------------------------------------------------------------
+  // ---- the switcher ---------------------------------------------------------------------
+  //
+  // The chosen takeoffs as one segmented control, in the sticky row under the day and the
+  // hour, with + after it. It replaced a row of chips *and* a second switcher over the
+  // columns that said the same; removing a takeoff is the × in its column's head (and its
+  // tick in the picker). Wider than the screen it scrolls, its ends fading where there
+  // are more, and keeps the takeoff in focus in the middle.
   function drawChosen() {
-    var box = document.getElementById('met-chosen');
+    var row = document.getElementById('met-chosen');
     var add = document.getElementById('met-add');
-    Array.prototype.slice.call(box.querySelectorAll('.met-chip, .met-cap'))
-      .forEach(function (node) { node.remove(); });
+    var frame = row.querySelector('.met-picks');
+    if (!frame) {
+      frame = document.createElement('div');
+      frame.className = 'met-picks';
+      frame.innerHTML = '<div class="seg" role="group" aria-label="The takeoff to show"></div>'
+        + '<span class="met-more met-more-l" aria-hidden="true">\u2039</span>'
+        + '<span class="met-more met-more-r" aria-hidden="true">\u203a</span>';
+      row.insertBefore(frame, add);
+      frame.querySelector('.seg').addEventListener('scroll', function () { ends(frame); }, { passive: true });
+    }
+    var seg = frame.querySelector('.seg'), was = seg.scrollLeft;
+    seg.textContent = '';
+    frame.hidden = !chosen().length;
     chosen().forEach(function (index) {
-      var slot = slotOf(index), site = conf.sites[index];
-      var chip = document.createElement('span');
-      chip.className = 'chip met-chip' + (state.site === index ? ' is-focus' : '');
-      chip.innerHTML = '<i class="swatch"></i>'
-        + '<button type="button" class="met-chip-name"></button>'
-        + '<button type="button" class="met-chip-drop" aria-label="Remove"></button>';
-      chip.querySelector('.swatch').style.background = seriesColour(slot);
-      var name = chip.querySelector('.met-chip-name');
-      name.textContent = site.name;
-      name.setAttribute('aria-pressed', state.site === index ? 'true' : 'false');
-      name.onclick = function () { focus(index); };
-      var close = chip.querySelector('.met-chip-drop');
-      close.innerHTML = CLOSE_ICON;
-      close.setAttribute('aria-label', 'Remove ' + site.name);
-      close.onclick = function () { drop(index); };
-      // Dragged onto another chip, it takes that chip's place in the order.
-      chip.draggable = true;
-      chip.dataset.site = index;
-      chip.addEventListener('dragstart', function (event) {
+      var site = conf.sites[index], on = state.site === index;
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'met-pick' + (on ? ' is-on' : '');
+      b.dataset.site = index;
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      b.innerHTML = '<i class="dot"></i><span></span>';
+      b.querySelector('i').style.background = seriesColour(slotOf(index));
+      b.querySelector('span').textContent = site.name;
+      // The takeoff in focus, its column brought into view sideways — never the page
+      // scrolled: `scrollIntoView` took it down to a tall column's bottom.
+      b.onclick = function () { if (state.site === index) swipeTo(index); else focus(index); };
+      // Dragged onto another takeoff, it takes that one's place in the order.
+      b.draggable = true;
+      b.addEventListener('dragstart', function (event) {
         event.dataTransfer.effectAllowed = 'move';
         event.dataTransfer.setData('text/plain', String(index));
-        chip.classList.add('is-dragged');
+        b.classList.add('is-dragged');
       });
-      chip.addEventListener('dragend', function () { chip.classList.remove('is-dragged'); });
-      chip.addEventListener('dragover', function (event) { event.preventDefault(); });
-      chip.addEventListener('drop', function (event) {
+      b.addEventListener('dragend', function () { b.classList.remove('is-dragged'); });
+      b.addEventListener('dragover', function (event) { event.preventDefault(); });
+      b.addEventListener('drop', function (event) {
         event.preventDefault();
         var moved = Number(event.dataTransfer.getData('text/plain'));
         if (slotOf(moved) >= 0) moveTo(moved, chosen().indexOf(index));
       });
-      box.insertBefore(chip, add);
+      seg.appendChild(b);
     });
+    // Back where it was, then smoothly to the takeoff in focus, centred.
+    seg.scrollLeft = was;
+    var pick = seg.querySelector('.is-on');
+    if (pick && seg.scrollWidth > seg.clientWidth + 1) {
+      seg.scrollTo({ left: pick.offsetLeft + pick.offsetWidth / 2 - seg.clientWidth / 2, behavior: 'smooth' });
+    }
+    ends(frame);
     add.innerHTML = PLUS_ICON + '<span>Add takeoff</span>';
+    add.setAttribute('aria-label', 'Add takeoff');
     // The cap, said only when it matters: on the button that stops working.
     add.disabled = chosen().length >= MAX_CHOSEN;
-    add.title = add.disabled ? MAX_CHOSEN + ' at a time — remove one to add another' : '';
+    add.title = add.disabled ? MAX_CHOSEN + ' at a time — remove one to add another' : 'Add takeoff';
   }
+  // Which ends of the switcher fade: the ones with more takeoffs past them.
+  function ends(frame) {
+    var seg = frame.querySelector('.seg');
+    frame.classList.toggle('more-l', seg.scrollLeft > 1);
+    frame.classList.toggle('more-r', seg.scrollLeft + seg.clientWidth < seg.scrollWidth - 1);
+  }
+  window.addEventListener('resize', function () {
+    var frame = document.querySelector('.met-picks');
+    if (frame) ends(frame);
+  });
 
   // ---- the comparison ------------------------------------------------------------------
   //
@@ -912,6 +936,7 @@
           + '<a class="met-col-pge" rel="noreferrer" target="_blank">' + LINK_ICON + '</a>'
           + '<button type="button" class="met-col-move" data-by="-1">' + LEFT_ICON + '</button>'
           + '<button type="button" class="met-col-move" data-by="1">' + RIGHT_ICON + '</button>'
+          + '<button type="button" class="met-col-drop">' + CLOSE_ICON + '</button>'
           + '</span></p>'
           + '<p class="met-col-rose"><span></span></p>'
           + '<canvas class="met-canvas met-col-air" width="380" height="270"'
@@ -951,6 +976,11 @@
           button.disabled = at + by < 0 || at + by >= wanted.length;
           button.onclick = function () { moveTo(index, chosen().indexOf(index) + by); };
         });
+        // Removing a takeoff, under its own name: the chips that did it are gone.
+        var remove = cell.querySelector('.met-col-drop');
+        remove.title = 'Remove ' + site.name;
+        remove.setAttribute('aria-label', remove.title);
+        remove.onclick = function () { drop(index); };
         cell.querySelector('.met-col-sounding').title =
           box.dataset.soundingHint.replace(/\s+/g, ' ');
         bindProbe(cell.querySelector('.met-col-sounding'));
@@ -958,7 +988,6 @@
                 index);
         box.appendChild(cell);
       });
-      drawSwipe(box, wanted);
     }
     Array.prototype.forEach.call(box.children, function (cell) {
       var index = Number(cell.dataset.site);
@@ -973,51 +1002,6 @@
       drawSounding(sounding, profile);
       drawAir(cell.querySelector('.met-col-air'), profile, slotOf(index));
     });
-  }
-
-  // On a phone the columns are a strip to swipe; this is its selector, and it follows the
-  // swipe. Built with the columns, because it names them.
-  function drawSwipe(box, wanted) {
-    var holder = document.getElementById('met-swipe');
-    if (!holder) return;
-    holder.textContent = '';
-    if (wanted.length < 2) return;
-    var seg = document.createElement('div');
-    seg.className = 'seg';
-    seg.setAttribute('role', 'group');
-    seg.setAttribute('aria-label', 'Show the charts for');
-    wanted.forEach(function (index, i) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.className = i === 0 ? 'is-on' : '';
-      b.innerHTML = '<i class="dot"></i><span></span>';
-      b.querySelector('i').style.background = seriesColour(slotOf(index));
-      b.querySelector('span').textContent = conf.sites[index].name;
-      // Sideways only: `scrollIntoView` scrolled the page down as well, to show as much of
-      // a column taller than the screen as it could.
-      b.onclick = function () {
-        var cell = box.children[i], r = cell.getBoundingClientRect(), frame = box.getBoundingClientRect();
-        box.scrollTo({ left: box.scrollLeft + r.left - frame.left - (frame.width - r.width) / 2, behavior: 'smooth' });
-      };
-      seg.appendChild(b);
-    });
-    holder.appendChild(seg);
-    box.onscroll = function () {
-      var middle = box.scrollLeft + box.clientWidth / 2, best = 0;
-      Array.prototype.forEach.call(box.children, function (cell, i) {
-        if (Math.abs(cell.offsetLeft + cell.offsetWidth / 2 - middle) <
-            Math.abs(box.children[best].offsetLeft + box.children[best].offsetWidth / 2 - middle)) best = i;
-      });
-      Array.prototype.forEach.call(seg.children, function (b, i) { b.className = i === best ? 'is-on' : ''; });
-      // The selector scrolls too, past four takeoffs: the one shown kept in its view.
-      var on = seg.children[best];
-      if (on && seg.scrollWidth > seg.clientWidth + 1) {
-        if (on.offsetLeft < seg.scrollLeft) seg.scrollLeft = on.offsetLeft;
-        else if (on.offsetLeft + on.offsetWidth > seg.scrollLeft + seg.clientWidth) {
-          seg.scrollLeft = on.offsetLeft + on.offsetWidth - seg.clientWidth;
-        }
-      }
-    };
   }
 
   // ---- the airgram: wind by hour and height ---------------------------------------------
