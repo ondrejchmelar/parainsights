@@ -157,7 +157,7 @@ STYLE = """
    canvases carry `width`/`height` and no CSS height, so a wider column makes a chart
    bigger rather than flatter. One takeoff puts its two charts side by side instead, so a
    lone takeoff's charts come out the size of a pair's. */
-.met-columns { display:flex; gap:22px; margin:0; overflow-x:auto; scroll-snap-type:x mandatory;
+.met-columns { position:relative; display:flex; gap:22px; margin:0; overflow-x:auto; scroll-snap-type:x mandatory;
   overscroll-behavior-x:contain; scrollbar-width:thin; padding-bottom:6px; }
 .met-columns:not(.is-single) .met-col { flex:0 0 calc((100% - 44px) / 3); scroll-snap-align:start; }
 .met-columns.is-two .met-col { flex-basis:calc((100% - 22px) / 2); }

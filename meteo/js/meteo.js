@@ -437,17 +437,25 @@
   }
   if (columnsBox) {
     var settle = null;
+    // The column nearest the middle, by layout offsets: no rect read on every frame.
+    var middleColumn = function () {
+      var mid = columnsBox.scrollLeft + columnsBox.clientWidth / 2, best = null, bestD = Infinity;
+      Array.prototype.forEach.call(columnsBox.children, function (cell) {
+        var d = Math.abs(cell.offsetLeft + cell.offsetWidth / 2 - mid);
+        if (d < bestD) { bestD = d; best = cell; }
+      });
+      return best ? Number(best.dataset.site) : null;
+    };
     columnsBox.addEventListener('scroll', function () {
       if (!swiping() || !oneAtATime()) return;
+      // The switcher follows the swipe as it moves; the redraw that focusing is waits
+      // for the swipe to settle. Waiting for both made the switcher lag the columns.
+      var now = middleColumn();
+      if (now !== null) markPick(now);
       clearTimeout(settle);
       settle = setTimeout(function () {
-        var box = columnsBox.getBoundingClientRect(), mid = box.left + box.width / 2;
-        var best = null, bestD = Infinity;
-        columnsBox.querySelectorAll('.met-col').forEach(function (cell) {
-          var r = cell.getBoundingClientRect(), d = Math.abs(r.left + r.width / 2 - mid);
-          if (d < bestD) { bestD = d; best = cell; }
-        });
-        if (best) focus(Number(best.dataset.site), true);
+        var index = middleColumn();
+        if (index !== null) focus(index, true);
       }, 140);
     }, { passive: true });
   }
@@ -505,6 +513,7 @@
       seg.appendChild(b);
     });
     // Back where it was, then smoothly to the takeoff in focus, centred.
+    marked = state.site;
     seg.scrollLeft = was;
     var pick = seg.querySelector('.is-on');
     if (pick && seg.scrollWidth > seg.clientWidth + 1) {
@@ -516,6 +525,25 @@
     // The cap, said only when it matters: on the button that stops working.
     add.disabled = chosen().length >= MAX_CHOSEN;
     add.title = add.disabled ? MAX_CHOSEN + ' at a time — remove one to add another' : 'Add takeoff';
+  }
+  // The switcher's highlight moved to `index` without rebuilding it, as the columns swipe.
+  var marked = null;
+  function markPick(index) {
+    if (marked === index) return;
+    marked = index;
+    var frame = document.querySelector('.met-picks');
+    if (!frame) return;
+    var seg = frame.querySelector('.seg'), pick = null;
+    seg.querySelectorAll('.met-pick').forEach(function (b) {
+      var on = Number(b.dataset.site) === index;
+      b.classList.toggle('is-on', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      if (on) pick = b;
+    });
+    if (pick && seg.scrollWidth > seg.clientWidth + 1) {
+      seg.scrollTo({ left: pick.offsetLeft + pick.offsetWidth / 2 - seg.clientWidth / 2, behavior: 'smooth' });
+    }
+    ends(frame);
   }
   // Which ends of the switcher fade: the ones with more takeoffs past them.
   function ends(frame) {
