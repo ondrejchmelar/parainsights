@@ -623,8 +623,12 @@ function initFlight(root) {
       tipBox = null;
     }
     if (!tipBox || !tipBox.width) tipBox = tip.getBoundingClientRect();
-    tip.style.left = Math.min(pageX + 14, window.innerWidth - tipBox.width - 10) + (full ? 0 : window.scrollX) + 'px';
-    tip.style.top = (pageY - tipBox.height - 12) + (full ? 0 : window.scrollY) + 'px';
+    // Measured in the screen's pixels, placed in the page's: aA zooms the page an eighth,
+    // and a tooltip placed in screen pixels landed an eighth further right, off the edge.
+    var zoom = document.body.getBoundingClientRect().width / (document.body.offsetWidth || 1) || 1;
+    var left = Math.max(Math.min(pageX + 14, window.innerWidth - tipBox.width - 10), 10);
+    tip.style.left = (left + (full ? 0 : window.scrollX)) / zoom + 'px';
+    tip.style.top = (pageY - tipBox.height - 12 + (full ? 0 : window.scrollY)) / zoom + 'px';
     highlight(data.segment[index]);
   }
 

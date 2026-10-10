@@ -199,6 +199,9 @@ p.note, p.caption { margin: 12px 0 0; color: var(--ink-2); font-size: 16px; disp
    the whole block full screen, so the side view goes with it. */
 .map-section { margin-top: 0; }
 .flight-map { --page: calc(100vw - var(--scrollbar, 0px)); width: var(--page); margin-left: calc(50% - var(--page) / 2); }
+/* aA zooms the page an eighth, and `vw` is not zoomed: the block came out an eighth wider
+   than the screen, the side view's axis and its tooltip cut off at both edges. */
+html[data-text="large"] .flight-map { --page: calc((100vw - var(--scrollbar, 0px)) / 1.125); }
 .flight-map .side-view { border-radius: 0; border: 0; border-bottom: 1px solid var(--rule); padding: 0; background: var(--panel); }
 .flight-map .side-view .chart-host { max-width: 1100px; margin: 0 auto; }
 .side-bar { max-width: 1100px; margin: 0 auto; padding: 4px 20px 12px; display: flex; flex-wrap: wrap;
@@ -402,7 +405,9 @@ code { font-family: ui-monospace, "DejaVu Sans Mono", monospace; font-size: 0.92
      for screen readers, the tooltip says it). */
   .tabs { flex-wrap: nowrap; overflow-x: auto; margin-right: -14px; padding-right: 14px;
     scroll-snap-type: x proximity; scroll-padding-left: 0; }
-  .tab { width: calc(100vw - 130px); min-width: 0; flex: none; scroll-snap-align: start; }
+  /* Of the strip's own width, not the screen's: aA zooms the page and not `vw`, and at
+     the larger size the next flight's edge landed exactly on the screen's. */
+  .tab { width: calc(100% - 110px); min-width: 0; flex: none; scroll-snap-align: start; }
   .tab-add { width: auto; }
   .tab-add .tab-open { padding: 0 16px; }
   .tab-add .tab-date { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -5278,8 +5283,12 @@ function initFlight(root) {
       tipBox = null;
     }
     if (!tipBox || !tipBox.width) tipBox = tip.getBoundingClientRect();
-    tip.style.left = Math.min(pageX + 14, window.innerWidth - tipBox.width - 10) + (full ? 0 : window.scrollX) + 'px';
-    tip.style.top = (pageY - tipBox.height - 12) + (full ? 0 : window.scrollY) + 'px';
+    // Measured in the screen's pixels, placed in the page's: aA zooms the page an eighth,
+    // and a tooltip placed in screen pixels landed an eighth further right, off the edge.
+    var zoom = document.body.getBoundingClientRect().width / (document.body.offsetWidth || 1) || 1;
+    var left = Math.max(Math.min(pageX + 14, window.innerWidth - tipBox.width - 10), 10);
+    tip.style.left = (left + (full ? 0 : window.scrollX)) / zoom + 'px';
+    tip.style.top = (pageY - tipBox.height - 12 + (full ? 0 : window.scrollY)) / zoom + 'px';
     highlight(data.segment[index]);
   }
 
