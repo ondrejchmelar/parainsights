@@ -1004,6 +1004,14 @@
             Math.abs(box.children[best].offsetLeft + box.children[best].offsetWidth / 2 - middle)) best = i;
       });
       Array.prototype.forEach.call(seg.children, function (b, i) { b.className = i === best ? 'is-on' : ''; });
+      // The selector scrolls too, past four takeoffs: the one shown kept in its view.
+      var on = seg.children[best];
+      if (on && seg.scrollWidth > seg.clientWidth + 1) {
+        if (on.offsetLeft < seg.scrollLeft) seg.scrollLeft = on.offsetLeft;
+        else if (on.offsetLeft + on.offsetWidth > seg.scrollLeft + seg.clientWidth) {
+          seg.scrollLeft = on.offsetLeft + on.offsetWidth - seg.clientWidth;
+        }
+      }
     };
   }
 

@@ -221,8 +221,12 @@ STYLE = """
   .met-compare tr > :nth-child(5) { grid-column:4; grid-row:1 / span 2; }
   .met-compare thead tr > :nth-child(1) { grid-row: 1 / span 2; }
   /* One takeoff's charts at a time, side by side by a swipe. */
-  .met-swipe { display:flex; justify-content:center; margin:0 0 14px; }
-  .met-swipe .seg > button { padding:0 12px; }
+  /* Wider than the screen with four or more takeoffs: it scrolls, and follows the swipe
+     (`drawSwipe`). It was clipped, the takeoffs past the edge out of reach. */
+  .met-swipe { display:flex; justify-content:safe center; margin:0 0 14px; }
+  .met-swipe .seg { position:relative; max-width:100%; overflow-x:auto; scrollbar-width:none; overscroll-behavior-x:contain; }
+  .met-swipe .seg::-webkit-scrollbar { display:none; }
+  .met-swipe .seg > button { padding:0 12px; flex:none; white-space:nowrap; }
   /* The swipe uses the screen's full width: a column at a time, edge to edge. */
   .met-columns:not(.is-single) { gap:14px; margin:0 -14px; padding:0 14px; scroll-padding:0 14px;
     scrollbar-width: none; }
