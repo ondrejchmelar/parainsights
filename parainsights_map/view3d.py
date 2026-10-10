@@ -152,10 +152,11 @@ STYLE = """
 html[data-help="off"] .m3-help { display: none; }
 @media (max-width: 640px) {
   .view3d-panel { --mh: 38px; }
-  .view3d-controls { gap: 4px; flex-wrap: nowrap; }
+  /* Wrapped onto a second row where the screen is too narrow for the bar: on one row at
+     360 px it ran 40 px off the right edge, and the last button with it. */
+  .view3d-controls { gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
   .view3d-controls button { padding: 0 8px; font-size: 14px; }
   .view3d-controls .m3-icon { padding: 0; width: 34px; min-width: 34px; }
-  .view3d-reset { display: none; }
 }
 /* The help list, over the controls: the one overlay a reader opens deliberately. The
    panel clips its overflow, so the list is capped to the box and scrolls. */
