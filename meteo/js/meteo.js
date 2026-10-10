@@ -993,7 +993,12 @@
       b.innerHTML = '<i class="dot"></i><span></span>';
       b.querySelector('i').style.background = seriesColour(slotOf(index));
       b.querySelector('span').textContent = conf.sites[index].name;
-      b.onclick = function () { box.children[i].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }); };
+      // Sideways only: `scrollIntoView` scrolled the page down as well, to show as much of
+      // a column taller than the screen as it could.
+      b.onclick = function () {
+        var cell = box.children[i], r = cell.getBoundingClientRect(), frame = box.getBoundingClientRect();
+        box.scrollTo({ left: box.scrollLeft + r.left - frame.left - (frame.width - r.width) / 2, behavior: 'smooth' });
+      };
       seg.appendChild(b);
     });
     holder.appendChild(seg);
