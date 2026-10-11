@@ -674,7 +674,23 @@
     };
   }
   var xctOut = document.getElementById('plan-xct-out');
-  function xctSay(html) { if (xctOut) xctOut.innerHTML = html; }
+  var dlg = document.getElementById('plan-xct-dlg'), dlgBody = document.getElementById('plan-xct-body');
+  function xctSay(text) { if (xctOut) xctOut.textContent = text; }
+  // The dialog: the QR code or the code, big enough to scan or to type, over the page
+  // rather than growing the panel under the route.
+  function xctDialog(html) {
+    var walk = course();
+    document.getElementById('plan-xct-sub').textContent = walk.map(function (p, i) {
+      return 'TP' + (i < points.length ? i + 1 : 1);
+    }).join(' \u2192 ') + ' \u00b7 ' + (score().total / 1000).toFixed(0) + ' km';
+    dlgBody.innerHTML = html;
+    if (dlg.showModal && !dlg.open) dlg.showModal(); else dlg.setAttribute('open', '');
+    return dlgBody;
+  }
+  if (dlg) {
+    document.getElementById('plan-xct-close').addEventListener('click', function () { dlg.close(); });
+    dlg.addEventListener('click', function (event) { if (event.target === dlg) dlg.close(); });
+  }
   function xctFile() {
     var blob = new Blob([JSON.stringify(xctrackTask())], { type: 'application/xctsk' });
     var link = document.createElement('a');
@@ -686,7 +702,7 @@
     link.click();
     link.remove();
     setTimeout(function () { URL.revokeObjectURL(link.href); }, 10000);
-    xctSay('Saved. On the phone, open it from the download and choose XCTrack.');
+    xctSay('Saved \u2014 open it from the download and choose XCTrack.');
   }
   function xctPost(path) {
     return fetch(XCT_API + path, {
@@ -698,37 +714,88 @@
     });
   }
   function xctCode() {
-    xctSay('Asking XContest for a code\u2026');
+    var body = xctDialog('<p>Asking XContest for a code\u2026</p>');
     xctPost('save').then(function (r) { return r.json(); }).then(function (answer) {
       var code = String(answer.taskCode || '').toUpperCase();
       if (!code) throw new Error('no code in the answer');
-      xctSay('Task code <b class="plan-xct-code"></b> \u2014 in XCTrack, import a task by its '
-        + 'XContest code. It lasts a month.');
-      xctOut.querySelector('.plan-xct-code').textContent = code;
+      body.innerHTML = '<b class="plan-xct-code"></b><p>In XCTrack, import a task by its XContest '
+        + 'code and type these letters. The code lasts a month.</p>';
+      body.querySelector('.plan-xct-code').textContent = code;
     }).catch(function (error) {
-      xctSay('No code: ' + error.message + '. The file works without a network.');
+      body.innerHTML = '<p></p>';
+      body.querySelector('p').textContent = 'No code: ' + error.message + '. The file works without a network.';
     });
   }
   function xctQr() {
-    xctSay('Drawing the QR code\u2026');
+    var body = xctDialog('<p>Drawing the QR code\u2026</p>');
     xctPost('qr2z').then(function (r) { return r.blob(); }).then(function (svg) {
       // As an image, not markup: what another site sends is drawn, never run.
-      var img = document.createElement('img');
-      img.className = 'plan-xct-qr';
-      img.alt = 'QR code of the task for XCTrack';
-      img.src = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
-      xctSay('Scan it with XCTrack\'s task import:');
-      xctOut.appendChild(img);
+      body.innerHTML = '<img class="plan-xct-qr" alt="QR code of the task for XCTrack">'
+        + '<p>Scan it with XCTrack\u2019s task import (QR code). Drawn by XContest\u2019s task service.</p>';
+      body.querySelector('img').src = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
     }).catch(function (error) {
-      xctSay('No QR code: ' + error.message + '. The file works without a network.');
+      body.innerHTML = '<p></p>';
+      body.querySelector('p').textContent = 'No QR code: ' + error.message + '. The file works without a network.';
     });
   }
-  [['plan-xct-file', xctFile], ['plan-xct-code', xctCode], ['plan-xct-qr', xctQr]].forEach(function (pair) {
-    var button = document.getElementById(pair[0]);
-    if (button) button.addEventListener('click', function () { if (points.length >= 2) pair[1](); });
-  });
-  // Shown once there is a route to send, and cleared when it changes: a code or a QR
-  // code for the route before the last change would be the wrong task.
+  // One split button: the device's best way as the button, the other two behind the
+  // arrow. On a phone XCTrack runs there, so the file opens straight into it; on a
+  // desktop the phone is in the other hand, so the QR code is the way across.
+  var touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+  function glyph(paths) {
+    return '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75"'
+      + ' stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths + '</svg>';
+  }
+  var GLYPHS = {
+    file: glyph('<path d="M10 3v10M6 9l4 4 4-4M4 16.5h12"/>'),
+    qr: glyph('<rect x="3" y="3" width="5" height="5" rx="1"/><rect x="12" y="3" width="5" height="5" rx="1"/>'
+      + '<rect x="3" y="12" width="5" height="5" rx="1"/><path d="M12 12h2v2M17 12v1M12 17h1M15 15h2v2"/>'),
+    code: glyph('<path d="M4 7h12M4 13h12M8 3.5 6.5 16.5M13.5 3.5 12 16.5"/>')
+  };
+  var xctMethods = {
+    file: { label: touch ? 'Open in XCTrack' : 'Download .xctsk file', run: xctFile },
+    qr: { label: touch ? 'QR code to scan' : 'QR code for XCTrack', run: xctQr },
+    code: { label: 'Task code (XContest)', run: xctCode }
+  };
+  var xctOrder = touch ? ['file', 'qr', 'code'] : ['qr', 'file', 'code'];
+  var xctMain = document.getElementById('plan-xct-main');
+  var xctMore = document.getElementById('plan-xct-more');
+  var xctMenu = document.getElementById('plan-xct-menu');
+  function menuOpen(on) {
+    xctMenu.hidden = !on;
+    xctMore.setAttribute('aria-expanded', on ? 'true' : 'false');
+    if (on) xctMenu.querySelector('button').focus();
+  }
+  if (xctMain) {
+    xctMain.innerHTML = GLYPHS[xctOrder[0]] + '<span></span>';
+    xctMain.querySelector('span').textContent = xctMethods[xctOrder[0]].label;
+    xctMain.dataset.method = xctOrder[0];
+    xctMain.addEventListener('click', function () { if (points.length >= 2) xctMethods[xctOrder[0]].run(); });
+    xctOrder.slice(1).forEach(function (key) {
+      var item = document.createElement('button');
+      item.type = 'button';
+      item.setAttribute('role', 'menuitem');
+      item.dataset.method = key;
+      item.innerHTML = GLYPHS[key] + '<span></span>';
+      item.querySelector('span').textContent = xctMethods[key].label;
+      item.addEventListener('click', function () {
+        menuOpen(false);
+        if (points.length >= 2) xctMethods[key].run();
+      });
+      xctMenu.appendChild(item);
+    });
+    xctMore.addEventListener('click', function (event) {
+      event.stopPropagation();
+      menuOpen(xctMenu.hidden);
+    });
+    document.addEventListener('click', function (event) {
+      if (!xctMenu.hidden && !xctMenu.contains(event.target)) menuOpen(false);
+    });
+    xctMenu.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') { menuOpen(false); xctMore.focus(); }
+    });
+  }
+  // Shown once there is a route to send, and its note cleared when the route changes.
   var xctBox = document.getElementById('plan-xct');
   var xctFor = '';
   function xctRefresh() {

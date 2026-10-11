@@ -104,13 +104,30 @@ STYLE = """
 .plan-when.is-shut { border:1.5px solid var(--edge); color:var(--ink-2); }
 .plan-section { margin:0; }
 .plan-note { margin:12px 0 0; font-size:15px; color:var(--ink-2); }
-.plan-xct { display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; margin:12px 0 0; }
+.plan-xct { display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; margin:14px 0 0;
+  padding-top:12px; border-top:1px solid var(--rule); }
 .plan-xct[hidden] { display:none; }
-.plan-xct-label { font-size:15px; font-weight:600; color:var(--ink-2); display:inline-flex; align-items:center; }
-.plan-xct-out { flex-basis:100%; margin:2px 0 0; font-size:15.5px; color:var(--ink-2); }
+.plan-split { display:inline-flex; position:relative; }
+.plan-split-main { border-radius:10px 0 0 10px; }
+.plan-split-more { border-radius:0 10px 10px 0; margin-left:-1px; padding:0 10px; }
+.plan-split-menu { position:absolute; bottom:calc(100% + 6px); left:0; z-index:8; min-width:250px; padding:6px;
+  background:var(--panel); border:1px solid var(--edge); border-radius:12px; box-shadow:0 12px 30px rgba(0,0,0,.3); }
+.plan-split-menu[hidden] { display:none; }
+.plan-split-menu button { display:flex; align-items:center; gap:10px; width:100%; text-align:left; background:none; border:0;
+  color:var(--ink); font:inherit; font-size:16px; padding:10px 12px; border-radius:8px; cursor:pointer; }
+.plan-split-menu button:hover, .plan-split-menu button:focus-visible { background:var(--panel-2); }
+.plan-xct-out { flex-basis:100%; margin:0; font-size:15px; color:var(--ink-2); }
 .plan-xct-out:empty { display:none; }
-.plan-xct-code { font-size:22px; letter-spacing:.08em; color:var(--ink); font-variant-numeric:tabular-nums; }
-.plan-xct-qr { display:block; width:min(260px, 100%); height:auto; margin:8px 0 0; background:#fff;
+.plan-xct-dlg { width:min(420px, 92vw); padding:0; border:1px solid var(--edge); border-radius:14px;
+  background:var(--panel); color:var(--ink); box-shadow:0 18px 44px rgba(0,0,0,.45); }
+.plan-xct-dlg::backdrop { background:rgba(0,0,0,.55); }
+.plan-xct-dlg-head { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:14px 16px 0; }
+.plan-xct-dlg-head h2 { margin:0; font-size:19px; }
+.plan-xct-dlg-sub { margin:4px 16px 12px; font-size:15px; color:var(--ink-2); }
+.plan-xct-dlg-body { padding:0 16px 18px; font-size:15.5px; color:var(--ink-2); }
+.plan-xct-code { display:block; margin:6px 0 8px; font-size:40px; font-weight:700; letter-spacing:.12em;
+  color:var(--ink); font-variant-numeric:tabular-nums; text-align:center; }
+.plan-xct-qr { display:block; width:min(280px, 100%); height:auto; margin:0 auto 10px; background:#fff;
   padding:10px; border-radius:10px; box-sizing:border-box; }
 [data-planner][data-drawing="on"] .maplibregl-canvas-container.maplibregl-interactive { cursor:crosshair; }
 """
@@ -172,15 +189,25 @@ def results() -> str:
     return f"""<section class="plan-section" aria-label="The task">
     <div class="plan-figures" id="plan-figures"></div>
     <p class="plan-legs" id="plan-legs"></p>
-    <div class="plan-xct" id="plan-xct" hidden>
-      <span class="plan-xct-label">To XCTrack{common.info(XCT_HELP, "Sending the task to XCTrack")}</span>
-      <button type="button" class="btn" id="plan-xct-file">{common.icon(common.ICONS["download"])}File</button>
-      <button type="button" class="btn" id="plan-xct-code">Task code</button>
-      <button type="button" class="btn" id="plan-xct-qr">QR code</button>
-      <p class="plan-xct-out" id="plan-xct-out" role="status"></p>
-    </div>
     <div class="plan-airspace" id="plan-airspace"></div>
     <p class="plan-note">A plan, not a clearance.{common.info(rules, "How the task is scored")}</p>
+    <!-- To XCTrack: one split button at the panel's foot, the device's best way first
+         (`xctMethods` in planner.js); a QR code or a task code opens in the dialog. -->
+    <div class="plan-xct" id="plan-xct" hidden>
+      <div class="plan-split">
+        <button type="button" class="btn plan-split-main" id="plan-xct-main"></button>
+        <button type="button" class="btn plan-split-more" id="plan-xct-more" aria-haspopup="menu"
+                aria-expanded="false" aria-label="Other ways to XCTrack">{common.icon(common.ICONS["down"])}</button>
+        <div class="plan-split-menu" id="plan-xct-menu" role="menu" hidden></div>
+      </div>{common.info(XCT_HELP, "Sending the task to XCTrack")}
+      <p class="plan-xct-out" id="plan-xct-out" role="status"></p>
+    </div>
+    <dialog class="plan-xct-dlg" id="plan-xct-dlg" aria-labelledby="plan-xct-title">
+      <div class="plan-xct-dlg-head"><h2 id="plan-xct-title">Send the task to XCTrack</h2>
+        <button type="button" class="tool" id="plan-xct-close" aria-label="Close">{common.icon(common.ICONS["close"])}</button></div>
+      <p class="plan-xct-dlg-sub" id="plan-xct-sub"></p>
+      <div class="plan-xct-dlg-body" id="plan-xct-body"></div>
+    </dialog>
     <script type="application/json" id="plan-coverage">{_coverage()}</script>
   </section>"""
 

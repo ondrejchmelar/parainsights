@@ -563,6 +563,33 @@ def test_the_task_goes_to_xctrack_as_a_waypoints_task():
     assert alt == pytest.approx(answer["ground"], abs=1), "the turnpoint lost the ground's height"
 
 
+
+@needs_chrome
+def test_xctrack_is_one_split_button_at_the_panel_foot():
+    """One button for the device's best way, the other two behind its arrow; a desktop
+    (no coarse pointer here) leads with the QR code, which opens in the dialog."""
+    answer = _run(_HARNESS + """
+    tap(0.35, 0.40); tap(0.60, 0.40);
+    var section = document.getElementById('plan-xct').closest('.plan-section');
+    var more = document.getElementById('plan-xct-more');
+    var shut = document.getElementById('plan-xct-menu').hidden;
+    more.click();
+    return { main: document.getElementById('plan-xct-main').dataset.method,
+             menu: Array.prototype.map.call(document.querySelectorAll('#plan-xct-menu button'),
+                                            function (b) { return b.dataset.method; }),
+             shut: shut, open: !document.getElementById('plan-xct-menu').hidden,
+             last: ['plan-airspace', 'plan-figures'].every(function (id) {
+               return !!(document.getElementById(id).compareDocumentPosition(
+                 document.getElementById('plan-xct')) & Node.DOCUMENT_POSITION_FOLLOWING);
+             }) && !!(section.querySelector('.plan-note').compareDocumentPosition(
+                 document.getElementById('plan-xct')) & Node.DOCUMENT_POSITION_FOLLOWING) };
+    """)
+    assert answer["main"] == "qr"
+    assert answer["menu"] == ["file", "code"]
+    assert answer["shut"] is True and answer["open"] is True
+    assert answer["last"], "the export is not at the foot of the Task panel"
+
+
 def test_the_polyline_encoding_is_googles():
     """The encoder against the algorithm's own published example
     (developers.google.com/maps/documentation/utilities/polylinealgorithm): -179.9832104
