@@ -39,12 +39,14 @@ FLYMET_RANGE_KM = 60
 LEVELS = (1000, 975, 950, 925, 900, 850, 800, 700, 600, 500)
 ENDPOINT = "https://api.open-meteo.com/v1/forecast"
 
-# The synoptic situation behind the day: the Met Office's surface pressure charts — the
-# analysis and forecasts out to five days, over the Atlantic and Europe — the chart a
-# pilot reads the fronts and the gradient off. Linked, not drawn: there is no forecast
-# here to draw one from.
-SYNOPTIC = "https://weather.metoffice.gov.uk/maps-and-charts/surface-pressure"
-LINK_ICON = '<path d="M11.5 3.5h5v5M16.5 3.5 9 11M14 11.5v5H3.5V6h5"/>'
+# The synoptic situation behind the day: ČHMÚ's "Synoptická situace" — the pressure
+# and the fronts over Central Europe, stepped through the coming days — the chart a pilot
+# reads the fronts and the gradient off. Linked, not drawn: there is no forecast here to
+# draw one from. (The pilot's pick, October 2026, over DWD's and the Met Office's.)
+SYNOPTIC = "https://www.chmi.cz/predpoved-pocasi/synopticka-situace"
+# An isobar map: a front's line across the curved isobars.
+SYNOPTIC_ICON = ('<path d="M2.5 13.5c3-4 6-5 9-3.5s5 .5 6-2"/><path d="M2.5 8.5c2.5-3 5.5-4 8-3s4.5.5 7-1.5"/>'
+                 '<path d="M5 17.5c2-2.5 5-3 7.5-2s4 .5 5-1"/>')
 
 # The lapse rate at or below which a layer is drawn as the lid on the day. Here because
 # the caption has to state it and the caption is written in Python; the rule itself is in
@@ -75,6 +77,8 @@ STYLE = """
 .met-sticky { position: sticky; top: 0; z-index: 20; background: var(--paper);
   padding: 14px 0 12px; border-bottom: 1px solid var(--rule); margin: -18px 0 22px; }
 .met-head { display:flex; flex-wrap:wrap; gap:12px 22px; align-items:center; margin: 0 0 14px; }
+.met-day-row { display:flex; flex-wrap:wrap; align-items:center; gap:10px; min-width:0; }
+.met-days { flex:none; }
 .met-hour { display:flex; align-items:center; gap:12px; font-size:16px; color:var(--ink-2);
   flex:1 1 300px; min-width:240px; }
 .met-hour label { display:inline-flex; align-items:center; }
@@ -205,7 +209,8 @@ STYLE = """
 .met-col-sounding, .met-col-air { touch-action: manipulation; -webkit-touch-callout: none;
   -webkit-user-select: none; user-select: none; }
 /* The synoptic situation, a link off the page: the pressure chart for the days above. */
-.met-synoptic { margin:0 0 18px; font-size:15.5px; color:var(--ink-2); }
+/* The synoptic chart, an icon by the days it is about. */
+.met-synoptic { width:44px; padding:0; flex:none; }
 /* flymet's meteogram for the airfield nearest this takeoff, under its own charts. */
 .met-col-fly { margin: 0; }
 .met-col-fly img { display:block; width:100%; border-radius:14px; background:#fff; }
@@ -221,6 +226,8 @@ STYLE = """
   .met-sticky { margin: -18px -14px 18px; padding: 12px 14px 10px; }
   .met-head { gap: 10px; margin-bottom: 10px; }
   .met-hour { flex-basis: 100%; min-width: 0; }
+  /* Tighter days, so the four and the synoptic chart's icon share a 360 px row. */
+  .met-days > button { padding: 0 10px; }
   /* The head on one line: the name gives way (…) before the height or the tools do. */
   .met-col-head { font-size:19px; gap:7px; }
   .met-col-head .name { flex:none; max-width:62%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -305,7 +312,11 @@ def body(uid: str = "meteo") -> str:
   <!-- The day and the hour apply to everything below, so they stay in view. -->
   <div class="met-sticky">
   <div class="met-head">
-    <div class="seg met-days" id="met-days" role="group" aria-label="Which day"></div>
+    <div class="met-day-row">
+      <div class="seg met-days" id="met-days" role="group" aria-label="Which day"></div>
+      <a class="tool met-synoptic" href="{SYNOPTIC}" rel="noreferrer" target="_blank"
+         title="Synoptic chart (ČHMÚ)" aria-label="Synoptic chart (ČHMÚ)">{common.icon(SYNOPTIC_ICON)}</a>
+    </div>
     <div class="met-hour">
       <label for="met-hour-input">Hour</label><span class="info-wrap"><button type="button" class="info"
         aria-expanded="false" aria-label="About the forecast model">i</button><span class="info-pop"
@@ -321,8 +332,6 @@ def body(uid: str = "meteo") -> str:
     <button type="button" class="chip met-add" id="met-add">{common.icon(common.ICONS["plus"])}<span>Add takeoff</span></button>
   </div>
   </div>
-
-  <p class="met-synoptic"><a class="lnk" href="{SYNOPTIC}" rel="noreferrer" target="_blank">Synoptic chart{common.icon(LINK_ICON, 16)}</a></p>
 
   <table class="met-compare" id="met-compare" hidden
          aria-label="The chosen takeoffs at the chosen hour">
