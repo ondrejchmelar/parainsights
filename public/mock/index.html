@@ -1,0 +1,322 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>XCTrack export — two layouts</title><script>
+try {
+  var t = localStorage.getItem('parainsights.theme');
+  if (t) document.documentElement.dataset.theme = t;
+  if (localStorage.getItem('parainsights.text') === 'large') document.documentElement.dataset.text = 'large';
+  if (localStorage.getItem('parainsights.help') === 'off') document.documentElement.dataset.help = 'off';
+} catch (e) {}
+</script><style>
+:root { color-scheme: light; --paper:#f6f5f1; --panel:#ffffff; --panel-2:#eeece6; --ink:#161614; --ink-2:#45433d;
+  --ink-3:#45433d; --rule:#d9d5cb; --edge:#8f8a80; --rule-strong:#8f8a80;
+  --accent:#c2410c; --on-accent:#ffffff; --good:#13803f; --on-good:#ffffff;
+  --warn:#8f6200; --on-warn:#ffffff; --bad:#b42318;
+  --series-1:#7c3aed; --series-2:#0e7f93; --series-3:#c42a72;
+  --series-4:#a16207; --series-5:#475569; --series-6:#4d7c0f;
+  --float:rgba(255,255,255,.92); --float-2:rgba(238,236,230,.96); --float-edge:rgba(0,0,0,.16);
+  --float-shadow:0 6px 20px rgba(0,0,0,.18); --pop-bg:#1d1d1a; --pop-ink:#f2f0ea;
+  --climb:#eb6834; --climb-1:#f0a07a; --climb-2:#eb6834; --climb-3:#c8431a;
+  --sink:#1d5fd1; --sink-1:#8fb6e6; --sink-2:#1d5fd1; --sink-3:#17508f;
+  --tow:#1baf7a; --neutral:#a9a49a; --shadow-ink:#c3bfb4;
+  --ld-1:#86aed8; --ld-2:#5f92c9; --ld-3:#3f74b4; --ld-4:#2a5894; --ld-5:#173d69; }
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) { color-scheme: dark; --paper:#141412; --panel:#1d1d1a; --panel-2:#272723; --ink:#efede8; --ink-2:#c3bfb6;
+    --ink-3:#c3bfb6; --rule:#34332e; --edge:#6b685f; --rule-strong:#6b685f;
+    --accent:#e8692c; --on-accent:#141412; --good:#2fb36a; --on-good:#0b1a10;
+    --warn:#d9a21b; --on-warn:#111111; --bad:#e5484d;
+    --series-1:#a78bfa; --series-2:#3cc8dc; --series-3:#f47fb0;
+    --series-4:#e0a458; --series-5:#a8b3c4; --series-6:#9bc25b;
+    --float:rgba(20,20,18,.84); --float-2:rgba(39,39,35,.92); --float-edge:rgba(255,255,255,.16);
+    --float-shadow:0 6px 20px rgba(0,0,0,.35); --pop-bg:#f3f1ec; --pop-ink:#181816;
+    --climb:#e8692c; --climb-1:#b06a4a; --climb-2:#e8692c; --climb-3:#f08a55;
+    --sink:#4b8ff0; --sink-1:#4a6f9e; --sink-2:#4b8ff0; --sink-3:#86b2f5;
+    --tow:#199e70; --neutral:#8a877f; --shadow-ink:#3a3934;
+    --ld-1:#35577f; --ld-2:#4874a6; --ld-3:#5b91cc; --ld-4:#74aae0; --ld-5:#9cc6f0; }
+}
+:root[data-theme="dark"] { color-scheme: dark; --paper:#141412; --panel:#1d1d1a; --panel-2:#272723; --ink:#efede8; --ink-2:#c3bfb6;
+    --ink-3:#c3bfb6; --rule:#34332e; --edge:#6b685f; --rule-strong:#6b685f;
+    --accent:#e8692c; --on-accent:#141412; --good:#2fb36a; --on-good:#0b1a10;
+    --warn:#d9a21b; --on-warn:#111111; --bad:#e5484d;
+    --series-1:#a78bfa; --series-2:#3cc8dc; --series-3:#f47fb0;
+    --series-4:#e0a458; --series-5:#a8b3c4; --series-6:#9bc25b;
+    --float:rgba(20,20,18,.84); --float-2:rgba(39,39,35,.92); --float-edge:rgba(255,255,255,.16);
+    --float-shadow:0 6px 20px rgba(0,0,0,.35); --pop-bg:#f3f1ec; --pop-ink:#181816;
+    --climb:#e8692c; --climb-1:#b06a4a; --climb-2:#e8692c; --climb-3:#f08a55;
+    --sink:#4b8ff0; --sink-1:#4a6f9e; --sink-2:#4b8ff0; --sink-3:#86b2f5;
+    --tow:#199e70; --neutral:#8a877f; --shadow-ink:#3a3934;
+    --ld-1:#35577f; --ld-2:#4874a6; --ld-3:#5b91cc; --ld-4:#74aae0; --ld-5:#9cc6f0; }
+
+/* The strip: the three tools, then aA, Help, the theme and the source. */
+.site-nav { display:flex; align-items:center; gap:4px; min-height:62px; margin:0 0 18px;
+  border-bottom:1px solid var(--rule); flex-wrap:wrap; }
+.site-nav > a, .site-nav > span:not(.site-sp), .site-nav > .view-tab { height:44px; display:inline-flex;
+  align-items:center; padding:0 15px; border-radius:10px; font-family:inherit; font-size:16px;
+  font-weight:600; line-height:1; color:var(--ink-2); text-decoration:none; border:0; background:none;
+  cursor:pointer; margin:0; }
+.site-nav > a:hover, .site-nav > .view-tab:hover { background:var(--panel-2); color:var(--ink); }
+.site-nav > .is-on:not(.site-sp), .site-nav > .is-on:not(.site-sp):hover { background:var(--ink); color:var(--paper); }
+.site-nav > .site-sp { flex:1; }
+.site-nav > a.tool { padding:0 13px; border:1px solid var(--edge); border-radius:999px; }
+.tool { height:44px; min-width:44px; padding:0 13px; display:inline-flex; align-items:center; justify-content:center;
+  gap:8px; border:1px solid var(--edge); border-radius:999px; background:transparent; color:var(--ink-2);
+  font-family:inherit; font-size:16px; font-weight:600; line-height:1; cursor:pointer; text-decoration:none; }
+.tool:hover { background:var(--panel-2); color:var(--ink); }
+.text-toggle { gap:1px; } .text-toggle b { font-size:19px; }
+/* aA and the theme: the same circle, side by side at the end of the strip. */
+.tool.text-toggle, .tool.theme-toggle { width:44px; min-width:44px; padding:0; }
+.text-toggle[aria-pressed="true"] { background:var(--ink); color:var(--paper); border-color:var(--ink); }
+.switch { width:36px; height:21px; border-radius:11px; background:var(--edge); position:relative; flex:none; }
+.switch::after { content:""; position:absolute; left:3px; top:3px; width:15px; height:15px; border-radius:50%;
+  background:#fff; transition:left .15s; }
+.help-toggle[aria-pressed="true"] .switch { background:var(--accent); }
+.help-toggle[aria-pressed="true"] .switch::after { left:18px; }
+.theme-glyph, .theme-glyph svg { display:block; }
+.site-foot { margin:56px 0 0; padding:18px 0 0; border-top:1px solid var(--rule);
+  font-size:15px; line-height:1.55; color:var(--ink-2); display:block; }
+.site-foot a { color:var(--ink-2); }
+.site-foot .gh { vertical-align: -2px; margin-right: 6px; }
+@media (max-width: 640px) {
+  .site-nav { gap:2px; min-height:56px; }
+  .site-nav { flex-wrap:nowrap; }
+  .site-nav > a, .site-nav > span:not(.site-sp), .site-nav > .view-tab { padding:0 8px; }
+  .site-nav > a.tool, .tool { padding:0 9px; min-width:40px; }
+  /* Help is a desktop switch: on a phone the ⓘ are there to tap, and the strip is full. */
+  .help-toggle { display:none; }
+}
+
+body { font-family: "Noto Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 16px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+/* aA: the page an eighth larger, the maps excepted — MapLibre reads its pointer through
+   the zoom, and a zoomed canvas blurs. */
+html[data-text="large"] body { zoom: 1.125; }
+html[data-text="large"] .view3d-panel { zoom: calc(1 / 1.125); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lnk, a.lnk { color: var(--accent); font-weight: 600; text-decoration: none; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0;
+  font-family: inherit; font-size: inherit; }
+.lnk:hover { text-decoration: underline; }
+.btn { height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--edge);
+  background: var(--panel-2); color: var(--ink); font-family: inherit; font-size: 16px; font-weight: 600;
+  line-height: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  cursor: pointer; text-decoration: none; white-space: nowrap; }
+.btn:hover { background: var(--panel); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn svg, .tool svg, .lnk svg, .chip svg { display: block; flex: none; }
+.seg { display: inline-flex; border: 1px solid var(--edge); border-radius: 11px; overflow: hidden;
+  background: var(--panel); vertical-align: middle; }
+.seg > button, .seg > span { height: 42px; padding: 0 16px; border: 0; border-radius: 0; background: none;
+  color: var(--ink-2); font-family: inherit; font-size: 16px; font-weight: 600; line-height: 1;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.seg > * + * { border-left: 1px solid var(--rule); }
+.seg > button:hover { background: var(--panel-2); color: var(--ink); }
+.seg > .is-on, .seg > [aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.seg > .is-on:hover, .seg > [aria-pressed="true"]:hover { background: var(--ink); color: var(--paper); }
+.chip { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px;
+  border-radius: 999px; border: 1px solid var(--edge); background: var(--panel); color: var(--ink);
+  font-family: inherit; font-size: 16px; font-weight: 600; line-height: 1; }
+.dot { display: inline-block; width: 11px; height: 11px; border-radius: 50%; flex: none; }
+.badge { display: inline-flex; align-items: center; padding: 3px 11px; border-radius: 999px;
+  font-weight: 600; font-size: 15px; line-height: 1.3; white-space: nowrap; }
+.badge.good { background: var(--good); color: var(--on-good); }
+.badge.warn { background: var(--warn); color: var(--on-warn); }
+.badge.bad { border: 1.5px solid var(--edge); color: var(--ink-2); }
+.badge.accent { background: var(--accent); color: var(--on-accent); }
+.legend-row { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; margin: 10px 0 0;
+  padding: 0; list-style: none; font-size: 15px; color: var(--ink-2); }
+.legend-row > * { display: inline-flex; align-items: center; gap: 7px; }
+.legend-row i { width: 14px; height: 10px; border-radius: 3px; display: inline-block; flex: none; }
+.legend-row .grad { width: 70px; height: 10px; border-radius: 5px; display: inline-block;
+  background: linear-gradient(90deg, var(--sink), var(--neutral), var(--climb)); }
+/* The ⓘ: about the cap height of the text it follows, a 44 px target for a finger. */
+.info-wrap { position: relative; display: inline-flex; align-items: center; vertical-align: 0.1em;
+  margin-left: 0.4em; font-weight: 400; text-transform: none; letter-spacing: 0; line-height: 1; }
+.info { position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: 1.3em; height: 1.3em; min-width: 13px; min-height: 13px; padding: 0; border-radius: 50%;
+  border: 1.5px solid var(--ink-2); background: none; color: var(--ink-2);
+  font: italic 700 0.66em/1 Georgia, serif; cursor: help; box-sizing: border-box; flex: none; }
+.info::after { content: ""; position: absolute; inset: -12px; }
+.info:hover, .info[aria-expanded="true"] { color: var(--ink); border-color: var(--ink); }
+.info-pop { display: none; position: absolute; z-index: 80; left: 50%; top: calc(100% + 10px);
+  transform: translateX(-50%); width: max-content; max-width: min(320px, 86vw); padding: 12px 15px;
+  background: var(--pop-bg); color: var(--pop-ink); border-radius: 14px; box-shadow: 0 10px 34px rgba(0,0,0,.35);
+  font: 400 15.5px/1.5 "Noto Sans", ui-sans-serif, system-ui, sans-serif; text-align: left;
+  white-space: normal; letter-spacing: 0; text-transform: none; }
+.info-pop a { color: inherit; }
+.info-wrap.to-left .info-pop { left: auto; right: -12px; transform: none; }
+.info-wrap.to-right .info-pop { left: -12px; transform: none; }
+@media (hover: hover) { .info-wrap:hover .info-pop { display: block; } }
+.info[aria-expanded="true"] + .info-pop { display: block; }
+html[data-help="off"] .info-wrap { display: none; }
+
+body{margin:0;background:var(--paper);color:var(--ink);font-family:"Noto Sans",system-ui,sans-serif}
+.wrap{max-width:1100px;margin:0 auto;padding:14px 14px 60px}
+h1{font-size:22px;margin:6px 0} .case{margin:26px 0} .case h2{font-size:18px;margin:0 0 2px} .note{font-size:15px;color:var(--ink-2);margin:0 0 10px}
+.frame{border:1px solid var(--edge);border-radius:14px;background:repeating-linear-gradient(45deg,#7a8a6a22 0 12px,#6a7a5a22 12px 24px);padding:12px;position:relative}
+.frame.phone{max-width:390px}.frame.desk{max-width:620px}
+.tk{background:var(--panel);border-radius:14px;padding:16px;max-width:560px}
+.tk-head{display:flex;justify-content:space-between;align-items:center}.tk-head b{font-size:20px}
+.chip-shape{background:#9a6a00;color:#fff;border-radius:999px;padding:3px 12px;font-weight:600;font-size:15px}
+.tk-km{font-size:38px;font-weight:700;margin:2px 0}
+.tk-figs{display:flex;gap:28px;margin:0 0 12px}.tk-figs span{display:block;color:var(--ink-2);font-size:15px}.tk-figs b{font-size:18px;font-weight:600}
+.tk-bar{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
+.tk-opts{display:flex;gap:18px;margin:4px 0 8px}.tk-legs{font-size:15px;color:var(--ink-2);margin:6px 0}
+.tk-air{font-size:15px;color:var(--ink-2);margin:12px 0 6px;border-bottom:1px solid var(--rule);padding-bottom:8px}
+.tk-li{display:flex;gap:8px;font-size:15px;padding:6px 0;border-bottom:1px solid var(--rule)}.tk-li i{width:10px;height:10px;border-radius:50%;background:#c2410c;margin-top:6px;flex:none}.tk-li span{margin-left:auto;color:var(--ink-2)}
+.btn svg{margin-right:2px}
+.split{display:inline-flex;position:relative;margin:0 0 6px}
+.split-main{border-radius:10px 0 0 10px}.split-more{border-radius:0 10px 10px 0;margin-left:-1px;padding:0 10px}
+.split-menu{position:absolute;top:48px;left:0;z-index:5;background:var(--panel);border:1px solid var(--edge);border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.3);min-width:240px;padding:6px}
+.split-menu button{display:block;width:100%;text-align:left;background:none;border:0;color:var(--ink);font:inherit;font-size:16px;padding:10px 12px;border-radius:8px;cursor:pointer}
+.split-menu button:hover{background:var(--panel-2)}
+.split-out{font-size:15px;color:var(--ink-2);margin:2px 0 10px;min-height:0}
+.dlg{width:min(420px,92vw);border:1px solid var(--edge);border-radius:14px;background:var(--panel);color:var(--ink);padding:0;box-shadow:0 18px 44px rgba(0,0,0,.45)}
+.dlg::backdrop{background:rgba(0,0,0,.55)}
+.d-head{display:flex;justify-content:space-between;align-items:center;padding:14px 16px 0}.d-head h2{font-size:19px;margin:0}
+.d-sub{font-size:15px;color:var(--ink-2);margin:4px 16px 14px}
+.dlg .big{margin:0 16px;width:calc(100% - 32px);height:52px;font-size:18px}
+.d-note{font-size:15px;color:var(--ink-2);margin:8px 16px}
+.d-qr{display:flex;justify-content:center;margin:0 16px}.d-qr svg{border-radius:10px;padding:8px;background:#fff}
+.d-alt{display:flex;flex-wrap:wrap;gap:6px 18px;border-top:1px solid var(--rule);margin:12px 0 0;padding:12px 16px 16px}
+</style><div class="wrap"><h1>Sending the task to XCTrack — two layouts</h1><p class="note">A mock: the buttons work, nothing is sent anywhere. The Task panel is shortened to what matters here. On a phone, look at the phone cases; on a desktop, both.</p><section class="case"><h2>A · Modal, phone</h2><p class="note">One button beside Undo and Clear. The dialog leads with the file, which opens straight into XCTrack on the phone.</p><div class="frame phone"><div class="tk"><div class="tk-head"><b>Task</b><span class="chip-shape">Flat triangle</span></div>
+<div class="tk-km">258.17 km</div>
+<div class="tk-figs"><div><span>Score</span><b>361.43 pts</b></div><div><span>Multiplier</span><b>×1.4</b></div><div><span>Turnpoints</span><b>3</b></div></div><div class="tk-bar"><button class="btn primary">Draw a task</button><button class="btn">Undo</button><button class="btn">Clear</button><button class="btn xct-open" data-dialog="dlg-ap"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3v10M6 9l4 4 4-4M4 16.5h12"/></svg>XCTrack</button></div><div class="tk-opts"><label class="chk"><input type="checkbox" checked> Closed</label><label class="chk"><input type="checkbox" checked> FAI areas</label></div>
+<p class="tk-legs">side 1: 87.3 km · side 2: 87.5 km · side 3: 83.4 km · closing gap: 0.0 km</p>
+<p class="tk-air">30 airspaces crossed, lowest floor first</p>
+<div class="tk-li"><i></i>MCTR PARDUBICE <span>35.0 km through, from the ground</span></div>
+<div class="tk-li"><i></i>MCTR CASLAV <span>22.4 km through, from the ground</span></div><dialog class="dlg" id="dlg-ap"><div class="d-head"><h2>Send the task to XCTrack</h2><button class="tool d-close" aria-label="Close"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15"/></svg></button></div><p class="d-sub">TP1 → TP2 → TP3 → TP1 · 258 km · as a waypoints task</p><button class="btn primary big"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3v10M6 9l4 4 4-4M4 16.5h12"/></svg>Open in XCTrack</button><p class="d-note">Downloads the task; open it and choose XCTrack.</p><div class="d-alt"><button class="lnk">Get a task code instead</button></div></dialog></div></div></section><section class="case"><h2>A · Modal, desktop</h2><p class="note">On a desktop the dialog leads with the QR code (it is drawn by XContest when the dialog opens); the file and the code under it.</p><div class="frame desk"><div class="tk"><div class="tk-head"><b>Task</b><span class="chip-shape">Flat triangle</span></div>
+<div class="tk-km">258.17 km</div>
+<div class="tk-figs"><div><span>Score</span><b>361.43 pts</b></div><div><span>Multiplier</span><b>×1.4</b></div><div><span>Turnpoints</span><b>3</b></div></div><div class="tk-bar"><button class="btn primary">Draw a task</button><button class="btn">Undo</button><button class="btn">Clear</button><button class="btn xct-open" data-dialog="dlg-ad"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3v10M6 9l4 4 4-4M4 16.5h12"/></svg>XCTrack</button></div><div class="tk-opts"><label class="chk"><input type="checkbox" checked> Closed</label><label class="chk"><input type="checkbox" checked> FAI areas</label></div>
+<p class="tk-legs">side 1: 87.3 km · side 2: 87.5 km · side 3: 83.4 km · closing gap: 0.0 km</p>
+<p class="tk-air">30 airspaces crossed, lowest floor first</p>
+<div class="tk-li"><i></i>MCTR PARDUBICE <span>35.0 km through, from the ground</span></div>
+<div class="tk-li"><i></i>MCTR CASLAV <span>22.4 km through, from the ground</span></div><dialog class="dlg" id="dlg-ad"><div class="d-head"><h2>Send the task to XCTrack</h2><button class="tool d-close" aria-label="Close"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15"/></svg></button></div><p class="d-sub">TP1 → TP2 → TP3 → TP1 · 258 km · as a waypoints task</p><div class="d-qr"><svg viewBox="0 0 29 29" width="200" height="200" shape-rendering="crispEdges"><rect width="29" height="29" fill="#fff"/><rect x="10" y="2" width="1" height="1" fill="#000"/><rect x="11" y="2" width="1" height="1" fill="#000"/><rect x="15" y="2" width="1" height="1" fill="#000"/><rect x="16" y="2" width="1" height="1" fill="#000"/><rect x="9" y="4" width="1" height="1" fill="#000"/><rect x="13" y="4" width="1" height="1" fill="#000"/><rect x="14" y="4" width="1" height="1" fill="#000"/><rect x="18" y="4" width="1" height="1" fill="#000"/><rect x="19" y="4" width="1" height="1" fill="#000"/><rect x="10" y="5" width="1" height="1" fill="#000"/><rect x="13" y="5" width="1" height="1" fill="#000"/><rect x="15" y="5" width="1" height="1" fill="#000"/><rect x="18" y="5" width="1" height="1" fill="#000"/><rect x="9" y="6" width="1" height="1" fill="#000"/><rect x="11" y="6" width="1" height="1" fill="#000"/><rect x="14" y="6" width="1" height="1" fill="#000"/><rect x="16" y="6" width="1" height="1" fill="#000"/><rect x="19" y="6" width="1" height="1" fill="#000"/><rect x="10" y="7" width="1" height="1" fill="#000"/><rect x="11" y="7" width="1" height="1" fill="#000"/><rect x="15" y="7" width="1" height="1" fill="#000"/><rect x="16" y="7" width="1" height="1" fill="#000"/><rect x="3" y="9" width="1" height="1" fill="#000"/><rect x="4" y="9" width="1" height="1" fill="#000"/><rect x="8" y="9" width="1" height="1" fill="#000"/><rect x="9" y="9" width="1" height="1" fill="#000"/><rect x="13" y="9" width="1" height="1" fill="#000"/><rect x="14" y="9" width="1" height="1" fill="#000"/><rect x="18" y="9" width="1" height="1" fill="#000"/><rect x="19" y="9" width="1" height="1" fill="#000"/><rect x="23" y="9" width="1" height="1" fill="#000"/><rect x="24" y="9" width="1" height="1" fill="#000"/><rect x="3" y="10" width="1" height="1" fill="#000"/><rect x="5" y="10" width="1" height="1" fill="#000"/><rect x="8" y="10" width="1" height="1" fill="#000"/><rect x="10" y="10" width="1" height="1" fill="#000"/><rect x="13" y="10" width="1" height="1" fill="#000"/><rect x="15" y="10" width="1" height="1" fill="#000"/><rect x="18" y="10" width="1" height="1" fill="#000"/><rect x="20" y="10" width="1" height="1" fill="#000"/><rect x="23" y="10" width="1" height="1" fill="#000"/><rect x="25" y="10" width="1" height="1" fill="#000"/><rect x="4" y="11" width="1" height="1" fill="#000"/><rect x="6" y="11" width="1" height="1" fill="#000"/><rect x="9" y="11" width="1" height="1" fill="#000"/><rect x="11" y="11" width="1" height="1" fill="#000"/><rect x="14" y="11" width="1" height="1" fill="#000"/><rect x="16" y="11" width="1" height="1" fill="#000"/><rect x="19" y="11" width="1" height="1" fill="#000"/><rect x="21" y="11" width="1" height="1" fill="#000"/><rect x="24" y="11" width="1" height="1" fill="#000"/><rect x="26" y="11" width="1" height="1" fill="#000"/><rect x="5" y="12" width="1" height="1" fill="#000"/><rect x="6" y="12" width="1" height="1" fill="#000"/><rect x="10" y="12" width="1" height="1" fill="#000"/><rect x="11" y="12" width="1" height="1" fill="#000"/><rect x="15" y="12" width="1" height="1" fill="#000"/><rect x="16" y="12" width="1" height="1" fill="#000"/><rect x="20" y="12" width="1" height="1" fill="#000"/><rect x="21" y="12" width="1" height="1" fill="#000"/><rect x="25" y="12" width="1" height="1" fill="#000"/><rect x="26" y="12" width="1" height="1" fill="#000"/><rect x="3" y="14" width="1" height="1" fill="#000"/><rect x="4" y="14" width="1" height="1" fill="#000"/><rect x="8" y="14" width="1" height="1" fill="#000"/><rect x="9" y="14" width="1" height="1" fill="#000"/><rect x="13" y="14" width="1" height="1" fill="#000"/><rect x="14" y="14" width="1" height="1" fill="#000"/><rect x="18" y="14" width="1" height="1" fill="#000"/><rect x="19" y="14" width="1" height="1" fill="#000"/><rect x="23" y="14" width="1" height="1" fill="#000"/><rect x="24" y="14" width="1" height="1" fill="#000"/><rect x="3" y="15" width="1" height="1" fill="#000"/><rect x="5" y="15" width="1" height="1" fill="#000"/><rect x="8" y="15" width="1" height="1" fill="#000"/><rect x="10" y="15" width="1" height="1" fill="#000"/><rect x="13" y="15" width="1" height="1" fill="#000"/><rect x="15" y="15" width="1" height="1" fill="#000"/><rect x="18" y="15" width="1" height="1" fill="#000"/><rect x="20" y="15" width="1" height="1" fill="#000"/><rect x="23" y="15" width="1" height="1" fill="#000"/><rect x="25" y="15" width="1" height="1" fill="#000"/><rect x="4" y="16" width="1" height="1" fill="#000"/><rect x="6" y="16" width="1" height="1" fill="#000"/><rect x="9" y="16" width="1" height="1" fill="#000"/><rect x="11" y="16" width="1" height="1" fill="#000"/><rect x="14" y="16" width="1" height="1" fill="#000"/><rect x="16" y="16" width="1" height="1" fill="#000"/><rect x="19" y="16" width="1" height="1" fill="#000"/><rect x="21" y="16" width="1" height="1" fill="#000"/><rect x="24" y="16" width="1" height="1" fill="#000"/><rect x="26" y="16" width="1" height="1" fill="#000"/><rect x="5" y="17" width="1" height="1" fill="#000"/><rect x="6" y="17" width="1" height="1" fill="#000"/><rect x="10" y="17" width="1" height="1" fill="#000"/><rect x="11" y="17" width="1" height="1" fill="#000"/><rect x="15" y="17" width="1" height="1" fill="#000"/><rect x="16" y="17" width="1" height="1" fill="#000"/><rect x="20" y="17" width="1" height="1" fill="#000"/><rect x="21" y="17" width="1" height="1" fill="#000"/><rect x="25" y="17" width="1" height="1" fill="#000"/><rect x="26" y="17" width="1" height="1" fill="#000"/><rect x="3" y="19" width="1" height="1" fill="#000"/><rect x="4" y="19" width="1" height="1" fill="#000"/><rect x="8" y="19" width="1" height="1" fill="#000"/><rect x="9" y="19" width="1" height="1" fill="#000"/><rect x="13" y="19" width="1" height="1" fill="#000"/><rect x="14" y="19" width="1" height="1" fill="#000"/><rect x="18" y="19" width="1" height="1" fill="#000"/><rect x="19" y="19" width="1" height="1" fill="#000"/><rect x="23" y="19" width="1" height="1" fill="#000"/><rect x="24" y="19" width="1" height="1" fill="#000"/><rect x="10" y="20" width="1" height="1" fill="#000"/><rect x="13" y="20" width="1" height="1" fill="#000"/><rect x="15" y="20" width="1" height="1" fill="#000"/><rect x="18" y="20" width="1" height="1" fill="#000"/><rect x="20" y="20" width="1" height="1" fill="#000"/><rect x="23" y="20" width="1" height="1" fill="#000"/><rect x="25" y="20" width="1" height="1" fill="#000"/><rect x="9" y="21" width="1" height="1" fill="#000"/><rect x="11" y="21" width="1" height="1" fill="#000"/><rect x="14" y="21" width="1" height="1" fill="#000"/><rect x="16" y="21" width="1" height="1" fill="#000"/><rect x="19" y="21" width="1" height="1" fill="#000"/><rect x="21" y="21" width="1" height="1" fill="#000"/><rect x="24" y="21" width="1" height="1" fill="#000"/><rect x="26" y="21" width="1" height="1" fill="#000"/><rect x="10" y="22" width="1" height="1" fill="#000"/><rect x="11" y="22" width="1" height="1" fill="#000"/><rect x="15" y="22" width="1" height="1" fill="#000"/><rect x="16" y="22" width="1" height="1" fill="#000"/><rect x="20" y="22" width="1" height="1" fill="#000"/><rect x="21" y="22" width="1" height="1" fill="#000"/><rect x="25" y="22" width="1" height="1" fill="#000"/><rect x="26" y="22" width="1" height="1" fill="#000"/><rect x="9" y="24" width="1" height="1" fill="#000"/><rect x="13" y="24" width="1" height="1" fill="#000"/><rect x="14" y="24" width="1" height="1" fill="#000"/><rect x="18" y="24" width="1" height="1" fill="#000"/><rect x="19" y="24" width="1" height="1" fill="#000"/><rect x="23" y="24" width="1" height="1" fill="#000"/><rect x="24" y="24" width="1" height="1" fill="#000"/><rect x="10" y="25" width="1" height="1" fill="#000"/><rect x="13" y="25" width="1" height="1" fill="#000"/><rect x="15" y="25" width="1" height="1" fill="#000"/><rect x="18" y="25" width="1" height="1" fill="#000"/><rect x="20" y="25" width="1" height="1" fill="#000"/><rect x="23" y="25" width="1" height="1" fill="#000"/><rect x="25" y="25" width="1" height="1" fill="#000"/><rect x="9" y="26" width="1" height="1" fill="#000"/><rect x="11" y="26" width="1" height="1" fill="#000"/><rect x="14" y="26" width="1" height="1" fill="#000"/><rect x="16" y="26" width="1" height="1" fill="#000"/><rect x="19" y="26" width="1" height="1" fill="#000"/><rect x="21" y="26" width="1" height="1" fill="#000"/><rect x="24" y="26" width="1" height="1" fill="#000"/><rect x="26" y="26" width="1" height="1" fill="#000"/><rect x="2.5" y="2.5" width="7" height="7" fill="none" stroke="#000"/><rect x="4.5" y="4.5" width="3" height="3" fill="#000"/><rect x="19.5" y="2.5" width="7" height="7" fill="none" stroke="#000"/><rect x="21.5" y="4.5" width="3" height="3" fill="#000"/><rect x="2.5" y="19.5" width="7" height="7" fill="none" stroke="#000"/><rect x="4.5" y="21.5" width="3" height="3" fill="#000"/></svg></div><p class="d-note">Scan with XCTrack: Task → Import → QR code.<br>Drawn by XContest's task service.</p><div class="d-alt"><button class="lnk"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3v10M6 9l4 4 4-4M4 16.5h12"/></svg>Download .xctsk file</button><button class="lnk">Get a task code</button></div></dialog></div></div></section><section class="case"><h2>B · Split button, phone</h2><p class="note">One row: the device's best way as the button, the other two behind ▾. The result appears in one line under it.</p><div class="frame phone"><div class="tk"><div class="tk-head"><b>Task</b><span class="chip-shape">Flat triangle</span></div>
+<div class="tk-km">258.17 km</div>
+<div class="tk-figs"><div><span>Score</span><b>361.43 pts</b></div><div><span>Multiplier</span><b>×1.4</b></div><div><span>Turnpoints</span><b>3</b></div></div><div class="tk-bar"><button class="btn primary">Draw a task</button><button class="btn">Undo</button><button class="btn">Clear</button></div><div class="split"><button class="btn split-main" data-say="bp"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3v10M6 9l4 4 4-4M4 16.5h12"/></svg>Open in XCTrack</button><button class="btn split-more" aria-label="Other ways" data-menu="menu-bp"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 8l4.5 4.5L14.5 8"/></svg></button><div class="split-menu" id="menu-bp" hidden><button>QR code to scan</button><button>Task code (XContest)</button></div></div><p class="split-out" id="say-bp"></p><div class="tk-opts"><label class="chk"><input type="checkbox" checked> Closed</label><label class="chk"><input type="checkbox" checked> FAI areas</label></div>
+<p class="tk-legs">side 1: 87.3 km · side 2: 87.5 km · side 3: 83.4 km · closing gap: 0.0 km</p>
+<p class="tk-air">30 airspaces crossed, lowest floor first</p>
+<div class="tk-li"><i></i>MCTR PARDUBICE <span>35.0 km through, from the ground</span></div>
+<div class="tk-li"><i></i>MCTR CASLAV <span>22.4 km through, from the ground</span></div></div></div></section><section class="case"><h2>B · Split button, desktop</h2><p class="note">Same, with the QR code as the default action; ▾ for the file and the code.</p><div class="frame desk"><div class="tk"><div class="tk-head"><b>Task</b><span class="chip-shape">Flat triangle</span></div>
+<div class="tk-km">258.17 km</div>
+<div class="tk-figs"><div><span>Score</span><b>361.43 pts</b></div><div><span>Multiplier</span><b>×1.4</b></div><div><span>Turnpoints</span><b>3</b></div></div><div class="tk-bar"><button class="btn primary">Draw a task</button><button class="btn">Undo</button><button class="btn">Clear</button></div><div class="split"><button class="btn split-main" data-say="bd"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3v10M6 9l4 4 4-4M4 16.5h12"/></svg>QR for XCTrack</button><button class="btn split-more" aria-label="Other ways" data-menu="menu-bd"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 8l4.5 4.5L14.5 8"/></svg></button><div class="split-menu" id="menu-bd" hidden><button>Download .xctsk file</button><button>Task code (XContest)</button></div></div><p class="split-out" id="say-bd"></p><div class="tk-opts"><label class="chk"><input type="checkbox" checked> Closed</label><label class="chk"><input type="checkbox" checked> FAI areas</label></div>
+<p class="tk-legs">side 1: 87.3 km · side 2: 87.5 km · side 3: 83.4 km · closing gap: 0.0 km</p>
+<p class="tk-air">30 airspaces crossed, lowest floor first</p>
+<div class="tk-li"><i></i>MCTR PARDUBICE <span>35.0 km through, from the ground</span></div>
+<div class="tk-li"><i></i>MCTR CASLAV <span>22.4 km through, from the ground</span></div></div></div></section><p><button type="button" class="tool theme-toggle" aria-pressed="false" aria-label="Switch between the light and dark theme"><span class="theme-glyph" data-sun="<svg width=&quot;20&quot; height=&quot;20&quot; viewBox=&quot;0 0 20 20&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;1.75&quot; stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; aria-hidden=&quot;true&quot;><circle cx=&quot;10&quot; cy=&quot;10&quot; r=&quot;3.5&quot;/><path d=&quot;M10 2v2M10 16v2M2 10h2M16 10h2M4.3 4.3l1.4 1.4M14.3 14.3l1.4 1.4M4.3 15.7l1.4-1.4M14.3 5.7l1.4-1.4&quot;/></svg>" data-moon="<svg width=&quot;20&quot; height=&quot;20&quot; viewBox=&quot;0 0 20 20&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;1.75&quot; stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; aria-hidden=&quot;true&quot;><path d=&quot;M15.5 12.5A6.5 6.5 0 0 1 7.5 4.5a6.5 6.5 0 1 0 8 8z&quot;/></svg>"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.5 12.5A6.5 6.5 0 0 1 7.5 4.5a6.5 6.5 0 1 0 8 8z"/></svg></span></button></p></div><script>
+document.querySelectorAll('.xct-open').forEach(function(b){b.onclick=function(){document.getElementById(b.dataset.dialog).showModal();};});
+document.querySelectorAll('.d-close').forEach(function(b){b.onclick=function(){b.closest('dialog').close();};});
+document.querySelectorAll('dialog').forEach(function(d){d.addEventListener('click',function(e){if(e.target===d)d.close();});});
+document.querySelectorAll('.split-more').forEach(function(b){b.onclick=function(e){e.stopPropagation();var m=document.getElementById(b.dataset.menu);m.hidden=!m.hidden;};});
+document.addEventListener('click',function(){document.querySelectorAll('.split-menu').forEach(function(m){m.hidden=true;});});
+document.querySelectorAll('.split-main').forEach(function(b){b.onclick=function(){document.getElementById('say-'+b.dataset.say).textContent=/QR/.test(b.textContent)?'(the QR code would open here, over the page)':'Saved — open it and choose XCTrack.';};});
+</script><script>(function () {
+  var root = document.documentElement;
+  function dark() {
+    return root.dataset.theme
+      ? root.dataset.theme === 'dark'
+      : window.matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+  function label(button) {
+    var isDark = dark();
+    button.setAttribute('aria-pressed', isDark ? 'true' : 'false');
+    button.title = isDark ? 'Switch to the light theme' : 'Switch to the dark theme';
+    var glyph = button.querySelector('.theme-glyph');
+    glyph.innerHTML = isDark ? glyph.dataset.sun : glyph.dataset.moon;
+  }
+  var buttons = document.querySelectorAll('.theme-toggle');
+  buttons.forEach(function (button) {
+    label(button);
+    button.addEventListener('click', function () {
+      root.dataset.theme = dark() ? 'light' : 'dark';
+      try {
+        localStorage.setItem('parainsights.theme', root.dataset.theme);
+      } catch (e) { /* private mode: the page still switches, it just forgets */ }
+      buttons.forEach(label);
+      // The canvases are painted with the tokens read at draw time, so they hold the
+      // old theme until something asks them to redraw. Each tool exposes its own.
+      if (window.__meteo && window.__meteo.draw) window.__meteo.draw();
+      if (window.__drawCharts) {
+        document.querySelectorAll('[data-flight-report]').forEach(window.__drawCharts);
+      }
+    });
+  });
+  // The system changing under a reader who has expressed no preference.
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
+    if (!root.dataset.theme) buttons.forEach(label);
+  });
+})();
+// aA, Help and the ⓘ — every page, beside the theme switch.
+(function () {
+  var root = document.documentElement;
+  function store(key, value) {
+    try { if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, value); }
+    catch (e) { /* private mode: it switches, it just forgets */ }
+  }
+  function paint() {
+    document.querySelectorAll('.text-toggle').forEach(function (b) {
+      b.setAttribute('aria-pressed', root.dataset.text === 'large' ? 'true' : 'false');
+    });
+    document.querySelectorAll('.help-toggle').forEach(function (b) {
+      b.setAttribute('aria-pressed', root.dataset.help === 'off' ? 'false' : 'true');
+    });
+  }
+  document.addEventListener('click', function (event) {
+    var t = event.target.closest && event.target.closest('.text-toggle, .help-toggle');
+    if (!t) return;
+    if (t.classList.contains('text-toggle')) {
+      if (root.dataset.text === 'large') { delete root.dataset.text; store('parainsights.text', null); }
+      else { root.dataset.text = 'large'; store('parainsights.text', 'large'); }
+      // The maps measure their box; a page that grew under them needs telling.
+      window.dispatchEvent(new Event('resize'));
+    } else {
+      if (root.dataset.help === 'off') { delete root.dataset.help; store('parainsights.help', null); }
+      else { root.dataset.help = 'off'; store('parainsights.help', 'off'); }
+    }
+    paint();
+  });
+  paint();
+
+  // The ⓘ. Hover shows it on a desktop (CSS); a click or tap pins it open, a second one,
+  // Esc or a click anywhere else closes it. Before it shows, it is kept on screen: a
+  // bubble centred on an ⓘ near an edge would hang off it.
+  // Centred on the ⓘ, then moved just enough to stay 8 px inside the window. Hanging it
+  // to the ⓘ's left or right (the first version) failed in the middle of a phone, where a
+  // bubble 320 px wide does not fit on either side of it.
+  function place(wrap) {
+    var pop = wrap.querySelector('.info-pop');
+    if (!pop) return;
+    wrap.classList.remove('to-left', 'to-right');
+    pop.style.left = pop.style.right = pop.style.transform = '';
+    var r = wrap.getBoundingClientRect(), W = document.documentElement.clientWidth;
+    // Its own width once it shows; before, the widest it can be.
+    var width = pop.getBoundingClientRect().width || Math.min(320, W * 0.86);
+    var left = Math.max(8, Math.min(r.left + r.width / 2 - width / 2, W - 8 - width));
+    pop.style.left = (left - r.left) + 'px';
+    pop.style.right = 'auto';
+    pop.style.transform = 'none';
+  }
+  function closeAll(except) {
+    document.querySelectorAll('.info[aria-expanded="true"]').forEach(function (b) {
+      if (b !== except) b.setAttribute('aria-expanded', 'false');
+    });
+  }
+  document.addEventListener('mouseover', function (event) {
+    var w = event.target.closest && event.target.closest('.info-wrap');
+    if (w) place(w);
+  });
+  document.addEventListener('click', function (event) {
+    var b = event.target.closest && event.target.closest('.info');
+    if (b) {
+      event.preventDefault();
+      event.stopPropagation();
+      var open = b.getAttribute('aria-expanded') !== 'true';
+      closeAll(b);
+      b.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (open) place(b.parentNode);   // shown now, so measured at its own width
+      return;
+    }
+    if (!(event.target.closest && event.target.closest('.info-pop'))) closeAll(null);
+  }, true);
+  document.addEventListener('keydown', function (event) { if (event.key === 'Escape') closeAll(null); });
+})();
+</script>
