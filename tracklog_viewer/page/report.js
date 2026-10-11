@@ -441,16 +441,39 @@
     }
     return scenes[uid];
   }
+  // The label each compared flight goes by, chosen among them: the pilot's name where the
+  // pilots differ, and among one pilot's flights the day, or — the same day — the launch
+  // time. Two flights from the same day were both "2026-10-11" in the map's legend.
+  function compareLabels(all) {
+    var info = all.map(function (a) {
+      return { pilot: a.getAttribute('data-compare-pilot') || '', date: a.getAttribute('data-compare-date') || '',
+               time: a.getAttribute('data-compare-time') || '',
+               fallback: a.getAttribute('data-compare-name') || a.getAttribute('data-flight-report') };
+    });
+    var pilots = info.map(function (i) { return i.pilot; })
+      .filter(function (p, k, list) { return list.indexOf(p) === k; });
+    return info.map(function (i) {
+      var parts = [];
+      if (pilots.length > 1) parts.push(i.pilot || i.fallback);
+      var same = info.filter(function (j) { return j.pilot === i.pilot; });
+      if (same.length > 1) {
+        var days = same.map(function (j) { return j.date; })
+          .filter(function (d, k, list) { return list.indexOf(d) === k; });
+        parts.push(days.length > 1 ? i.date : (i.time || i.date));
+      }
+      return parts.join(' \u00b7 ') || i.fallback;
+    });
+  }
   function picked() {
     return articles().filter(function (a) { return chosen[a.getAttribute('data-flight-report')]; });
   }
   window.__compareFor = function (uid) {
     var all = picked();
     if (all.length < 2 || !chosen[uid]) return null;
-    var out = { own: null, others: [] };
+    var out = { own: null, others: [] }, labels = compareLabels(all);
     all.forEach(function (article, i) {
       var colour = OTHER_COLOURS[i % OTHER_COLOURS.length];
-      var name = article.getAttribute('data-compare-name') || '';
+      var name = labels[i];
       if (article.getAttribute('data-flight-report') === uid) {
         var mine = sceneOf(article);
         out.own = { name: name, colour: colour, start: mine ? mine.start : null,
@@ -458,7 +481,7 @@
         return;
       }
       var scene = sceneOf(article);
-      if (scene) out.others.push({ name: scene.name, track: scene.track, start: scene.start, utcOffset: scene.utcOffset,
+      if (scene) out.others.push({ name: name, track: scene.track, start: scene.start, utcOffset: scene.utcOffset,
                                    climbs: scene.climbs, phases: scene.phases, colour: colour });
     });
     return out;

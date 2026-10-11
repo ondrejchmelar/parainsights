@@ -923,7 +923,10 @@
                 return all;
               }, []);
             }),
-            pickable: true,
+            // Not pickable: every pointer move draws the pickable layers into the picking
+            // buffer and reads it back, and the caps doubled that over all the airspace for
+            // a name the walls around them already give.
+            pickable: false,
             getPolygon: function (c) { return c.box.ring.map(function (p) { return [p[0], p[1], z(c.at)]; }); },
             getFillColor: function (c) { return rgb(c.box.colour, 32); },
             parameters: GLASS, updateTriggers: { getPolygon: vertical }
@@ -1194,8 +1197,7 @@
         // over the map, everything showed through the mountains.
         interleaved: true, layers: layers(),
         onHover: function (info) {
-          var box = info && info.layer && info.object &&
-            (info.layer.id === 'airspace' ? info.object : info.layer.id === 'airspace-caps' ? info.object.box : null);
+          var box = info && info.layer && info.layer.id === 'airspace' && info.object;
           if (!box) { asp.hidden = true; return; }
           asp.hidden = false;
           asp.textContent = box.name + (box.capped ? ' — drawn to 4 000 m' : '');

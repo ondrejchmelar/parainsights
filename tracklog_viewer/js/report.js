@@ -529,6 +529,10 @@
                    ['ceiling-used', use ? pyFloat(use.fraction) : null]]
       .filter(function (c) { return c[1] !== null; }).map(function (c) { return ' data-compare-' + c[0] + '="' + c[1] + '"'; }).join('');
     var compareName = esc([summary.date, summary.site].filter(Boolean).join(' · '));
+    // What tells compared flights apart is chosen among them (`compareLabels`, page): the
+    // pilot, the day, the launch time.
+    var compareWho = ' data-compare-pilot="' + esc(summary.pilot || '') + '" data-compare-date="' + esc(summary.date || '') +
+      '" data-compare-time="' + esc(String(summary.takeoff_time || '').slice(0, 5)) + '"';
     var glideCount = glides(a).length;
     var otherFraction = budget.fractions.other;
 
@@ -543,7 +547,7 @@
 
     // The page's title while this flight is the one shown (`flightTabs.show`, page/report.js).
     var pageTitle = summary.date + ' · ' + (summary.site || 'flight') + ' — flight review';
-    return '<article class="flight" data-flight-report="' + uid + '"' + compare + ' data-compare-name="' + compareName + '"' +
+    return '<article class="flight" data-flight-report="' + uid + '"' + compare + ' data-compare-name="' + compareName + '"' + compareWho +
       ' data-title="' + esc(pageTitle) + '"' + (options.hidden ? ' hidden' : '') + '>\n' +
       '  <header class="masthead">\n    <h1>' + esc(summary.site || 'Flight') + ' <span>' + esc(summary.date) + '</span></h1>\n' +
       '    <p class="who"><b>' + esc(summary.pilot || '—') + '</b> · ' + esc(summary.glider || '—') + chip + '</p>\n  </header>\n' +
