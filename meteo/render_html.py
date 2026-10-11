@@ -44,15 +44,18 @@ ENDPOINT = "https://api.open-meteo.com/v1/forecast"
 # reads the fronts and the gradient off. Linked, not drawn: there is no forecast here to
 # draw one from. (The pilot's pick, October 2026, over DWD's and the Met Office's.)
 SYNOPTIC = "https://www.chmi.cz/predpoved-pocasi/synopticka-situace"
-# A synoptic chart in little: uneven isobars round a low, and a cold front sweeping
-# away below it, its teeth filled. Drawn at 24 px rather than the site's 20, the one icon
-# that is: at 20 the front's teeth closed up into a bump on the line.
-SYNOPTIC_ICON = ('<path d="M2.4 9.3C1.5 6.4 3.6 3.3 7.4 2.9c3.8-.4 6.4 1.7 6.2 4.3-.2 2.8-3 5.1-6.5 5.5-2.4.2-4-1-4.7-3.4z"/>'
-                 '<path d="M5 8.6c-.4-1.8.8-3.4 3-3.6 2.1-.1 3.4.9 3.3 2.3-.1 1.5-1.7 2.7-3.6 2.8-1.4.1-2.4-.4-2.7-1.5z"/>'
-                 '<path d="M5 18.2c3.4-.6 6.4-2.4 8.6-5 1.4-1.7 2.8-2.6 4.4-2.9"/>'
-                 '<path d="M8 17.4 7.3 14l3.6 1.1z" fill="currentColor" stroke-width="1"/>'
-                 '<path d="M12.6 14.6 12.9 11l3.1 2.1z" fill="currentColor" stroke-width="1"/>')
-SYNOPTIC_SIZE = 24
+# Concentric isobars, four uneven rings bunched a little to one side, as a chart draws
+# them round a low. On a 24 grid and drawn at 32 px, so they fill the 44 px button, with
+# the line thinned to the weight the site's 20 px icons have (1.35 on 24 is 1.8 px).
+# The pilot's pick, October 2026, out of a dozen tried — fronts closed up at this size.
+SYNOPTIC_ICON = (
+    '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+    'stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    '<path d="M22.66 10.22C23.05 11.93 22.33 14.34 21.29 15.95C20.25 17.56 18.27 19.05 16.42 19.86C14.57 20.68 12.14 21.07 10.20 20.85C8.26 20.63 6.24 19.69 4.77 18.57C3.31 17.44 1.90 15.81 1.41 14.09C0.92 12.37 0.89 9.88 1.84 8.26C2.79 6.65 5.20 5.12 7.11 4.43C9.02 3.73 11.32 3.87 13.30 4.08C15.28 4.29 17.43 4.66 18.99 5.68C20.55 6.71 22.28 8.51 22.66 10.22z"/>'
+    '<path d="M19.92 10.41C20.19 11.60 19.69 13.28 18.96 14.40C18.23 15.52 16.84 16.56 15.54 17.14C14.24 17.71 12.53 17.98 11.17 17.83C9.81 17.68 8.39 17.03 7.36 16.24C6.34 15.46 5.35 14.32 5.01 13.13C4.66 11.93 4.64 10.19 5.31 9.07C5.98 7.94 7.67 6.87 9.02 6.39C10.36 5.90 11.97 6.00 13.36 6.14C14.75 6.29 16.26 6.54 17.35 7.25C18.45 7.96 19.66 9.22 19.92 10.41z"/>'
+    '<path d="M17.19 10.60C17.34 11.29 17.05 12.27 16.63 12.92C16.21 13.57 15.41 14.17 14.67 14.50C13.92 14.83 12.94 14.99 12.15 14.90C11.37 14.81 10.56 14.43 9.96 13.97C9.37 13.52 8.80 12.86 8.60 12.16C8.41 11.47 8.39 10.46 8.78 9.81C9.16 9.16 10.13 8.54 10.90 8.25C11.68 7.97 12.61 8.03 13.41 8.12C14.21 8.20 15.07 8.35 15.70 8.76C16.33 9.18 17.03 9.91 17.19 10.60z"/>'
+    '<path d="M14.38 10.87C14.42 11.08 14.37 11.35 14.25 11.55C14.13 11.75 13.91 11.95 13.68 12.06C13.46 12.17 13.14 12.22 12.89 12.20C12.64 12.18 12.36 12.07 12.18 11.92C12.00 11.78 11.86 11.54 11.82 11.33C11.78 11.12 11.83 10.85 11.95 10.65C12.07 10.45 12.29 10.25 12.52 10.14C12.74 10.03 13.06 9.98 13.31 10.00C13.56 10.02 13.84 10.13 14.02 10.28C14.20 10.42 14.34 10.66 14.38 10.87z"/>'
+    '</svg>')
 
 # The lapse rate at or below which a layer is drawn as the lid on the day. Here because
 # the caption has to state it and the caption is written in Python; the rule itself is in
@@ -329,7 +332,7 @@ def body(uid: str = "meteo") -> str:
     <div class="met-day-row">
       <div class="seg met-days" id="met-days" role="group" aria-label="Which day"></div>
       <a class="tool met-synoptic" href="{SYNOPTIC}" rel="noreferrer" target="_blank"
-         title="Synoptic chart (ČHMÚ)" aria-label="Synoptic chart (ČHMÚ)">{common.icon(SYNOPTIC_ICON, SYNOPTIC_SIZE)}</a>
+         title="Synoptic chart (ČHMÚ)" aria-label="Synoptic chart (ČHMÚ)">{SYNOPTIC_ICON}</a>
     </div>
     <div class="met-hour">
       <label for="met-hour-input">Hour</label><span class="info-wrap"><button type="button" class="info"
