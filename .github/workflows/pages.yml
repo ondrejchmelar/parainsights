@@ -54,9 +54,8 @@ jobs:
       # `-c pyproject.toml` matters: pytest otherwise walks up and adopts an enclosing
       # project's config. -rs so skips are named in the log. A silently skipped test is
       # a test you think you have.
-      # Across the runner's cores (`-n auto`, pytest-xdist): one at a time was most of a
-      # deploy's wait.
-      - run: uv run pytest -c pyproject.toml -rs -n auto
+      # In parallel already: `addopts` in pyproject.toml carries `-n auto --dist loadfile`.
+      - run: uv run pytest -c pyproject.toml -rs
         env:
           PARAINSIGHTS_REQUIRE: node
 
@@ -88,8 +87,7 @@ jobs:
       # MapLibre and deck.gl, the pinned versions the page loads from its CDN, cached for
       # the merged map's tests: the suite itself has no network.
       - run: uv run python -m tests.vendor
-      # Across the runner's cores: serial, this job was 3–4 minutes of every deploy.
-      - run: uv run pytest -c pyproject.toml -rs -n auto
+      - run: uv run pytest -c pyproject.toml -rs
 
   # What this job builds, and what it only checks.
   #

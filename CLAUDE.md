@@ -1194,8 +1194,8 @@ Still wanted:
   which fetches) and by the monthly `airspace.yml`, which also refreshes the openAIP layers
   into `public/planner/layers/` — it wrote to `public/airspace/layers/`, where nothing reads
   them, until that was caught. `stale.sh` checks all three pages against the code that
-  renders each. The deploy's `build` job runs beside the tests rather than after them, and
-  both test jobs run with `-n auto`. `ci/download-link.sh` still checks the one link on the
+  renders each. The deploy's `build` job runs beside the tests rather than after them, so a
+  deploy is as long as the browser tests (they already run in parallel: `addopts`). `ci/download-link.sh` still checks the one link on the
   site that is not in the nav: the airspace page names its OpenAir file, the name carries
   the AIRAC date, and a half-finished rebuild leaves a button that 404s.
   **`--require-terrain` was what stopped a rebuild being a downgrade** — moot since the
