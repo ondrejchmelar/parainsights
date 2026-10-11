@@ -5,7 +5,7 @@ free for a non-commercial site that credits it. Its API needs a key, and a key i
 published page is a key anyone can copy — so the pages never ask openAIP for anything.
 This fetches every country in `COUNTRIES` once (`python -m airspaces.openaip`, monthly
 in `.github/workflows/airspace.yml`, the key a repository secret), and writes one file
-per country into `public/airspace/layers/`, beside an `index.json` that says what area
+per country into `public/planner/layers/`, beside an `index.json` that says what area
 each file covers. A flight's 3D map loads the files under its ground when it is opened
 (`loadAirspace` in `parainsights_map.view3d`), bundled flights and uploads alike, so a
 refresh reaches every flight without rebuilding the report.
@@ -251,7 +251,7 @@ def write_index(folder: Path) -> dict:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="airspaces.openaip",
                                      description="Fetch openAIP airspace per country.")
-    parser.add_argument("--out", type=Path, default=Path("public/airspace/layers"))
+    parser.add_argument("--out", type=Path, default=Path("public/planner/layers"))
     parser.add_argument("--countries", default=",".join(COUNTRIES),
                         help="comma-separated ISO codes (default: Europe and the Alps)")
     args = parser.parse_args(argv)

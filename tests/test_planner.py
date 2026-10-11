@@ -518,3 +518,61 @@ def test_a_route_over_the_border_says_how_much_was_not_checked():
     assert found, answer
     assert 10 < float(found.group(1)) < 35, answer
     assert "Nothing on this map is crossed" in answer, "the checked part lost its answer"
+
+
+def _decode_polyline(text):
+    """Google's polyline algorithm, read back: what XCTrack does with a turnpoint's `z`."""
+    values, i = [], 0
+    while i < len(text):
+        result = shift = 0
+        while True:
+            b = ord(text[i]) - 63
+            i += 1
+            result |= (b & 0x1F) << shift
+            shift += 5
+            if b < 0x20:
+                break
+        values.append(~(result >> 1) if result & 1 else result >> 1)
+    return values
+
+
+@needs_chrome
+def test_the_task_goes_to_xctrack_as_a_waypoints_task():
+    """XCTrack's waypoints task (xctrack.org/Competition_Interfaces.html): `T` "W", `V` 2,
+    each turnpoint a name and its longitude, latitude and altitude polyline-encoded. A
+    closed course returns to turnpoint 1, and the export is offered only once there is a
+    route."""
+    answer = _run(_HARNESS + """
+    var before = document.getElementById('plan-xct').hidden;
+    document.getElementById('plan-close').checked = true;
+    tap(0.35, 0.40); tap(0.60, 0.40); tap(0.48, 0.62);
+    var ground = handle.groundAt(dem.west + (dem.east - dem.west) * 0.35,
+                                 dem.north - (dem.north - dem.south) * 0.40);
+    return { before: before, after: document.getElementById('plan-xct').hidden,
+             task: window.__plannerTask(), ground: ground,
+             first: [dem.west + (dem.east - dem.west) * 0.35, dem.north - (dem.north - dem.south) * 0.40] };
+    """)
+    assert answer["before"] is True, "an export was offered with no route to send"
+    assert answer["after"] is False
+    task = answer["task"]
+    assert task["T"] == "W" and task["V"] == 2
+    assert [tp["n"] for tp in task["t"]] == ["TP1", "TP2", "TP3", "TP1"]
+    lon, lat, alt = _decode_polyline(task["t"][0]["z"])
+    assert lon / 1e5 == pytest.approx(answer["first"][0], abs=2e-5)
+    assert lat / 1e5 == pytest.approx(answer["first"][1], abs=2e-5)
+    assert alt == pytest.approx(answer["ground"], abs=1), "the turnpoint lost the ground's height"
+
+
+def test_the_polyline_encoding_is_googles():
+    """The encoder against the algorithm's own published example
+    (developers.google.com/maps/documentation/utilities/polylinealgorithm): -179.9832104
+    encodes as `` `~oia@ ``. Run through Node, from the planner's own source."""
+    source = (Path(__file__).parent.parent / "planner/js/planner.js").read_text(encoding="utf-8")
+    start = source.index("  function polyline(values) {")
+    end = source.index("  function xctrackTask() {")
+    script = source[start:end] + "\nconsole.log(polyline([-179.9832104 * 1e5]));\n"
+    try:
+        out = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=30)
+    except FileNotFoundError:
+        pytest.skip("no node")
+    assert out.stdout.strip() == "`~oia@"

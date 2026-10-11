@@ -104,6 +104,14 @@ STYLE = """
 .plan-when.is-shut { border:1.5px solid var(--edge); color:var(--ink-2); }
 .plan-section { margin:0; }
 .plan-note { margin:12px 0 0; font-size:15px; color:var(--ink-2); }
+.plan-xct { display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; margin:12px 0 0; }
+.plan-xct[hidden] { display:none; }
+.plan-xct-label { font-size:15px; font-weight:600; color:var(--ink-2); display:inline-flex; align-items:center; }
+.plan-xct-out { flex-basis:100%; margin:2px 0 0; font-size:15.5px; color:var(--ink-2); }
+.plan-xct-out:empty { display:none; }
+.plan-xct-code { font-size:22px; letter-spacing:.08em; color:var(--ink); font-variant-numeric:tabular-nums; }
+.plan-xct-qr { display:block; width:min(260px, 100%); height:auto; margin:8px 0 0; background:#fff;
+  padding:10px; border-radius:10px; box-sizing:border-box; }
 [data-planner][data-drawing="on"] .maplibregl-canvas-container.maplibregl-interactive { cursor:crosshair; }
 """
 
@@ -138,6 +146,15 @@ def controls() -> str:
     )
 
 
+XCT_HELP = ("The route as an XCTrack waypoints task: the turnpoints in order, with the "
+            "ground's height under each, no cylinders. <b>File</b>: a .xctsk file — on the "
+            "phone XCTrack runs on, open it from the download and choose XCTrack. "
+            "<b>Task code</b>: the task is stored with XContest for a month and you get four "
+            "letters to import it by in XCTrack. <b>QR code</b>: to scan from this screen "
+            "with XCTrack's task import. The code and the QR code send the route to "
+            "XContest's task service (tools.xcontest.org); the file stays on your device.")
+
+
 def results() -> str:
     """What the drawn route is worth and what it crosses, in the Task panel."""
     import parainsights_common as common
@@ -155,6 +172,13 @@ def results() -> str:
     return f"""<section class="plan-section" aria-label="The task">
     <div class="plan-figures" id="plan-figures"></div>
     <p class="plan-legs" id="plan-legs"></p>
+    <div class="plan-xct" id="plan-xct" hidden>
+      <span class="plan-xct-label">To XCTrack{common.info(XCT_HELP, "Sending the task to XCTrack")}</span>
+      <button type="button" class="btn" id="plan-xct-file">{common.icon(common.ICONS["download"])}File</button>
+      <button type="button" class="btn" id="plan-xct-code">Task code</button>
+      <button type="button" class="btn" id="plan-xct-qr">QR code</button>
+      <p class="plan-xct-out" id="plan-xct-out" role="status"></p>
+    </div>
     <div class="plan-airspace" id="plan-airspace"></div>
     <p class="plan-note">A plan, not a clearance.{common.info(rules, "How the task is scored")}</p>
     <script type="application/json" id="plan-coverage">{_coverage()}</script>

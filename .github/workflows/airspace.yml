@@ -3,12 +3,19 @@
 # The pages never ask openAIP for anything: its API needs a key, and a key in a published
 # page is a key anyone can copy. So the key lives here, as the repository secret
 # OPENAIP_API_KEY, and this job writes one file per European country into
-# `public/airspace/layers/` and commits them. The maps load the files under a flight when
+# `public/planner/layers/` and commits them. (`public/airspace/layers/` until October
+# 2026, when the planner took the address and the maps read from there — this job kept
+# writing to the old one.) The maps load the files under a flight when
 # it is opened, so a refresh reaches every flight, bundled or uploaded, without a rebuild
 # of the report — which cannot be rebuilt here anyway (no tracklogs in the repository).
 #
 # Airspace changes every 28-day AIRAC cycle; monthly keeps a map at most one cycle behind.
 # A country that fails keeps its committed file, and the run says which.
+#
+# It also rebuilds the planner page — the Czech aerodrome zones, their traffic circuits
+# and the OpenAir download named for the AIRAC cycle — which the Pages deploy used to
+# rebuild on every push, 90 s of fetching for data that changes once a cycle. A source
+# that is down leaves the committed page as it is, and the run warns.
 #
 # A push made with this workflow's own token does not start other workflows, so the Pages
 # deploy is asked for explicitly at the end.
@@ -36,21 +43,24 @@ jobs:
       - uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: true
-      - run: uv sync --locked
+      - run: uv sync --locked --extra terrain
       - run: test -n "$OPENAIP_API_KEY" || (echo "::error::no OPENAIP_API_KEY secret — Settings → Secrets and variables → Actions" && exit 1)
         env:
           OPENAIP_API_KEY: ${{ secrets.OPENAIP_API_KEY }}
-      - run: uv run python -m airspaces.openaip --out public/airspace/layers
+      - run: uv run python -m airspaces.openaip --out public/planner/layers
         env:
           OPENAIP_API_KEY: ${{ secrets.OPENAIP_API_KEY }}
+      - run: uv run python -m airspaces.cli --html public/planner/index.html || echo "::warning::the planner page could not be rebuilt, keeping the committed copy - check airspaces/sources.py"
+      # The OpenAir file the page names must be beside it.
+      - run: sh ci/download-link.sh
       - name: Commit and publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add public/airspace/layers
+          git add public/planner
           if git diff --cached --quiet; then echo "nothing changed"; exit 0; fi
-          git commit -m "Airspace: openAIP refresh $(date -u +%F)"
+          git commit -m "Airspace: openAIP and the planner page refreshed $(date -u +%F)"
           git push
           gh workflow run pages.yml --ref main

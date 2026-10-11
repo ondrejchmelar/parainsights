@@ -1186,12 +1186,16 @@ Still wanted:
   added to that file, which no report could contain. It cannot
   rebuild the page; it can refuse to publish one that does not match the code beside it.
   Run `sh ci/stale.sh` before committing a renderer change.
-  **The other three pages are built in CI now**, every deploy. `meteo` needs nothing but
-  its own committed data, so a failure there is a bug and fails the job. `airspace` and
-  `planner` fetch from four public sources, and those are allowed to be down: the build
-  is attempted, a failure prints a warning, and the committed page is published instead
-  of nothing — refusing to publish a rebuilt *report* because someone else's CSV is
-  unreachable is the wrong trade. `ci/download-link.sh` then checks the one link on the
+  **No page is built in CI any more** (October 2026). The meteo and planner pages were,
+  every deploy, and the planner's rebuild was 90 s of fetching four sources for data that
+  changes once an AIRAC cycle. Now all three are committed artifacts: the meteo page is
+  built where it is changed (`uv run python -m meteo.cli --html public/meteo/index.html`),
+  the planner page likewise (`uv run python -m airspaces.cli --html public/planner/index.html`,
+  which fetches) and by the monthly `airspace.yml`, which also refreshes the openAIP layers
+  into `public/planner/layers/` — it wrote to `public/airspace/layers/`, where nothing reads
+  them, until that was caught. `stale.sh` checks all three pages against the code that
+  renders each. The deploy's `build` job runs beside the tests rather than after them, and
+  both test jobs run with `-n auto`. `ci/download-link.sh` still checks the one link on the
   site that is not in the nav: the airspace page names its OpenAir file, the name carries
   the AIRAC date, and a half-finished rebuild leaves a button that 404s.
   **`--require-terrain` was what stopped a rebuild being a downgrade** — moot since the

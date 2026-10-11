@@ -54,7 +54,9 @@ jobs:
       # `-c pyproject.toml` matters: pytest otherwise walks up and adopts an enclosing
       # project's config. -rs so skips are named in the log. A silently skipped test is
       # a test you think you have.
-      - run: uv run pytest -c pyproject.toml -rs
+      # Across the runner's cores (`-n auto`, pytest-xdist): one at a time was most of a
+      # deploy's wait.
+      - run: uv run pytest -c pyproject.toml -rs -n auto
         env:
           PARAINSIGHTS_REQUIRE: node
 
@@ -86,60 +88,44 @@ jobs:
       # MapLibre and deck.gl, the pinned versions the page loads from its CDN, cached for
       # the merged map's tests: the suite itself has no network.
       - run: uv run python -m tests.vendor
-      - run: uv run pytest -c pyproject.toml -rs
+      # Across the runner's cores: serial, this job was 3–4 minutes of every deploy.
+      - run: uv run pytest -c pyproject.toml -rs -n auto
 
-  # What this job can and cannot build, and why the difference matters.
+  # What this job builds, and what it only checks.
   #
-  # **The report cannot be built here.** It needs the IGC files and flight tracks stay out
-  # of this repository, so `public/flights/index.html` is a committed artifact — which is exactly
-  # how the site once sat weeks out of date behind a wall of green pipelines: the renderer
-  # changed, nobody rebuilt, and the job had nothing to notice with. `stale.sh` is what
-  # notices now. It asks whether the commit that last built the page contains the last
-  # change to everything that renders it, and fails when it does not. That is the whole
-  # guard: it cannot rebuild the page, but it can refuse to publish a page that no longer
-  # matches the code in the same commit.
+  # **Nothing that needs data is built here** (October 2026). The report cannot be — it
+  # needs the IGC files, and flight tracks stay out of this repository. The meteo and
+  # planner pages could be and were, until the planner's rebuild was 90 s of every deploy
+  # fetching four sources for data that changes once an AIRAC cycle: the monthly
+  # `airspace.yml` rebuilds it now, and the meteo page is built where it is changed. So
+  # all three are committed artifacts, and `stale.sh` is what keeps that honest: it asks
+  # whether the commit that last built each page contains the last change to everything
+  # that renders it, and refuses to publish one that does not. It cannot rebuild a page;
+  # it can refuse to publish one that no longer matches the code in the same commit —
+  # which is how the report once sat weeks out of date behind a wall of green pipelines.
   #
-  # **The other three pages can be built here**, and are — `meteo` needs nothing but its
-  # own committed data, and `airspace` and `planner` fetch from public sources. Building
-  # them means three quarters of the site can never be stale, and the two that need a
-  # network fail the job rather than publishing yesterday's copy if a source is down.
+  # It runs beside the tests rather than after them: it takes seconds, and the deploy
+  # waits for all three.
   build:
-    needs: [tests, browser-tests]
-    timeout-minutes: 20
+    timeout-minutes: 10
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
           # `stale.sh` reads the history. The default clone is one commit deep, and in a
-          # one-commit window the page's last change is usually not there at all — the
-          # check would fail every deploy that did not itself rebuild the report.
+          # one-commit window a page's last change is usually not there at all — the
+          # check would fail every deploy that did not itself rebuild the page.
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: true
-      # `--extra terrain` is Pillow, and the terrain is why. A bare `uv sync` builds an
-      # environment that fetches DEM tiles perfectly and cannot decode a single one, which
-      # is not a shape of failure anyone guesses at: two deploys published without their
-      # 3D view while the diagnosis was "the tile host must be blocking the runner". The
-      # comment above `[project.optional-dependencies]` already records the same mistake
-      # one extra along.
-      - run: uv sync --locked --extra terrain
+      - run: uv sync --locked
       # Fail loudly rather than deploying an empty site: without this the job goes green
       # and publishes nothing, which looks like Pages being broken.
       - run: test -f public/flights/index.html || (echo "no public/flights/index.html to publish — build one locally, see the header of this file" && exit 1)
-      # The committed report against the code that renders it.
+      # The committed pages against the code that renders them.
       - run: sh ci/stale.sh
-      # The meteo page needs no network — its takeoff list and station map are committed
-      # data — so there is no excuse for it not to build, and a failure here is a bug.
-      - run: uv run python -m meteo.cli --html public/meteo/index.html
-      # The other two fetch from four public sources. Those *are* allowed to be down, and
-      # when they are the committed page is published instead of nothing: it is a few
-      # days old at worst, and refusing to publish a rebuilt *report* because someone
-      # else's CSV is unreachable is the wrong trade. Loud, and not fatal. The 3D map's
-      # ground is fetched by the page, so a build cannot lose it and fall back to the flat
-      # map — which is what the first green deploy once did, with the build's own fetch.
-      - run: uv run python -m airspaces.cli --html public/planner/index.html || echo "::warning::the airspace page could not be rebuilt, publishing the committed copy - check airspaces/sources.py"
       # The planner and airspace page lives at planner/; airspace/ is the redirect for old links.
       - run: uv run python -m planner.cli --html public/airspace/index.html
       # The report lives in `flights/` since October 2026; the root sends old links there.
@@ -161,7 +147,7 @@ jobs:
   # A deploy is not cancelled half way: that publishes nothing and leaves the last deploy
   # standing, which is a confusing state to debug. Queued, never interrupted.
   deploy:
-    needs: build
+    needs: [tests, browser-tests, build]
     runs-on: ubuntu-latest
     # deploy-pages occasionally waits on GitHub's deployment status for much longer than a
     # deploy takes (October 2026: one run hung until cancelled, the retry took a minute).

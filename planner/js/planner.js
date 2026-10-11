@@ -294,6 +294,7 @@
   }
   // What the airspace page's Layers panel counts: these, not the page's whole payload.
   handle.drawnAirspaces = function () { return nearNow; };
+  window.__plannerTask = function () { return points.length >= 2 ? xctrackTask() : null; };
   handle.planned = function () { return points.length >= 2; };
   var loading = null;
   function refreshAirspace() {
@@ -588,6 +589,7 @@
   }
 
   function report() {
+    xctRefresh();
     var answer = score();
     var figures = document.getElementById('plan-figures');
     figures.innerHTML = '';
@@ -634,6 +636,106 @@
       span.textContent = 'closing gap: ' + (answer.closing / 1000).toFixed(1) + ' km';
       legs.appendChild(span);
     }
+  }
+
+  // ---- to XCTrack -----------------------------------------------------------------------
+  //
+  // The route as XCTrack's waypoints task (xctrack.org/Competition_Interfaces.html, "XC /
+  // Waypoints task"): the turnpoints in order with no cylinders — what an XC route is,
+  // where a competition task would want start, goal and radii nobody drew. Three ways in,
+  // because a phone and a desktop want different ones:
+  //  - a .xctsk file, which on the phone XCTrack runs on opens straight into it;
+  //  - a task code: the task stored with XContest (tools.xcontest.org, the service XCTrack
+  //    itself shares tasks through) for a month, four letters to type into XCTrack;
+  //  - a QR code to scan from a desktop's screen, drawn by the same service.
+  // The last two send the route to XContest, and only when their button is pressed.
+  // Each point carries the ground's height under it, which the format requires.
+  var XCT_API = 'https://tools.xcontest.org/api/xctsk/';
+  function polyline(values) {
+    return values.map(function (value) {
+      var v = Math.round(value);
+      v = v < 0 ? ~(v << 1) : v << 1;
+      var out = '';
+      while (v >= 0x20) { out += String.fromCharCode((0x20 | (v & 0x1f)) + 63); v >>= 5; }
+      return out + String.fromCharCode(v + 63);
+    }).join('');
+  }
+  function xctrackTask() {
+    var walk = course();
+    return {
+      T: 'W', V: 2,
+      t: walk.map(function (p, i) {
+        var ground = handle.groundAt ? handle.groundAt(p[0], p[1]) : null;
+        var alt = ground === null || ground === undefined || isNaN(ground) ? 0 : ground;
+        // Named as the map numbers them; a closed course returns to turnpoint 1.
+        var n = i < points.length ? i + 1 : 1;
+        return { n: 'TP' + n, z: polyline([p[0] * 1e5, p[1] * 1e5, alt]) };
+      })
+    };
+  }
+  var xctOut = document.getElementById('plan-xct-out');
+  function xctSay(html) { if (xctOut) xctOut.innerHTML = html; }
+  function xctFile() {
+    var blob = new Blob([JSON.stringify(xctrackTask())], { type: 'application/xctsk' });
+    var link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    var d = new Date();
+    link.download = 'task-' + d.getFullYear() + ('0' + (d.getMonth() + 1)).slice(-2)
+      + ('0' + d.getDate()).slice(-2) + '.xctsk';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(function () { URL.revokeObjectURL(link.href); }, 10000);
+    xctSay('Saved. On the phone, open it from the download and choose XCTrack.');
+  }
+  function xctPost(path) {
+    return fetch(XCT_API + path, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(xctrackTask())
+    }).then(function (response) {
+      if (!response.ok) throw new Error('XContest answered ' + response.status);
+      return response;
+    });
+  }
+  function xctCode() {
+    xctSay('Asking XContest for a code\u2026');
+    xctPost('save').then(function (r) { return r.json(); }).then(function (answer) {
+      var code = String(answer.taskCode || '').toUpperCase();
+      if (!code) throw new Error('no code in the answer');
+      xctSay('Task code <b class="plan-xct-code"></b> \u2014 in XCTrack, import a task by its '
+        + 'XContest code. It lasts a month.');
+      xctOut.querySelector('.plan-xct-code').textContent = code;
+    }).catch(function (error) {
+      xctSay('No code: ' + error.message + '. The file works without a network.');
+    });
+  }
+  function xctQr() {
+    xctSay('Drawing the QR code\u2026');
+    xctPost('qr2z').then(function (r) { return r.blob(); }).then(function (svg) {
+      // As an image, not markup: what another site sends is drawn, never run.
+      var img = document.createElement('img');
+      img.className = 'plan-xct-qr';
+      img.alt = 'QR code of the task for XCTrack';
+      img.src = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+      xctSay('Scan it with XCTrack\'s task import:');
+      xctOut.appendChild(img);
+    }).catch(function (error) {
+      xctSay('No QR code: ' + error.message + '. The file works without a network.');
+    });
+  }
+  [['plan-xct-file', xctFile], ['plan-xct-code', xctCode], ['plan-xct-qr', xctQr]].forEach(function (pair) {
+    var button = document.getElementById(pair[0]);
+    if (button) button.addEventListener('click', function () { if (points.length >= 2) pair[1](); });
+  });
+  // Shown once there is a route to send, and cleared when it changes: a code or a QR
+  // code for the route before the last change would be the wrong task.
+  var xctBox = document.getElementById('plan-xct');
+  var xctFor = '';
+  function xctRefresh() {
+    if (!xctBox) return;
+    xctBox.hidden = points.length < 2;
+    var key = JSON.stringify(course());
+    if (key !== xctFor) { xctFor = key; xctSay(''); }
   }
 
   // ---- input -------------------------------------------------------------------------
