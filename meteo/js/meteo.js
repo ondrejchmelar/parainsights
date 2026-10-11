@@ -194,7 +194,12 @@
 
   function get(url) {
     return fetch(url).then(function (response) {
-      if (!response.ok) throw new Error('HTTP ' + response.status);
+      if (!response.ok) {
+        var error = new Error('HTTP ' + response.status);
+        error.status = response.status;
+        error.retryAfter = Number(response.headers.get('Retry-After')) || 0;
+        throw error;
+      }
       return response.json();
     });
   }
@@ -1776,27 +1781,68 @@
   // used to be one, and they are the reason the surface call is separate: asking for the
   // pressure levels of every takeoff to rank them would be megabytes spent to
   // answer a question about three hills.
+  // The soundings, two at a time and the one in focus first. All at once — six
+  // takeoffs, and a focus that asked again for one still in the air — and Open-Meteo
+  // answered with 429, which the page reported until a later fetch got through: "No
+  // sounding" that went away on its own. A 429 or a dropped connection is now retried,
+  // waiting longer each time (or as long as the answer asks), and a takeoff is reported
+  // only once it has failed for good.
+  var LOADING = 2, RETRIES = 4;
+  // One queue for the page: the loader is called once per takeoff added, and a queue
+  // per call ran them side by side again.
+  var inFlight = {}, failedFor = {}, queue = [], running = 0;
   function loadProfiles() {
-    var wanted = chosen().filter(function (index) { return !state.profiles[index]; });
-    if (!wanted.length) return;
-    var names = wanted.map(function (index) { return conf.sites[index].name; });
-    say('Fetching the sounding for ' + names.join(', ') + '…');
-    var failed = [];
-    Promise.all(wanted.map(function (index) {
-      return get(profileUrl(conf.sites[index])).then(unpack).then(function (answer) {
-        // Still chosen? A reader who drops a takeoff while its sounding is in the air
-        // should not have it reappear when the answer lands.
-        if (slotOf(index) < 0) return;
-        state.profiles[index] = answer;
-        if (index === state.site) state.profile = answer;
-      }).catch(function (error) {
-        failed.push(conf.sites[index].name + ' (' + error.message + ')');
-      });
-    })).then(function () {
-      say(failed.length ? 'No sounding for ' + failed.join(', ') : '');
+    var wanted = chosen().filter(function (index) { return !state.profiles[index] && !inFlight[index]; });
+    wanted.forEach(function (index) { inFlight[index] = true; delete failedFor[index]; queue.push(index); });
+    // The one in focus first, whenever it was asked for.
+    queue.sort(function (a, b) { return (b === state.site) - (a === state.site); });
+    sayLoading();
+    next();
+  }
+  function next() {
+    while (running < LOADING && queue.length) one(queue.shift());
+  }
+  function one(index) {
+    running += 1;
+    fetchProfile(index, 0).then(function (answer) {
+      // Still chosen? A reader who drops a takeoff while its sounding is in the air
+      // should not have it reappear when the answer lands.
+      if (slotOf(index) < 0) return;
+      state.profiles[index] = answer;
+      if (index === state.site) state.profile = answer;
+    }).catch(function (error) {
+      if (slotOf(index) >= 0) failedFor[index] = error.message;
+    }).then(function () {
+      delete inFlight[index];
+      running -= 1;
+      sayLoading();
+      // Each column drawn as its sounding lands, not when the slowest one does.
       drawCompare();
       drawSite();
+      next();
     });
+  }
+  function fetchProfile(index, attempt) {
+    return get(profileUrl(conf.sites[index])).then(unpack).catch(function (error) {
+      var again = (error.status === 429 || error.status >= 500 || !error.status) && attempt < RETRIES;
+      if (!again) throw error;
+      var wait = error.retryAfter ? error.retryAfter * 1000 : 1000 * Math.pow(2, attempt);
+      return new Promise(function (resolve) { setTimeout(resolve, wait); }).then(function () {
+        return slotOf(index) < 0 ? Promise.reject(error) : fetchProfile(index, attempt + 1);
+      });
+    });
+  }
+  // The status line: what is still on its way, else what failed for good, else nothing.
+  function sayLoading() {
+    var loading = chosen().filter(function (index) { return inFlight[index]; });
+    var failed = chosen().filter(function (index) { return failedFor[index]; });
+    if (loading.length) {
+      say('Fetching the sounding for ' + loading.map(function (i) { return conf.sites[i].name; }).join(', ') + '\u2026');
+    } else {
+      say(failed.length ? 'No sounding for ' + failed.map(function (i) {
+        return conf.sites[i].name + ' (' + failedFor[i] + ')';
+      }).join(', ') : '');
+    }
   }
 
   // Hover on a mouse, drag-to-read on a touchscreen. The same split the airspace map

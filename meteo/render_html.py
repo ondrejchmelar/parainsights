@@ -226,13 +226,21 @@ STYLE = """
   .met-sticky { margin: -18px -14px 18px; padding: 12px 14px 10px; }
   .met-head { gap: 10px; margin-bottom: 10px; }
   .met-hour { flex-basis: 100%; min-width: 0; }
-  /* Tighter days, so the four and the synoptic chart's icon share a 360 px row. */
-  .met-days > button { padding: 0 10px; }
+  /* The days across the phone's width, the synoptic chart's icon at the end: tighter
+     buttons so the four and the icon share a 360 px row, stretched on a wider one. */
+  .met-day-row { flex: 1 1 100%; flex-wrap: nowrap; }
+  .met-days { flex: 1 1 auto; display: flex; }
+  .met-days > button { flex: 1 1 auto; padding: 0 10px; }
   /* The head on one line: the name gives way (…) before the height or the tools do. */
   .met-col-head { font-size:19px; gap:7px; }
   .met-col-head .name { flex:none; max-width:62%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .met-col-tools { flex:none; gap:0; }
   .met-col-tools a, .met-col-move, .met-col-drop { width:32px; height:32px; }
+  /* The switcher across the row up to +, however few takeoffs: buttons grow to fill it
+     and never shrink, so with many it still scrolls. */
+  .met-picks { flex: 1 1 auto; }
+  .met-picks .seg { flex: 1 1 auto; display: flex; }
+  .met-picks .seg > button { flex: 1 0 auto; justify-content: center; }
   /* + alone on a phone: the switcher gets the room. */
   .met-add { padding:0; width:44px; justify-content:center; }
   .met-add span { display:none; }
