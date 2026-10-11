@@ -1240,42 +1240,52 @@ def test_wind_is_metres_per_second_everywhere_it_is_printed():
     assert "km/h" not in answer["list"] + answer["table"]
 
 
-def test_the_sounding_owns_the_vertical_gesture():
-    """A drag up the sounding reads a height; a drag up the page scrolls it. They are the
-    same gesture, so the browser scrolled and the chart read nothing — the one bug a
-    caption saying "drag a finger up it" cannot survive.
-
-    `touch-action` is what actually stops it: a `preventDefault` on a move the
-    browser has already begun scrolling with is too late. `pan-x`, not `none` (October
-    2026): the vertical drag is the chart's, a sideways swipe is still the columns' — on
-    a phone they swipe, and with `none` a swipe over a sounding moved nothing. Deliberately
-    *not* on the airgram above it, so every column keeps a full-width strip to scroll the
-    page from.
-    """
+def test_the_charts_leave_the_scroll_to_the_page():
+    """A finger scrolls the page over the charts as anywhere else (October 2026): the
+    sounding kept the vertical drag, and with the charts most of a phone's screen the
+    page was hard to scroll. A tap reads; a held press drags the reading."""
     style = render_html.STYLE
-    assert ".met-col-sounding { touch-action: pan-x; }" in style
-    assert ".met-col-air { touch-action" not in style
+    assert ".met-col-sounding, .met-col-air { touch-action: manipulation;" in style
+    assert "pan-x; }" not in style
+
+
+def _touch(kind, canvas_js, dx=0, dy=0):
+    return f"""
+    (function () {{
+      var c = {canvas_js}, b = c.getBoundingClientRect();
+      var t = new Touch({{ identifier: 1, target: c, clientX: b.left + b.width / 2 + {dx},
+                           clientY: b.top + b.height / 2 + {dy} }});
+      var e = new TouchEvent('{kind}', {{ touches: '{kind}' === 'touchend' ? [] : [t],
+        changedTouches: [t], bubbles: true, cancelable: true }});
+      c.dispatchEvent(e);
+      return e.defaultPrevented;
+    }})()"""
 
 
 @needs_chrome
-def test_a_touch_on_the_sounding_is_taken_by_the_chart():
-    answer = _probe_page("""
+def test_a_tap_reads_the_sounding_and_a_drag_scrolls_past_it():
+    answer = _probe_page(f"""
     var m = window.__meteo;
     var free = null;
-    for (var i = 0; i < 8; i++) if (m.chosen().indexOf(i) < 0) { free = i; break; }
+    for (var i = 0; i < 8; i++) if (m.chosen().indexOf(i) < 0) {{ free = i; break; }}
     m.add(free);
-    var canvas = document.getElementById('met-sounding');
-    var box = canvas.getBoundingClientRect();
-    var down = new PointerEvent('pointerdown', {
-      clientX: box.left + box.width / 2, clientY: box.top + box.height / 2,
-      bubbles: true, cancelable: true, pointerType: 'touch', pointerId: 7, buttons: 1 });
-    canvas.dispatchEvent(down);
-    return { prevented: down.defaultPrevented, probe: m.state.probe,
-             action: getComputedStyle(canvas).touchAction };
+    var c = "document.getElementById('met-sounding')";
+    {_touch('touchstart', "document.getElementById('met-sounding')")};
+    {_touch('touchend', "document.getElementById('met-sounding')")};
+    var tapped = m.state.probe;
+    // A drag straight away is a scroll: not cancelled, and no reading taken.
+    {_touch('touchstart', "document.querySelector('.met-col-air')")};
+    var cancelled = {_touch('touchmove', "document.querySelector('.met-col-air')", 0, 40)};
+    {_touch('touchend', "document.querySelector('.met-col-air')", 0, 40)};
+    return {{ tapped: tapped, cancelled: cancelled, cleared: m.state.probe,
+              air: m.state.airProbe || null,
+              action: getComputedStyle(document.getElementById('met-sounding')).touchAction }};
     """)
-    assert answer["prevented"] is True, "the browser keeps its own gesture"
-    assert answer["action"] == "pan-x"
-    assert answer["probe"] is not None, "the touch read no height"
+    assert answer["tapped"] is not None, "a tap read no height"
+    assert answer["cancelled"] is False, "the chart kept the page from scrolling"
+    assert answer["air"] is None, "a scroll over the airgram left a reading"
+    assert answer["cleared"] is None, "touching elsewhere left the sounding's reading up"
+    assert answer["action"] == "manipulation"
 
 
 @needs_chrome
@@ -1415,18 +1425,18 @@ def test_the_airgram_draws_the_day_and_reads_the_wind_under_the_pointer():
     readout at that height has to say 40 from the north, and the shading has to exist."""
     answer = _probe_page("""
     var canvas = document.querySelector('.met-col-air');
-    var out = document.querySelector('.met-col-airout');
     var box = canvas.getBoundingClientRect();
     var top = 8, bottom = 22, ceiling = 4000;
     var y = box.top + top + (1 - 760 / ceiling) * (box.height - top - bottom);
     var x = box.left + 38 + (13 - 5) / 16 * (box.width - 38 - 8);
     canvas.dispatchEvent(new PointerEvent('pointermove', {
       clientX: x, clientY: y, bubbles: true, pointerType: 'mouse' }));
-    var probe = window.__meteo.state.airProbe, text = out.textContent;
+    var p = window.__meteo.state.airProbe, text = canvas.__readout;
+    var probe = p && { hour: p.hour, metres: p.metres, speed: p.speed, dir: p.dir };
     canvas.dispatchEvent(new PointerEvent('pointerleave', {
       clientX: box.left, clientY: box.top, bubbles: true, pointerType: 'mouse' }));
     return { cells: Number(canvas.dataset.cells), probe: probe, text: text,
-             after: out.textContent, height: box.height };
+             after: canvas.__readout, gone: window.__meteo.state.airProbe, height: box.height };
     """)
     assert answer["cells"] > 17 * 20, answer
     probe = answer["probe"]
@@ -1435,4 +1445,5 @@ def test_the_airgram_draws_the_day_and_reads_the_wind_under_the_pointer():
     assert probe["speed"] == pytest.approx(40, abs=1.5)
     assert probe["dir"] == pytest.approx(10, abs=3)
     assert "m/s from N" in answer["text"], answer["text"]
-    assert answer["after"] == "", "the readout stayed up after the pointer left"
+    assert answer["after"] == "" and answer["gone"] is None, (
+        "the readout stayed up after the pointer left")

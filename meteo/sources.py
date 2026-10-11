@@ -90,11 +90,32 @@ def fetch(iso: str = "CZ") -> list[dict]:
             "lat": round(float(lat), 4),
             "lon": round(float(lon), 4),
             "alt": int(float(properties.get("takeoff_altitude") or 0)),
+            "landing": _landing(properties),
             "winds": winds,
             "id": int(properties.get("pge_site_id") or 0),
         })
     sites.sort(key=lambda site: site["name"].lower())
     return sites
+
+
+def _landing(properties: dict) -> int | None:
+    """The landing field's altitude, metres AMSL, or None where the record has none.
+
+    The record's own number: checked against Open-Meteo's terrain at the landing's
+    coordinates for all fourteen chosen takeoffs that have one (October 2026), it agreed
+    to 14 m at worst. A landing with no altitude is left out rather than guessed from a
+    DEM, because which field is the landing is the record's knowledge, not the map's.
+    """
+    landing = properties.get("landing")
+    if isinstance(landing, list):
+        landing = landing[0] if landing else None
+    if not isinstance(landing, dict):
+        return None
+    try:
+        altitude = int(float(landing.get("landing_altitude") or ""))
+    except ValueError:
+        return None
+    return altitude if altitude > 0 else None
 
 
 def fetch_chosen(chosen=CHOSEN) -> list[dict]:
@@ -125,6 +146,7 @@ def write(path: Path, sites: list[dict]) -> None:
         "takeoffs `meteo.sources.CHOSEN` names, in its order:",
         f"    {ENDPOINT.format(iso='{' + countries + '}')}",
         "",
+        "`landing` is the landing field's altitude in metres, None where none is recorded.",
         "`winds` is ParaglidingEarth's own suitability per octant, N first and clockwise:",
         "0 unflyable, 1 marginal, 2 good. An empty list means the site records none, and",
         "the page then refuses to judge it against the forecast rather than guessing.",
@@ -141,7 +163,7 @@ def write(path: Path, sites: list[dict]) -> None:
         lines.append(
             f'    {{"name": {site["name"]!r}, "country": {site["country"]!r}, '
             f'"lat": {site["lat"]}, '
-            f'"lon": {site["lon"]}, "alt": {site["alt"]}, '
+            f'"lon": {site["lon"]}, "alt": {site["alt"]}, "landing": {site["landing"]}, '
             f'"winds": {site["winds"]}, "id": {site["id"]}}},'
         )
     lines.append("]")

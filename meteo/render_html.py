@@ -39,6 +39,12 @@ FLYMET_RANGE_KM = 60
 LEVELS = (1000, 975, 950, 925, 900, 850, 800, 700, 600, 500)
 ENDPOINT = "https://api.open-meteo.com/v1/forecast"
 
+# The synoptic situation behind the day: the Met Office's surface pressure charts — the
+# analysis and forecasts out to five days, over the Atlantic and Europe — the chart a
+# pilot reads the fronts and the gradient off. Linked, not drawn: there is no forecast
+# here to draw one from.
+SYNOPTIC = "https://weather.metoffice.gov.uk/maps-and-charts/surface-pressure"
+
 # The lapse rate at or below which a layer is drawn as the lid on the day. Here because
 # the caption has to state it and the caption is written in Python; the rule itself is in
 # the script, and a test holds the two to the same number.
@@ -171,8 +177,6 @@ STYLE = """
 .met-columns.is-single .met-canvas + .met-canvas { margin-top:0; }
 /* Side by side, the airgram takes the sounding's shape, so the two height scales read across. */
 .met-columns.is-single .met-col-air { aspect-ratio: 380 / 300; }
-.met-columns.is-single .met-col-airout { grid-column:1; }
-.met-col-airout { font-size:15px; color:var(--ink-2); margin:4px 0 0; min-height:1.5em; font-variant-numeric:tabular-nums; }
 .met-col-head { display:flex; align-items:baseline; gap:9px; font-size:21px; font-weight:650; margin:0 0 2px; }
 .met-col-head i { width:11px; height:11px; border-radius:50%; flex:none; align-self:center; }
 .met-col-head .name { background:none; border:0; padding:0; font:inherit; color:inherit; cursor:pointer; }
@@ -190,11 +194,15 @@ STYLE = """
 .met-col-top { font-size:16.5px; color:var(--ink); margin:8px 0 14px; display:flex; align-items:center; }
 .met-col-top[hidden] { display:none; }
 .met-canvas { width:100%; display:block; background:var(--panel); border-radius:14px; }
-/* The sounding reads a height from a vertical drag, the gesture the page scrolls with;
-   this hands it to the chart. A sideways swipe is still the columns' (on a phone they
-   swipe): with `none` it was neither, and a swipe over a sounding moved nothing. The
-   airgram above each one still scrolls the page. */
-.met-col-sounding { touch-action: pan-x; }
+/* A finger scrolls the page and swipes the columns over the charts as anywhere else; a
+   tap reads a chart, and a press held then dragged scrubs it (`bindReader`). The sounding
+   used to keep the vertical drag, and with the charts most of a phone's screen the page
+   was hard to scroll. `manipulation` only drops the double-tap zoom, so a tap reads at
+   once. */
+.met-col-sounding, .met-col-air { touch-action: manipulation; -webkit-touch-callout: none;
+  -webkit-user-select: none; user-select: none; }
+/* The synoptic situation, a link off the page: the pressure chart for the days above. */
+.met-synoptic { margin:0 0 18px; font-size:15.5px; color:var(--ink-2); }
 /* flymet's meteogram for the airfield nearest this takeoff, under its own charts. */
 .met-col-fly { margin: 0; }
 .met-col-fly img { display:block; width:100%; border-radius:14px; background:#fff; }
@@ -310,6 +318,9 @@ def body(uid: str = "meteo") -> str:
   </div>
   </div>
 
+  <p class="met-synoptic">The synoptic situation: <a class="lnk" href="{SYNOPTIC}" rel="noreferrer"
+     target="_blank">surface pressure, Met Office</a> — the analysis and the next five days.</p>
+
   <table class="met-compare" id="met-compare" hidden
          aria-label="The chosen takeoffs at the chosen hour">
     <thead><tr>
@@ -335,8 +346,8 @@ def body(uid: str = "meteo") -> str:
     <div class="met-columns" id="met-columns" data-sounding-hint="Shaded: a layer the
       thermals stop at — lapse under {CAP_LAPSE:.0f} °C/km, red where the air warms with
       height. Orange: the dry adiabat, {DRY_LAPSE:.1f} °C/km from the surface temperature;
-      the ring is where a parcel stops. Point or drag to read every sounding at that
-      height."></div>
+      the ring is where a parcel stops. Point, or tap, to read every sounding at that
+      height; press and hold to drag the reading."></div>
     <!-- flymet's meteograms now sit in each takeoff's column (`drawFlymet`). -->
     <details class="met-flymet" id="met-flymet" hidden>
       <summary id="met-flymet-summary"></summary>

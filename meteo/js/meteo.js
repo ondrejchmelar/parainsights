@@ -941,6 +941,14 @@
   // three dew points on one frame is six crossing lines, and three sets of cloud shading
   // is a grey smear. What compares across hills is on the strip above; what belongs to
   // one hill is in that hill's column, under its name.
+  // What the hill gives: the height from takeoff to landing (the landing's own altitude
+  // is the head's title). A takeoff with no landing recorded says nothing rather than
+  // guessing one.
+  function landingNote(site) {
+    if (site.landing == null) return '';
+    return ' \u00b7 ' + Math.max(site.alt - site.landing, 0) + ' m to the landing';
+  }
+
   function drawColumns() {
     var box = document.getElementById('met-columns');
     var wanted = chosen();
@@ -971,7 +979,6 @@
           + ' aria-label="The day by hour and height: wind, cloud, boundary layer and cloudbase">'
           + '</canvas>'
           + '<canvas class="met-canvas met-col-sounding" width="380" height="300"></canvas>'
-          + '<p class="met-col-airout"></p>'
           + '<p class="met-col-top" hidden><span class="txt"></span><span class="info-wrap">'
           + '<button type="button" class="info" aria-expanded="false" aria-label="About the thermal top">i</button>'
           + '<span class="info-pop" role="note"></span></span></p>'
@@ -987,9 +994,17 @@
         var good = (site.winds || []).length
           ? conf.octants.filter(function (point, i) { return site.winds[i] === 2; })
           : null;
-        cell.querySelector('.met-col-rose span').textContent = good === null
+        cell.querySelector('.met-col-rose span').textContent = (good === null
           ? 'No directions recorded, so this page will not judge it'
-          : (good.length ? 'Works in ' + good.join(' ') : 'Only marginal directions');
+          : (good.length ? 'Works in ' + good.join(' ') : 'Only marginal directions'))
+          + landingNote(site);
+        // The takeoff's own altitude, ParaglidingEarth's: the charts' ground is the
+        // model's, which on a hill is the cell's average and can be 200 m out.
+        cell.querySelector('.ground').textContent = site.alt + ' m';
+        cell.querySelector('.ground').title = 'Takeoff altitude'
+          + (site.landing != null ? '; the landing is at ' + site.landing + ' m' : '');
+        cell.querySelector('.met-col-rose span').title = site.landing != null
+          ? 'Takeoff ' + site.alt + ' m, landing ' + site.landing + ' m (ParaglidingEarth)' : '';
         // The takeoff's own page, as an icon by its name: the source of its directions.
         var link = cell.querySelector('.met-col-pge');
         link.href = 'https://www.paraglidingearth.com/index.php?site=' + site.id;
@@ -1012,8 +1027,7 @@
         cell.querySelector('.met-col-sounding').title =
           box.dataset.soundingHint.replace(/\s+/g, ' ');
         bindProbe(cell.querySelector('.met-col-sounding'));
-        bindAir(cell.querySelector('.met-col-air'), cell.querySelector('.met-col-airout'),
-                index);
+        bindAir(cell.querySelector('.met-col-air'), index);
         box.appendChild(cell);
       });
     }
@@ -1021,8 +1035,6 @@
       var index = Number(cell.dataset.site);
       var profile = state.profiles[index];
       cell.classList.toggle('is-focus', index === state.site);
-      cell.querySelector('.ground').textContent =
-        profile ? Math.round(profile.elevation) + ' m' : 'fetching…';
       var sounding = cell.querySelector('.met-col-sounding');
       // The focused takeoff's sounding keeps the id the pointer readout has always
       // addressed, so nothing has to hunt for "whichever chart happens to be first".
@@ -1058,6 +1070,57 @@
              y: function (metres) { return top + (1 - metres / top_m) * (H - top - bottom); },
              hour: function (px) { return 5 + (px - left) / (W - left - right) * 16; },
              metres: function (py) { return (1 - (py - top) / (H - top - bottom)) * top_m; } };
+  }
+  // A wind barb, centred on (cx, cy): the staff points into the wind, and its feathers
+  // count the speed — a half feather 2.5 m/s, a whole one 5, a pennant 25. The knots
+  // convention (5, 10, 50 kt) in round metres per second, the unit this page prints;
+  // feathers on the staff's right looking up it, as in the northern hemisphere. Under
+  // 1.25 m/s, a ring: calm.
+  var BARB = 18, BARB_STEP = 3.6, FEATHER = 7.5;
+  function barb(ctx, cx, cy, speed, dir, colour) {
+    ctx.save();
+    ctx.strokeStyle = ctx.fillStyle = colour;
+    ctx.lineWidth = 1.4;
+    ctx.lineCap = 'round';
+    if (speed < 1.25) {
+      ctx.beginPath(); ctx.arc(cx, cy, 3.5, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+      return;
+    }
+    var a = dir * Math.PI / 180, ux = Math.sin(a), uy = -Math.cos(a), rx = -uy, ry = ux;
+    var x0 = cx - ux * BARB / 2, y0 = cy - uy * BARB / 2;
+    var tx = cx + ux * BARB / 2, ty = cy + uy * BARB / 2;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(tx, ty); ctx.stroke();
+    var halves = Math.round(speed / 2.5);
+    var pennants = Math.floor(halves / 10); halves -= pennants * 10;
+    var whole = Math.floor(halves / 2), half = halves % 2;
+    var fx = (rx * 0.87 + ux * 0.5) * FEATHER, fy = (ry * 0.87 + uy * 0.5) * FEATHER;
+    var at = 0;
+    for (var p = 0; p < pennants; p++) {
+      var bx = tx - ux * at, by = ty - uy * at;
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.lineTo(bx + rx * FEATHER, by + ry * FEATHER);
+      ctx.lineTo(bx - ux * BARB_STEP * 1.3, by - uy * BARB_STEP * 1.3);
+      ctx.closePath(); ctx.fill();
+      at += BARB_STEP * 1.6;
+    }
+    for (var q = 0; q < whole; q++) {
+      ctx.beginPath();
+      ctx.moveTo(tx - ux * at, ty - uy * at);
+      ctx.lineTo(tx - ux * at + fx, ty - uy * at + fy);
+      ctx.stroke();
+      at += BARB_STEP;
+    }
+    if (half) {
+      // A lone half feather stands back from the tip, so it is not read as a whole one.
+      if (!at) at = BARB_STEP;
+      ctx.beginPath();
+      ctx.moveTo(tx - ux * at, ty - uy * at);
+      ctx.lineTo(tx - ux * at + fx / 2, ty - uy * at + fy / 2);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
   function airShade(speed) {
     return 'rgba(37,99,235,' + (0.08 + Math.min(speed / AIR_FULL, 1) * 0.8).toFixed(3) + ')';
@@ -1113,24 +1176,15 @@
       return cloudbase(hourly.temperature_2m[at], hourly.dew_point_2m[at], ground);
     }, true, ink('--ink'), 1.5, box);
 
-    // Arrows every two hours, every 500 m above the ground. Dark ink where the shading is
-    // light and white where it is deep, so an arrow is never the colour of its cell.
+    // Wind barbs every two hours, every 500 m above the ground, over the same shading.
+    // Dark ink where the shading is light and white where it is deep, so a barb is never
+    // the colour of its cell.
     for (var h = 6; h <= 20; h += 2) {
       var idx = indexFor(hourly.time, state.day, h);
       for (var z = Math.ceil((ground + 150) / 500) * 500; z < f.top_m; z += 500) {
         var w = sampleProfile(hourly, idx, z, ground);
         if (!w || w.speed == null || w.dir == null) continue;
-        var to = (w.dir + 180) * Math.PI / 180, len = 8;
-        var cx = f.x(h), cy = f.y(z), dx = Math.sin(to) * len, dy = -Math.cos(to) * len;
-        ctx.strokeStyle = ctx.fillStyle = w.speed / AIR_FULL > 0.45 ? '#fff' : ink('--ink');
-        ctx.lineWidth = 1.4;
-        ctx.beginPath(); ctx.moveTo(cx - dx, cy - dy); ctx.lineTo(cx + dx, cy + dy); ctx.stroke();
-        var back = Math.atan2(dy, dx);
-        ctx.beginPath();
-        ctx.moveTo(cx + dx, cy + dy);
-        ctx.lineTo(cx + dx - 5 * Math.cos(back - 0.45), cy + dy - 5 * Math.sin(back - 0.45));
-        ctx.lineTo(cx + dx - 5 * Math.cos(back + 0.45), cy + dy - 5 * Math.sin(back + 0.45));
-        ctx.closePath(); ctx.fill();
+        barb(ctx, f.x(h), f.y(z), w.speed, w.dir, w.speed / AIR_FULL > 0.45 ? '#fff' : ink('--ink'));
       }
     }
 
@@ -1159,7 +1213,10 @@
     // twice.
     var kx = f.left + 4, ky = f.top + 4;
     ctx.font = '14px "Noto Sans", ui-sans-serif, sans-serif';
-    var label = 'Wind 0 \u2192 ' + AIR_FULL + '+ m/s \u00b7 grey: cloud';
+    var label = 'Wind 0 \u2192 ' + AIR_FULL + '+ m/s \u00b7 feather 5 m/s \u00b7 grey: cloud';
+    if (ctx.measureText(label).width + 52 > f.W - f.left - f.right - 8) {
+      label = 'Wind 0\u2013' + AIR_FULL + '+, feather 5 m/s \u00b7 grey: cloud';
+    }
     var kw = ctx.measureText(label).width;
     ctx.globalAlpha = 0.88; ctx.fillStyle = ink('--panel');
     ctx.fillRect(kx - 2, ky - 1, kw + 52, 14); ctx.globalAlpha = 1;
@@ -1170,31 +1227,79 @@
     ctx.fillStyle = ink('--ink-3'); ctx.textAlign = 'left'; ctx.textBaseline = 'top';
     ctx.fillText(label, kx + 46, ky + 1);
     canvas.dataset.cells = cells.length;
+    var probe = state.airProbe;
+    if (probe && probe.canvas === canvas) airReadout(ctx, f, profile, probe);
   }
 
-  // The readout: the wind at the hour and height under the pointer.
-  function bindAir(canvas, out, index) {
-    function say(event) {
+  // The airgram's readout, on the chart as the sounding's is: the hour under the pointer
+  // marked down the chart, the height across it, and the air there in a box beside it.
+  function airReadout(ctx, f, profile, probe) {
+    var x = f.x(probe.hour), y = f.y(probe.metres);
+    ctx.save();
+    ctx.strokeStyle = ink('--ink-3');
+    ctx.setLineDash([1, 3]);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x, f.top); ctx.lineTo(x, f.H - f.bottom);
+    ctx.moveTo(f.left, y); ctx.lineTo(f.W - f.right, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = ink('--ink');
+    ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
+    var lines = probe.lines;
+    ctx.font = '15px "Noto Sans", ui-sans-serif, sans-serif';
+    var width = 0;
+    lines.forEach(function (line) { width = Math.max(width, ctx.measureText(line).width); });
+    var boxW = width + 12, boxH = lines.length * 17 + 6;
+    var boxY = y - boxH - 8;
+    if (boxY < f.top) boxY = y + 8;
+    var boxX = Math.min(Math.max(f.left + 2, x - boxW / 2), f.W - f.right - boxW);
+    ctx.globalAlpha = 0.93;
+    ctx.fillStyle = ink('--paper');
+    ctx.fillRect(boxX, boxY, boxW, boxH);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = ink('--rule');
+    ctx.strokeRect(boxX + 0.5, boxY + 0.5, boxW, boxH);
+    ctx.fillStyle = ink('--ink');
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    lines.forEach(function (line, i) { ctx.fillText(line, boxX + 6, boxY + 4 + i * 17); });
+    ctx.restore();
+  }
+
+  // The readout: the air at the hour and height under the pointer, drawn on the chart.
+  function bindAir(canvas, index) {
+    function redraw() {
+      var profile = state.profiles[index];
+      if (profile) drawAir(canvas, profile, slotOf(index));
+    }
+    bindReader(canvas, function (point) {
       var profile = state.profiles[index];
       if (!profile) return;
       var f = airFrame(canvas, profile), box = canvas.getBoundingClientRect();
-      var hour = Math.round(f.hour(event.clientX - box.left));
-      var metres = f.metres(event.clientY - box.top);
-      if (hour < 5 || hour > 21 || metres < profile.elevation || metres > f.top_m) {
-        out.textContent = ''; state.airProbe = null; return;
-      }
+      var hour = Math.round(f.hour(point.clientX - box.left));
+      var metres = f.metres(point.clientY - box.top);
+      if (hour < 5 || hour > 21 || metres > f.top_m) { state.airProbe = null; redraw(); return; }
+      metres = Math.max(metres, profile.elevation);
       var w = sampleProfile(profile.hourly, indexFor(profile.hourly.time, state.day, hour),
                             metres, profile.elevation);
-      state.airProbe = { hour: hour, metres: metres, speed: w && w.speed, dir: w && w.dir };
-      out.textContent = ('0' + hour).slice(-2) + ':00 · ' + Math.round(metres / 50) * 50
-        + ' m · ' + (w && w.speed != null
-          ? w.speed.toFixed(1) + ' m/s from ' + compass(w.dir) + ' (' + Math.round(w.dir) + '°)'
-          : 'no wind in the model here');
-    }
-    canvas.addEventListener('pointermove', say);
-    canvas.addEventListener('pointerdown', say);
-    canvas.addEventListener('pointerleave', function () {
-      out.textContent = ''; state.airProbe = null;
+      var lines = [('0' + hour).slice(-2) + ':00 \u00b7 ' + Math.round(metres / 10) * 10 + ' m \u00b7 '
+                   + Math.round((metres - profile.elevation) / 10) * 10 + ' m agl'];
+      lines.push(w && w.speed != null && w.dir != null
+        ? w.speed.toFixed(1) + ' m/s from ' + compass(w.dir) + ' (' + Math.round(w.dir) + '\u00b0)'
+        : 'No wind in the model here');
+      if (w && w.t != null) {
+        lines.push(w.t.toFixed(1) + ' \u00b0C' + (w.td == null ? '' : ' \u00b7 dew ' + w.td.toFixed(1)));
+      }
+      state.airProbe = { canvas: canvas, hour: hour, metres: metres, lines: lines,
+                         speed: w && w.speed, dir: w && w.dir };
+      canvas.__readout = lines.join('\n');
+      redraw();
+    }, function () {
+      if (!state.airProbe || state.airProbe.canvas !== canvas) return;
+      state.airProbe = null;
+      canvas.__readout = '';
+      redraw();
     });
   }
 
@@ -1697,46 +1802,77 @@
   // per-pointer, because the readout box follows the pointer sideways on the chart it is
   // over and would otherwise be drawn off the edge of its neighbours.
   function bindProbe(canvas) {
-    function read(event) {
+    bindReader(canvas, function (point) {
       var box = canvas.getBoundingClientRect();
-      var y = event.clientY - box.top;
+      var y = point.clientY - box.top;
       var plot = box.height - SOUND_TOP - SOUND_BOTTOM;
       state.probe = (1 - (y - SOUND_TOP) / plot) * (canvas.__ceiling || SOUND_CEILING);
-      state.probeX = event.clientX - box.left;
+      state.probeX = point.clientX - box.left;
       drawSoundings();
-    }
-    function clear() { state.probe = null; drawSoundings(); }
+    }, function () {
+      if (state.probe == null) return;
+      state.probe = null;
+      drawSoundings();
+    });
+  }
+
+  // Reading a chart without taking the page's scroll away. A mouse reads where it points.
+  // A finger scrolls the page and swipes the columns over a chart as anywhere else — the
+  // charts are most of a phone's screen, and a chart that kept the vertical drag made
+  // the page hard to scroll; a tap reads that point and the reading stays until the next
+  // tap; pressed and held, the finger then drags the reading along without scrolling.
+  // The hold is caught before the browser has started a scroll, which is the one moment
+  // a `touchmove` can still be cancelled.
+  var HOLD_MS = 280, HOLD_SLOP = 8;
+  var readers = [];
+  function bindReader(canvas, read, clear) {
+    readers.push({ canvas: canvas, clear: clear });
+    var start = null, hold = null, scrubbing = false;
     canvas.addEventListener('pointermove', function (event) {
-      if (event.pointerType === 'touch' && !event.buttons) return;
-      read(event);
+      if (event.pointerType !== 'touch') read(event);
     });
-    canvas.addEventListener('pointerdown', function (event) {
-      if (event.pointerType !== 'touch') return;
-      // Held rather than tapped: a finger dragged up the chart reads it off, and lifting
-      // it puts the readout away. `preventDefault` stops the long-press menu and the
-      // text-selection gesture; the page not scrolling underneath is `touch-action:
-      // none` in the stylesheet, which is the only thing that actually stops it — a
-      // `preventDefault` on a move the browser has already begun scrolling with is too
-      // late by then.
-      event.preventDefault();
-      // **Read first, capture second, and never let the capture stop the read.**
-      // `setPointerCapture` throws on a pointer the browser does not have live — which
-      // is any synthetic one, and also a real one that has already been released — and
-      // it used to run first, so the throw took the reading with it. Capture is what
-      // keeps the *rest of the drag* coming to this canvas; the first touch does not
-      // need it, and a chart that shows nothing when a finger lands on it is a chart
-      // that looks broken.
-      read(event);
-      try {
-        canvas.setPointerCapture(event.pointerId);
-      } catch (error) { /* the drag still reads; it just is not captured */ }
-    });
-    canvas.addEventListener('pointerup', clear);
-    canvas.addEventListener('pointercancel', clear);
     canvas.addEventListener('pointerleave', function (event) {
       if (event.pointerType !== 'touch') clear();
     });
+    canvas.addEventListener('touchstart', function (event) {
+      if (event.touches.length !== 1) { start = null; clearTimeout(hold); return; }
+      var t = event.touches[0];
+      start = { clientX: t.clientX, clientY: t.clientY };
+      scrubbing = false;
+      clearTimeout(hold);
+      hold = setTimeout(function () { scrubbing = true; read(start); }, HOLD_MS);
+    }, { passive: true });
+    canvas.addEventListener('touchmove', function (event) {
+      var t = event.touches[0];
+      if (!t) return;
+      if (scrubbing) {
+        if (event.cancelable) event.preventDefault();
+        read({ clientX: t.clientX, clientY: t.clientY });
+      } else if (start && Math.hypot(t.clientX - start.clientX, t.clientY - start.clientY) > HOLD_SLOP) {
+        // A scroll or a swipe: the chart lets it go.
+        clearTimeout(hold);
+        start = null;
+      }
+    }, { passive: false });
+    canvas.addEventListener('touchend', function () {
+      clearTimeout(hold);
+      if (!scrubbing && start) read(start);  // a tap
+      start = null;
+      scrubbing = false;
+    });
+    canvas.addEventListener('touchcancel', function () {
+      clearTimeout(hold);
+      start = null;
+      scrubbing = false;
+    });
+    // A long press is the reading's, not the browser's menu.
+    canvas.addEventListener('contextmenu', function (event) { event.preventDefault(); });
   }
+  // A tap anywhere but a chart puts the readings away.
+  document.addEventListener('touchstart', function (event) {
+    readers = readers.filter(function (r) { return r.canvas.isConnected; });
+    readers.forEach(function (r) { if (!r.canvas.contains(event.target)) r.clear(); });
+  }, { passive: true });
 
   // ---- the picker's controls -----------------------------------------------------------
   //
