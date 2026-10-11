@@ -277,7 +277,9 @@ html[data-help="off"] .info-wrap { display: none; }
 .met-col-head { display:flex; align-items:baseline; gap:9px; font-size:21px; font-weight:650; margin:0 0 2px; }
 .met-col-head i { width:11px; height:11px; border-radius:50%; flex:none; align-self:center; }
 .met-col-head .name { background:none; border:0; padding:0; font:inherit; color:inherit; cursor:pointer; }
-.met-col-head .ground { font-weight:400; font-size:16px; color:var(--ink-2); font-variant-numeric:tabular-nums; }
+.met-col-head .dirs { font-weight:600; font-size:16px; color:var(--ink-2); min-width:0;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.met-col-head .dirs.is-marginal { font-weight:400; font-style:italic; }
 /* The takeoff's ParaglidingEarth page, and its place in the order, at the head's end. */
 .met-col-tools { margin-left:auto; display:inline-flex; align-items:center; gap:2px; align-self:center; }
 .met-col-tools a, .met-col-move, .met-col-drop { width:34px; height:34px; border:0; background:none; padding:0;
@@ -286,7 +288,7 @@ html[data-help="off"] .info-wrap { display: none; }
 .met-col-move:disabled { opacity:.3; cursor:default; }
 .met-columns.is-single .met-col-move { display:none; }
 
-.met-col-rose { font-size:15.5px; color:var(--ink-2); margin:0 0 10px; }
+.met-col-rose { font-size:15.5px; color:var(--ink-2); margin:0 0 10px; font-variant-numeric:tabular-nums; }
 /* The number visible, the reason one tap away. */
 .met-col-top { font-size:16.5px; color:var(--ink); margin:8px 0 14px; display:flex; align-items:center; }
 .met-col-top[hidden] { display:none; }
@@ -317,8 +319,7 @@ html[data-help="off"] .info-wrap { display: none; }
   .met-hour { flex-basis: 100%; min-width: 0; }
   /* The head on one line: the name gives way (…) before the height or the tools do. */
   .met-col-head { font-size:19px; gap:7px; }
-  .met-col-head .name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .met-col-head .ground { white-space:nowrap; flex:none; }
+  .met-col-head .name { flex:none; max-width:62%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .met-col-tools { flex:none; gap:0; }
   .met-col-tools a, .met-col-move, .met-col-drop { width:32px; height:32px; }
   /* + alone on a phone: the switcher gets the room. */
@@ -342,7 +343,9 @@ html[data-help="off"] .info-wrap { display: none; }
   /* The swipe uses the screen's full width: a column at a time, edge to edge. */
   .met-columns:not(.is-single) { gap:14px; margin:0 -14px; padding:0 14px; scroll-padding:0 14px;
     scrollbar-width: none; }
-  .met-columns:not(.is-single) .met-col, .met-columns.is-two .met-col { flex:0 0 100%; scroll-snap-align:center; }
+  /* One column a swipe, however fast: a quick flick ran on two or three columns past. */
+  .met-columns:not(.is-single) .met-col, .met-columns.is-two .met-col { flex:0 0 100%; scroll-snap-align:center;
+    scroll-snap-stop:always; }
   .met-columns.is-single .met-col { display:block; }
   .met-columns.is-single .met-canvas + .met-canvas { margin-top:10px; }
 }
@@ -371,8 +374,7 @@ html[data-help="off"] .info-wrap { display: none; }
   </div>
   </div>
 
-  <p class="met-synoptic">The synoptic situation: <a class="lnk" href="https://weather.metoffice.gov.uk/maps-and-charts/surface-pressure" rel="noreferrer"
-     target="_blank">surface pressure, Met Office</a> — the analysis and the next five days.</p>
+  <p class="met-synoptic"><a class="lnk" href="https://weather.metoffice.gov.uk/maps-and-charts/surface-pressure" rel="noreferrer" target="_blank">Synoptic chart<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.5 3.5h5v5M16.5 3.5 9 11M14 11.5v5H3.5V6h5"/></svg></a></p>
 
   <table class="met-compare" id="met-compare" hidden
          aria-label="The chosen takeoffs at the chosen hour">
@@ -429,7 +431,7 @@ html[data-help="off"] .info-wrap { display: none; }
     Takeoffs from ParaglidingEarth, CC BY-SA, list taken 2026-10-11. Meteograms by FLYMET, Meteopress, loaded
     from <a href="https://flymet.meteopress.cz/meteogram/" rel="noreferrer">flymet</a> —
     186 stations, matched to the nearest takeoff.</span></span></p>
-  <script type="application/json" class="met-data">{"sites":[{"name":"Ran\u00e1","country":"CZ","lat":50.4075,"lon":13.7715,"alt":426,"landing":293,"winds":[2,0,0,2,2,0,0,2],"id":10099},{"name":"Krupka","country":"CZ","lat":50.6964,"lon":13.8769,"alt":644,"landing":248,"winds":[0,0,0,1,2,1,0,0],"id":6737},{"name":"Koz\u00e1kov","country":"CZ","lat":50.5933,"lon":15.2632,"alt":737,"landing":487,"winds":[0,0,0,1,2,2,2,1],"id":7197},{"name":"\u010cern\u00e1 hora","country":"CZ","lat":50.6496,"lon":15.74,"alt":1254,"landing":684,"winds":[0,0,0,1,2,1,0,0],"id":7188},{"name":"Doln\u00ed Morava","country":"CZ","lat":50.1544,"lon":16.8377,"alt":1228,"landing":724,"winds":[0,0,0,1,2,1,0,0],"id":21878},{"name":"Velk\u00fd Lopen\u00edk","country":"SK","lat":48.9152,"lon":17.7824,"alt":866,"landing":705,"winds":[0,0,1,2,2,2,1,0],"id":10270},{"name":"Martinsk\u00e9 hole","country":"SK","lat":49.0963,"lon":18.8238,"alt":1433,"landing":null,"winds":[],"id":22106},{"name":"P\u00e1lava - D\u011bv\u00edn","country":"CZ","lat":48.8674,"lon":16.6523,"alt":504,"landing":322,"winds":[0,0,2,2,0,0,0,0],"id":22931},{"name":"V\u0161echov","country":"CZ","lat":49.4379,"lon":14.6222,"alt":489,"landing":486,"winds":[1,1,1,2,1,1,1,2],"id":10333},{"name":"Doubrava","country":"CZ","lat":49.4328,"lon":13.2028,"alt":715,"landing":419,"winds":[0,0,0,0,0,0,2,0],"id":12436},{"name":"Hausstein","country":"DE","lat":48.8712,"lon":13.0729,"alt":880,"landing":501,"winds":[0,0,0,2,0,0,0,0],"id":8590},{"name":"Bassano","country":"IT","lat":45.8238,"lon":11.7694,"alt":865,"landing":159,"winds":[0,0,0,1,2,1,0,0],"id":9200},{"name":"Col Rodella","country":"IT","lat":46.4972,"lon":11.7535,"alt":2360,"landing":1415,"winds":[2,1,0,1,2,2,1,1],"id":7243},{"name":"Meduno","country":"IT","lat":46.2306,"lon":12.8069,"alt":983,"landing":264,"winds":[0,0,0,0,1,2,1,0],"id":19791},{"name":"Kobala","country":"SI","lat":46.1805,"lon":13.7791,"alt":1061,"landing":158,"winds":[0,0,2,1,1,1,2,0],"id":7183}],"octants":["N","NE","E","SE","S","SW","W","NW"],"levels":[1000,975,950,925,900,850,800,700,600,500],"endpoint":"https://api.open-meteo.com/v1/forecast","attribution":"Takeoffs from ParaglidingEarth, CC BY-SA","fetched":"2026-10-11","flymet":{"near":[{"slug":"RANA","name":"Rana","km":1.5},{"slug":"USTI-NL","name":"\u00dast\u00ed n.L.","km":11.0},{"slug":"DRZKOV","name":"Drzkov","km":10.7},{"slug":"VRCHLABI","name":"Vrchlab\u00ed","km":7.3},{"slug":"KRALIKY","name":"Kraliky","km":10.0},{"slug":"TRENCIN","name":"Trencin","km":18.1},{"slug":"MARTIN","name":"Martin","km":9.9},{"slug":"BRECLAV","name":"B\u0159eclav","km":19.9},{"slug":"TABOR","name":"T\u00e1bor","km":8.5},{"slug":"KLATOVY","name":"Klatovy","km":8.7},{"slug":"DEGGENDORF","name":"Deggendorf","km":9.6},null,null,null,null],"today":"https://flymet.meteopress.cz/meteogram/{slug}.png","tomorrow":"https://flymet.meteopress.cz/meteogram2/{slug}.png","index":"https://flymet.meteopress.cz/meteogram/"}}</script>
+  <script type="application/json" class="met-data">{"sites":[{"name":"Ran\u00e1","country":"CZ","lat":50.4075,"lon":13.7715,"alt":426,"landing":293,"tow":false,"winds":[2,0,0,2,2,0,0,2],"id":10099},{"name":"Krupka","country":"CZ","lat":50.6964,"lon":13.8769,"alt":644,"landing":248,"tow":false,"winds":[0,0,0,1,2,1,0,0],"id":6737},{"name":"Koz\u00e1kov","country":"CZ","lat":50.5933,"lon":15.2632,"alt":737,"landing":487,"tow":false,"winds":[0,0,0,1,2,2,2,1],"id":7197},{"name":"\u010cern\u00e1 hora","country":"CZ","lat":50.6496,"lon":15.74,"alt":1254,"landing":684,"tow":false,"winds":[0,0,0,1,2,1,0,0],"id":7188},{"name":"Doln\u00ed Morava","country":"CZ","lat":50.1544,"lon":16.8377,"alt":1228,"landing":724,"tow":false,"winds":[0,0,0,1,2,1,0,0],"id":21878},{"name":"Velk\u00fd Lopen\u00edk","country":"SK","lat":48.9152,"lon":17.7824,"alt":866,"landing":705,"tow":false,"winds":[0,0,1,2,2,2,1,0],"id":10270},{"name":"Martinsk\u00e9 hole","country":"SK","lat":49.0963,"lon":18.8238,"alt":1433,"landing":null,"tow":false,"winds":[],"id":22106},{"name":"P\u00e1lava - D\u011bv\u00edn","country":"CZ","lat":48.8674,"lon":16.6523,"alt":504,"landing":322,"tow":false,"winds":[0,0,2,2,0,0,0,0],"id":22931},{"name":"V\u0161echov","country":"CZ","lat":49.4379,"lon":14.6222,"alt":489,"landing":486,"tow":true,"winds":[1,1,1,2,1,1,1,2],"id":10333},{"name":"Doubrava","country":"CZ","lat":49.4328,"lon":13.2028,"alt":715,"landing":419,"tow":false,"winds":[0,0,0,0,0,0,2,0],"id":12436},{"name":"Hausstein","country":"DE","lat":48.8712,"lon":13.0729,"alt":880,"landing":501,"tow":false,"winds":[0,0,0,2,0,0,0,0],"id":8590},{"name":"Bassano","country":"IT","lat":45.8238,"lon":11.7694,"alt":865,"landing":159,"tow":false,"winds":[0,0,0,1,2,1,0,0],"id":9200},{"name":"Col Rodella","country":"IT","lat":46.4972,"lon":11.7535,"alt":2360,"landing":1415,"tow":false,"winds":[2,1,0,1,2,2,1,1],"id":7243},{"name":"Meduno","country":"IT","lat":46.2306,"lon":12.8069,"alt":983,"landing":264,"tow":false,"winds":[0,0,0,0,1,2,1,0],"id":19791},{"name":"Kobala","country":"SI","lat":46.1805,"lon":13.7791,"alt":1061,"landing":158,"tow":false,"winds":[0,0,2,1,1,1,2,0],"id":7183}],"octants":["N","NE","E","SE","S","SW","W","NW"],"levels":[1000,975,950,925,900,850,800,700,600,500],"endpoint":"https://api.open-meteo.com/v1/forecast","attribution":"Takeoffs from ParaglidingEarth, CC BY-SA","fetched":"2026-10-11","flymet":{"near":[{"slug":"RANA","name":"Rana","km":1.5},{"slug":"USTI-NL","name":"\u00dast\u00ed n.L.","km":11.0},{"slug":"DRZKOV","name":"Drzkov","km":10.7},{"slug":"VRCHLABI","name":"Vrchlab\u00ed","km":7.3},{"slug":"KRALIKY","name":"Kraliky","km":10.0},{"slug":"TRENCIN","name":"Trencin","km":18.1},{"slug":"MARTIN","name":"Martin","km":9.9},{"slug":"BRECLAV","name":"B\u0159eclav","km":19.9},{"slug":"TABOR","name":"T\u00e1bor","km":8.5},{"slug":"KLATOVY","name":"Klatovy","km":8.7},{"slug":"DEGGENDORF","name":"Deggendorf","km":9.6},null,null,null,null],"today":"https://flymet.meteopress.cz/meteogram/{slug}.png","tomorrow":"https://flymet.meteopress.cz/meteogram2/{slug}.png","index":"https://flymet.meteopress.cz/meteogram/"}}</script>
 </article>
 <footer class="site-foot"><a href="https://github.com/ondrejchmelar/parainsights" rel="noreferrer"><svg class="gh" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>parainsights on GitHub</a> — the source, the issues, and how every number on these pages is worked out. Airspace © <a href="https://www.openaip.net" rel="noreferrer">openAIP</a> (CC BY-NC 4.0); imagery © Esri, Maxar, Earthstar Geographics; place names © OpenMapTiles, © OpenStreetMap contributors; terrain: AWS Open Data; weather: Open-Meteo.</footer>
 </div>
@@ -1376,12 +1378,14 @@ html[data-help="off"] .info-wrap { display: none; }
   // three dew points on one frame is six crossing lines, and three sets of cloud shading
   // is a grey smear. What compares across hills is on the strip above; what belongs to
   // one hill is in that hill's column, under its name.
-  // What the hill gives: the height from takeoff to landing (the landing's own altitude
-  // is the head's title). A takeoff with no landing recorded says nothing rather than
-  // guessing one.
-  function landingNote(site) {
-    if (site.landing == null) return '';
-    return ' \u00b7 ' + Math.max(site.alt - site.landing, 0) + ' m to the landing';
+  // The takeoff's own altitude (ParaglidingEarth's: the charts' ground is the model's,
+  // which on a hill can be 200 m out) and what the hill gives — the height above the
+  // landing. A takeoff with no landing recorded gives its altitude alone rather than a
+  // guessed landing; a tow site has no hill, so it says so and nothing else.
+  function heightNote(site) {
+    if (site.tow) return 'Tow';
+    return site.alt + ' m' + (site.landing == null ? ''
+      : ' (' + Math.max(site.alt - site.landing, 0) + ' m above landing)');
   }
 
   function drawColumns() {
@@ -1403,7 +1407,7 @@ html[data-help="off"] .info-wrap { display: none; }
         cell.className = 'met-col';
         cell.dataset.site = index;
         cell.innerHTML = '<p class="met-col-head"><i></i><span class="name"></span>'
-          + '<span class="ground"></span><span class="met-col-tools">'
+          + '<span class="dirs"></span><span class="met-col-tools">'
           + '<a class="met-col-pge" rel="noreferrer" target="_blank">' + LINK_ICON + '</a>'
           + '<button type="button" class="met-col-move" data-by="-1">' + LEFT_ICON + '</button>'
           + '<button type="button" class="met-col-move" data-by="1">' + RIGHT_ICON + '</button>'
@@ -1429,17 +1433,21 @@ html[data-help="off"] .info-wrap { display: none; }
         var good = (site.winds || []).length
           ? conf.octants.filter(function (point, i) { return site.winds[i] === 2; })
           : null;
-        cell.querySelector('.met-col-rose span').textContent = (good === null
-          ? 'No directions recorded, so this page will not judge it'
-          : (good.length ? 'Works in ' + good.join(' ') : 'Only marginal directions'))
-          + landingNote(site);
-        // The takeoff's own altitude, ParaglidingEarth's: the charts' ground is the
-        // model's, which on a hill is the cell's average and can be 200 m out.
-        cell.querySelector('.ground').textContent = site.alt + ' m';
-        cell.querySelector('.ground').title = 'Takeoff altitude'
-          + (site.landing != null ? '; the landing is at ' + site.landing + ' m' : '');
-        cell.querySelector('.met-col-rose span').title = site.landing != null
-          ? 'Takeoff ' + site.alt + ' m, landing ' + site.landing + ' m (ParaglidingEarth)' : '';
+        // By its name, the directions it works in; under it, its height. The way a pilot
+        // says a hill: "Bassano S, 865 m, 706 above the landing".
+        var dirs = cell.querySelector('.dirs');
+        var marginal = conf.octants.filter(function (point, i) { return (site.winds || [])[i] === 1; });
+        dirs.textContent = good === null ? '' : (good.length ? good.join(' ') : marginal.join(' '));
+        dirs.classList.toggle('is-marginal', good !== null && !good.length);
+        dirs.title = good === null ? 'No directions recorded, so this page will not judge it'
+          : (good.length ? 'Works in ' + good.join(' ')
+             + (marginal.length ? '; marginal in ' + marginal.join(' ') : '')
+             : 'Only marginal directions');
+        var height = cell.querySelector('.met-col-rose span');
+        height.textContent = heightNote(site);
+        height.title = site.tow ? 'A tow site: launched on a line from the field'
+          : 'Takeoff ' + site.alt + ' m' + (site.landing != null ? ', landing ' + site.landing + ' m' : '')
+            + ' (ParaglidingEarth)';
         // The takeoff's own page, as an icon by its name: the source of its directions.
         var link = cell.querySelector('.met-col-pge');
         link.href = 'https://www.paraglidingearth.com/index.php?site=' + site.id;

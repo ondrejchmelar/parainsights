@@ -44,6 +44,7 @@ ENDPOINT = "https://api.open-meteo.com/v1/forecast"
 # pilot reads the fronts and the gradient off. Linked, not drawn: there is no forecast
 # here to draw one from.
 SYNOPTIC = "https://weather.metoffice.gov.uk/maps-and-charts/surface-pressure"
+LINK_ICON = '<path d="M11.5 3.5h5v5M16.5 3.5 9 11M14 11.5v5H3.5V6h5"/>'
 
 # The lapse rate at or below which a layer is drawn as the lid on the day. Here because
 # the caption has to state it and the caption is written in Python; the rule itself is in
@@ -180,7 +181,9 @@ STYLE = """
 .met-col-head { display:flex; align-items:baseline; gap:9px; font-size:21px; font-weight:650; margin:0 0 2px; }
 .met-col-head i { width:11px; height:11px; border-radius:50%; flex:none; align-self:center; }
 .met-col-head .name { background:none; border:0; padding:0; font:inherit; color:inherit; cursor:pointer; }
-.met-col-head .ground { font-weight:400; font-size:16px; color:var(--ink-2); font-variant-numeric:tabular-nums; }
+.met-col-head .dirs { font-weight:600; font-size:16px; color:var(--ink-2); min-width:0;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.met-col-head .dirs.is-marginal { font-weight:400; font-style:italic; }
 /* The takeoff's ParaglidingEarth page, and its place in the order, at the head's end. */
 .met-col-tools { margin-left:auto; display:inline-flex; align-items:center; gap:2px; align-self:center; }
 .met-col-tools a, .met-col-move, .met-col-drop { width:34px; height:34px; border:0; background:none; padding:0;
@@ -189,7 +192,7 @@ STYLE = """
 .met-col-move:disabled { opacity:.3; cursor:default; }
 .met-columns.is-single .met-col-move { display:none; }
 
-.met-col-rose { font-size:15.5px; color:var(--ink-2); margin:0 0 10px; }
+.met-col-rose { font-size:15.5px; color:var(--ink-2); margin:0 0 10px; font-variant-numeric:tabular-nums; }
 /* The number visible, the reason one tap away. */
 .met-col-top { font-size:16.5px; color:var(--ink); margin:8px 0 14px; display:flex; align-items:center; }
 .met-col-top[hidden] { display:none; }
@@ -220,8 +223,7 @@ STYLE = """
   .met-hour { flex-basis: 100%; min-width: 0; }
   /* The head on one line: the name gives way (…) before the height or the tools do. */
   .met-col-head { font-size:19px; gap:7px; }
-  .met-col-head .name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .met-col-head .ground { white-space:nowrap; flex:none; }
+  .met-col-head .name { flex:none; max-width:62%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .met-col-tools { flex:none; gap:0; }
   .met-col-tools a, .met-col-move, .met-col-drop { width:32px; height:32px; }
   /* + alone on a phone: the switcher gets the room. */
@@ -245,7 +247,9 @@ STYLE = """
   /* The swipe uses the screen's full width: a column at a time, edge to edge. */
   .met-columns:not(.is-single) { gap:14px; margin:0 -14px; padding:0 14px; scroll-padding:0 14px;
     scrollbar-width: none; }
-  .met-columns:not(.is-single) .met-col, .met-columns.is-two .met-col { flex:0 0 100%; scroll-snap-align:center; }
+  /* One column a swipe, however fast: a quick flick ran on two or three columns past. */
+  .met-columns:not(.is-single) .met-col, .met-columns.is-two .met-col { flex:0 0 100%; scroll-snap-align:center;
+    scroll-snap-stop:always; }
   .met-columns.is-single .met-col { display:block; }
   .met-columns.is-single .met-canvas + .met-canvas { margin-top:10px; }
 }
@@ -318,8 +322,7 @@ def body(uid: str = "meteo") -> str:
   </div>
   </div>
 
-  <p class="met-synoptic">The synoptic situation: <a class="lnk" href="{SYNOPTIC}" rel="noreferrer"
-     target="_blank">surface pressure, Met Office</a> — the analysis and the next five days.</p>
+  <p class="met-synoptic"><a class="lnk" href="{SYNOPTIC}" rel="noreferrer" target="_blank">Synoptic chart{common.icon(LINK_ICON, 16)}</a></p>
 
   <table class="met-compare" id="met-compare" hidden
          aria-label="The chosen takeoffs at the chosen hour">

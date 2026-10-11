@@ -91,6 +91,9 @@ def fetch(iso: str = "CZ") -> list[dict]:
             "lon": round(float(lon), 4),
             "alt": int(float(properties.get("takeoff_altitude") or 0)),
             "landing": _landing(properties),
+            # A tow (winch) site: launched on a line, so the takeoff's height is the
+            # field's and there is no hill to fly down.
+            "tow": properties.get("winch") == "1",
             "winds": winds,
             "id": int(properties.get("pge_site_id") or 0),
         })
@@ -146,7 +149,8 @@ def write(path: Path, sites: list[dict]) -> None:
         "takeoffs `meteo.sources.CHOSEN` names, in its order:",
         f"    {ENDPOINT.format(iso='{' + countries + '}')}",
         "",
-        "`landing` is the landing field's altitude in metres, None where none is recorded.",
+        "`landing` is the landing field's altitude in metres, None where none is recorded;",
+        "`tow` marks a winch site, where the height to the landing means nothing.",
         "`winds` is ParaglidingEarth's own suitability per octant, N first and clockwise:",
         "0 unflyable, 1 marginal, 2 good. An empty list means the site records none, and",
         "the page then refuses to judge it against the forecast rather than guessing.",
@@ -164,6 +168,7 @@ def write(path: Path, sites: list[dict]) -> None:
             f'    {{"name": {site["name"]!r}, "country": {site["country"]!r}, '
             f'"lat": {site["lat"]}, '
             f'"lon": {site["lon"]}, "alt": {site["alt"]}, "landing": {site["landing"]}, '
+            f'"tow": {site["tow"]}, '
             f'"winds": {site["winds"]}, "id": {site["id"]}}},'
         )
     lines.append("]")

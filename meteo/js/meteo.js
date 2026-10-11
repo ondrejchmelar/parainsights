@@ -941,12 +941,14 @@
   // three dew points on one frame is six crossing lines, and three sets of cloud shading
   // is a grey smear. What compares across hills is on the strip above; what belongs to
   // one hill is in that hill's column, under its name.
-  // What the hill gives: the height from takeoff to landing (the landing's own altitude
-  // is the head's title). A takeoff with no landing recorded says nothing rather than
-  // guessing one.
-  function landingNote(site) {
-    if (site.landing == null) return '';
-    return ' \u00b7 ' + Math.max(site.alt - site.landing, 0) + ' m to the landing';
+  // The takeoff's own altitude (ParaglidingEarth's: the charts' ground is the model's,
+  // which on a hill can be 200 m out) and what the hill gives — the height above the
+  // landing. A takeoff with no landing recorded gives its altitude alone rather than a
+  // guessed landing; a tow site has no hill, so it says so and nothing else.
+  function heightNote(site) {
+    if (site.tow) return 'Tow';
+    return site.alt + ' m' + (site.landing == null ? ''
+      : ' (' + Math.max(site.alt - site.landing, 0) + ' m above landing)');
   }
 
   function drawColumns() {
@@ -968,7 +970,7 @@
         cell.className = 'met-col';
         cell.dataset.site = index;
         cell.innerHTML = '<p class="met-col-head"><i></i><span class="name"></span>'
-          + '<span class="ground"></span><span class="met-col-tools">'
+          + '<span class="dirs"></span><span class="met-col-tools">'
           + '<a class="met-col-pge" rel="noreferrer" target="_blank">' + LINK_ICON + '</a>'
           + '<button type="button" class="met-col-move" data-by="-1">' + LEFT_ICON + '</button>'
           + '<button type="button" class="met-col-move" data-by="1">' + RIGHT_ICON + '</button>'
@@ -994,17 +996,21 @@
         var good = (site.winds || []).length
           ? conf.octants.filter(function (point, i) { return site.winds[i] === 2; })
           : null;
-        cell.querySelector('.met-col-rose span').textContent = (good === null
-          ? 'No directions recorded, so this page will not judge it'
-          : (good.length ? 'Works in ' + good.join(' ') : 'Only marginal directions'))
-          + landingNote(site);
-        // The takeoff's own altitude, ParaglidingEarth's: the charts' ground is the
-        // model's, which on a hill is the cell's average and can be 200 m out.
-        cell.querySelector('.ground').textContent = site.alt + ' m';
-        cell.querySelector('.ground').title = 'Takeoff altitude'
-          + (site.landing != null ? '; the landing is at ' + site.landing + ' m' : '');
-        cell.querySelector('.met-col-rose span').title = site.landing != null
-          ? 'Takeoff ' + site.alt + ' m, landing ' + site.landing + ' m (ParaglidingEarth)' : '';
+        // By its name, the directions it works in; under it, its height. The way a pilot
+        // says a hill: "Bassano S, 865 m, 706 above the landing".
+        var dirs = cell.querySelector('.dirs');
+        var marginal = conf.octants.filter(function (point, i) { return (site.winds || [])[i] === 1; });
+        dirs.textContent = good === null ? '' : (good.length ? good.join(' ') : marginal.join(' '));
+        dirs.classList.toggle('is-marginal', good !== null && !good.length);
+        dirs.title = good === null ? 'No directions recorded, so this page will not judge it'
+          : (good.length ? 'Works in ' + good.join(' ')
+             + (marginal.length ? '; marginal in ' + marginal.join(' ') : '')
+             : 'Only marginal directions');
+        var height = cell.querySelector('.met-col-rose span');
+        height.textContent = heightNote(site);
+        height.title = site.tow ? 'A tow site: launched on a line from the field'
+          : 'Takeoff ' + site.alt + ' m' + (site.landing != null ? ', landing ' + site.landing + ' m' : '')
+            + ' (ParaglidingEarth)';
         // The takeoff's own page, as an icon by its name: the source of its directions.
         var link = cell.querySelector('.met-col-pge');
         link.href = 'https://www.paraglidingearth.com/index.php?site=' + site.id;
