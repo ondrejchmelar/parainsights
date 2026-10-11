@@ -1464,6 +1464,22 @@
         showRange();
         refresh();
       }
+      // A moment the page asks to be shown ("show me" in the debrief), in seconds since
+      // the first fix. With the replay open and the moment outside its window the map
+      // would not draw it, so the window moves to it: the right handle — the replay's
+      // "now", where the glider is drawn — to the moment. Later than the window, the left
+      // handle stays and the trail runs up to the moment; earlier, the window keeps its
+      // length and slides back to end there (moving only the left handle to the moment
+      // left a window of nothing, no trail into it). A moment inside the window leaves
+      // the reader's choice alone.
+      handle.revealTime = function (seconds) {
+        if (!hasTime || !replay || replay.hidden || !fromInput) return;
+        if (seconds >= from && seconds <= cutoff) return;
+        pause();
+        var t = Math.min(Math.max(seconds, spanStart), spanEnd);
+        if (t < from) from = Math.max(t - (cutoff - from), spanStart);
+        setTime(t);
+      };
       if (fromInput) {
         fromInput.addEventListener('input', function () { pause(); setFrom(Number(fromInput.value)); });
         toInput.addEventListener('input', function () { pause(); setTime(Number(toInput.value)); });

@@ -833,6 +833,10 @@ function initFlight(root) {
       // Pinned rather than merely placed. "Show me" is a deliberate act, and it used to
       // be undone by the reader's own mouse on its way to look at what had been shown.
       pinAt(index, view);
+      // The replay's window moved to the moment if it lies outside it (`map3d`).
+      if (terrainView && terrainView.revealTime && data.t && data.t[index] !== undefined) {
+        terrainView.revealTime(data.t[index]);
+      }
       view.svg.scrollIntoView({ block: 'center', behavior: 'smooth' });
     });
   });
