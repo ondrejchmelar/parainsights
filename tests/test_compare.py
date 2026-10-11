@@ -44,6 +44,9 @@ def _tap(browser, selector):
         " return [r.left + r.width / 2, r.top + r.height / 2]; })()" % json.dumps(selector))
     browser.click(x, y)
     time.sleep(0.4)
+    # A compare tap redraws the comparison after a frame is painted, with its button
+    # busy until then; on a software renderer a frame can take seconds.
+    browser.wait("!document.querySelector('.tab-compare.is-busy')")
 
 
 def test_tapping_compare_adds_the_flight_and_never_removes_it(page):
@@ -62,6 +65,23 @@ def test_tapping_compare_adds_the_flight_and_never_removes_it(page):
     assert state["pressed"] == ["true", "true"]
     assert state["comparing"]
     assert state["lines"] and all("of 2" in line for line in state["lines"]), state
+
+
+def test_a_second_tap_while_busy_does_not_undo_the_first(page):
+    """The comparison is redrawn after the tap, a second or two on a phone; a second tap
+    in that time used to undo the first. The button is busy until it is done."""
+    state = page.js("""(() => {
+      var b = document.querySelector('[data-compare-toggle="f1"]');
+      var before = b.getAttribute('aria-pressed');
+      b.click(); var busy = b.classList.contains('is-busy');
+      b.click(); return { before: before, busy: busy, after: b.getAttribute('aria-pressed') }; })()""")
+    page.wait("!document.querySelector('.tab-compare.is-busy')")
+    assert state["busy"] is True
+    assert state["after"] != state["before"], "the second tap undid the first"
+    # Back as it was, for the tests after this one.
+    page.js("document.querySelector('[data-compare-toggle=\"f1\"]').click()")
+    page.wait("!document.querySelector('.tab-compare.is-busy')")
+    assert page.js("document.querySelector('[data-compare-toggle=\"f1\"]').getAttribute('aria-pressed')") == state["before"]
 
 
 def test_removing_a_compared_flight_leaves_the_comparison(page):
