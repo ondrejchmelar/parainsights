@@ -731,7 +731,8 @@ function initFlight(root) {
   // How a redrawn chart gets back into the cursor. `page/charts.js` calls this after
   // the axis toggle rebuilds the side view; without it the toggle silently produces a
   // chart the cursor cannot drive, which looks exactly like the cursor being broken.
-  root.__relinkCharts = collectViews;
+  // After a redraw (a comparison, a new shape) the replay's bar and window go back on.
+  root.__relinkCharts = function () { collectViews(); if (range) drawRange(); };
   // The 3D map's replay drives the charts (`map3d`, `setTime`): its "now", in seconds
   // since the first fix, as the cursor on the side and top views. Quiet — no tooltip, and
   // not back to the map, which is showing the replay already.
@@ -752,48 +753,62 @@ function initFlight(root) {
     highlight(data.segment[lo]);
   };
 
-  // The 3D replay's window (`map3d`, `showRange`): the side view dims what lies outside
-  // the two handles, so the slider's choice reads against the whole flight. Seconds since
-  // the first fix, as `__cursorAtTime`; null when the replay closes.
+  // The 3D replay's window (`map3d`, `showRange`) on the side view: a bar at its "now"
+  // (the right handle), and — once the left handle has been moved off the start — what
+  // lies outside the two handles dimmed, so the slider's choice reads against the whole
+  // day. Seconds since this flight's first fix, as `__cursorAtTime`; null when the replay
+  // closes.
+  //
+  // Placed by time along the axis, not by this flight's own samples: compared flights
+  // from the same day share the axis and can fly on after this one has landed, and a
+  // window clamped to this flight's last fix dimmed everything after its landing while
+  // the others were still in the air.
   var range = null;
-  function indexAt(t) {
-    var lo = 0, hi = data.t.length - 1;
-    while (lo < hi) { var mid = (lo + hi) >> 1; if (data.t[mid] < t) lo = mid + 1; else hi = mid; }
-    return lo;
-  }
   function drawRange() {
     views.forEach(function (view) {
       if (view.mode !== 'x') return;
       var shade = view.svg.querySelector('.replay-range');
-      if (!range || !data.t || !data.t.length) { if (shade) shade.remove(); return; }
-      var n = view.px.length;
-      var a = Math.min(indexAt(range[0]), n - 1), b = Math.min(indexAt(range[1]), n - 1);
-      // Along distance or time the trace runs left to right; from launch it doubles back,
-      // and the window is the stretch of the axis it covers.
-      var left = Infinity, right = -Infinity;
-      for (var i = a; i <= b; i++) { left = Math.min(left, view.px[i]); right = Math.max(right, view.px[i]); }
-      var x = +view.hit.getAttribute('x'), w = +view.hit.getAttribute('width');
+      var n = Math.min(view.px.length, data.t ? data.t.length : 0);
+      if (!range || n < 2) { if (shade) shade.remove(); return; }
+      var t0 = data.t[0], t1 = data.t[n - 1];
+      var x0 = view.px[0], x1 = view.px[n - 1];
+      var box = +view.hit.getAttribute('x'), w = +view.hit.getAttribute('width');
+      function xAt(t) {
+        var x = t1 > t0 ? x0 + (t - t0) / (t1 - t0) * (x1 - x0) : x0;
+        return Math.min(Math.max(x, box), box + w);
+      }
+      var left = xAt(range[0]), right = xAt(range[1]);
+      var y = view.hit.getAttribute('y'), h = view.hit.getAttribute('height');
       if (!shade) {
-        shade = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        var NS = 'http://www.w3.org/2000/svg';
+        shade = document.createElementNS(NS, 'g');
         shade.setAttribute('class', 'replay-range');
         ['before', 'after'].forEach(function () {
-          var r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+          var r = document.createElementNS(NS, 'rect');
           r.setAttribute('class', 'replay-dim');
-          r.setAttribute('y', view.hit.getAttribute('y'));
-          r.setAttribute('height', view.hit.getAttribute('height'));
+          r.setAttribute('y', y);
+          r.setAttribute('height', h);
           shade.appendChild(r);
         });
+        var bar = document.createElementNS(NS, 'line');
+        bar.setAttribute('class', 'replay-now');
+        bar.setAttribute('y1', y);
+        bar.setAttribute('y2', +y + +h);
+        shade.appendChild(bar);
         view.svg.insertBefore(shade, view.cursor || view.hit);
       }
-      if (!(left <= right)) { left = x; right = x; }
-      shade.firstChild.setAttribute('x', x);
-      shade.firstChild.setAttribute('width', Math.max(left - x, 0));
-      shade.lastChild.setAttribute('x', right);
-      shade.lastChild.setAttribute('width', Math.max(x + w - right, 0));
+      var dims = shade.querySelectorAll('.replay-dim'), dim = !!range[2];
+      dims[0].setAttribute('x', box);
+      dims[0].setAttribute('width', dim ? Math.max(left - box, 0) : 0);
+      dims[1].setAttribute('x', right);
+      dims[1].setAttribute('width', dim ? Math.max(box + w - right, 0) : 0);
+      var now = shade.querySelector('.replay-now');
+      now.setAttribute('x1', right);
+      now.setAttribute('x2', right);
     });
   }
   root.__rangeAtTime = function (span) {
-    range = span ? [Math.max(span[0], 0), Math.max(span[1], 0)] : null;
+    range = span ? [span[0], span[1], !!span[2]] : null;
     drawRange();
   };
 

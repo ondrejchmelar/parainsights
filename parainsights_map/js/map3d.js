@@ -1405,10 +1405,12 @@
         fill.style.left = ((from - spanStart) / span * 100) + '%';
         fill.style.right = (100 - (cutoff - spanStart) / span * 100) + '%';
         clockLabel.textContent = clockAt(from) + ' – ' + clockAt(cutoff);
-        // The same window on the side view, while the replay is open.
+        // The same window on the side view, while the replay is open: a bar at "now",
+        // and the outside dimmed only once the left handle has been moved off the start —
+        // with it there, the window is the whole day so far and dimming said nothing.
         var article = panel.closest('[data-flight-report]');
         if (article && article.__rangeAtTime) {
-          article.__rangeAtTime(replay && !replay.hidden ? [from, cutoff] : null);
+          article.__rangeAtTime(replay && !replay.hidden ? [from, cutoff, from > spanStart + 1] : null);
         }
       }
       // The right handle: the replay's "now", and the moment the sun is lit for.
