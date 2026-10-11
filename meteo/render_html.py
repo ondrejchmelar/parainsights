@@ -44,12 +44,15 @@ ENDPOINT = "https://api.open-meteo.com/v1/forecast"
 # reads the fronts and the gradient off. Linked, not drawn: there is no forecast here to
 # draw one from. (The pilot's pick, October 2026, over DWD's and the Met Office's.)
 SYNOPTIC = "https://www.chmi.cz/predpoved-pocasi/synopticka-situace"
-# Concentric isobars round a low, the outer one open at the edge as a chart's are: what
-# a synoptic chart is drawn with. Uneven and bunched to one side — evenly spaced rings
-# read as a target.
-SYNOPTIC_ICON = ('<path d="M1.8 6.5C4.5 3 9.5 1.9 13.4 3.4c3.8 1.5 5.4 5.2 3.6 8.6-1.9 3.6-6.6 5.5-10.6 4.4"/>'
-                 '<path d="M5.2 13.2c-1.9-2.2-1.2-5.5 1.7-7 2.9-1.6 6.6-1 8 1.4 1.3 2.3-.1 5.3-3 6.4-2.5.9-5.2.6-6.7-.8z"/>'
-                 '<path d="M8.5 10.7c-.7-1 0-2.5 1.5-3 1.5-.5 3 0 3.4 1.1.3 1.1-.5 2.2-1.9 2.6-1.3.3-2.5 0-3-.7z"/>')
+# A synoptic chart in little: uneven isobars round a low, and a cold front sweeping
+# away below it, its teeth filled. Drawn at 24 px rather than the site's 20, the one icon
+# that is: at 20 the front's teeth closed up into a bump on the line.
+SYNOPTIC_ICON = ('<path d="M2.4 9.3C1.5 6.4 3.6 3.3 7.4 2.9c3.8-.4 6.4 1.7 6.2 4.3-.2 2.8-3 5.1-6.5 5.5-2.4.2-4-1-4.7-3.4z"/>'
+                 '<path d="M5 8.6c-.4-1.8.8-3.4 3-3.6 2.1-.1 3.4.9 3.3 2.3-.1 1.5-1.7 2.7-3.6 2.8-1.4.1-2.4-.4-2.7-1.5z"/>'
+                 '<path d="M5 18.2c3.4-.6 6.4-2.4 8.6-5 1.4-1.7 2.8-2.6 4.4-2.9"/>'
+                 '<path d="M8 17.4 7.3 14l3.6 1.1z" fill="currentColor" stroke-width="1"/>'
+                 '<path d="M12.6 14.6 12.9 11l3.1 2.1z" fill="currentColor" stroke-width="1"/>')
+SYNOPTIC_SIZE = 24
 
 # The lapse rate at or below which a layer is drawn as the lid on the day. Here because
 # the caption has to state it and the caption is written in Python; the rule itself is in
@@ -326,7 +329,7 @@ def body(uid: str = "meteo") -> str:
     <div class="met-day-row">
       <div class="seg met-days" id="met-days" role="group" aria-label="Which day"></div>
       <a class="tool met-synoptic" href="{SYNOPTIC}" rel="noreferrer" target="_blank"
-         title="Synoptic chart (ČHMÚ)" aria-label="Synoptic chart (ČHMÚ)">{common.icon(SYNOPTIC_ICON)}</a>
+         title="Synoptic chart (ČHMÚ)" aria-label="Synoptic chart (ČHMÚ)">{common.icon(SYNOPTIC_ICON, SYNOPTIC_SIZE)}</a>
     </div>
     <div class="met-hour">
       <label for="met-hour-input">Hour</label><span class="info-wrap"><button type="button" class="info"
