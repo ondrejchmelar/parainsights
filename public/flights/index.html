@@ -6298,6 +6298,25 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
     return { alt: count ? out : alt, count: count };
   }
 
+  // Pressure altitude written as 00000 for a stretch while GPS kept its height: the
+  // sensor gone, as a phone's does for a few seconds. Fifteen of them in a row after a
+  // launch drew the trace down to the ground and stretched the side view to 0 m, and a
+  // run that long is its own neighbourhood, so the median repair above cannot see it.
+  // Filled from GPS altitude, shifted by the flight's usual GPS-to-pressure difference.
+  // Only where GPS puts the glider clearly above the sea (DROPOUT_MIN_GPS), so a pressure
+  // altitude that really is about 0 m is left as it is.
+  var DROPOUT_MIN_GPS = 50;
+  function fillBaroDropouts(baro, gps) {
+    var diffs = [];
+    for (var i = 0; i < baro.length; i++) if (baro[i] !== 0) diffs.push(gps[i] - baro[i]);
+    if (!diffs.length) return { alt: baro, count: 0 };
+    var offset = np.median(diffs), out = baro.slice(), count = 0;
+    for (var j = 0; j < baro.length; j++) {
+      if (baro[j] === 0 && gps[j] - offset > DROPOUT_MIN_GPS) { out[j] = Math.round(gps[j] - offset); count++; }
+    }
+    return { alt: count ? out : baro, count: count };
+  }
+
   function filterBadFixes(flight) {
     var n = flight.time.length, keep = new Array(n).fill(false), dropped = {};
     function bump(key, by) { dropped[key] = (dropped[key] || 0) + (by === undefined ? 1 : by); }
@@ -6316,6 +6335,9 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
     if (gps.count) bump('GPS altitude spikes repaired', gps.count);
     var baro = pick(flight.alt_baro);
     if (hasBaro(flight)) {
+      var filled = fillBaroDropouts(baro, gps.alt);
+      baro = filled.alt;
+      if (filled.count) bump('baro altitude dropouts filled from GPS', filled.count);
       var b = despikeAltitude(baro);
       baro = b.alt;
       if (b.count) bump('baro altitude spikes repaired', b.count);

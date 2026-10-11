@@ -190,6 +190,30 @@ def test_altitude_spike_is_repaired_not_dropped(tmp_path):
     assert flight.alt_gps[5] == 500  # replaced by the local median
 
 
+def test_a_run_of_zero_baro_is_filled_from_gps(tmp_path):
+    """A phone's pressure sensor gone for fifteen seconds after launch: 00000 written
+    while GPS kept the height (a real file, October 2026). Too long a run for the median
+    repair; filled from GPS less the flight's usual GPS-to-pressure difference."""
+    def fix(second, baro, gps):
+        return f"B12{second // 60:02d}{second % 60:02d}4925977N01437750EA{baro:05d}{gps:05d}\n"
+    rows = [fix(s, 900 + s, 980 + s) for s in range(20)]
+    rows += [fix(s, 0, 980 + s) for s in range(20, 35)]
+    rows += [fix(s, 900 + s, 980 + s) for s in range(35, 50)]
+    flight = parse(tmp_path, "AXCT1\nHFDTE010120\n" + "".join(rows))
+    assert flight.n == 50
+    assert flight.dropped["baro altitude dropouts filled from GPS"] == 15
+    assert list(flight.alt_baro[20:35]) == [900 + s for s in range(20, 35)]
+
+
+def test_baro_that_is_really_zero_is_left_alone(tmp_path):
+    """At sea level a pressure altitude of 0 is a reading, not a dropout."""
+    rows = "".join(f"B1200{s:02d}4925977N01437750EA{(0 if 5 <= s < 15 else 3):05d}00012\n"
+                   for s in range(20))
+    flight = parse(tmp_path, "AXCT1\nHFDTE010120\n" + rows)
+    assert "baro altitude dropouts filled from GPS" not in flight.dropped
+    assert list(flight.alt_baro[5:15]) == [0] * 10
+
+
 def test_teleport_is_dropped(tmp_path):
     flight = parse(tmp_path, "AXCT1\nHFDTE010120\n"
                              "B1200004925977N01437750EA0041000492\n"
