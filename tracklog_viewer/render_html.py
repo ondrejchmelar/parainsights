@@ -195,6 +195,21 @@ svg.chart { overflow: visible; }
 .tab-compare:hover, .tab-close:hover { background: var(--panel-2); color: var(--ink); }
 .tab-compare.is-on { background: var(--ink); color: var(--paper); }
 .tab-compare svg, .tab-close svg { display: block; }
+/* A flight being worked on: the compare button while the comparison is redrawn, a card
+   while an upload is analysed. A CSS transform animation, which the compositor keeps
+   turning while the work holds the main thread. */
+.tab-compare.is-busy { pointer-events: none; }
+.tab-compare.is-busy svg { visibility: hidden; }
+.tab-compare.is-busy::before, .tab-spin {
+  content: ""; width: 18px; height: 18px; box-sizing: border-box; border-radius: 50%;
+  border: 2.5px solid var(--rule); border-top-color: var(--accent); animation: tab-spin .8s linear infinite; }
+.tab-compare.is-busy::before { position: absolute; left: 13px; top: 13px; }
+.tab-compare.is-on.is-busy::before { border-color: rgba(255,255,255,.35); border-top-color: var(--paper); }
+.tab-spin { flex: none; margin: 0 16px 0 6px; }
+.tab.is-loading { cursor: progress; }
+.tab.is-loading .tab-open { cursor: progress; }
+@keyframes tab-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .tab-compare.is-busy::before, .tab-spin { animation-duration: 2.4s; } }
 /* On touch, only the open tab's buttons are live: the first tap opens a flight, and only
    then can a second remove it or add it to the comparison. */
 @media (hover: none) { .tab:not(.is-on) .tab-close, .tab:not(.is-on) .tab-compare { pointer-events: none; opacity: 0.45; } }

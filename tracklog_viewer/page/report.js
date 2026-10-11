@@ -382,11 +382,26 @@
     // The compare control lives inside the tab, which opens the flight. Without this the
     // tab would switch every time someone marked one for comparison.
     event.stopPropagation();
+    // Busy until the comparison is redrawn: a second or two of work — every compared
+    // flight's scene read, every map and side view redrawn — that used to start inside the
+    // click, with nothing on the screen to say so, and a second click undid the first.
+    if (button.classList.contains('is-busy')) return;
     var uid = button.getAttribute('data-compare-toggle');
     chosen[uid] = !chosen[uid];
     button.setAttribute('aria-pressed', chosen[uid] ? 'true' : 'false');
     button.classList.toggle('is-on', chosen[uid]);
-    settle();
+    button.classList.add('is-busy');
+    button.setAttribute('aria-busy', 'true');
+    // After a frame is painted, so the spinner is on the screen before the work holds the
+    // page (a CSS animation keeps turning through it).
+    requestAnimationFrame(function () {
+      setTimeout(function () {
+        try { settle(); } finally {
+          button.classList.remove('is-busy');
+          button.removeAttribute('aria-busy');
+        }
+      }, 0);
+    });
   }, true);
 
   // Counted from the flights still in the document: a removed flight leaves the

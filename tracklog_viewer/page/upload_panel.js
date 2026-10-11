@@ -67,16 +67,42 @@
     writing: 'Writing the article for {name}…'
   };
 
+  // A card in the strip while a flight is read and analysed: its file name, the stage,
+  // a spinner. The analysis holds the page for seconds, and with nothing in the strip
+  // it looked as if the drop had done nothing.
+  var STAGE_WORDS = { reading: 'Reading…', analysing: 'Analysing…', fetching: 'Fetching ground and weather…',
+                      writing: 'Writing…' };
+  function pendingTab(name) {
+    var strip = tabs() && tabs().strip;
+    if (!strip) return { stage: function () {}, remove: function () {} };
+    var tab = document.createElement('span');
+    tab.className = 'tab is-loading';
+    tab.setAttribute('aria-busy', 'true');
+    tab.innerHTML = '<span class="tab-open"><span class="tab-date"></span><span class="tab-meta"></span></span>'
+      + '<span class="tab-spin" aria-hidden="true"></span>';
+    tab.querySelector('.tab-date').textContent = name.replace(/\.[^.]+$/, '').slice(0, 26);
+    strip.appendChild(tab);
+    var meta = tab.querySelector('.tab-meta');
+    return {
+      stage: function (key) { meta.textContent = STAGE_WORDS[key] || ''; },
+      remove: function () { if (tab.parentNode) tab.parentNode.removeChild(tab); }
+    };
+  }
+
   function handleFile(file) {
     if (!file) return Promise.resolve();
     status.classList.remove('is-error');
     status.textContent = 'Reading ' + file.name + '…';
     working(true);
+    var pending = pendingTab(file.name);
+    pending.stage('reading');
     return TV.upload.read(file).then(function (flight) {
       return TV.upload.build(flight, file.name, function (stage) {
         status.textContent = STAGES[stage].replace('{name}', file.name);
+        pending.stage(stage);
       });
     }).then(function (built) {
+      pending.remove();
       TV.upload.place(built, document.getElementById('quicklook'));
       addTab(built.uid, built.label, built.meta, built.stat);
       if (window.__measureScrollbar) window.__measureScrollbar();
@@ -84,7 +110,7 @@
       status.textContent = built.missing.length
         ? 'Analysed. Not available just now: ' + built.missing.join(', ') + '.' : '';
     }).then(function () { working(false); },
-            function (error) { working(false); fail(file.name, error); });
+            function (error) { pending.remove(); working(false); fail(file.name, error); });
   }
 
   // Several at once: dropping a season's folder on the panel should just work. They are
