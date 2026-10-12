@@ -188,6 +188,7 @@
     var alwaysAirspace = !!(!scene.airspaceToggle && scene.airspaces && scene.airspaces.length);
     // What the switch says, from `settleAirspace`: drawn with its credit, or why not.
     var airspaceWhy = String(scene.airspaceWhy || (hasAirspace ? 'Draw the airspace over this flight'
+      : alwaysAirspace ? 'Show or hide the airspace'
       : 'No airspace data under this flight — the layers cover Europe')).replace(/"/g, '&quot;');
     // The exaggerations this panel offers, and the one it opens on, are the page's
     // (`view3d.panel(verticals=…)`): ×1/2/4 under a flight, ×1/5/15 under a country of
@@ -273,9 +274,11 @@
             '<span>Ground</span><div class="view3d-seg m3-grounds" role="group" aria-label="Ground"></div>' +
             '<span>Height</span><div class="view3d-seg m3-verticals" role="group" aria-label="Vertical exaggeration"></div>' +
           '</div></div>' +
-        (hasAirspace ?
+        (hasAirspace || alwaysAirspace ?
+          // On a map that is its airspace (the planner's) the switch starts on, and hides it.
           '<div class="view3d-seg view3d-airspace" role="group" aria-label="Airspace">' +
-          '<button type="button" data-m3="airspace" aria-pressed="false" title="' + airspaceWhy + '"' +
+          '<button type="button" data-m3="airspace"' + (alwaysAirspace ? ' class="is-on" aria-pressed="true"' : ' aria-pressed="false"') +
+          ' title="' + airspaceWhy + '"' +
           ' aria-label="' + airspaceWhy + '">Airspaces</button></div>' :
          noAirspace ?
           '<div class="view3d-seg view3d-airspace" role="group" aria-label="Airspace">' +
