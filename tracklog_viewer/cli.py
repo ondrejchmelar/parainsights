@@ -60,9 +60,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--airspace", metavar="HREF", nargs="?", const="",
-        help="add the Planner view (airspace and task planner) and the airspace over each "
-             "flight's map. Needs the network. HREF is where the OpenAir download sits "
-             "relative to the page: '../planner/' for the published page, public/flights/index.html.",
+        help="the airspace over each flight's map, and the Planner. Needs the network. "
+             "HREF is where the Planner page and its airspace layers sit relative to the "
+             "page: '../planner/' for the published page, public/flights/index.html, whose "
+             "strip then links to it. With no HREF the Planner is embedded as a view.",
     )
     args = parser.parse_args(argv)
 
@@ -105,8 +106,13 @@ def main(argv: list[str] | None = None) -> int:
                         "weather": weather, "when": found["meteo"]["when"],
                         "plan": _plan_payload(path, found["date"], found["site"], explicit)})
 
+    # The Planner: in this document only when it stands alone (`--airspace` with no
+    # HREF). Published beside the site's own Planner page (`--airspace ../planner/`), the
+    # strip links to that page instead — a copy here, shown in place, left the address at
+    # /flights/ and carried 400 KB the site already serves.
     extras = []
-    if args.airspace is not None:
+    published = bool(args.airspace)
+    if args.airspace is not None and not published:
         extras.append(_planner_view(args, reports))
 
     jobs = []
@@ -145,7 +151,7 @@ def main(argv: list[str] | None = None) -> int:
                   for i, m in enumerate(made))
         + "</nav>"
     )
-    page = render_html._page(made[0]["title"], [m["html"] for m in made], tabs, extras)
+    page = render_html._page(made[0]["title"], [m["html"] for m in made], tabs, extras, site=published)
     if args.airspace is not None:
         # Where an uploaded flight's map finds the airspace layers (`js/upload.js`).
         page = page.replace("<meta charset=\"utf-8\">", "<meta charset=\"utf-8\">\n"

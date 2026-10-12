@@ -378,7 +378,7 @@ def _flights_view(tabs: str, bodies: list[str], extras: "list[Extra]") -> str:
     return f'<section data-view="flights">\n{inner}\n</section>'
 
 
-def _view_nav(extras: "list[Extra]") -> str:
+def _view_nav(extras: "list[Extra]", site: bool = False) -> str:
     """The switch across the top. Absent entirely when there is nothing to switch to.
 
     Two kinds of destination, deliberately side by side: the views *in this document* are
@@ -391,7 +391,7 @@ def _view_nav(extras: "list[Extra]") -> str:
     and only ever appear on a report that has extras, which is the same report that is
     published there.
     """
-    if not extras:
+    if not extras and not site:
         # No other views, but the reader still gets the theme switch: it is furniture,
         # not part of the view chooser, and a report built from one flight with no
         # airspace is still a page somebody reads at night. It carries neither the id
@@ -445,7 +445,8 @@ def _view_nav(extras: "list[Extra]") -> str:
     )
 
 
-def _page(title: str, bodies: list[str], tabs: str = "", extras: "list[Extra]" = ()) -> str:
+def _page(title: str, bodies: list[str], tabs: str = "", extras: "list[Extra]" = (),
+          site: bool = False) -> str:
     """Wrap one or more flight bodies into a complete document.
 
     The doctype is not decoration. Without it the page is in **quirks mode**, where
@@ -463,9 +464,9 @@ def _page(title: str, bodies: list[str], tabs: str = "", extras: "list[Extra]" =
 <title>{escape(title)}</title>
 <script>{common.THEME_BOOT}</script>
 <style>{STYLE}{view3d.STYLE}{render_map.STYLE}{map3d.STYLE}{upload_panel.STYLE}{charts_client.STYLE}
-{VIEW_STYLE if extras else ""}{"".join(e.style for e in extras)}</style>
+{VIEW_STYLE if extras or site else ""}{"".join(e.style for e in extras)}</style>
 <div class="wrap">
-{_view_nav(extras)}
+{_view_nav(extras, site)}
 {_flights_view(tabs, bodies, extras)}
 {"".join(f'<section data-view="{e.uid}" hidden>{e.body}</section>' for e in extras)}
 {common.footer()}
