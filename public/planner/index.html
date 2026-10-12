@@ -196,6 +196,10 @@ html[data-help="off"] .info-wrap { display: none; }
    height) sits at the top right, beside the camera column, its panel opening leftwards. */
 .asp-stage .merged-view .m3-corner { left: auto; right: 58px; }
 .asp-stage .merged-view .m3-layers-panel { left: auto; right: 0; }
+/* The left of the map is the floating panels' too (380 px from 16 px in), down to the
+   airfield layer's download at the bottom, which hid the help button in the corner: on a
+   desktop it starts just right of them. On a phone the panels are under the map. */
+@media (min-width: 641px) { .asp-stage .merged-view .m3-help-box { margin-left: 396px; } }
 /* Full screen takes the whole stage, the task and layers panels floating over the map as
    they do on a desktop (the map's own button, `fullscreen` in map3d). */
 .asp-stage:fullscreen, .asp-stage.is-maximised { background: var(--paper); width: 100%; height: 100%; }
