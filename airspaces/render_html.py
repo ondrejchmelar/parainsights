@@ -75,10 +75,11 @@ STYLE = """
 /* The map's own layers stack among themselves, under the panels. */
 .asp-stage .asp-holder { isolation: isolate; z-index: 0; }
 .asp-stage .view3d { aspect-ratio: auto; height: calc(100vh - 80px); min-height: 560px; }
-/* The map's top-left corner is the Task panel's here, so the layers button (ground and
-   height) sits at the top right, beside the camera column, its panel opening leftwards. */
-.asp-stage .merged-view .m3-corner { left: auto; right: 58px; }
-.asp-stage .merged-view .m3-layers-panel { left: auto; right: 0; }
+/* The map's top left, as on a flight's map: the layers button and the Airspaces switch.
+   On a desktop the Task panel floats over that corner, so they start just right of the
+   panels (as the help button does at the bottom); on a phone the panels are under the
+   map and they take the corner. */
+@media (min-width: 641px) { .asp-stage .merged-view .m3-corner { left: 406px; } }
 /* The left of the map is the floating panels' too (380 px from 16 px in), down to the
    airfield layer's download at the bottom, which hid the help button in the corner: on a
    desktop it starts just right of them. On a phone the panels are under the map. */
