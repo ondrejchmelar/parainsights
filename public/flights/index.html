@@ -11343,22 +11343,38 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
                 shape: 'open', closing: null };
     if (!points.length) return out;
 
-    // A triangle is three corners, and the perimeter is the closed figure — not the
-    // path walked. Four points with the closing box ticked is the same three corners
-    // with the flight coming home, which is how a task is actually flown.
-    var corners = points.length === 3 && closed ? points.slice(0)
-      : (points.length === 4 && closed ? points.slice(0, 3) : null);
-    if (corners) {
-      var sides = [distance(corners[0], corners[1]), distance(corners[1], corners[2]),
-                   distance(corners[2], corners[0])];
-      var perimeter = sides[0] + sides[1] + sides[2];
-      var gap = points.length === 4 ? distance(points[3], points[0]) : 0;
-      out.closing = gap;
-      if (perimeter > 0 && gap / perimeter < rules().closing) {
-        out.total = perimeter;
-        out.sides = sides;
-        out.shape = Math.min.apply(null, sides) / perimeter >= FAI_MIN_SIDE ? 'fai' : 'flat';
+    // A triangle as XContest scores one: any three points of the route, in its order,
+    // are the corners, the perimeter is the closed figure — not the path walked — and the
+    // closing gap is from where the route starts to where it ends. A start on a leg, as a
+    // flight launched mid-course flies it (1 on the leg 4–2, corners 2, 3, 4), was scored
+    // as open distance, because only the first three points were ever tried as corners
+    // and only with the box ticked. Every set of three is tried now, and the best score
+    // is kept: the triangle where it beats the open distance.
+    var walkGap = walk.length > 2 ? distance(walk[0], walk[walk.length - 1]) : null;
+    var open = out.total / 1000 * (rules().multiplier.open || 1), best = null;
+    if (walk.length >= 3) {
+      for (var a = 0; a < walk.length - 2; a++) {
+        for (var b = a + 1; b < walk.length - 1; b++) {
+          for (var c = b + 1; c < walk.length; c++) {
+            var sides = [distance(walk[a], walk[b]), distance(walk[b], walk[c]), distance(walk[c], walk[a])];
+            var perimeter = sides[0] + sides[1] + sides[2];
+            if (perimeter <= 0 || walkGap / perimeter >= rules().closing) continue;
+            var shape = Math.min.apply(null, sides) / perimeter >= FAI_MIN_SIDE ? 'fai' : 'flat';
+            var points_ = perimeter / 1000 * (rules().multiplier[shape] || 1);
+            if (!best || points_ > best.score) {
+              best = { sides: sides, perimeter: perimeter, shape: shape, score: points_,
+                       corners: [walk[a], walk[b], walk[c]] };
+            }
+          }
+        }
       }
+    }
+    if (closed || best) out.closing = walkGap;
+    if (best && best.score > open) {
+      out.total = best.perimeter;
+      out.sides = best.sides;
+      out.shape = best.shape;
+      out.corners = best.corners;
     }
     out.score = out.total / 1000 * (rules().multiplier[out.shape] || 1);
     return out;
@@ -11486,15 +11502,20 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
     var box = document.getElementById('plan-fai');
     if (!box || !box.checked || points.length < 2) return [];
     if (points.length === 2) return faiArea(points[0], points[1], CORNER_COLOURS[2]);
-    var corners = points.slice(0, 3), shapes = [];
+    // Around the corners the score chose, once it has chosen a triangle; the first three
+    // points while the route is still being drawn.
+    var scored = score();
+    var corners = scored.corners || points.slice(0, 3), shapes = [];
     corners.forEach(function (corner, i) {
       shapes = shapes.concat(faiArea(corners[(i + 1) % 3], corners[(i + 2) % 3],
                                      CORNER_COLOURS[i], corner));
     });
-    if (document.getElementById('plan-close').checked) {
+    // Where the route must end to close: round its start, which is where a closed course
+    // is measured from.
+    if (scored.corners || document.getElementById('plan-close').checked) {
       var perimeter = distance(corners[0], corners[1]) + distance(corners[1], corners[2])
         + distance(corners[2], corners[0]);
-      shapes.push(closingCircle(corners[0], rules().closing * perimeter));
+      shapes.push(closingCircle(points[0], rules().closing * perimeter));
     }
     return shapes;
   }

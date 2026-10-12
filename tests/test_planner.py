@@ -603,3 +603,21 @@ def test_the_polyline_encoding_is_googles():
     except FileNotFoundError:
         pytest.skip("no node")
     assert out.stdout.strip() == "`~oia@"
+
+
+@needs_chrome
+def test_a_start_on_a_leg_scores_the_triangle_of_the_other_three():
+    """XContest scores any three points of the route as the corners, the closing gap from
+    start to end (October 2026: 1 on the leg 4–2, corners 2, 3, 4, was open distance).
+    Not ticked closed: the route ends at 4, near the start, which is the closing gap."""
+    answer = _run(_HARNESS + """
+    function at(fx, fy) { return [dem.west + (dem.east - dem.west) * fx, dem.north - (dem.north - dem.south) * fy]; }
+    var A = [0.30, 0.70], B = [0.70, 0.65], C = [0.50, 0.30];
+    var S = [C[0] + (A[0] - C[0]) * 0.12, C[1] + (A[1] - C[1]) * 0.12];
+    [S, A, B, C].forEach(function (p) { tap(p[0], p[1]); });
+    return { shape: document.querySelector('.plan-shape').className,
+             distance: figure('distance'), legs: document.getElementById('plan-legs').textContent };
+    """)
+    assert "is-open" not in answer["shape"], answer
+    assert answer["legs"].count("side") == 3, answer
+    assert "closing gap" in answer["legs"]
