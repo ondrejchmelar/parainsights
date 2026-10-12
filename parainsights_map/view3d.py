@@ -116,26 +116,29 @@ STYLE = """
 .view3d-controls { position: absolute; right: 10px; bottom: 10px; left: 10px; flex-wrap: wrap;
   justify-content: flex-end; z-index: 3; }
 .m3-corner { position: absolute; left: 10px; top: 10px; z-index: 3; flex-direction: column; align-items: flex-start; gap: 8px; }
+.m3-corner-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.m3-help-box { display: flex; }
+.m3-help-box[hidden] { display: none; }
 .m3-rail { position: absolute; right: 10px; top: 10px; z-index: 3; flex-direction: column; gap: 8px; }
 .m3-rose:not([hidden]) ~ .m3-rail { top: 80px; }
 .m3-corner[hidden], .m3-rail[hidden] { display: none; }
 .view3d-seg { display: flex; gap: 0; border-radius: 10px; box-shadow: var(--float-shadow); }
 .m3-rail .view3d-seg { flex-direction: column; }
-.view3d-controls button, .m3-corner button, .m3-rail button, .m3-replay button {
+.view3d-controls button, .m3-corner button, .m3-rail button, .m3-help-box button, .m3-replay button {
   position: relative; height: var(--mh); min-width: var(--mh); padding: 0 12px; margin: 0; box-sizing: border-box;
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   font: 600 15px/1 "Noto Sans", ui-sans-serif, system-ui, sans-serif; text-transform: none; letter-spacing: 0;
   color: var(--ink); background: var(--float); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   border: 1px solid var(--float-edge); border-radius: 10px; box-shadow: var(--float-shadow); cursor: pointer; }
 /* 36–38 px to see, 44 px to hit. */
-.view3d-controls button::after, .m3-corner button::after, .m3-rail button::after, .m3-replay button::after {
+.view3d-controls button::after, .m3-corner button::after, .m3-rail button::after, .m3-help-box button::after, .m3-replay button::after {
   content: ""; position: absolute; inset: -4px; }
-.view3d-controls button:hover, .m3-corner button:hover, .m3-rail button:hover, .m3-replay button:hover {
+.view3d-controls button:hover, .m3-corner button:hover, .m3-rail button:hover, .m3-help-box button:hover, .m3-replay button:hover {
   background: var(--float-2); }
-.view3d-controls button:focus-visible, .m3-corner button:focus-visible, .m3-rail button:focus-visible {
+.view3d-controls button:focus-visible, .m3-corner button:focus-visible, .m3-rail button:focus-visible, .m3-help-box button:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px; z-index: 2; }
-.view3d-controls .m3-icon, .m3-rail button { width: var(--mh); padding: 0; }
-.view3d-controls button svg, .m3-corner button svg, .m3-rail button svg, .m3-replay button svg { display: block; flex: none; }
+.view3d-controls .m3-icon, .m3-rail button, .m3-help-box button { width: var(--mh); padding: 0; }
+.view3d-controls button svg, .m3-corner button svg, .m3-rail button svg, .m3-help-box button svg, .m3-replay button svg { display: block; flex: none; }
 .view3d-seg button { border-radius: 0; box-shadow: none; }
 .view3d-seg button + button { margin-left: -1px; }
 .view3d-seg button:first-child { border-radius: 10px 0 0 10px; }
@@ -145,8 +148,8 @@ STYLE = """
 .m3-rail .view3d-seg button:last-child { border-radius: 0 0 10px 10px; }
 .view3d-seg button:only-child { border-radius: 10px; }
 /* Selected: filled with ink, as every selected control on the site is. */
-.view3d-controls button.is-on, .m3-corner button.is-on, .m3-rail button.is-on, .m3-replay button.is-on,
-.view3d-controls button[aria-pressed="true"], .m3-corner button[aria-pressed="true"], .m3-rail button[aria-pressed="true"] {
+.view3d-controls button.is-on, .m3-corner button.is-on, .m3-rail button.is-on, .m3-help-box button.is-on, .m3-replay button.is-on,
+.view3d-controls button[aria-pressed="true"], .m3-corner button[aria-pressed="true"], .m3-rail button[aria-pressed="true"], .m3-help-box button[aria-pressed="true"] {
   background: var(--ink); border-color: var(--ink); color: var(--paper); z-index: 1; }
 .view3d-controls button:disabled { opacity: 0.5; cursor: default; }
 html[data-help="off"] .m3-help { display: none; }

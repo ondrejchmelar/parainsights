@@ -222,6 +222,10 @@
       // until the bar's play button opens it: most of the time the reader wants the whole
       // flight, and a slider parked at the end is a row of nothing.
       '<div class="m3-bottom">' +
+      // Help on its own at the bottom-left corner, not between the bar's buttons; shown
+      // only while the page's Help switch is on, like every ⓘ.
+      '<div class="m3-help-box view3d-controls-extra" hidden>' +
+        '<button type="button" data-m3="help" class="m3-icon m3-help" title="Controls" aria-label="How to control this view">' + ICON.help + '</button></div>' +
       (hasTime ?
         // Two handles on one bar: the track is drawn between them. Left hides the start of
         // the flight where it overlaps the rest; right is the replay's "now". Both at the
@@ -250,6 +254,18 @@
         // groups of three were six of the bar's slots, and on a phone the bar is one row.
         '<button type="button" data-m3="ground" class="m3-cycle"></button>' +
         '<button type="button" data-m3="vertical" class="m3-cycle"></button>' +
+        (hasTime ? '<button type="button" data-m3="replay" class="m3-icon" aria-pressed="false"' +
+          ' title="Replay the flight" aria-label="Replay the flight">' + CAMERA_ICON + '</button>' : '') +
+        '<button type="button" data-m3="measure" class="m3-icon" aria-pressed="false"' +
+          ' title="Measure a distance (d)" aria-label="Measure a distance">' + RULER_ICON + '</button>' +
+        // Full screen last, in the corner, where every player puts it.
+        '<button type="button" data-m3="fullscreen" class="m3-icon" title="Full screen" aria-label="Full screen">' + ICON.fullscreen + '</button>' +
+      '</div></div>' +
+      // Top left, what is drawn on the map: the airspace first and on its own, then the
+      // labels for the track. They used to share the bottom bar, which on a phone had no
+      // room for them; the airspace stayed there until October 2026.
+      ((hasPhases || hasAirspace || noAirspace) ?
+        '<div class="m3-corner view3d-controls-extra" hidden><div class="m3-corner-row">' +
         (hasAirspace ?
           '<div class="view3d-seg view3d-airspace" role="group" aria-label="Airspace">' +
           '<button type="button" data-m3="airspace" aria-pressed="false" title="' + airspaceWhy + '"' +
@@ -258,24 +274,13 @@
           '<div class="view3d-seg view3d-airspace" role="group" aria-label="Airspace">' +
           '<button type="button" data-m3="airspace" aria-pressed="false" disabled' +
           ' title="' + airspaceWhy + '" aria-label="' + airspaceWhy + '">Airspace</button></div>' : '') +
-        (hasTime ? '<button type="button" data-m3="replay" class="m3-icon" aria-pressed="false"' +
-          ' title="Replay the flight" aria-label="Replay the flight">' + CAMERA_ICON + '</button>' : '') +
-        '<button type="button" data-m3="measure" class="m3-icon" aria-pressed="false"' +
-          ' title="Measure a distance (d)" aria-label="Measure a distance">' + RULER_ICON + '</button>' +
-        // Shown only while the page's Help switch is on, like every ⓘ.
-        '<button type="button" data-m3="help" class="m3-icon m3-help" title="Controls" aria-label="How to control this view">' + ICON.help + '</button>' +
-        '<button type="button" data-m3="fullscreen" class="m3-icon" title="Full screen" aria-label="Full screen">' + ICON.fullscreen + '</button>' +
-        '<button type="button" class="m3-icon view3d-reset" data-m3="reset" title="Reset view"' +
-        ' aria-label="Reset view">' + ICON.reset + '</button>' +
-      '</div></div>' +
-      // Top left: the labels for the track. They used to share the bottom bar, which on a
-      // phone had no room for them.
-      (hasPhases ?
-        '<div class="m3-corner view3d-controls-extra" hidden><div class="view3d-seg view3d-labels" role="group" aria-label="Phase labels">' +
-        '<button type="button" data-m3-label="climb" aria-pressed="false"' +
-        ' aria-label="Label each climb with its rate and gain">Climbs</button>' +
-        '<button type="button" data-m3-label="glide" aria-pressed="false"' +
-        ' aria-label="Label each glide with its ratio and distance">Glides</button></div></div>' : '') +
+        (hasPhases ?
+          '<div class="view3d-seg view3d-labels" role="group" aria-label="Phase labels">' +
+          '<button type="button" data-m3-label="climb" aria-pressed="false"' +
+          ' aria-label="Label each climb with its rate and gain">Climbs</button>' +
+          '<button type="button" data-m3-label="glide" aria-pressed="false"' +
+          ' aria-label="Label each glide with its ratio and distance">Glides</button></div>' : '') +
+        '</div></div>' : '') +
       // The right edge, one column: zoom, tilt, straight down.
       '<div class="m3-rail view3d-controls-extra" hidden>' +
         '<div class="view3d-seg view3d-zoom" role="group" aria-label="Zoom">' +
@@ -286,6 +291,9 @@
           '<button type="button" data-m3="tilt-steeper" title="Tilt steeper" aria-label="Tilt steeper">' + ICON.steeper + '</button></div>' +
         '<button type="button" data-m3="top" class="m3-top" aria-pressed="false" title="Look straight down' +
           (hasTime ? '; shows the scored route' : '') + '" aria-label="Look straight down">' + ICON.top + '</button>' +
+        // Reset with the other camera controls, under the overview.
+        '<button type="button" class="view3d-reset" data-m3="reset" title="Reset view"' +
+        ' aria-label="Reset view">' + ICON.reset + '</button>' +
       '</div>';
     panel.appendChild(view);
 
@@ -546,6 +554,15 @@
       // (i) never lined up with the bar beside it.
       // The credits: in the page's footer, and on the map in full screen only (`STYLE`).
       map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
+      // Help now holds the bottom-left corner, where MapLibre puts its credits (shown in
+      // full screen); they sit just above the bottom controls, however tall those are.
+      (function () {
+        var bottom = view.querySelector('.m3-bottom');
+        if (!bottom || !window.ResizeObserver) return;
+        new ResizeObserver(function () {
+          view.style.setProperty('--m3-bottom-h', bottom.offsetHeight + 'px');
+        }).observe(bottom);
+      })();
       // The legend of compared flights goes under the labels at the top left.
       (function () {
         var corner = view.querySelector('.m3-corner') || view.querySelector('.maplibregl-ctrl-top-left');

@@ -61,7 +61,7 @@ STYLE = """
   align-items: center; justify-content: center; font-size: 15px; color: var(--ink);
   font-variant-numeric: tabular-nums; background: var(--float); border-top: 1px solid var(--float-edge);
   border-bottom: 1px solid var(--float-edge); padding: 0 6px; }
-.merged-view .m3-time { flex: 1 1 100%; display: flex; gap: 10px; align-items: center; min-height: var(--mh);
+.merged-view .m3-time { order: -1; flex: 1 1 100%; display: flex; gap: 10px; align-items: center; min-height: var(--mh);
   background: var(--float); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   border: 1px solid var(--float-edge); border-radius: 10px; box-shadow: var(--float-shadow);
   padding: 2px 12px; font-size: 15px; color: var(--ink); font-variant-numeric: tabular-nums; }
@@ -106,6 +106,7 @@ STYLE = """
 .merged-view .maplibregl-ctrl-attrib { display: none; font-size: 13px; }
 :fullscreen .merged-view .maplibregl-ctrl-attrib, .is-maximised .merged-view .maplibregl-ctrl-attrib,
 .merged-view:fullscreen .maplibregl-ctrl-attrib { display: block; }
+.merged-view .maplibregl-ctrl-bottom-left { bottom: calc(var(--m3-bottom-h, 0px) + 6px); }
 .merged-view .maplibregl-ctrl-bottom-left { z-index: 2; }
 """
 
