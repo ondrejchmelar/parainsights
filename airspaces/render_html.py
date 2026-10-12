@@ -75,6 +75,10 @@ STYLE = """
 /* The map's own layers stack among themselves, under the panels. */
 .asp-stage .asp-holder { isolation: isolate; z-index: 0; }
 .asp-stage .view3d { aspect-ratio: auto; height: calc(100vh - 80px); min-height: 560px; }
+/* The map's top-left corner is the Task panel's here, so the layers button (ground and
+   height) sits at the top right, beside the camera column, its panel opening leftwards. */
+.asp-stage .merged-view .m3-corner { left: auto; right: 58px; }
+.asp-stage .merged-view .m3-layers-panel { left: auto; right: 0; }
 /* Full screen takes the whole stage, the task and layers panels floating over the map as
    they do on a desktop (the map's own button, `fullscreen` in map3d). */
 .asp-stage:fullscreen, .asp-stage.is-maximised { background: var(--paper); width: 100%; height: 100%; }

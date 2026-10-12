@@ -94,6 +94,21 @@ STYLE = """
   padding: 6px 12px; list-style: none; font-size: 15px; line-height: 1.5; color: var(--ink);
   background: var(--float); border: 1px solid var(--float-edge); border-radius: 10px; box-shadow: var(--float-shadow); }
 .merged-view .m3-others[hidden] { display: none; }
+/* The layers button's panel: the ground and the height scale, both in view. */
+.merged-view .m3-layers { position: relative; display: flex; }
+.merged-view .m3-layers .m3-icon { width: var(--mh); padding: 0; }
+.merged-view .m3-layers-panel { position: absolute; top: calc(var(--mh) + 8px); left: 0; z-index: 5;
+  display: grid; grid-template-columns: auto auto; gap: 8px 10px; align-items: center; padding: 10px 12px;
+  border-radius: 12px; background: var(--float); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  border: 1px solid var(--float-edge); box-shadow: var(--float-shadow);
+  font: 600 14px/1 "Noto Sans", ui-sans-serif, system-ui, sans-serif; color: var(--ink-2); white-space: nowrap; }
+.merged-view .m3-layers-panel[hidden] { display: none; }
+.merged-view .m3-layers-panel .view3d-seg { justify-self: start; }
+/* On a phone the top-left row is one line beside the compass, down to 360 px wide. */
+@media (max-width: 640px) {
+  .merged-view .m3-corner-row { gap: 6px; }
+  .merged-view .m3-corner-row > .view3d-seg button { padding: 0 9px; font-size: 14px; }
+}
 .merged-view .m3-others i { display: inline-block; width: 14px; height: 3px; margin: 0 7px 3px 0;
   vertical-align: middle; border-radius: 2px; }
 .merged-view .m3-others li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

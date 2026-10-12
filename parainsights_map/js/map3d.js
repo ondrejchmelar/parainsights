@@ -38,7 +38,9 @@
     help: icon('<circle cx="10" cy="10" r="7.25"/><path d="M7.9 8a2.2 2.2 0 1 1 3.1 2c-.7.3-1 .8-1 1.5v.3"/>' +
                '<circle cx="10" cy="14.2" r=".5" fill="currentColor"/>'),
     fullscreen: icon('<path d="M3.5 7.5v-4h4M12.5 3.5h4v4M16.5 12.5v4h-4M7.5 16.5h-4v-4"/>'),
-    reset: icon('<path d="M4.6 11.5A5.6 5.6 0 1 0 6 6.1"/><path d="M5.6 3v3.3h3.3"/>')
+    reset: icon('<path d="M4.6 11.5A5.6 5.6 0 1 0 6 6.1"/><path d="M5.6 3v3.3h3.3"/>'),
+    // Sheets stacked: the ground under the map, and how tall it is drawn.
+    layers: icon('<path d="M10 3 2.5 7 10 11l7.5-4z"/><path d="M2.5 10.5 10 14.5l7.5-4M2.5 14 10 18l7.5-4"/>')
   };
   var PAUSE_ICON = '<svg width="11" height="12" viewBox="0 0 11 12" aria-hidden="true">' +
     '<path d="M1.5 1h3v10h-3zM6.5 1h3v10h-3z" fill="currentColor"/></svg>';
@@ -250,10 +252,6 @@
           'facing the way the flight was going (c)">Follow</button>' +
         '</div>' : '') +
       '<div class="view3d-controls" hidden>' +
-        // One button each, naming what is on and stepping to the next: two segmented
-        // groups of three were six of the bar's slots, and on a phone the bar is one row.
-        '<button type="button" data-m3="ground" class="m3-cycle"></button>' +
-        '<button type="button" data-m3="vertical" class="m3-cycle"></button>' +
         (hasTime ? '<button type="button" data-m3="replay" class="m3-icon" aria-pressed="false"' +
           ' title="Replay the flight" aria-label="Replay the flight">' + CAMERA_ICON + '</button>' : '') +
         '<button type="button" data-m3="measure" class="m3-icon" aria-pressed="false"' +
@@ -264,23 +262,32 @@
       // Top left, what is drawn on the map: the airspace first and on its own, then the
       // labels for the track. They used to share the bottom bar, which on a phone had no
       // room for them; the airspace stayed there until October 2026.
-      ((hasPhases || hasAirspace || noAirspace) ?
-        '<div class="m3-corner view3d-controls-extra" hidden><div class="m3-corner-row">' +
+      // The ground and its height scale first, behind one layers button: a panel with both
+      // choices in view, where two buttons in the bottom bar each stepped to the next
+      // option unseen (October 2026).
+      '<div class="m3-corner view3d-controls-extra" hidden><div class="m3-corner-row">' +
+        '<div class="m3-layers">' +
+          '<button type="button" data-m3="layers" class="m3-icon" aria-expanded="false" aria-haspopup="true"' +
+          ' title="Ground and height" aria-label="Ground and height">' + ICON.layers + '</button>' +
+          '<div class="m3-layers-panel" hidden>' +
+            '<span>Ground</span><div class="view3d-seg m3-grounds" role="group" aria-label="Ground"></div>' +
+            '<span>Height</span><div class="view3d-seg m3-verticals" role="group" aria-label="Vertical exaggeration"></div>' +
+          '</div></div>' +
         (hasAirspace ?
           '<div class="view3d-seg view3d-airspace" role="group" aria-label="Airspace">' +
           '<button type="button" data-m3="airspace" aria-pressed="false" title="' + airspaceWhy + '"' +
-          ' aria-label="' + airspaceWhy + '">Airspace</button></div>' :
+          ' aria-label="' + airspaceWhy + '">Airspaces</button></div>' :
          noAirspace ?
           '<div class="view3d-seg view3d-airspace" role="group" aria-label="Airspace">' +
           '<button type="button" data-m3="airspace" aria-pressed="false" disabled' +
-          ' title="' + airspaceWhy + '" aria-label="' + airspaceWhy + '">Airspace</button></div>' : '') +
+          ' title="' + airspaceWhy + '" aria-label="' + airspaceWhy + '">Airspaces</button></div>' : '') +
         (hasPhases ?
           '<div class="view3d-seg view3d-labels" role="group" aria-label="Phase labels">' +
           '<button type="button" data-m3-label="climb" aria-pressed="false"' +
           ' aria-label="Label each climb with its rate and gain">Climbs</button>' +
           '<button type="button" data-m3-label="glide" aria-pressed="false"' +
           ' aria-label="Label each glide with its ratio and distance">Glides</button></div>' : '') +
-        '</div></div>' : '') +
+        '</div></div>' +
       // The right edge, one column: zoom, tilt, straight down.
       '<div class="m3-rail view3d-controls-extra" hidden>' +
         '<div class="view3d-seg view3d-zoom" role="group" aria-label="Zoom">' +
@@ -2072,16 +2079,55 @@
       function groundName(key) {
         return key === 'off' ? 'Relief' : ((tiles[key] || {}).label || key);
       }
+      // The layers panel: every ground and every height scale as a segmented row, the one
+      // in use filled. Built once; `label` marks the current two.
+      var layersButton = view.querySelector('[data-m3="layers"]');
+      var layersPanel = view.querySelector('.m3-layers-panel');
+      (function () {
+        var grounds = view.querySelector('.m3-grounds'), heights = view.querySelector('.m3-verticals');
+        GROUNDS.forEach(function (key) {
+          var b = document.createElement('button');
+          b.type = 'button';
+          b.dataset.ground = key;
+          b.textContent = groundName(key);
+          b.title = groundName(key) + ' (' + (key === 'off' ? 'r' : key.charAt(0)) + ')';
+          b.addEventListener('click', function () { setBasemap(key); });
+          grounds.appendChild(b);
+        });
+        VERTICALS.forEach(function (n) {
+          var b = document.createElement('button');
+          b.type = 'button';
+          b.dataset.vertical = n;
+          b.innerHTML = '&#215;' + n;
+          b.title = 'Vertical exaggeration \u00d7' + n;
+          b.addEventListener('click', function () { setVertical(n); });
+          heights.appendChild(b);
+        });
+      })();
+      function layersOpen(on) {
+        layersPanel.hidden = !on;
+        layersButton.setAttribute('aria-expanded', on ? 'true' : 'false');
+        layersButton.classList.toggle('is-on', on);
+      }
+      // Closed by a press anywhere else, or Escape; a choice leaves it open, so the ground
+      // and the height can both be set in one visit.
+      document.addEventListener('pointerdown', function (event) {
+        if (!layersPanel.hidden && !event.target.closest('.m3-layers')) layersOpen(false);
+      }, true);
+      view.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && !layersPanel.hidden) { layersOpen(false); layersButton.focus(); }
+      });
       function label() {
-        var g = view.querySelector('[data-m3="ground"]'), v = view.querySelector('[data-m3="vertical"]');
-        var nextGround = GROUNDS[(GROUNDS.indexOf(basemap) + 1) % GROUNDS.length];
-        var nextVertical = VERTICALS[(VERTICALS.indexOf(vertical) + 1) % VERTICALS.length];
-        g.textContent = groundName(basemap);
-        g.title = 'Ground: ' + groundName(basemap) + ' — press for ' + groundName(nextGround) + ' (s m r)';
-        g.setAttribute('aria-label', g.title);
-        v.innerHTML = '&#215;' + vertical;
-        v.title = 'Vertical exaggeration ×' + vertical + ' — press for ×' + nextVertical + ' (1 2 4)';
-        v.setAttribute('aria-label', v.title);
+        view.querySelectorAll('.m3-grounds button').forEach(function (b) {
+          var on = b.dataset.ground === basemap;
+          b.classList.toggle('is-on', on);
+          b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        view.querySelectorAll('.m3-verticals button').forEach(function (b) {
+          var on = Number(b.dataset.vertical) === vertical;
+          b.classList.toggle('is-on', on);
+          b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
       }
       function setBasemap(key) {
         if (key !== 'off' && !tiles[key]) return;
@@ -2146,8 +2192,7 @@
         var b = event.target.closest('button, .view3d-keys');
         if (!b || !view.contains(b)) return;
         var act = b.dataset.m3;
-        if (act === 'ground') setBasemap(GROUNDS[(GROUNDS.indexOf(basemap) + 1) % GROUNDS.length]);
-        else if (act === 'vertical') setVertical(VERTICALS[(VERTICALS.indexOf(vertical) + 1) % VERTICALS.length]);
+        if (act === 'layers') layersOpen(layersPanel.hidden);
         else if (b.dataset.m3Label) {
           labels[b.dataset.m3Label] = !labels[b.dataset.m3Label];
           toggle(b, labels[b.dataset.m3Label]);
