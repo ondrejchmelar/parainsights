@@ -75,9 +75,13 @@ PROBE = """
 window.addEventListener('load', function () {
   setTimeout(function () {
     var answer;
+    function put(value) { document.getElementById('probe-out').textContent = JSON.stringify(value); }
     try { answer = (function () { %s })(); }
     catch (error) { answer = { error: String((error && error.stack) || error) }; }
-    document.getElementById('probe-out').textContent = JSON.stringify(answer);
+    // A body may return a promise (the import is one); its value is the answer.
+    if (answer && typeof answer.then === 'function') {
+      answer.then(put, function (error) { put({ error: String((error && error.stack) || error) }); });
+    } else put(answer);
   }, 900);
 });
 </script>
@@ -543,12 +547,12 @@ def test_the_task_goes_to_xctrack_as_a_waypoints_task():
     closed course returns to turnpoint 1, and the export is offered only once there is a
     route."""
     answer = _run(_HARNESS + """
-    var before = document.getElementById('plan-xct').hidden;
+    var before = document.getElementById('plan-xct-export').hidden;
     document.getElementById('plan-close').checked = true;
     tap(0.35, 0.40); tap(0.60, 0.40); tap(0.48, 0.62);
     var ground = handle.groundAt(dem.west + (dem.east - dem.west) * 0.35,
                                  dem.north - (dem.north - dem.south) * 0.40);
-    return { before: before, after: document.getElementById('plan-xct').hidden,
+    return { before: before, after: document.getElementById('plan-xct-export').hidden,
              task: window.__plannerTask(), ground: ground,
              first: [dem.west + (dem.east - dem.west) * 0.35, dem.north - (dem.north - dem.south) * 0.40] };
     """)
@@ -621,3 +625,66 @@ def test_a_start_on_a_leg_scores_the_triangle_of_the_other_three():
     assert "is-open" not in answer["shape"], answer
     assert answer["legs"].count("side") == 3, answer
     assert "closing gap" in answer["legs"]
+
+
+_XCTSK_V1 = {
+    "taskType": "CLASSIC", "version": 1, "earthModel": "WGS84",
+    "turnpoints": [
+        {"type": "TAKEOFF", "radius": 400, "waypoint": {"name": "Rana", "lat": 50.4075, "lon": 13.7715, "altSmoothed": 426}},
+        {"type": "SSS", "radius": 2000, "waypoint": {"name": "B", "lat": 50.6, "lon": 14.2, "altSmoothed": 300}},
+        {"radius": 400, "waypoint": {"name": "C", "lat": 50.8, "lon": 13.9, "altSmoothed": 500}},
+        {"type": "ESS", "radius": 400, "waypoint": {"name": "Rana", "lat": 50.4076, "lon": 13.7716, "altSmoothed": 426}},
+    ],
+    "sss": {"type": "RACE", "direction": "EXIT", "timeGates": ["10:00:00Z"]}, "goal": {"type": "CYLINDER"},
+}
+
+
+def _waypoints_v2():
+    """The waypoints task as the export writes it, encoded here with the polyline rules."""
+    def enc(v):
+        v = round(v)
+        v = ~(v << 1) if v < 0 else v << 1
+        out = ""
+        while v >= 0x20:
+            out += chr((0x20 | (v & 0x1F)) + 63)
+            v >>= 5
+        return out + chr(v + 63)
+    pts = [(13.7715, 50.4075, 426), (14.2, 50.6, 300), (13.9, 50.8, 500)]
+    return {"T": "W", "V": 2, "t": [{"n": f"TP{i + 1}", "z": enc(lon * 1e5) + enc(lat * 1e5) + enc(alt)}
+                                    for i, (lon, lat, alt) in enumerate(pts)]}
+
+
+@needs_chrome
+@pytest.mark.parametrize("form", ["file-v1", "waypoints", "qr", "qr-compressed"])
+def test_a_task_comes_in_from_xctrack_in_every_form(form):
+    """The three ways in end in one reader: the competition task (v1), the waypoints task
+    the export writes, a QR code's `XCTSK:` text and its zlib form `XCTSKZ:`. A task that
+    ends where it starts comes in closed, its last point dropped."""
+    import base64
+    import zlib
+    task = _XCTSK_V1 if form == "file-v1" else _waypoints_v2()
+    text = json.dumps(task)
+    if form == "qr":
+        text = "XCTSK:" + text
+    elif form == "qr-compressed":
+        text = "XCTSKZ:" + base64.b64encode(zlib.compress(text.encode())).decode()
+    answer = _run(_MAP + """
+    return window.__plannerImport(%s).then(function (n) {
+      return { n: n, closed: document.getElementById('plan-close').checked,
+               first: route.points[0], exportShown: !document.getElementById('plan-xct-export').hidden };
+    });""" % json.dumps(text))
+    if form == "file-v1":
+        assert answer["n"] == 3 and answer["closed"] is True
+    else:
+        assert answer["n"] == 3 and answer["closed"] is False
+    assert answer["first"][0] == pytest.approx(13.7715, abs=1e-4)
+    assert answer["first"][1] == pytest.approx(50.4075, abs=1e-4)
+    assert answer["exportShown"] is True
+
+
+@needs_chrome
+def test_something_that_is_not_a_task_is_refused():
+    answer = _run(_MAP + """
+    return window.__plannerImport('{"hello": 1}').then(function () { return { ok: true }; },
+      function (error) { return { refused: String(error.message || error) }; });""")
+    assert "not an XCTrack task" in answer["refused"]

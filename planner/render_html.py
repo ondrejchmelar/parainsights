@@ -106,7 +106,15 @@ STYLE = """
 .plan-note { margin:12px 0 0; font-size:15px; color:var(--ink-2); }
 .plan-xct { display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; margin:14px 0 0;
   padding-top:12px; border-top:1px solid var(--rule); }
-.plan-xct[hidden] { display:none; }
+.plan-xct[hidden], .plan-split[hidden] { display:none; }
+.plan-import .btn svg:last-child { margin-left: -2px; }
+.plan-xct-dlg-body label { display:block; margin:0 0 8px; color:var(--ink); font-weight:600; }
+.plan-imp-code { font:inherit; font-size:24px; letter-spacing:.12em; text-transform:uppercase; width:8ch;
+  height:48px; padding:0 12px; border:1px solid var(--edge); border-radius:10px; background:var(--paper); color:var(--ink); }
+.plan-imp-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.plan-imp-video { display:block; width:100%; max-height:52vh; border-radius:10px; background:#000; object-fit:cover; }
+.plan-imp-say { margin:10px 0 0; }
+.plan-imp-say.is-error { color:var(--climb); }
 .plan-split { display:inline-flex; position:relative; }
 .plan-split-main { border-radius:10px 0 0 10px; }
 .plan-split-more { border-radius:0 10px 10px 0; margin-left:-1px; padding:0 10px; }
@@ -163,13 +171,23 @@ def controls() -> str:
     )
 
 
+# Import: an arrow into a tray; the code and QR glyphs as the export menu draws them.
+IMPORT_ICON = '<path d="M10 3v9M6 8.5l4 4 4-4"/><path d="M3.5 12.5v4h13v-4"/>'
+FILE_ICON = '<path d="M5.5 2.5h6l4 4v11h-10z"/><path d="M11.5 2.5v4h4"/>'
+CODE_ICON = '<path d="M4 7h12M4 13h12M8 3.5 6.5 16.5M13.5 3.5 12 16.5"/>'
+QR_ICON = ('<rect x="3" y="3" width="5" height="5" rx="1"/><rect x="12" y="3" width="5" height="5" rx="1"/>'
+           '<rect x="3" y="12" width="5" height="5" rx="1"/><path d="M12 12h2v2M17 12v1M12 17h1M15 15h2v2"/>')
+
 XCT_HELP = ("The route as an XCTrack waypoints task: the turnpoints in order, with the "
             "ground's height under each, no cylinders. <b>File</b>: a .xctsk file — on the "
             "phone XCTrack runs on, open it from the download and choose XCTrack. "
             "<b>Task code</b>: the task is stored with XContest for a month and you get four "
             "letters to import it by in XCTrack. <b>QR code</b>: to scan from this screen "
             "with XCTrack's task import. The code and the QR code send the route to "
-            "XContest's task service (tools.xcontest.org); the file stays on your device.")
+            "XContest's task service (tools.xcontest.org); the file stays on your device. "
+            "<b>Import</b> takes a task back the same three ways — an .xctsk file, an "
+            "XContest task code, or a QR code scanned with the camera or from a photo — and "
+            "replaces the route drawn.")
 
 
 def results() -> str:
@@ -193,8 +211,18 @@ def results() -> str:
     <p class="plan-note">A plan, not a clearance.{common.info(rules, "How the task is scored")}</p>
     <!-- To XCTrack: one split button at the panel's foot, the device's best way first
          (`xctMethods` in planner.js); a QR code or a task code opens in the dialog. -->
-    <div class="plan-xct" id="plan-xct" hidden>
-      <div class="plan-split">
+    <div class="plan-xct" id="plan-xct">
+      <div class="plan-split plan-import">
+        <button type="button" class="btn" id="plan-imp-more" aria-haspopup="menu" aria-expanded="false"
+                title="Import a task from XCTrack">{common.icon(IMPORT_ICON)}Import{common.icon(common.ICONS["down"])}</button>
+        <div class="plan-split-menu" id="plan-imp-menu" role="menu" hidden>
+          <button type="button" role="menuitem" data-import="file">{common.icon(FILE_ICON)}.xctsk file</button>
+          <button type="button" role="menuitem" data-import="code">{common.icon(CODE_ICON)}Task code (XContest)</button>
+          <button type="button" role="menuitem" data-import="qr">{common.icon(QR_ICON)}Scan a QR code</button>
+        </div>
+        <input type="file" id="plan-imp-file" accept=".xctsk,application/xctsk,application/json,text/plain" hidden>
+      </div>
+      <div class="plan-split plan-export" id="plan-xct-export" hidden>
         <button type="button" class="btn plan-split-main" id="plan-xct-main"></button>
         <button type="button" class="btn plan-split-more" id="plan-xct-more" aria-haspopup="menu"
                 aria-expanded="false" aria-label="Other ways to XCTrack">{common.icon(common.ICONS["down"])}</button>

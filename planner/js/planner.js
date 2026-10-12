@@ -295,6 +295,8 @@
   // What the airspace page's Layers panel counts: these, not the page's whole payload.
   handle.drawnAirspaces = function () { return nearNow; };
   window.__plannerTask = function () { return points.length >= 2 ? xctrackTask() : null; };
+  // For the tests: the import path a file, a code and a QR code all end in.
+  window.__plannerImport = function (text) { return readTask(text).then(function (task) { importTask(task, 'a test'); return points.length; }); };
   handle.planned = function () { return points.length >= 2; };
   var loading = null;
   function refreshAirspace() {
@@ -699,9 +701,12 @@
   function xctSay(text) { if (xctOut) xctOut.textContent = text; }
   // The dialog: the QR code or the code, big enough to scan or to type, over the page
   // rather than growing the panel under the route.
-  function xctDialog(html) {
+  function xctDialog(html, title) {
     var walk = course();
-    document.getElementById('plan-xct-sub').textContent = walk.map(function (p, i) {
+    document.getElementById('plan-xct-title').textContent = title || 'Send the task to XCTrack';
+    var sub = document.getElementById('plan-xct-sub');
+    sub.hidden = !!title;
+    sub.textContent = title ? '' : walk.map(function (p, i) {
       return 'TP' + (i < points.length ? i + 1 : 1);
     }).join(' \u2192 ') + ' \u00b7 ' + (score().total / 1000).toFixed(0) + ' km';
     dlgBody.innerHTML = html;
@@ -817,13 +822,238 @@
     });
   }
   // Shown once there is a route to send, and its note cleared when the route changes.
-  var xctBox = document.getElementById('plan-xct');
+  var xctBox = document.getElementById('plan-xct-export');
   var xctFor = '';
   function xctRefresh() {
     if (!xctBox) return;
     xctBox.hidden = points.length < 2;
     var key = JSON.stringify(course());
     if (key !== xctFor) { xctFor = key; xctSay(''); }
+  }
+
+  // ---- from XCTrack ----------------------------------------------------------------------
+  //
+  // A task back into the planner the three ways it goes out: an .xctsk file, an XContest
+  // task code, a QR code. Every form XCTrack writes is read — the competition task
+  // (version 1, `turnpoints[].waypoint`), its QR form (version 2, `t[].z` polyline), the
+  // waypoints task (`T` "W", which the export here writes), and a QR code compressed with
+  // zlib (`XCTSKZ:`). The turnpoints replace the route drawn; one that ends where it
+  // starts comes in closed. Cylinders, start gates and times are not a plan's, and are
+  // left behind.
+  function decodePolyline(text) {
+    var values = [], i = 0;
+    while (i < text.length) {
+      var result = 0, shift = 0, b;
+      do { b = text.charCodeAt(i++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20 && i <= text.length);
+      values.push(result & 1 ? ~(result >> 1) : result >> 1);
+    }
+    return values;
+  }
+  function turnpointsOf(task) {
+    var list = task && (task.t || task.turnpoints);
+    if (!Array.isArray(list)) throw new Error('not an XCTrack task');
+    return list.map(function (tp) {
+      if (tp.z) { var v = decodePolyline(tp.z); return [v[0] / 1e5, v[1] / 1e5]; }
+      var w = tp.waypoint || tp;
+      if (typeof w.lat !== 'number' || typeof w.lon !== 'number') throw new Error('a turnpoint has no position');
+      return [w.lon, w.lat];
+    });
+  }
+  // The text of a file or a QR code to the task in it.
+  function readTask(text) {
+    text = String(text || '').trim();
+    if (/^XCTSKZ:/i.test(text)) {
+      if (typeof DecompressionStream !== 'function') return Promise.reject(new Error('this browser cannot unpack a compressed QR code'));
+      var bin = atob(text.slice(7).trim()), bytes = new Uint8Array(bin.length);
+      for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      var stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate'));
+      return new Response(stream).text().then(function (json) { return JSON.parse(json); });
+    }
+    if (/^XCTSK:/i.test(text)) text = text.slice(6);
+    try { return Promise.resolve(JSON.parse(text)); }
+    catch (error) { return Promise.reject(new Error('not an XCTrack task')); }
+  }
+  function importTask(task, from) {
+    var list = turnpointsOf(task).filter(function (p) { return isFinite(p[0]) && isFinite(p[1]); });
+    if (list.length < 2) throw new Error('the task has fewer than two turnpoints');
+    var closed = list.length > 3 && distance(list[0], list[list.length - 1]) < 400;
+    if (closed) list.pop();
+    points = list.map(function (p) { return [Math.round(p[0] * 1e5) / 1e5, Math.round(p[1] * 1e5) / 1e5]; });
+    document.getElementById('plan-close').checked = closed;
+    drawing(false);
+    redraw();
+    var merged = mergedEntry();
+    if (merged && merged.frame) {
+      var w = Infinity, e = -Infinity, so = Infinity, n = -Infinity;
+      points.forEach(function (p) { w = Math.min(w, p[0]); e = Math.max(e, p[0]); so = Math.min(so, p[1]); n = Math.max(n, p[1]); });
+      merged.frame([[w, so], [e, n]]);
+    }
+    xctSay('Imported ' + points.length + ' turnpoints from ' + from + '.');
+  }
+  function importFailed(error) {
+    var say = dlg && dlg.open ? dlgBody.querySelector('.plan-imp-say') : null;
+    var text = 'Could not import: ' + ((error && error.message) || error) + '.';
+    if (say) { say.textContent = text; say.classList.add('is-error'); } else xctSay(text);
+  }
+
+  // The file: picked, read, imported.
+  var impFile = document.getElementById('plan-imp-file');
+  if (impFile) impFile.addEventListener('change', function () {
+    var file = impFile.files && impFile.files[0];
+    impFile.value = '';
+    if (!file) return;
+    file.text().then(readTask).then(function (task) { importTask(task, file.name); }).catch(importFailed);
+  });
+
+  // The task code: XContest's own service, the one XCTrack shares tasks through.
+  function importCode() {
+    var body = xctDialog('<label for="plan-imp-code">XContest task code</label>'
+      + '<div class="plan-imp-row"><input id="plan-imp-code" class="plan-imp-code" autocomplete="off"'
+      + ' autocapitalize="characters" spellcheck="false" maxlength="12">'
+      + '<button type="button" class="btn primary" id="plan-imp-load">Load</button></div>'
+      + '<p class="plan-imp-say">The letters XCTrack or XContest shows when a task is shared.</p>', 'Import a task');
+    var input = body.querySelector('input'), say = body.querySelector('.plan-imp-say');
+    function load() {
+      var code = input.value.trim().toLowerCase();
+      if (!code) return;
+      say.classList.remove('is-error');
+      say.textContent = 'Loading ' + code.toUpperCase() + '\u2026';
+      fetch(XCT_API + 'load/' + encodeURIComponent(code)).then(function (r) {
+        if (r.status === 404) throw new Error('XContest has no task ' + code.toUpperCase() + ' (codes last a month)');
+        if (!r.ok) throw new Error('XContest answered ' + r.status);
+        return r.text();
+      }).then(readTask).then(function (task) {
+        importTask(task, 'task code ' + code.toUpperCase());
+        dlg.close();
+      }).catch(importFailed);
+    }
+    body.querySelector('#plan-imp-load').addEventListener('click', load);
+    input.addEventListener('keydown', function (event) { if (event.key === 'Enter') load(); });
+    setTimeout(function () { input.focus(); }, 50);
+  }
+
+  // The QR code: the camera, or a photo of one. The browser's own reader where it has one
+  // (Chrome on Android and on macOS), else jsQR, fetched the first time it is needed.
+  var JSQR = 'https://unpkg.com/jsqr@1.4.0/dist/jsQR.js', jsqrLoading = null;
+  function qrReader() {
+    if ('BarcodeDetector' in window) {
+      return BarcodeDetector.getSupportedFormats().then(function (formats) {
+        if (formats.indexOf('qr_code') < 0) throw new Error('no qr');
+        var detector = new BarcodeDetector({ formats: ['qr_code'] });
+        return function (source) {
+          return detector.detect(source).then(function (found) { return found.length ? found[0].rawValue : null; });
+        };
+      }).catch(function () { return jsqrReader(); });
+    }
+    return jsqrReader();
+  }
+  function jsqrReader() {
+    if (!jsqrLoading) {
+      jsqrLoading = new Promise(function (resolve, reject) {
+        if (window.jsQR) { resolve(); return; }
+        var script = document.createElement('script');
+        script.src = JSQR;
+        script.onload = function () { resolve(); };
+        script.onerror = function () { jsqrLoading = null; reject(new Error('the QR reader could not be loaded')); };
+        document.head.appendChild(script);
+      });
+    }
+    var canvas = document.createElement('canvas'), ctx = canvas.getContext('2d', { willReadFrequently: true });
+    return jsqrLoading.then(function () {
+      return function (source) {
+        var w = source.videoWidth || source.naturalWidth || source.width;
+        var h = source.videoHeight || source.naturalHeight || source.height;
+        if (!w || !h) return Promise.resolve(null);
+        var scale = Math.min(1, 1000 / Math.max(w, h));
+        canvas.width = Math.round(w * scale); canvas.height = Math.round(h * scale);
+        ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+        var found = window.jsQR(ctx.getImageData(0, 0, canvas.width, canvas.height).data, canvas.width, canvas.height);
+        return Promise.resolve(found ? found.data : null);
+      };
+    });
+  }
+  var camera = null;
+  function stopCamera() {
+    if (camera) { camera.getTracks().forEach(function (t) { t.stop(); }); camera = null; }
+  }
+  if (dlg) dlg.addEventListener('close', stopCamera);
+  function importQr() {
+    var body = xctDialog('<video class="plan-imp-video" playsinline muted hidden></video>'
+      + '<div class="plan-imp-row" style="margin-top:10px">'
+      + '<label class="btn" style="margin:0">Choose a photo<input type="file" accept="image/*" hidden></label></div>'
+      + '<p class="plan-imp-say">Starting the camera\u2026</p>', 'Scan a QR code');
+    var video = body.querySelector('video'), say = body.querySelector('.plan-imp-say');
+    var done = false;
+    function found(text) {
+      if (done || !text) return false;
+      if (!/^XCTSKZ?:/i.test(text)) { say.textContent = 'That QR code is not an XCTrack task.'; return false; }
+      done = true;
+      stopCamera();
+      readTask(text).then(function (task) { importTask(task, 'a QR code'); dlg.close(); })
+        .catch(function (error) { done = false; importFailed(error); });
+      return true;
+    }
+    var reading = qrReader();
+    body.querySelector('input[type=file]').addEventListener('change', function (event) {
+      var file = event.target.files && event.target.files[0];
+      if (!file) return;
+      var img = new Image();
+      img.onload = function () {
+        reading.then(function (read) { return read(img); }).then(function (text) {
+          URL.revokeObjectURL(img.src);
+          if (!found(text)) say.textContent = text ? say.textContent : 'No QR code found in that photo.';
+        }).catch(importFailed);
+      };
+      img.src = URL.createObjectURL(file);
+    });
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      say.textContent = 'No camera here — choose a photo of the QR code.';
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(function (stream) {
+      if (!dlg.open) { stream.getTracks().forEach(function (t) { t.stop(); }); return; }
+      camera = stream;
+      video.srcObject = stream;
+      video.hidden = false;
+      return video.play().then(function () {
+        say.textContent = 'Point the camera at the task\u2019s QR code.';
+        return reading;
+      }).then(function (read) {
+        (function scan() {
+          if (done || !camera) return;
+          read(video).then(function (text) { if (!found(text)) setTimeout(scan, 250); },
+                           function () { setTimeout(scan, 500); });
+        })();
+      });
+    }).catch(function () {
+      say.textContent = 'The camera is not available — choose a photo of the QR code instead.';
+    });
+  }
+
+  // The import menu, as the export's: a button, the three ways under it.
+  var impMore = document.getElementById('plan-imp-more'), impMenu = document.getElementById('plan-imp-menu');
+  function impOpen(on) {
+    impMenu.hidden = !on;
+    impMore.setAttribute('aria-expanded', on ? 'true' : 'false');
+    if (on) impMenu.querySelector('button').focus();
+  }
+  if (impMore) {
+    impMore.addEventListener('click', function (event) { event.stopPropagation(); impOpen(impMenu.hidden); });
+    document.addEventListener('click', function (event) {
+      if (!impMenu.hidden && !impMenu.contains(event.target)) impOpen(false);
+    });
+    impMenu.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') { impOpen(false); impMore.focus(); }
+    });
+    impMenu.querySelectorAll('[data-import]').forEach(function (item) {
+      item.addEventListener('click', function () {
+        impOpen(false);
+        var how = item.dataset.import;
+        if (how === 'file') impFile.click();
+        else if (how === 'code') importCode();
+        else importQr();
+      });
+    });
   }
 
   // ---- input -------------------------------------------------------------------------

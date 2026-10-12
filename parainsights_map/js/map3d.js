@@ -2469,6 +2469,12 @@
         state: function () {
           return { basemap: basemap, vertical: vertical, labels: labels, airspace: airspaceOn,
                    bearing: map.getBearing(), sunMinute: sunMinute };
+        },
+        // A route the page wants in view (the planner's imported task), as [[w, s], [e, n]],
+        // clear of the map's buttons and the planner's panels, at the tilt the reader has.
+        frame: function (bounds) {
+          map.fitBounds(bounds, { padding: framePadding(), pitch: map.getPitch(),
+                                  bearing: map.getBearing(), duration: 600 });
         }
       };
       window.__mergedAll = window.__mergedAll || {};
