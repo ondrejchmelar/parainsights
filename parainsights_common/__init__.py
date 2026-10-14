@@ -321,6 +321,19 @@ def strip_end() -> str:
     return '<span class="site-sp"></span>' + text_button() + help_button() + theme_button()
 
 
+SITE_HOST = "ondrejchmelar.github.io"
+ANALYTICS_TOKEN = "fb27179888c0414ca33f514014e088d2"
+# Cloudflare Web Analytics: no cookies, nothing stored on the reader's device. Loaded only on
+# the published site, so a report built and opened locally neither counts nor calls out.
+_ANALYTICS = (
+    f"<script>if (location.hostname === '{SITE_HOST}') {{"
+    "const s = document.createElement('script'); s.defer = true;"
+    "s.src = 'https://static.cloudflareinsights.com/beacon.min.js';"
+    f"s.dataset.cfBeacon = '{{\"token\": \"{ANALYTICS_TOKEN}\"}}';"
+    "document.head.appendChild(s); }</script>"
+)
+
+
 def footer() -> str:
     """The foot of every page: what this is, where its source is, and who to credit."""
     return (
@@ -329,8 +342,9 @@ def footer() -> str:
         "issues, and how every number on these pages is worked out. Airspace © "
         '<a href="https://www.openaip.net" rel="noreferrer">openAIP</a> (CC BY-NC 4.0); '
         "imagery © Esri, Maxar, Earthstar Geographics; place names © OpenMapTiles, "
-        "© OpenStreetMap contributors; terrain: AWS Open Data; weather: Open-Meteo."
-        "</footer>"
+        "© OpenStreetMap contributors; terrain: AWS Open Data; weather: Open-Meteo. "
+        "Visits are counted by Cloudflare Web Analytics, without cookies."
+        f"</footer>{_ANALYTICS}"
     )
 
 
