@@ -110,8 +110,12 @@ check() {
     echo "stale.sh: $PAGE contains the last change to:$SOURCES${IGNORE:+ ($IGNORE)}"
 }
 
-check public/flights/index.html "tracklog_viewer airspaces planner parainsights_common parainsights_map" \
-    "the command is in the \"Known gaps\" section of CLAUDE.md" "$REPORT_IGNORE"
+# The report's own code, the strip and the map. Not `airspaces` and `planner` since the
+# published report links to the Planner page rather than embedding it (October 2026):
+# only the embedded view imports them, and a planner change left the report "stale"
+# with nothing in it to rebuild.
+check public/flights/index.html "tracklog_viewer parainsights_common parainsights_map" \
+    "the command is in the \"Known gaps\" section of CLAUDE.md"
 check public/meteo/index.html "meteo parainsights_common" \
     "uv run python -m meteo.cli --html public/meteo/index.html"
 check public/planner/index.html "airspaces planner parainsights_common parainsights_map tracklog_viewer/js/xc.js" \
