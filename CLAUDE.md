@@ -37,6 +37,22 @@ A fifth tool goes in as a sibling package (`parainsights/<tool_name>/`) sharing 
 `pyproject.toml` and `tests/`, and adds itself to `parainsights_common.PAGES` so the
 other three link to it.
 
+## To do
+
+Agreed, not started; newest last. The list lives here and nowhere else, and it may be
+empty.
+
+- **Planner: tasks kept in the browser (localStorage).** Save a planned task under a name
+  and load it back later, alongside the XCTrack export and import (file, task code, QR
+  code), so a task survives closing the page without going through XCTrack.
+- **Planner: UX review — more on the map, a smaller panel.** Move more of the Task panel's
+  buttons onto the map (as the 3D map's own controls now are) and shrink the panel, so
+  the map gets more of the screen, on a phone especially.
+- **Side view: a long press to read it, as the sounding has.** A finger on the side view
+  should scroll the page like anywhere else; a tap reads a point, and a press held then
+  dragged scrubs (`bindReader` in `meteo/js/meteo.js` is the pattern). Today a drag over
+  the side view moves the cursor and the page does not scroll.
+
 **Where the "no shared code" rule applies, and where it does not.** `airspaces/geo.py`
 exists alongside `tracklog_viewer/js/geo.js` rather than sharing it, because they are not
 the same geodesy: the viewer works on the FAI sphere because that is what a scored
