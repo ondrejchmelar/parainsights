@@ -437,8 +437,6 @@ def body(uid: str = "meteo") -> str:
           <a href="{flymet_data.SOURCE}" rel="noreferrer">flymet</a>: {len(flymet_data.STATIONS)}
           stations, each takeoff shown its nearest</td><td>loaded by this page; stations
           {flymet_data.FETCHED}</td></tr>
-        <tr><td>Synoptic chart</td><td><a href="{SYNOPTIC}" rel="noreferrer">ČHMÚ</a>, the icon by
-          the days</td><td>ČHMÚ's current chart</td></tr>
       </tbody>
     </table>
   </details>
