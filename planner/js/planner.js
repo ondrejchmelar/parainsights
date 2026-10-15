@@ -904,7 +904,9 @@
     file: glyph('<path d="M10 3v10M6 9l4 4 4-4M4 16.5h12"/>'),
     qr: glyph('<rect x="3" y="3" width="5" height="5" rx="1"/><rect x="12" y="3" width="5" height="5" rx="1"/>'
       + '<rect x="3" y="12" width="5" height="5" rx="1"/><path d="M12 12h2v2M17 12v1M12 17h1M15 15h2v2"/>'),
-    code: glyph('<path d="M4 7h12M4 13h12M8 3.5 6.5 16.5M13.5 3.5 12 16.5"/>')
+    code: glyph('<path d="M4 7h12M4 13h12M8 3.5 6.5 16.5M13.5 3.5 12 16.5"/>'),
+    save: glyph('<path d="M5.5 3h9v14l-4.5-3.5L5.5 17z"/>'),
+    drop: glyph('<path d="M5 5l10 10M15 5 5 15"/>')
   };
   var xctMethods = {
     file: { label: touch ? 'Open in XCTrack' : 'Download .xctsk file', run: xctFile },
@@ -938,6 +940,18 @@
       });
       xctMenu.appendChild(item);
     });
+    // Kept in this browser, beside the ways to XCTrack (`saveTask`).
+    var keep = document.createElement('button');
+    keep.type = 'button';
+    keep.setAttribute('role', 'menuitem');
+    keep.dataset.method = 'save';
+    keep.className = 'plan-menu-keep';
+    keep.innerHTML = GLYPHS.save + '<span>Save in this browser</span>';
+    keep.addEventListener('click', function () {
+      menuOpen(false);
+      if (points.length >= 2) saveTask();
+    });
+    xctMenu.appendChild(keep);
     xctMore.addEventListener('click', function (event) {
       event.stopPropagation();
       menuOpen(xctMenu.hidden);
@@ -958,6 +972,111 @@
     var key = JSON.stringify(course());
     if (key !== xctFor) { xctFor = key; xctSay(''); }
   }
+
+  // ---- kept in this browser ------------------------------------------------------------
+  //
+  // A task saved under a name in localStorage, to come back to without XCTrack: its
+  // turnpoints, whether it is closed, and the rules it was scored by. Newest first, the
+  // same name saved again replaces the old one. Listed in the Import menu, each with its
+  // own ×. Nothing leaves the browser.
+  var SAVED_KEY = 'parainsights.planner.tasks';
+  function savedTasks() {
+    try {
+      var list = JSON.parse(localStorage.getItem(SAVED_KEY) || '[]');
+      return Array.isArray(list) ? list.filter(function (t) { return t && t.name && Array.isArray(t.points); }) : [];
+    } catch (error) { return []; }
+  }
+  function storeTasks(list) {
+    try { localStorage.setItem(SAVED_KEY, JSON.stringify(list.slice(0, 50))); return true; }
+    catch (error) { return false; }
+  }
+  function defaultName() {
+    var answer = score(), names = { open: 'open distance', flat: 'flat triangle', fai: 'FAI triangle' };
+    return (answer.total / 1000).toFixed(0) + ' km ' + (names[answer.shape] || 'task');
+  }
+  function saveTask(name) {
+    if (name === undefined) {
+      var body = xctDialog('<label for="plan-keep-name">Name</label>'
+        + '<div class="plan-imp-row"><input id="plan-keep-name" class="plan-keep-name" autocomplete="off" maxlength="60">'
+        + '<button type="button" class="btn primary" id="plan-keep-go">Save</button></div>'
+        + '<p class="plan-imp-say">Kept in this browser only. Load it again from Import.</p>', 'Save the task');
+      var input = body.querySelector('input');
+      input.value = defaultName();
+      input.focus(); input.select();
+      function go() { if (saveTask(input.value) !== false) dlg.close(); }
+      body.querySelector('#plan-keep-go').addEventListener('click', go);
+      input.addEventListener('keydown', function (event) { if (event.key === 'Enter') go(); });
+      return;
+    }
+    name = String(name || '').trim() || defaultName();
+    var entry = { name: name, saved: new Date().toISOString(),
+                  points: points.map(function (p) { return p.slice(); }),
+                  closed: document.getElementById('plan-close').checked,
+                  rules: document.getElementById('plan-rules').value };
+    var list = savedTasks().filter(function (t) { return t.name !== name; });
+    list.unshift(entry);
+    if (!storeTasks(list)) { xctSay('Could not save: this browser keeps nothing for this page.'); return false; }
+    xctSay('Saved \u201c' + name + '\u201d in this browser.');
+    return true;
+  }
+  function loadSaved(name) {
+    var task = savedTasks().filter(function (t) { return t.name === name; })[0];
+    if (!task || task.points.length < 2) return false;
+    remember();
+    points = task.points.map(function (p) { return [Number(p[0]), Number(p[1])]; });
+    document.getElementById('plan-close').checked = !!task.closed;
+    if (task.rules) document.getElementById('plan-rules').value = task.rules;
+    drawing(false);
+    redraw();
+    var merged = mergedEntry();
+    if (merged && merged.frame) {
+      var w = Infinity, e = -Infinity, so = Infinity, n = -Infinity;
+      points.forEach(function (p) { w = Math.min(w, p[0]); e = Math.max(e, p[0]); so = Math.min(so, p[1]); n = Math.max(n, p[1]); });
+      merged.frame([[w, so], [e, n]]);
+    }
+    xctSay('Loaded \u201c' + task.name + '\u201d.');
+    return true;
+  }
+  function dropSaved(name) {
+    storeTasks(savedTasks().filter(function (t) { return t.name !== name; }));
+  }
+  // The Import menu's list of them, drawn each time the menu opens.
+  function drawSaved(box) {
+    var list = savedTasks();
+    box.innerHTML = '';
+    box.hidden = !list.length;
+    if (!list.length) return;
+    var head = document.createElement('p');
+    head.className = 'plan-saved-head';
+    head.textContent = 'Saved in this browser';
+    box.appendChild(head);
+    list.forEach(function (task) {
+      var row = document.createElement('div');
+      row.className = 'plan-saved-row';
+      row.innerHTML = '<button type="button" role="menuitem" class="plan-saved-load">' + GLYPHS.save
+        + '<span class="plan-saved-name"></span><small></small></button>'
+        + '<button type="button" class="plan-saved-drop">' + GLYPHS.drop + '</button>';
+      row.querySelector('.plan-saved-name').textContent = task.name;
+      var when = new Date(task.saved);
+      row.querySelector('small').textContent = isNaN(when) ? '' : when.toLocaleDateString();
+      var drop = row.querySelector('.plan-saved-drop');
+      drop.title = 'Delete \u201c' + task.name + '\u201d';
+      drop.setAttribute('aria-label', drop.title);
+      row.querySelector('.plan-saved-load').addEventListener('click', function () {
+        impOpen(false);
+        loadSaved(task.name);
+      });
+      drop.addEventListener('click', function (event) {
+        event.stopPropagation();
+        dropSaved(task.name);
+        drawSaved(box);
+        xctSay('Deleted \u201c' + task.name + '\u201d.');
+      });
+      box.appendChild(row);
+    });
+  }
+  // For the tests.
+  window.__plannerSaved = { list: savedTasks, save: saveTask, load: loadSaved, drop: dropSaved };
 
   // ---- from XCTrack ----------------------------------------------------------------------
   //
@@ -1161,7 +1280,16 @@
 
   // The import menu, as the export's: a button, the three ways under it.
   var impMore = document.getElementById('plan-imp-more'), impMenu = document.getElementById('plan-imp-menu');
+  var savedBox = null;
   function impOpen(on) {
+    if (on) {
+      if (!savedBox) {
+        savedBox = document.createElement('div');
+        savedBox.className = 'plan-saved';
+        impMenu.appendChild(savedBox);
+      }
+      drawSaved(savedBox);
+    }
     impMenu.hidden = !on;
     impMore.setAttribute('aria-expanded', on ? 'true' : 'false');
     if (on) impMenu.querySelector('button').focus();

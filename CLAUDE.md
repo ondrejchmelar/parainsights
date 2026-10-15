@@ -42,9 +42,6 @@ other three link to it.
 Agreed, not started; newest last. The list lives here and nowhere else, and it may be
 empty.
 
-- **Planner: tasks kept in the browser (localStorage).** Save a planned task under a name
-  and load it back later, alongside the XCTrack export and import (file, task code, QR
-  code), so a task survives closing the page without going through XCTrack.
 - **Side view: a long press to read it, as the sounding has.** A finger on the side view
   should scroll the page like anywhere else; a tap reads a point, and a press held then
   dragged scrubs (`bindReader` in `meteo/js/meteo.js` is the pattern). Today a drag over
@@ -144,7 +141,10 @@ they were two tabs drawing the same airspace over the same ground. There is no p
 the map (October 2026): the drawing tools are on the map, the task's strip — score,
 options, takeoff time — sits under it as a flight's side view does (`planner.strip`,
 inside `.asp-stage`, so full screen keeps it), and the XCTrack import and export and the
-crossings — in the order the task reaches them — are under that (`planner.results`). The
+crossings — in the order the task reaches them — are under that (`planner.results`). A task can
+be kept in the browser (localStorage `parainsights.planner.tasks`: turnpoints, closed,
+rules) from the export menu's *Save in this browser*, and comes back from the Import
+menu's *Saved in this browser* list, each with its ×. The
 strip carries no ⓘ: what a control does is its title (the scoring rules on the rules
 pill's, from `js/xc.js`). A task stands on the map's own terrain (`planZ` in `map3d`),
 not the page's coarse grid, which floated a turnpoint hundreds of metres off the slope

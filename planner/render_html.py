@@ -157,12 +157,25 @@ STYLE = """
 .plan-split { display:inline-flex; position:relative; }
 .plan-split-main { border-radius:10px 0 0 10px; }
 .plan-split-more { border-radius:0 10px 10px 0; margin-left:-1px; padding:0 10px; }
-.plan-split-menu { position:absolute; bottom:calc(100% + 6px); left:0; z-index:8; min-width:250px; padding:6px;
+.plan-split-menu { position:absolute; top:calc(100% + 6px); left:0; z-index:8; min-width:250px; padding:6px;
   background:var(--panel); border:1px solid var(--edge); border-radius:12px; box-shadow:0 12px 30px rgba(0,0,0,.3); }
 .plan-split-menu[hidden] { display:none; }
 .plan-split-menu button { display:flex; align-items:center; gap:10px; width:100%; text-align:left; background:none; border:0;
   color:var(--ink); font:inherit; font-size:16px; padding:10px 12px; border-radius:8px; cursor:pointer; }
 .plan-split-menu button:hover, .plan-split-menu button:focus-visible { background:var(--panel-2); }
+/* Kept in this browser: the export menu's last item, and the import menu's list. */
+.plan-menu-keep { border-top:1px solid var(--rule) !important; border-radius:0 0 8px 8px; margin-top:4px; }
+.plan-saved { max-height:min(50vh, 360px); overflow-y:auto; }
+.plan-saved[hidden] { display:none; }
+.plan-saved-head { margin:6px 0 2px; padding:8px 10px 0; border-top:1px solid var(--rule); font-size:14px;
+  font-weight:600; color:var(--ink-2); }
+.plan-saved-row { display:flex; align-items:center; }
+.plan-split-menu .plan-saved-load { flex:1; min-width:0; }
+.plan-saved-name { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.plan-saved-load small { margin-left:auto; color:var(--ink-2); font-size:13px; white-space:nowrap; }
+.plan-split-menu .plan-saved-drop { width:40px; flex:none; justify-content:center; color:var(--ink-2); padding:0; }
+.plan-keep-name { font:inherit; font-size:18px; height:44px; padding:0 12px; min-width:0; flex:1 1 220px;
+  border:1px solid var(--edge); border-radius:10px; background:var(--panel); color:var(--ink); }
 .plan-xct-out { flex-basis:100%; margin:0; font-size:15px; color:var(--ink-2); }
 .plan-xct-out:empty { display:none; }
 .plan-xct-dlg { width:min(420px, 92vw); padding:0; border:1px solid var(--edge); border-radius:14px;

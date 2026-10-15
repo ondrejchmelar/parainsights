@@ -624,7 +624,7 @@ def test_xctrack_is_one_split_button_under_the_strip():
              scoreInStrip: !!document.getElementById('plan-figures').closest('#plan-strip') };
     """)
     assert answer["main"] == "qr"
-    assert answer["menu"] == ["file", "code"]
+    assert answer["menu"] == ["file", "code", "save"], "the other two ways, then keeping it here"
     assert answer["shut"] is True and answer["open"] is True
     assert answer["order"], "the export is not under the strip, ahead of the crossings"
     assert answer["scoreInStrip"]
@@ -812,3 +812,39 @@ def test_the_strip_stays_under_the_map_in_full_screen():
     assert answer["inside"]
     assert abs(answer["bottom"] - answer["height"]) <= 1, answer
     assert answer["mapAbove"] and answer["mapTall"], answer
+
+
+@needs_chrome
+def test_a_task_is_kept_in_the_browser_and_comes_back():
+    """Saved under a name in localStorage, listed in the Import menu with its own ×, and
+    loaded back with its turnpoints, its closing and its rules. The same name saved again
+    replaces the old one; deleting takes it off the list."""
+    answer = _run(_HARNESS + """
+    localStorage.removeItem('parainsights.planner.tasks');
+    tap(0.35, 0.40); tap(0.60, 0.40); tap(0.48, 0.62);
+    var close = document.getElementById('plan-close'), rules = document.getElementById('plan-rules');
+    close.checked = true; rules.value = 'cpp';
+    var S = window.__plannerSaved;
+    S.save('Ridge run');
+    var saved = JSON.parse(JSON.stringify(route.points));
+    tap(0.20, 0.20);
+    S.save('Ridge run');                     // the same name again: replaced, not added
+    var afterReplace = S.list().length, replacedHas = S.list()[0].points.length;
+    S.save('Short');
+    document.getElementById('plan-clear').click();
+    close.checked = false; rules.value = 'world';
+    document.getElementById('plan-imp-more').click();
+    var rows = Array.prototype.map.call(document.querySelectorAll('#plan-imp-menu .plan-saved-name'),
+      function (n) { return n.textContent; });
+    document.querySelectorAll('#plan-imp-menu .plan-saved-load')[1].click();   // "Ridge run"
+    var loaded = { n: route.points.length, closed: close.checked, rules: rules.value };
+    document.getElementById('plan-imp-more').click();
+    document.querySelector('#plan-imp-menu .plan-saved-drop').click();       // delete "Short"
+    var left = S.list().map(function (t) { return t.name; });
+    return { afterReplace: afterReplace, replacedHas: replacedHas, rows: rows, loaded: loaded,
+             left: left, savedFirst: saved[0] };
+    """)
+    assert answer["afterReplace"] == 1 and answer["replacedHas"] == 4
+    assert answer["rows"] == ["Short", "Ridge run"], "newest first"
+    assert answer["loaded"] == {"n": 4, "closed": True, "rules": "cpp"}
+    assert answer["left"] == ["Ridge run"]
