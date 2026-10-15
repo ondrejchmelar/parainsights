@@ -692,28 +692,69 @@ def test_something_that_is_not_a_task_is_refused():
 
 @needs_chrome
 def test_the_takeoff_time_opens_on_tomorrow_noon_and_lights_the_map():
-    """The takeoff time is the sun's moment: it opens on tomorrow at 12:00 in the
-    reader's clock, and each change hands the map a sun table (`setSun`) for that moment
-    over the task — the UTC minute of the day, and the offset that reads it back."""
+    """The takeoff time is the sun's moment: a day, opening on tomorrow, and a time slid
+    through it, opening on 12:00, in the reader's clock. Each change hands the map a sun
+    table (`setSun`) for that moment over the task — the UTC minute of the day, and the
+    offset that reads it back — and the aerodrome hours follow it."""
     answer = _run(_MAP + """
     var suns = [];
     entry.setSun = function (table) { suns.push(table); };
-    var input = document.getElementById('plan-takeoff');
-    var opened = input.value;
+    var day = document.getElementById('plan-day'), time = document.getElementById('plan-time');
+    var opened = [day.value, time.value, document.getElementById('plan-time-out').textContent];
     var tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
     function pad(n) { return (n < 10 ? '0' : '') + n; }
-    var expect = tomorrow.getFullYear() + '-' + pad(tomorrow.getMonth() + 1) + '-' +
-      pad(tomorrow.getDate()) + 'T12:00';
-    input.value = '2026-07-04T15:30';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
+    var expect = tomorrow.getFullYear() + '-' + pad(tomorrow.getMonth() + 1) + '-' + pad(tomorrow.getDate());
+    day.value = '2026-07-04';
+    day.dispatchEvent(new Event('input', { bubbles: true }));
+    time.value = 930;
+    time.dispatchEvent(new Event('input', { bubbles: true }));
     var last = suns[suns.length - 1], when = new Date('2026-07-04T15:30');
     return { opened: opened, expect: expect, at: last.at, offset: last.offset,
              wantAt: when.getUTCHours() * 60 + when.getUTCMinutes(),
              wantOffset: -when.getTimezoneOffset(), steps: last.track.az.length,
-             step: last.track.step, hours: document.getElementById('asp-when').value };
+             step: last.track.step, hours: document.getElementById('asp-when').value,
+             shown: document.getElementById('plan-time-out').textContent };
     """)
-    assert answer["opened"] == answer["expect"]
+    assert answer["opened"] == [answer["expect"], "720", "12:00"]
     assert answer["at"] == answer["wantAt"]
     assert answer["offset"] == answer["wantOffset"]
     assert answer["step"] == 10 and answer["steps"] == 144
+    assert answer["shown"] == "15:30"
     assert answer["hours"] == "2026-07-04T15:30", "the aerodrome hours follow the takeoff"
+
+
+@needs_chrome
+def test_the_rose_gets_the_forecast_wind_at_the_takeoff_hour():
+    """The wind at 850 hPa (about 1500 m) from Open-Meteo, read at the hour nearest the
+    slider; one request a day and place, and no wind where the forecast has none."""
+    answer = _run(_MAP + """
+    var winds = [], asked = [];
+    entry.setSun = function () {};
+    entry.setWind = function (w) { winds.push(w); };
+    window.fetch = function (url) {
+      asked.push(url);
+      var speed = [], dir = [];
+      for (var h = 0; h < 24; h++) { speed.push(h); dir.push(h < 12 ? 225 : null); }
+      return Promise.resolve({ ok: true, json: function () {
+        return Promise.resolve({ hourly: { wind_speed_850hPa: speed, wind_direction_850hPa: dir } }); } });
+    };
+    var day = document.getElementById('plan-day'), time = document.getElementById('plan-time');
+    day.value = '2026-07-04';
+    time.value = 600;
+    time.dispatchEvent(new Event('input', { bubbles: true }));
+    var hour = new Date('2026-07-04T10:00').getUTCHours();
+    return new Promise(function (done) { setTimeout(done, 50); }).then(function () {
+      var morning = winds[winds.length - 1];
+      time.value = 1200;
+      time.dispatchEvent(new Event('input', { bubbles: true }));
+      return new Promise(function (done) { setTimeout(done, 50); }).then(function () {
+        return { morning: morning, evening: winds[winds.length - 1], hour: hour,
+                 requests: asked.filter(function (u) { return u.indexOf('2026-07-04') > 0; }).length,
+                 url: asked[asked.length - 1] };
+      });
+    });
+    """)
+    assert answer["morning"] == {"ms": answer["hour"], "from": 225, "cardinal": "SW", "at": "at 1500 m"}
+    assert answer["evening"] is None, "no direction in the forecast, no wind on the rose"
+    assert answer["requests"] == 1
+    assert "wind_speed_unit=ms" in answer["url"] and "850hPa" in answer["url"]

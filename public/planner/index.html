@@ -540,8 +540,13 @@ html[data-help="off"] .m3-help { display: none; }
 .chk { display:inline-flex; align-items:center; gap:9px; font-size:16px; cursor:pointer; min-height:44px; }
 .chk input { width:20px; height:20px; margin:0; accent-color:var(--accent); }
 .plan-opts select.btn { height:44px; padding:0 12px; appearance:auto; }
-.plan-takeoff { display:flex; align-items:center; gap:10px; margin:4px 0 6px; font-size:16px; }
-.plan-takeoff input.btn { height:44px; padding:0 10px; font:inherit; min-width:0; }
+.plan-takeoff { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px 10px;
+  margin:4px 0 8px; font-size:16px; }
+.plan-takeoff .info-wrap { margin-left:0; justify-self:start; }
+.plan-field { height:44px; padding:0 10px; box-sizing:border-box; font:inherit; min-width:0;
+  border:1px solid var(--edge); border-radius:10px; background:var(--panel); color:var(--ink); }
+#plan-time { grid-column:1 / 3; width:100%; margin:0; accent-color:var(--accent); }
+#plan-time-out { font-variant-numeric:tabular-nums; font-weight:600; min-width:3.2em; text-align:right; }
 .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
 .plan-hint[hidden] { display:none; }
 /* The score: the distance large, the rest as a line under it. The cells are the script's
@@ -639,7 +644,7 @@ html[data-help="off"] .m3-help { display: none; }
     </div>
     <div class="asp-floats">
       <div class="float plan-panel"><h2>Task<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="More about this">i</button><span class="info-pop" role="note">Press Draw a task, then click the map to drop turnpoints; drag, pinch and twist still move the view. The route is scored as XContest would and checked against every zone it crosses.</span></span></h2><section class="plan-section" aria-label="The task">
-    <div class="plan-figures" id="plan-figures"></div><div class="plan-bar"><button type="button" class="btn primary plan-draw" id="plan-draw" aria-pressed="false">Draw a task</button><button type="button" class="btn" id="plan-undo">Undo</button><button type="button" class="btn" id="plan-clear">Clear</button></div><div class="plan-opts"><label class="chk"><input type="checkbox" id="plan-close"> Closed</label><label class="chk"><input type="checkbox" id="plan-fai" checked> FAI areas<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="More about this">i</button><span class="info-pop" role="note">Where each turnpoint can go for an FAI triangle (every side at least 28% of the perimeter), the other two staying put: turnpoint 1 green, 2 blue, 3 red. Yellow: where a closed course must finish.</span></span></label><label class="plan-rules-label"><span class="sr">Rules</span><select id="plan-rules" class="btn"><option value="world">XContest</option><option value="cpp">ČPP (Czech)</option></select></label></div><label class="plan-takeoff"><span>Takeoff</span><input type="datetime-local" id="plan-takeoff" class="btn" step="900"><span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="More about this">i</button><span class="info-pop" role="note">The sun at this moment, your own clock: the ground is lit from where it stands and the rose on the map shows it, as on a flight's map. The aerodrome hours on the map's Airspaces menu follow this time too.</span></span></label><span class="plan-hint" id="plan-hint" hidden></span>
+    <div class="plan-figures" id="plan-figures"></div><div class="plan-bar"><button type="button" class="btn primary plan-draw" id="plan-draw" aria-pressed="false">Draw a task</button><button type="button" class="btn" id="plan-undo">Undo</button><button type="button" class="btn" id="plan-clear">Clear</button></div><div class="plan-opts"><label class="chk"><input type="checkbox" id="plan-close"> Closed</label><label class="chk"><input type="checkbox" id="plan-fai" checked> FAI areas<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="More about this">i</button><span class="info-pop" role="note">Where each turnpoint can go for an FAI triangle (every side at least 28% of the perimeter), the other two staying put: turnpoint 1 green, 2 blue, 3 red. Yellow: where a closed course must finish.</span></span></label><label class="plan-rules-label"><span class="sr">Rules</span><select id="plan-rules" class="btn"><option value="world">XContest</option><option value="cpp">ČPP (Czech)</option></select></label></div><div class="plan-takeoff"><label for="plan-day">Takeoff</label><input type="date" id="plan-day" class="plan-field"><span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="More about this">i</button><span class="info-pop" role="note">Slide through the day to see which slopes the sun reaches when: the ground is shaded from where the sun stands (strongest on the Relief ground, under the layers button), and the rose on the map shows the sun and the forecast wind at about 1500 m (the 850 hPa level, Open-Meteo) over the task. Your own clock. The aerodrome hours in the map's Airspaces menu follow this time too.</span></span><input type="range" id="plan-time" min="300" max="1260" step="15" value="720" aria-label="Time of day"><output id="plan-time-out" for="plan-time">12:00</output></div><span class="plan-hint" id="plan-hint" hidden></span>
     <p class="plan-legs" id="plan-legs"></p>
     <div class="plan-airspace" id="plan-airspace"></div>
     <p class="plan-note">A plan, not a clearance.<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="How the task is scored">i</button><span class="info-pop" role="note">Scored with the same rules as the flight report: every side at least 28% of the perimeter for FAI, a closing gap under 20% of it for a closed course, multipliers 1&thinsp;/&thinsp;1.2&thinsp;/&thinsp;1.4. With ČPP chosen, the Czech cup's: closing under 5%, and in the Central European zone 1&thinsp;/&thinsp;1.8&thinsp;/&thinsp;2.2 (<a href="https://www.xcontest.org/cesko/pravidla/" rel="noreferrer">rules</a>). The map draws the airspace within 5&nbsp;km of the task, and none before there is one: Czechia's from this page, with its traffic circuits; any other European country's from openAIP once the task reaches it.</span></span></p>
@@ -2872,7 +2877,8 @@ function initView3d(root, cursorTrack, preset) {
         } else {
           sunGroup.style.display = 'none';
         }
-        if (wind) text.push('Wind ' + wind.ms.toFixed(1) + ' m/s from ' + wind.cardinal);
+        if (wind) text.push('Wind ' + wind.ms.toFixed(1) + ' m/s from ' + wind.cardinal +
+                            (wind.at ? ' ' + wind.at : ''));
         var said = text.join('<br>');
         if (said !== roseText) rose.querySelector('.m3-rose-text').innerHTML = roseText = said;
       }
@@ -4098,6 +4104,15 @@ function initView3d(root, cursorTrack, preset) {
           if (sun) sunTo(sun.at);
           else { drawRose(); if (!wind) rose.hidden = true; }
         },
+        // A wind from the page (the planner's forecast for its takeoff time), as a
+        // flight's scene carries one: { ms, from, cardinal, at }, `at` saying where it
+        // blows ("at 1500 m"). Null takes it away.
+        setWind: function (w) {
+          wind = w && isFinite(w.ms) && isFinite(w.from) ? w : null;
+          rose.querySelector('svg').style.display = '';
+          drawRose();
+          if (!sun && !wind) rose.hidden = true;
+        },
         // The zones to draw instead of the scene's own: the planner's, near its task.
         setAirspaces: function (list) {
           boxes = boxesFrom(list || []);
@@ -5221,51 +5236,97 @@ function initView3d(root, cursorTrack, preset) {
     lightSun();
   }
 
-  // The takeoff time: the sun over the task (or the map's middle, before there is one) at
-  // that moment, handed to the map as the table a flight's map is lit from (`TV.sun`).
-  // The reader's own clock; it opens on tomorrow at 12:00. The aerodrome hours follow it.
-  var takeoff = document.getElementById('plan-takeoff');
+  // The takeoff time, a day and a time slid through it: the sun over the task (or the
+  // map's middle, before there is one) at that moment, handed to the map as the table a
+  // flight's map is lit from (`TV.sun`), and the forecast wind at about 1500 m (850 hPa,
+  // Open-Meteo) for the rose. The reader's own clock; it opens on tomorrow at 12:00. The
+  // aerodrome hours follow it.
+  var day = document.getElementById('plan-day');
+  var time = document.getElementById('plan-time');
+  var timeOut = document.getElementById('plan-time-out');
+  var takeoff = day && time;
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
-  function localValue(d) {
-    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + 'T' +
-      pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  function clock(minutes) { return pad2(Math.floor(minutes / 60)) + ':' + pad2(minutes % 60); }
+  if (takeoff && !day.value) {
+    var tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    day.value = tomorrow.getFullYear() + '-' + pad2(tomorrow.getMonth() + 1) + '-' + pad2(tomorrow.getDate());
   }
-  if (takeoff && !takeoff.value) {
-    var start = new Date();
-    start.setDate(start.getDate() + 1);
-    start.setHours(12, 0, 0, 0);
-    takeoff.value = localValue(start);
+  function takeoffValue() {
+    return takeoff && day.value ? day.value + 'T' + clock(Number(time.value)) : null;
+  }
+  function takeoffAt() {
+    var value = takeoffValue(), when = value ? new Date(value) : null;
+    return when && !isNaN(when.getTime()) ? when : null;
+  }
+  function sunPlace() {
+    if (points.length) {
+      return [points.reduce(function (s, p) { return s + p[0]; }, 0) / points.length,
+              points.reduce(function (s, p) { return s + p[1]; }, 0) / points.length];
+    }
+    var dem = handle.scene().terrain || {};
+    var lon = (dem.west + dem.east) / 2, lat = (dem.south + dem.north) / 2;
+    return isNaN(lon) || isNaN(lat) ? [15.5, 49.8] : [lon, lat];
   }
   function sunTable() {
-    if (!takeoff || !takeoff.value || !window.TV || !TV.sun) return null;
-    var when = new Date(takeoff.value);
-    if (isNaN(when.getTime())) return null;
-    var lon, lat;
-    if (points.length) {
-      lon = points.reduce(function (s, p) { return s + p[0]; }, 0) / points.length;
-      lat = points.reduce(function (s, p) { return s + p[1]; }, 0) / points.length;
-    } else {
-      var dem = handle.scene().terrain || {};
-      lon = (dem.west + dem.east) / 2; lat = (dem.south + dem.north) / 2;
-      if (isNaN(lon) || isNaN(lat)) { lon = 15.5; lat = 49.8; }
-    }
+    var when = takeoffAt();
+    if (!when || !window.TV || !TV.sun) return null;
+    var at = sunPlace();
     var date = { year: when.getUTCFullYear(), month: when.getUTCMonth() + 1, day: when.getUTCDate() };
-    return { track: TV.sun.dayTrack(date, lat, lon), offset: -when.getTimezoneOffset(),
+    return { track: TV.sun.dayTrack(date, at[1], at[0]), offset: -when.getTimezoneOffset(),
              at: when.getUTCHours() * 60 + when.getUTCMinutes() };
+  }
+  // The wind: one day of hourly answers per place (to 0.25°) and day, fetched once, read
+  // at the hour nearest the slider. A day the forecast does not reach has no wind.
+  var winds = {};
+  var CARDINALS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+  function windDay(lon, lat, date) {
+    var key = lon.toFixed(2) + ',' + lat.toFixed(2) + ',' + date;
+    if (!winds[key] && typeof fetch === 'function') {
+      winds[key] = fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lat.toFixed(2) +
+          '&longitude=' + lon.toFixed(2) + '&hourly=wind_speed_850hPa,wind_direction_850hPa' +
+          '&wind_speed_unit=ms&timezone=GMT&start_date=' + date + '&end_date=' + date)
+        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+        .then(function (data) { return data.hourly || null; });
+      winds[key].catch(function () { delete winds[key]; });
+    }
+    return winds[key] || Promise.resolve(null);
+  }
+  var windAsked = 0;
+  function lightWind() {
+    var merged = mergedEntry(), when = takeoffAt();
+    if (!merged || !merged.setWind) return;
+    if (!when) { merged.setWind(null); return; }
+    var at = sunPlace(), ask = ++windAsked;
+    var lon = Math.round(at[0] * 4) / 4, lat = Math.round(at[1] * 4) / 4;
+    var date = when.getUTCFullYear() + '-' + pad2(when.getUTCMonth() + 1) + '-' + pad2(when.getUTCDate());
+    windDay(lon, lat, date).then(function (hourly) {
+      if (ask !== windAsked) return;
+      var hour = Math.min(23, Math.round(when.getUTCHours() + when.getUTCMinutes() / 60));
+      var ms = hourly && hourly.wind_speed_850hPa ? hourly.wind_speed_850hPa[hour] : null;
+      var from = hourly && hourly.wind_direction_850hPa ? hourly.wind_direction_850hPa[hour] : null;
+      merged.setWind(ms === null || ms === undefined || from === null || from === undefined ? null
+        : { ms: ms, from: from, cardinal: CARDINALS[Math.round(from / 22.5) % 16], at: 'at 1500 m' });
+    }, function () { if (ask === windAsked) merged.setWind(null); });
   }
   function lightSun() {
     var merged = mergedEntry();
     if (merged && merged.setSun) merged.setSun(sunTable());
+    lightWind();
   }
   function followTakeoff() {
+    if (timeOut && time) timeOut.textContent = clock(Number(time.value));
     lightSun();
-    var hoursAt = document.getElementById('asp-when');
-    if (hoursAt && takeoff && takeoff.value && hoursAt.value !== takeoff.value) {
-      hoursAt.value = takeoff.value;
+    var hoursAt = document.getElementById('asp-when'), value = takeoffValue();
+    if (hoursAt && value && hoursAt.value !== value) {
+      hoursAt.value = value;
       hoursAt.dispatchEvent(new Event('input', { bubbles: true }));
     }
   }
-  if (takeoff) takeoff.addEventListener('input', followTakeoff);
+  if (takeoff) {
+    day.addEventListener('input', followTakeoff);
+    time.addEventListener('input', followTakeoff);
+  }
   panel.addEventListener('merged-ready', function (event) { hookMerged(event.detail); });
   hookMerged(mergedEntry());
 

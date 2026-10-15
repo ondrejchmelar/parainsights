@@ -59,8 +59,13 @@ STYLE = """
 .chk { display:inline-flex; align-items:center; gap:9px; font-size:16px; cursor:pointer; min-height:44px; }
 .chk input { width:20px; height:20px; margin:0; accent-color:var(--accent); }
 .plan-opts select.btn { height:44px; padding:0 12px; appearance:auto; }
-.plan-takeoff { display:flex; align-items:center; gap:10px; margin:4px 0 6px; font-size:16px; }
-.plan-takeoff input.btn { height:44px; padding:0 10px; font:inherit; min-width:0; }
+.plan-takeoff { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px 10px;
+  margin:4px 0 8px; font-size:16px; }
+.plan-takeoff .info-wrap { margin-left:0; justify-self:start; }
+.plan-field { height:44px; padding:0 10px; box-sizing:border-box; font:inherit; min-width:0;
+  border:1px solid var(--edge); border-radius:10px; background:var(--panel); color:var(--ink); }
+#plan-time { grid-column:1 / 3; width:100%; margin:0; accent-color:var(--accent); }
+#plan-time-out { font-variant-numeric:tabular-nums; font-weight:600; min-width:3.2em; text-align:right; }
 .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
 .plan-hint[hidden] { display:none; }
 /* The score: the distance large, the rest as a line under it. The cells are the script's
@@ -167,12 +172,19 @@ def controls() -> str:
         '<option value="world">XContest</option>'
         '<option value="cpp">ČPP (Czech)</option></select></label>'
         "</div>"
-        '<label class="plan-takeoff"><span>Takeoff</span>'
-        '<input type="datetime-local" id="plan-takeoff" class="btn" step="900">'
-        + common.info("The sun at this moment, your own clock: the ground is lit from where "
-                      "it stands and the rose on the map shows it, as on a flight's map. The "
-                      "aerodrome hours on the map's Airspaces menu follow this time too.")
-        + "</label>"
+        '<div class="plan-takeoff">'
+        '<label for="plan-day">Takeoff</label>'
+        '<input type="date" id="plan-day" class="plan-field">'
+        + common.info("Slide through the day to see which slopes the sun reaches when: the "
+                      "ground is shaded from where the sun stands (strongest on the Relief "
+                      "ground, under the layers button), and the rose on the map shows the "
+                      "sun and the forecast wind at about 1500 m (the 850 hPa level, "
+                      "Open-Meteo) over the task. Your own clock. The aerodrome hours in the "
+                      "map's Airspaces menu follow this time too.")
+        + '<input type="range" id="plan-time" min="300" max="1260" step="15" value="720" '
+        'aria-label="Time of day">'
+        '<output id="plan-time-out" for="plan-time">12:00</output>'
+        "</div>"
         # Said only before the first point: the button itself turns into "Drawing — click
         # the map" once pressed.
         '<span class="plan-hint" id="plan-hint" hidden></span>'

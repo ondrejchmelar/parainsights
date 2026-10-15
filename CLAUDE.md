@@ -153,9 +153,12 @@ the planner listens to the time control only to re-mark its list. What of the ai
 the map's own menu, the ▾ beside *Airspaces* (`aspMenu` in `map3d.js`, on a flight's map
 too, where it counts and filters only the zones near the track): the kinds, the floor,
 and on this page the hours row moved in from `.m3-airspace-extra` (October 2026; it was a
-Layers panel under the task). The planner's **Takeoff** time lights the ground and turns
-the rose's sun as a flight's map does (`entry.setSun`, a `TV.sun.dayTrack` table over the
-task), and the hours filter follows it. The ground is the
+Layers panel under the task). The planner's **Takeoff** — a day and a time slider, opening
+on tomorrow at 12:00 — lights the ground and turns the rose's sun as a flight's map does
+(`entry.setSun`, a `TV.sun.dayTrack` table over the task), puts Open-Meteo's 850 hPa wind
+(about 1500 m) on the rose (`entry.setWind`), and the hours filter follows it. MapLibre
+4.7's hillshade takes a direction and no altitude, so the shading says which slopes face
+the sun, not how low it stands. The ground is the
 planner's wider box (`scene.PLAN_BOX`, Czechia and the Alps, 120 000 nodes) fetched by
 the page (`scene.remote`), opening framed on Czechia (`view.focus`); in the report the
 fetch waits until the view is first opened. A build can therefore no longer lose the

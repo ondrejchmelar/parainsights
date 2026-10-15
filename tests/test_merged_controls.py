@@ -340,8 +340,9 @@ def test_the_airspace_split_button_is_one_rounded_group(browser):
 
 
 def test_a_sun_handed_in_lights_the_ground_and_turns_the_rose(browser):
-    """`setSun`, the planner's takeoff time: the map takes a `TV.sun` table, lights the
-    hillshade from its azimuth and says the time on the rose in the page's clock."""
+    """`setSun` and `setWind`, the planner's takeoff time: the map takes a `TV.sun` table,
+    lights the hillshade from its azimuth and says the time on the rose in the page's
+    clock, and the wind with where it blows."""
     _reset(browser)
     az = [100 + i for i in range(144)]          # a degree every ten minutes, from 100°
     table = {"track": {"step": 10, "az": az, "el": [30] * 144}, "offset": 60, "at": 600}
@@ -350,6 +351,12 @@ def test_a_sun_handed_in_lights_the_ground_and_turns_the_rose(browser):
     text = browser.js("document.querySelector('.merged-view .m3-rose-text').textContent")
     assert text.startswith("Sun 11:00"), text
     assert browser.js("!document.querySelector('.merged-view .m3-rose').hidden") is True
+    browser.js(f"({ENTRY}).setWind({{ms: 5, from: 225, cardinal: 'SW', at: 'at 1500 m'}}); 1")
+    text = browser.js("document.querySelector('.merged-view .m3-rose-text').textContent")
+    assert text.endswith("Wind 5.0 m/s from SW at 1500 m"), text
+    browser.js(f"({ENTRY}).setWind(null); 1")
+    text = browser.js("document.querySelector('.merged-view .m3-rose-text').textContent")
+    assert "Wind" not in text, text
 
 
 def test_the_measure_tool_adds_up_the_legs_on_the_sphere(browser):

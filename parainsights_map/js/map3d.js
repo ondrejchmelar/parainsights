@@ -1344,7 +1344,8 @@
         } else {
           sunGroup.style.display = 'none';
         }
-        if (wind) text.push('Wind ' + wind.ms.toFixed(1) + ' m/s from ' + wind.cardinal);
+        if (wind) text.push('Wind ' + wind.ms.toFixed(1) + ' m/s from ' + wind.cardinal +
+                            (wind.at ? ' ' + wind.at : ''));
         var said = text.join('<br>');
         if (said !== roseText) rose.querySelector('.m3-rose-text').innerHTML = roseText = said;
       }
@@ -2569,6 +2570,15 @@
           view.querySelector('.m3-sun').style.display = '';
           if (sun) sunTo(sun.at);
           else { drawRose(); if (!wind) rose.hidden = true; }
+        },
+        // A wind from the page (the planner's forecast for its takeoff time), as a
+        // flight's scene carries one: { ms, from, cardinal, at }, `at` saying where it
+        // blows ("at 1500 m"). Null takes it away.
+        setWind: function (w) {
+          wind = w && isFinite(w.ms) && isFinite(w.from) ? w : null;
+          rose.querySelector('svg').style.display = '';
+          drawRose();
+          if (!sun && !wind) rose.hidden = true;
         },
         // The zones to draw instead of the scene's own: the planner's, near its task.
         setAirspaces: function (list) {
