@@ -79,7 +79,7 @@ def test_an_upload_gets_the_full_article_even_offline(tmp_path):
     assert out["article"] and out["visible"], out
     # The flight's own sections are all there; with no ground there is no 3D view, so the
     # side view carries the first section, as in a report built without --terrain.
-    assert out["figures"] >= 5, out
+    assert out["figures"] == 4, out
     for heading in ("Top view", "How the air was used", "Climbs", "Glides"):
         assert heading in out["sections"], (heading, out["sections"])
     assert out["climbRows"] >= 2 and out["profileDrawn"] and out["planDrawn"], out

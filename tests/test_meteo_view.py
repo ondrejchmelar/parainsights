@@ -195,11 +195,10 @@ class TestThePage:
         difference between a page that is honest and a page that looks broken."""
         assert "needs a network" in render_html.SCRIPT
 
-    def test_the_page_credits_both_sources_and_refuses_to_decide(self):
+    def test_the_page_credits_its_sources(self):
         html = cli.page(render_html.body(), "Meteo")
         assert "Open-Meteo" in html
         assert "ParaglidingEarth" in html
-        assert "A forecast is not a decision" in html
         assert "flymet" in html
 
 

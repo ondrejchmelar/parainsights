@@ -406,8 +406,7 @@ def body(uid: str = "meteo") -> str:
       <button type="button" class="btn primary" id="met-done">Done</button>
     </div>
   </dialog>
-  <p class="met-links">A forecast is not a decision — check the airspace, the NOTAMs and the
-    sky.{info(f"""Forecast from <a href="https://open-meteo.com/" rel="noreferrer">Open-Meteo</a>,
+  <p class="met-links">Sources{info(f"""Forecast from <a href="https://open-meteo.com/" rel="noreferrer">Open-Meteo</a>,
     fetched in this page: DWD ICON-D2 (2 km) for as far as it reaches, ICON-EU (7 km) after,
     and the boundary layer height from ECMWF IFS, which ICON does not publish. Takeoffs chosen
     after <a href="https://gfs.pgweb.cz/" rel="noreferrer">gfs.pgweb.cz</a>'s essentials.

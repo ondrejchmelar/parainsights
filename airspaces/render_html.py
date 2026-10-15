@@ -562,12 +562,10 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
         capped = sum(1 for ring in scene.get("airspaces", []) if ring.get("t"))
         boxes = (
             " Each zone is the box it really is — floor to ceiling — so drag with the "
-            "right button to tilt and see what sits over what. <strong>The vertical is "
-            "exaggerated five times</strong>, which the \u00d7 buttons under the map set: "
-            "at true scale, across 500 km of country, a 300 m traffic circuit is a third "
-            "of a pixel tall and every box here is two rings on top of each other. "
-            "\u00d71 is one press away, and the limits in each label are the real ones "
-            "whichever setting you are on."
+            "right button to tilt and see what sits over what. The map opens at true scale; "
+            "\u00d75 and \u00d715, under the layers button, stretch the height so thin "
+            "zones such as a 300 m traffic circuit stand out, and the limits in each label "
+            "are the real ones whichever setting you are on."
             + (f" The {capped} that run above {DRAWN_TOP / 1000:.0f} km are cut off at a "
                "dashed lid, which is a cap and not their ceiling; the label says how high "
                "they go." if capped else "")
@@ -678,12 +676,11 @@ def _map(airspaces, project, scene: dict | None, uid: str) -> str:
         return map_svg(airspaces, project)
     from parainsights_map import view3d
 
-    # The exaggeration this map offers, and it starts at x5. At true scale over 500 km
-    # of country a 300 m traffic circuit is **0.3 px** tall and an ATZ 0.7 px, so every
-    # box is two coincident rings — the flat map with extra steps. x1 is still one press
-    # away and the segmented control says which is on, so nothing here is hidden; what is
-    # hidden at true scale is the entire point of the view. The map is the flights' own
-    # (`map3d`, opened by `render_map`), and the planner draws on it too.
+    # The exaggerations this map offers, opening at true scale (October 2026, the pilot's
+    # call: it opened at x5, which over a whole country makes thin boxes readable, and now
+    # that the map draws only the zones along a task, at the scale a task is planned, true
+    # scale reads the ground right). x5 and x15 are under the layers button. The map is the
+    # flights' own (`map3d`, opened by `render_map`), and the planner draws on it too.
     return ('<div class="renderer-host">'
-            + view3d.panel(scene, uid, verticals=(1, 5, 15), vertical=5)
+            + view3d.panel(scene, uid, verticals=(1, 5, 15), vertical=1)
             + "</div>")

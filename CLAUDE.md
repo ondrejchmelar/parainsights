@@ -174,14 +174,12 @@ fetch waits until the view is first opened. A build can therefore no longer lose
 terrain, so `--require-terrain` is accepted and does nothing. `public/planner/` is a
 redirect (`planner/cli.py`), and `common.PAGES` has three entries.
 
-**The airspace and planner maps open at
-×5 vertical**, and that is not a decoration: at true scale over 500 km of country a 300 m
-traffic circuit projects to **0.3 px**, and 2.8 px even zoomed a long way in, so every box
-is two coincident rings and the 3D view shows exactly what the flat one did. The
-segmented control offers ×1, ×5 and ×15, the caption says which is on, and every label
-carries the real limits. The *report* still opens at true scale, where it belongs: a
-flight is kilometres of air over tens of kilometres of ground, and true scale is the
-setting you can read height above ground from. `view3d.panel(verticals=…, vertical=…)`
+**The planner's map opens at true scale** (October 2026, the pilot's call), as the report
+does; ×5 and ×15 are under the layers button. It opened at ×5 when it drew all of
+Czechia's airspace: at true scale over 500 km of country a 300 m traffic circuit projects
+to **0.3 px**, every box two coincident rings. Now it draws only the zones along a task, at
+the scale a task is planned, and every label carries the real limits whichever is on.
+`view3d.panel(verticals=…, vertical=…)`
 is how a page says which it wants. Two things there are decisions and not
 details — a limit carries its *datum* as well as its number, so anything AGL stays a
 height and is resolved against the terrain in the renderer; and the 21 airspaces that run

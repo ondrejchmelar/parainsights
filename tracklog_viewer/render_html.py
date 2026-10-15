@@ -59,6 +59,10 @@ h1, h2, h3 { margin: 0; font-weight: 650; letter-spacing: -0.01em; }
 .verdict-delta.is-best { color: var(--accent); font-weight: 600; }
 .verdict-delta[hidden] { display: none; }
 .figs.air .v { font-size: 26px; }
+.figs.keys { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+/* The flight's other figures, opening the debrief: a size under the key four. */
+.figs.debrief-figs { margin: 0 0 18px; }
+.figs.debrief-figs .v { font-size: 26px; }
 
 /* Sections ------------------------------------------------------------------ */
 section { margin-top: 46px; }
@@ -291,6 +295,9 @@ code { font-family: ui-monospace, "DejaVu Sans Mono", monospace; font-size: 0.92
   .wrap { padding: 0 14px 40px; }
   .masthead h1 { font-size: 30px; }
   .figs.keys { grid-template-columns: repeat(2, 1fr); }
+  .figs.debrief-figs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .figs.debrief-figs .v { font-size: 22px; }
+  .figs.debrief-figs .v small { font-size: 15px; }
   .fig { padding: 12px 8px 12px 0; }
   .fig .v { font-size: 26px; }
   /* The flights swipe sideways, and the next one shows at the edge so the strip reads as

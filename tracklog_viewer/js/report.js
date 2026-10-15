@@ -384,9 +384,10 @@
     return "the day's sounding was not fetched when this report was built";
   }
 
-  function debriefCards(result, uid, sample, facts, reason) {
-    if (!result || !result.findings.length) return '';
-    var cards = result.findings.map(function (finding) {
+  function debriefCards(result, uid, sample, facts, reason, figs) {
+    var found = result && result.findings.length;
+    if (!found && !(figs && figs.length)) return '';
+    var cards = (found ? result.findings : []).map(function (finding) {
       var footer = finding.at ? '<span class="finding-when">' + esc(finding.at) + '</span>' : '', link = '';
       if (finding.cursor !== null && sample && sample.length) {
         link = '<button type="button" class="lnk finding-link" data-finding-cursor="' + Ch.samplePosition(sample, finding.cursor) +
@@ -399,14 +400,16 @@
     var reasons = { terrain: 'ground clearance needs an elevation model, which this report has none of',
                     meteo: reason || "the day's sounding is not in this report",
                     route: 'the route findings need a scored route', sampling: 'this track is too coarse to count circles' };
-    var missing = result.suppressed.filter(function (k) { return k in reasons; }).map(function (k) { return reasons[k]; });
+    var missing = (result ? result.suppressed : []).filter(function (k) { return k in reasons; }).map(function (k) { return reasons[k]; });
     var ctx = facts.length ? '<div class="context debrief-context">' + facts.map(function (f) {
       return '<div class="card"><b>' + f.value + '</b><span>' + f.label + info(f.detail) + '</span></div>';
     }).join('') + '</div>' : '';
     var note = missing.length ? '<p class="note debrief-note">Some findings are not computed here' +
       info(esc(cap(missing.join('; '))) + '.') + '</p>' : '';
-    return '\n  <section id="debrief-' + uid + '">\n    <h2>Debrief</h2>\n' +
-      '    <div class="findings">' + cards.join('') + '</div>\n    ' + ctx + '\n    ' + note + '\n  </section>';
+    // The flight's other figures first, then what cost it.
+    var more = figs && figs.length ? '    <div class="figs debrief-figs">' + figs.join('') + '</div>\n' : '';
+    return '\n  <section id="debrief-' + uid + '">\n    <h2>Debrief</h2>\n' + more +
+      (cards.length ? '    <div class="findings">' + cards.join('') + '</div>\n    ' : '    ') + ctx + '\n    ' + note + '\n  </section>';
   }
 
   var ARROW = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
@@ -455,6 +458,8 @@
     var perf = null, field = TV.airmass.field(a, weather);
     perf = TV.airmass.glidePerformance(a, field);
     var curve = perf ? TV.airmass.polar(a, field) : null;
+    // Four key numbers over the map (2 × 2 on a phone): how far, how long, how well it
+    // climbed, the wind. The rest of the flight's figures open the debrief (October 2026).
     var figs = [
       figure('Scored', route ? fmt(route.distance / 1000, 2) : '—', ' km',
              route ? cap(SHAPE_LABEL[routeShape] || 'open distance') + ', ' + fmt(summary.track_distance / 1000, 0) + ' km flown, ' +
@@ -462,25 +467,27 @@
       figure('Airtime', duration(summary.duration), '', summary.takeoff_time + ' – ' + summary.landing_time + '. ' + sampling),
       figure('Mean climb', fmt(climbRate, 2, { plus: true }), ' m/s', th.length + ' climbs' + (!coarse ? ', ' + fmt(totalTurns, 0) + ' turns' : '') +
              '. Height gained while circling, over the time spent circling.', 'mean_climb'),
+      // Where it came from in the label, as a forecast says it: the speed alone left the
+      // direction in the ⓘ.
+      figure(a.wind ? 'Wind from ' + a.wind.cardinal : 'Wind', a.wind ? fmt(a.wind.speed, 1) : '—', ' m/s',
+        a.wind ? 'From ' + a.wind.cardinal + ', averaged over ' + withWind + ' climbs. Inferred, not measured: while circling the glider\'s own airspeed averages out and the track drifts with the air. Climbs flown fewer than two full turns, or in both directions, are left out.' : 'Too few circled climbs to sound the wind.')
+    ];
+    var moreFigs = [
       figure('Height gained', spaced(summary.total_gain), ' m', 'Best single climb ' + fmt(summary.max_gain, 0) + ' m. ' + altitude),
       ceiling[0] === 'ceiling used'
         ? figure('Of cloudbase', ceiling[1].replace('%', ''), '%', cap(ceiling[3]) + '.', 'ceiling_used')
         : figure('Highest', ceiling[1], ' m', cap(ceiling[3]) + '.')
     ];
     if (perf) {
-      figs.push(figure('Wing’s glide', fmt(perf.air_ld, 1) + '&thinsp;:&thinsp;1', '',
+      moreFigs.push(figure('Wing’s glide', fmt(perf.air_ld, 1) + '&thinsp;:&thinsp;1', '',
         'The median glide through the air at ' + fmt(perf.median_airspeed, 0) + ' km/h, the wind taken out; ' + fmt(perf.ground_ld, 1) +
         ':1 over the ground. The wind is the one sounded from ' + field.soundings.length + ' circled climbs, which this flight supports to about ' +
         fmt(perf.confidence, 0, { percent: true }) + '.' +
         (curve && curve.best_glide && curve.monotone ? ' Your best glides came at about ' + fmt(curve.best_glide[0], 0) + ' km/h, where the wing returned ' +
          fmt(curve.best_glide[1], 1) + ':1.' : '')));
     }
-    // Where it came from in the label, as a forecast says it: the speed alone left the
-    // direction in the ⓘ.
-    figs.push(figure(a.wind ? 'Wind from ' + a.wind.cardinal : 'Wind', a.wind ? fmt(a.wind.speed, 1) : '—', ' m/s',
-      a.wind ? 'From ' + a.wind.cardinal + ', averaged over ' + withWind + ' climbs. Inferred, not measured: while circling the glider\'s own airspeed averages out and the track drifts with the air. Climbs flown fewer than two full turns, or in both directions, are left out.' : 'Too few circled climbs to sound the wind.'));
     if (tow) {
-      figs.push(figure('Off tow at', spaced(tow.finish_altitude), ' m',
+      moreFigs.push(figure('Off tow at', spaced(tow.finish_altitude), ' m',
         fmt(tow.altitude_change, 0, { plus: true }) + ' m in ' + shortDuration(tow.duration) + ' at ' + fmt(tow.average_climb, 2, { plus: true }) +
         ' m/s, flown almost straight' + (tow.swept_turns !== null ? ' (' + fmt(tow.swept_turns, 1) + ' turns of heading)' : '') +
         '. Kept out of the thermal statistics and the wind estimate.'));
@@ -522,7 +529,7 @@
 
     var result = TV.debrief.build(a, { route: route, weather: weather, clearance: clearance, valley: valley, flightPlan: options.flightPlan || null });
     var sources = TV.insolation.sources(a, terrain);
-    var debriefSection = debriefCards(result, uid, sample, contextFacts(a, clearance, terrain), meteo ? '' : meteoReason(a, now));
+    var debriefSection = debriefCards(result, uid, sample, contextFacts(a, clearance, terrain), meteo ? '' : meteoReason(a, now), moreFigs);
     var use = M.ceilingUse(a, weather);
     var compare = [['scored-km', route ? pyFloat(R(route.distance / 1000.0, 2)) : null],
                    ['mean-climb', th.length ? pyFloat(R(climbRate, 2)) : null],
@@ -542,7 +549,7 @@
     var sparkLegend = '<ul class="legend legend-row spark-legend"><li>Over time:</li><li><i style="background:var(--sink-1)"></i>Sinking</li>' +
       '<li><i style="background:var(--neutral)"></i>Around zero</li><li><i style="background:var(--climb-1)"></i>Climbing</li>' +
       '<li><i style="background:var(--climb-2)"></i>Climbing hard</li></ul>';
-    var ldLegend = 'Glide ratio over the ground, so it carries the wind as well as the wing; the wing\'s own is the key number above. Bar colours: ' +
+    var ldLegend = 'Glide ratio over the ground, so it carries the wind as well as the wing; the wing\'s own is in the debrief. Bar colours: ' +
       ['under 5', '5–7', '7–9', '9–12', 'over 12'].map(function (t, i) { return '<span class="sw" style="background:var(--ld-' + (i + 1) + ')"></span>' + t; }).join(', ') + '.';
 
     // The page's title while this flight is the one shown (`flightTabs.show`, page/report.js).
