@@ -185,6 +185,7 @@ function loadAirspace(root, scene) {
   var credits = [];
   var found = airspaceJson(href + 'index.json').then(function (index) {
     scene.airspaceColours = index.colours || {};
+    scene.airspaceClasses = index.classes || [];
     var names = Object.keys(index.files || {}).filter(function (name) {
       return overlaps(index.files[name].bbox);
     });

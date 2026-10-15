@@ -635,6 +635,40 @@ html[data-help="off"] .m3-help { display: none; }
   font: 600 14px/1 "Noto Sans", ui-sans-serif, system-ui, sans-serif; color: var(--ink-2); white-space: nowrap; }
 .merged-view .m3-layers-panel[hidden] { display: none; }
 .merged-view .m3-layers-panel .view3d-seg { justify-self: start; }
+/* The airspace split button and its menu: the kinds with their colour and count, the
+   floor, the page's own rows (the planner's hours), and what is shown with a reset. */
+.merged-view .m3-airspaces { position: relative; display: flex; }
+.merged-view .view3d-airspace .m3-chev { width: 30px; padding: 0; }
+.merged-view .view3d-airspace .m3-chev svg { transition: transform .15s; }
+.merged-view .view3d-airspace .m3-chev[aria-expanded="true"] svg { transform: rotate(180deg); }
+.merged-view .m3-airspace-menu { position: absolute; top: calc(var(--mh) + 8px); left: 0; z-index: 5;
+  width: 300px; max-width: calc(100vw - 90px); box-sizing: border-box; display: grid; gap: 6px;
+  padding: 10px 12px; border-radius: 12px; background: var(--float);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  border: 1px solid var(--float-edge); box-shadow: var(--float-shadow);
+  font: 500 14px/1.3 "Noto Sans", ui-sans-serif, system-ui, sans-serif; color: var(--ink);
+  overflow-y: auto; overscroll-behavior: contain; }
+.merged-view .m3-airspace-menu[hidden] { display: none; }
+.merged-view .m3-drop-head { font-weight: 600; color: var(--ink-2); margin-top: 2px; }
+.merged-view .m3-asp-kinds { display: grid; gap: 2px; }
+.merged-view .m3-asp-kinds label { display: flex; align-items: center; gap: 8px; min-height: 28px; cursor: pointer; }
+.merged-view .m3-asp-kinds label.is-empty { color: var(--ink-2); opacity: .6; cursor: default; }
+.merged-view .m3-asp-kinds input, .merged-view .m3-airspace-extra input[type="checkbox"] {
+  width: 18px; height: 18px; margin: 0; accent-color: var(--accent); flex: none; }
+.merged-view .m3-asp-kinds i { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+.merged-view .m3-asp-kinds b { margin-left: auto; font-weight: 500; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.merged-view .m3-asp-floor { display: flex; align-items: center; gap: 10px; }
+.merged-view .m3-asp-floor input { flex: 1; min-width: 0; accent-color: var(--accent); }
+.merged-view .m3-asp-floor-out { color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.merged-view .m3-asp-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  border-top: 1px solid var(--rule); padding-top: 8px; margin-top: 2px; color: var(--ink-2); }
+.merged-view .m3-airspace-menu .m3-asp-reset { height: 34px; padding: 0 12px; }
+/* On a phone the menu hangs from the corner itself, clear of the rail on the right. */
+@media (max-width: 640px) {
+  .merged-view .m3-airspaces { position: static; }
+  .merged-view .m3-airspace-menu { top: calc(var(--mh) + 8px); left: 0; width: auto; right: auto;
+    max-width: calc(100vw - 80px); }
+}
 /* On a phone the top-left row is one line beside the compass, down to 360 px wide. */
 @media (max-width: 640px) {
   .merged-view .m3-corner-row { gap: 6px; }
@@ -1300,6 +1334,7 @@ function loadAirspace(root, scene) {
   var credits = [];
   var found = airspaceJson(href + 'index.json').then(function (index) {
     scene.airspaceColours = index.colours || {};
+    scene.airspaceClasses = index.classes || [];
     var names = Object.keys(index.files || {}).filter(function (name) {
       return overlaps(index.files[name].bbox);
     });
@@ -1606,7 +1641,8 @@ function initView3d(root, cursorTrack, preset) {
     fullscreen: icon('<path d="M3.5 7.5v-4h4M12.5 3.5h4v4M16.5 12.5v4h-4M7.5 16.5h-4v-4"/>'),
     reset: icon('<path d="M4.6 11.5A5.6 5.6 0 1 0 6 6.1"/><path d="M5.6 3v3.3h3.3"/>'),
     // Sheets stacked: the ground under the map, and how tall it is drawn.
-    layers: icon('<path d="M10 3 2.5 7 10 11l7.5-4z"/><path d="M2.5 10.5 10 14.5l7.5-4M2.5 14 10 18l7.5-4"/>')
+    layers: icon('<path d="M10 3 2.5 7 10 11l7.5-4z"/><path d="M2.5 10.5 10 14.5l7.5-4M2.5 14 10 18l7.5-4"/>'),
+    chevron: icon('<path d="M6 8l4 4 4-4"/>')
   };
   var PAUSE_ICON = '<svg width="11" height="12" viewBox="0 0 11 12" aria-hidden="true">' +
     '<path d="M1.5 1h3v10h-3zM6.5 1h3v10h-3z" fill="currentColor"/></svg>';
@@ -1840,16 +1876,28 @@ function initView3d(root, cursorTrack, preset) {
             '<span>Ground</span><div class="view3d-seg m3-grounds" role="group" aria-label="Ground"></div>' +
             '<span>Height</span><div class="view3d-seg m3-verticals" role="group" aria-label="Vertical exaggeration"></div>' +
           '</div></div>' +
-        (hasAirspace || alwaysAirspace ?
-          // On a map that is its airspace (the planner's) the switch starts on, and hides it.
+        (hasAirspace || alwaysAirspace || noAirspace ?
+          // The switch, and beside it what of the airspace to draw: one split button, its
+          // menu holding the kinds, the floor, and whatever the page adds (the planner's
+          // hours, `.m3-airspace-extra`). On a map that is its airspace (the planner's) the
+          // switch starts on, and hides it.
+          '<div class="m3-airspaces">' +
           '<div class="view3d-seg view3d-airspace" role="group" aria-label="Airspace">' +
-          '<button type="button" data-m3="airspace"' + (alwaysAirspace ? ' class="is-on" aria-pressed="true"' : ' aria-pressed="false"') +
-          ' title="' + airspaceWhy + '"' +
-          ' aria-label="' + airspaceWhy + '">Airspaces</button></div>' :
-         noAirspace ?
-          '<div class="view3d-seg view3d-airspace" role="group" aria-label="Airspace">' +
-          '<button type="button" data-m3="airspace" aria-pressed="false" disabled' +
-          ' title="' + airspaceWhy + '" aria-label="' + airspaceWhy + '">Airspaces</button></div>' : '') +
+          '<button type="button" data-m3="airspace"' +
+          (alwaysAirspace ? ' class="is-on" aria-pressed="true"' : ' aria-pressed="false"') +
+          (noAirspace ? ' disabled' : '') +
+          ' title="' + airspaceWhy + '" aria-label="' + airspaceWhy + '">Airspaces</button>' +
+          '<button type="button" data-m3="airspace-menu" class="m3-chev" aria-expanded="false"' +
+          ' aria-haspopup="true" title="Which airspace to draw" aria-label="Which airspace to draw"' +
+          (noAirspace ? ' disabled' : '') + '>' + ICON.chevron + '</button></div>' +
+          '<div class="m3-drop m3-airspace-menu" hidden>' +
+            '<span class="m3-drop-head">Show</span><div class="m3-asp-kinds"></div>' +
+            '<span class="m3-drop-head">Floor at or below</span>' +
+            '<div class="m3-asp-floor"><input type="range" min="0" step="50" aria-label="Draw zones with a floor at or below">' +
+            '<span class="m3-asp-floor-out"></span></div>' +
+            '<div class="m3-asp-foot"><span class="m3-asp-count"></span>' +
+            '<button type="button" class="m3-asp-reset">Reset</button></div>' +
+          '</div></div>' : '') +
         (hasPhases ?
           '<div class="view3d-seg view3d-labels" role="group" aria-label="Phase labels">' +
           '<button type="button" data-m3-label="climb" aria-pressed="false"' +
@@ -2316,6 +2364,13 @@ function initView3d(root, cursorTrack, preset) {
       // none before there is one: started from those, not flashed in full first.
       var boxes = (hasAirspace || alwaysAirspace)
         ? boxesFrom(handle.drawnAirspaces ? handle.drawnAirspaces() : scene.airspaces) : [];
+      // The airspace menu's own cut, on top of the page's filter: kinds switched off, and
+      // the highest floor drawn (Infinity: every floor). `boxShown` is the one test.
+      var kindsOff = {}, floorLimit = Infinity;
+      function boxShown(d) {
+        return !kindsOff[d.space.k] && (floorLimit === Infinity || d.floor <= floorLimit) &&
+          (!airspaceFilter || airspaceFilter(d.space));
+      }
 
       // ---- compared flights ----------------------------------------------------------
       // Handed in by the page's comparison (`setOthers`, from `render_html`): the other
@@ -2494,8 +2549,7 @@ function initView3d(root, cursorTrack, preset) {
 
       function layers() {
         var out = [];
-        var drawn = airspaceFilter ? same('airspace', boxes.filter(function (d) { return airspaceFilter(d.space); }))
-                                   : boxes;
+        var drawn = same('airspace', boxes.filter(boxShown));
         if (airspaceOn && drawn.length) {
           out.push(new deck.SolidPolygonLayer({
             id: 'airspace', data: drawn, extruded: true, wireframe: false, pickable: true,
@@ -3686,6 +3740,103 @@ function initView3d(root, cursorTrack, preset) {
       view.addEventListener('keydown', function (event) {
         if (event.key === 'Escape' && !layersPanel.hidden) { layersOpen(false); layersButton.focus(); }
       });
+
+      // The airspace menu: which kinds, how low a floor, and the page's own rows (the
+      // planner's hours) moved in from `.m3-airspace-extra` — given back on `dispose`, so a
+      // rebuilt map finds them again. Counts are of the zones this map has to draw: near
+      // the flight, or near the planner's task.
+      var aspMenu = (function () {
+        var menu = view.querySelector('.m3-airspace-menu');
+        if (!menu) return { update: function () {}, reset: function () {} };
+        var chev = view.querySelector('[data-m3="airspace-menu"]');
+        var kindsHost = menu.querySelector('.m3-asp-kinds');
+        var slider = menu.querySelector('.m3-asp-floor input');
+        var floorOut = menu.querySelector('.m3-asp-floor-out');
+        var count = menu.querySelector('.m3-asp-count');
+        var extra = host.querySelector('.m3-airspace-extra');
+        if (extra) { menu.insertBefore(extra, menu.querySelector('.m3-asp-foot')); extra.hidden = false; }
+        var colours = scene.airspaceColours || {};
+        var kinds = (scene.airspaceClasses || []).slice();
+        boxes.forEach(function (d) {
+          if (!kinds.some(function (k) { return k[0] === d.space.k; })) kinds.push([d.space.k, d.space.k]);
+        });
+        var boxesOf = {};
+        kinds.forEach(function (k) {
+          var row = document.createElement('label');
+          row.innerHTML = '<input type="checkbox" checked><i style="background:' +
+            (colours[k[0]] || '#888888') + '"></i><span></span><b></b>';
+          row.querySelector('span').textContent = k[1];
+          row.querySelector('input').addEventListener('change', function (event) {
+            kindsOff[k[0]] = !event.target.checked;
+            changed();
+          });
+          kindsHost.appendChild(row);
+          boxesOf[k[0]] = row;
+        });
+        function top() {
+          var high = 0;
+          boxes.forEach(function (d) { high = Math.max(high, d.floor); });
+          return Math.max(50, Math.ceil(high / 50) * 50);
+        }
+        slider.addEventListener('input', function () {
+          floorLimit = Number(slider.value) >= Number(slider.max) ? Infinity : Number(slider.value);
+          changed();
+        });
+        function changed() {
+          update();
+          if (!airspaceOn) { var a = view.querySelector('[data-m3="airspace"]'); if (a) a.click(); }
+          else refresh();
+        }
+        function update() {
+          // Before the planner has a task nothing is drawn, and the kinds can still be set.
+          var planned = handle.planned ? handle.planned() : true;
+          var per = {};
+          boxes.forEach(function (d) { per[d.space.k] = (per[d.space.k] || 0) + 1; });
+          Object.keys(boxesOf).forEach(function (k) {
+            var row = boxesOf[k], n = per[k] || 0, empty = planned && !n;
+            row.querySelector('b').textContent = planned ? n : '';
+            row.querySelector('input').checked = !kindsOff[k];
+            row.querySelector('input').disabled = empty;
+            row.classList.toggle('is-empty', empty);
+          });
+          slider.max = top();
+          slider.value = floorLimit === Infinity ? slider.max : Math.min(floorLimit, slider.max);
+          floorOut.textContent = floorLimit === Infinity ? 'every floor' : floorLimit + ' m';
+          count.textContent = planned ? boxes.filter(boxShown).length + ' shown' : 'drawn along a task';
+        }
+        function open(on) {
+          menu.hidden = !on;
+          chev.setAttribute('aria-expanded', on ? 'true' : 'false');
+          if (on) {
+            update();
+            // No further than the map's foot: the map clips what hangs below it, and on a
+            // phone the menu is taller than the room under the button.
+            menu.style.maxHeight = '';
+            var room = view.getBoundingClientRect().bottom - menu.getBoundingClientRect().top - 10;
+            if (menu.scrollHeight > room) menu.style.maxHeight = Math.max(160, room) + 'px';
+          }
+        }
+        chev.addEventListener('click', function () { open(menu.hidden); });
+        document.addEventListener('pointerdown', function (event) {
+          if (!menu.hidden && !event.target.closest('.m3-airspaces')) open(false);
+        }, true);
+        view.addEventListener('keydown', function (event) {
+          if (event.key === 'Escape' && !menu.hidden) { open(false); chev.focus(); }
+        });
+        function reset() {
+          kindsOff = {}; floorLimit = Infinity;
+          // The page's rows go back to their start too: every switch in them off.
+          if (extra) extra.querySelectorAll('input[type="checkbox"]').forEach(function (box) {
+            if (box.checked) { box.checked = false; box.dispatchEvent(new Event('change', { bubbles: true })); }
+          });
+          update(); refresh();
+        }
+        menu.querySelector('.m3-asp-reset').addEventListener('click', reset);
+        update();
+        return { update: update, reset: reset, extra: extra,
+                 state: function () { return { off: Object.assign({}, kindsOff), floor: floorLimit }; },
+                 restore: function (st) { kindsOff = Object.assign({}, st.off); floorLimit = st.floor; update(); refresh(); } };
+      })();
       function label() {
         view.querySelectorAll('.m3-grounds button').forEach(function (b) {
           var on = b.dataset.ground === basemap;
@@ -3873,7 +4024,7 @@ function initView3d(root, cursorTrack, preset) {
                  pitch: map.getPitch(), basemap: basemap, vertical: vertical,
                  labels: { climb: labels.climb, glide: labels.glide }, airspace: airspaceOn,
                  replay: !!(replay && !replay.hidden), from: from, cutoff: cutoff, speed: speed,
-                 follow: following };
+                 follow: following, airspaceMenu: aspMenu.state ? aspMenu.state() : null };
       };
       api.dispose = function () {
         pause();
@@ -3884,6 +4035,7 @@ function initView3d(root, cursorTrack, preset) {
         handle.__mergedFilterHooks = (handle.__mergedFilterHooks || []).filter(function (h) {
           return h !== filterHook;
         });
+        if (aspMenu.extra) { aspMenu.extra.hidden = true; host.appendChild(aspMenu.extra); }
         try { map.remove(); } catch (error) { /* a dead context can throw on the way out */ }
         view.remove();
       };
@@ -3902,6 +4054,7 @@ function initView3d(root, cursorTrack, preset) {
         });
         var a = view.querySelector('[data-m3="airspace"]');
         if (a && restore.airspace !== airspaceOn) a.click();
+        if (restore.airspaceMenu && aspMenu.restore) aspMenu.restore(restore.airspaceMenu);
         speed = restore.speed; showSpeed();
         if (restore.replay) { openReplay(true); pause(); }
         from = restore.from;
@@ -3919,7 +4072,7 @@ function initView3d(root, cursorTrack, preset) {
         };
         handle.setAirspaceFilter.__merged = true;
       }
-      function filterHook(fn) { airspaceFilter = fn || null; refresh(); }
+      function filterHook(fn) { airspaceFilter = fn || null; aspMenu.update(); refresh(); }
       handle.__mergedFilterHooks = (handle.__mergedFilterHooks || []).concat([filterHook]);
       // A click that is not a drag, as a place on the ground: what the planner drops a
       // turnpoint with. MapLibre's own `click` already refuses a pointer that moved.
@@ -4010,6 +4163,7 @@ function initView3d(root, cursorTrack, preset) {
         // The zones to draw instead of the scene's own: the planner's, near its task.
         setAirspaces: function (list) {
           boxes = boxesFrom(list || []);
+          aspMenu.update();
           refresh();
         },
         setRoute: function (walk, points) {
@@ -4031,9 +4185,7 @@ function initView3d(root, cursorTrack, preset) {
           if (styleReady) drawOverlay('shapes', pendingShapes);
         },
         airspaceShown: function () {
-          return airspaceOn ? boxes.filter(function (d) {
-            return !airspaceFilter || airspaceFilter(d.space);
-          }).length : 0;
+          return airspaceOn ? boxes.filter(boxShown).length : 0;
         },
         state: function () {
           return { basemap: basemap, vertical: vertical, labels: labels, airspace: airspaceOn,

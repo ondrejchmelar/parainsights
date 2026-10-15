@@ -292,7 +292,7 @@
     if (merged && merged.setAirspaces) merged.setAirspaces(nearNow);
     if (window.__aspRefilter) window.__aspRefilter();
   }
-  // What the airspace page's Layers panel counts: these, not the page's whole payload.
+  // What the map's airspace menu counts: these, not the page's whole payload.
   handle.drawnAirspaces = function () { return nearNow; };
   window.__plannerTask = function () { return points.length >= 2 ? xctrackTask() : null; };
   // For the tests: the import path a file, a code and a QR code all end in.

@@ -101,17 +101,23 @@ STYLE = """
   border: 1px solid var(--float-edge); border-radius: 14px; box-shadow: var(--float-shadow); }
 .float h2 { font-size: 20px; margin: 0; display: flex; align-items: center; gap: 4px; }
 .plan-panel { position: relative; padding: 16px 20px; overflow-y: auto; min-height: 0; flex: 0 1 auto; }
-.asp-layers { padding: 0; flex: none; max-height: 60%; overflow-y: auto; }
-/* Folded, nothing to scroll, and the ⓘ's bubble must hang out below it, not be cut off. */
-.asp-layers:not([open]) { overflow: visible; }
-.asp-layers > summary { list-style: none; display: flex; align-items: center; justify-content: space-between;
-  gap: 10px; padding: 10px 20px; min-height: 52px; cursor: pointer; }
-.asp-layers > summary::-webkit-details-marker { display: none; }
-.asp-layers > summary svg { transition: transform .15s; margin-left: -4px; }
-.asp-layers[open] > summary svg { transform: rotate(90deg); }
-.asp-layers-count { color: var(--ink-2); font-size: 15px; }
-.asp-layers .asp-controls { padding: 0 20px; }
-.asp-layers .asp-when-row { padding-bottom: 14px; }
+.m3-airspace-extra { display: grid; gap: 6px; }
+.m3-airspace-extra[hidden] { display: none; }
+.m3-airspace-extra .asp-controls { margin: 0; gap: 6px 8px; font-size: 14px; }
+.m3-airspace-extra .chk { display: inline-flex; align-items: center; gap: 8px; min-height: 28px; }
+.m3-airspace-extra input[type="datetime-local"] { font: inherit; height: 34px; padding: 0 6px; box-sizing: border-box;
+  border: 1px solid var(--edge); border-radius: 8px; background: var(--panel); color: var(--ink); min-width: 0; }
+.m3-airspace-extra .asp-readout { font-size: 14px; }
+.m3-asp-about { display: inline-flex; align-items: center; gap: 2px; }
+.m3-airspace-extra .asp-when-row .chk { flex: 1 1 auto; }
+.m3-airspace-extra input[type="datetime-local"] { flex: 1 1 150px; }
+.m3-airspace-extra .asp-when-row .btn { height: 34px; }
+/* The ⓘ in the map's menu, not one of the map's buttons, whose rule it otherwise meets. */
+.m3-airspace-extra button.info { position: relative; height: 1.3em; width: 1.3em; min-width: 13px; min-height: 13px;
+  padding: 0; border-radius: 50%; border: 1.5px solid var(--ink-2); background: none; color: var(--ink-2);
+  box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; font: italic 700 0.66em/1 Georgia, serif; cursor: help; }
+.m3-airspace-extra button.info::after { inset: -12px; }
+.m3-airspace-extra button.info:hover { background: none; color: var(--ink); border-color: var(--ink); }
 .asp-get-float { margin-top: auto; flex: none; display: flex; align-items: center; justify-content: space-between;
   gap: 12px; padding: 8px 8px 8px 18px; font-weight: 600; }
 .asp-get-label { display: inline-flex; align-items: center; }
@@ -149,14 +155,11 @@ STYLE = """
      band after it; the download alone stays a card. */
   .asp-floats { position: static; width: auto; display: flex; gap: 0; margin-top: 0; }
   .float { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--panel); box-shadow: none; }
-  .plan-panel, .asp-layers { position: relative; margin: 0 -14px; border-radius: 0;
+  .plan-panel { position: relative; margin: 0 -14px; border-radius: 0;
     border-width: 0 0 1px; border-color: var(--rule); }
   .plan-panel { z-index: 7; padding: 16px 14px; }
-  .asp-layers > summary { padding: 10px 14px; }
-  .asp-layers .asp-controls { padding: 0 14px; }
   /* The dates wrap between themselves; at one line each the table ran off a phone. */
   .asp-src-when { white-space: normal; }
-  .asp-layers { max-height: none; }
   /* Full screen on a phone: the map on the top part, the panels scrolling under it — not
      over it, where they hid the map's own bar and the button that leaves full screen. */
   .asp-stage:fullscreen .asp-holder, .asp-stage.is-maximised .asp-holder { height: 58%; }
@@ -672,6 +675,13 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
                f'<a class="btn primary" download="{_escape((openair_href or openair_name).rsplit("/", 1)[-1])}" '
                f'href="{_escape(openair_href or openair_name)}">'
                f'{common.icon(common.ICONS["download"])}Download</a></div>')
+    # The airspace map's own menu (`map3d`, the ▾ beside Airspaces) holds the kinds and
+    # the floor; this page adds its hours and what the map is, moved in when the map is
+    # built. They were a Layers panel under the task until October 2026.
+    extra = ('<div class="m3-airspace-extra" hidden>'
+             f'<span class="m3-drop-head">Hours</span>{when_control(WHEN_NOTE)}'
+             f'<span class="m3-drop-head m3-asp-about">About this map{common.info(about, "About this map")}</span>'
+             '</div>')
     task = ""
     if plan_bar:
         task = (f'<div class="float plan-panel"><h2>Task{common.info("Press Draw a task, then click the map to drop turnpoints; drag, pinch and twist still move the view. The route is scored as XContest would and checked against every zone it crosses.")}</h2>'
@@ -683,15 +693,11 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
        sheet across its foot. -->
   <div class="asp-stage">
     <div class="asp-holder">
-      {_map(airspaces, project, scene, uid)}
+      {_map(airspaces, project, scene, uid).replace('<div class="renderer-host">', '<div class="renderer-host">' + extra, 1)}
       <div class="asp-name" id="asp-name"></div>
     </div>
     <div class="asp-floats">
       {task}
-      <details class="float asp-layers">
-        <summary><h2>{common.icon(common.ICONS["right"])}Layers{common.info(about, "About this map")}</h2><span class="asp-layers-count" id="asp-count"></span></summary>
-        {controls(top, flat=False).replace('<span class="asp-readout" id="asp-count"></span>', '', 1)}
-      </details>
       {get}
     </div>
   </div>

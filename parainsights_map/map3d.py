@@ -104,6 +104,40 @@ STYLE = """
   font: 600 14px/1 "Noto Sans", ui-sans-serif, system-ui, sans-serif; color: var(--ink-2); white-space: nowrap; }
 .merged-view .m3-layers-panel[hidden] { display: none; }
 .merged-view .m3-layers-panel .view3d-seg { justify-self: start; }
+/* The airspace split button and its menu: the kinds with their colour and count, the
+   floor, the page's own rows (the planner's hours), and what is shown with a reset. */
+.merged-view .m3-airspaces { position: relative; display: flex; }
+.merged-view .view3d-airspace .m3-chev { width: 30px; padding: 0; }
+.merged-view .view3d-airspace .m3-chev svg { transition: transform .15s; }
+.merged-view .view3d-airspace .m3-chev[aria-expanded="true"] svg { transform: rotate(180deg); }
+.merged-view .m3-airspace-menu { position: absolute; top: calc(var(--mh) + 8px); left: 0; z-index: 5;
+  width: 300px; max-width: calc(100vw - 90px); box-sizing: border-box; display: grid; gap: 6px;
+  padding: 10px 12px; border-radius: 12px; background: var(--float);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  border: 1px solid var(--float-edge); box-shadow: var(--float-shadow);
+  font: 500 14px/1.3 "Noto Sans", ui-sans-serif, system-ui, sans-serif; color: var(--ink);
+  overflow-y: auto; overscroll-behavior: contain; }
+.merged-view .m3-airspace-menu[hidden] { display: none; }
+.merged-view .m3-drop-head { font-weight: 600; color: var(--ink-2); margin-top: 2px; }
+.merged-view .m3-asp-kinds { display: grid; gap: 2px; }
+.merged-view .m3-asp-kinds label { display: flex; align-items: center; gap: 8px; min-height: 28px; cursor: pointer; }
+.merged-view .m3-asp-kinds label.is-empty { color: var(--ink-2); opacity: .6; cursor: default; }
+.merged-view .m3-asp-kinds input, .merged-view .m3-airspace-extra input[type="checkbox"] {
+  width: 18px; height: 18px; margin: 0; accent-color: var(--accent); flex: none; }
+.merged-view .m3-asp-kinds i { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+.merged-view .m3-asp-kinds b { margin-left: auto; font-weight: 500; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.merged-view .m3-asp-floor { display: flex; align-items: center; gap: 10px; }
+.merged-view .m3-asp-floor input { flex: 1; min-width: 0; accent-color: var(--accent); }
+.merged-view .m3-asp-floor-out { color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.merged-view .m3-asp-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  border-top: 1px solid var(--rule); padding-top: 8px; margin-top: 2px; color: var(--ink-2); }
+.merged-view .m3-airspace-menu .m3-asp-reset { height: 34px; padding: 0 12px; }
+/* On a phone the menu hangs from the corner itself, clear of the rail on the right. */
+@media (max-width: 640px) {
+  .merged-view .m3-airspaces { position: static; }
+  .merged-view .m3-airspace-menu { top: calc(var(--mh) + 8px); left: 0; width: auto; right: auto;
+    max-width: calc(100vw - 80px); }
+}
 /* On a phone the top-left row is one line beside the compass, down to 360 px wide. */
 @media (max-width: 640px) {
   .merged-view .m3-corner-row { gap: 6px; }

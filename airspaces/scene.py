@@ -241,6 +241,8 @@ def build(airspaces, *, terrain=None, tiles: bool = True) -> dict:
         "tiles": dict(view3d.TILE_SOURCES) if tiles else None,
         "airspaces": rings(airspaces),
         "airspaceColours": {key: colour for key, _, colour in CLASSES},
+        # The kinds the map's airspace menu offers, in this order, with their names.
+        "airspaceClasses": [[key, label] for key, label, _ in CLASSES],
         # Nearly flat and square to north. The flight view's three-quarter camera is the
         # angle a pilot recognises over one valley; over 500 km of country it turns the
         # far half of the map into a sliver, and there is no relief at this scale for the

@@ -243,7 +243,8 @@ def write_index(folder: Path) -> dict:
                             "version": data.get("version", "")}
     from .render_html import CLASSES
 
-    index = {"files": files, "colours": {key: colour for key, _, colour in CLASSES}}
+    index = {"files": files, "colours": {key: colour for key, _, colour in CLASSES},
+             "classes": [[key, label] for key, label, _ in CLASSES]}
     (folder / INDEX).write_text(json.dumps(index, separators=(",", ":")), encoding="utf-8")
     return index
 

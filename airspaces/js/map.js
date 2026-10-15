@@ -37,35 +37,22 @@
   function wire(handle) {
   // The filter is a predicate handed to the map, not a pass over the DOM: on the flat
   // map every airspace was an SVG element with a `display` to set, and here they are
-  // entries in a payload the map draws from (`map3d` follows `setAirspaceFilter`).
+  // entries in a payload the map draws from (`map3d` follows `setAirspaceFilter`). The
+  // kinds and the floor are the map's own menu's; this page adds the hours, whose row
+  // the map moves into that menu.
   function refilter() {
-    var on = {};
-    document.querySelectorAll('[data-asp-class]').forEach(function (box) {
-      on[box.dataset.aspClass] = box.checked;
-    });
-    var slider = document.getElementById('asp-floor');
-    var limit = slider ? Number(slider.value) : Infinity;
-    var top = slider ? Number(slider.dataset.top) : 0;
-    var out = document.getElementById('asp-readout');
-    if (out) out.textContent = limit >= top ? 'every floor'
-      : 'floor at or below ' + limit + ' m';
     var when = window.aspHours ? window.aspHours.chosen() : null;
     var holidays = window.aspHours ? window.aspHours.holidays() : {};
     function open(space) {
       return !when || window.aspHours.activeAt(space.w, when, holidays);
     }
-    var shown = 0, dimmed = 0;
+    var dimmed = 0;
     // What the map draws: with a planner, the zones near its task — and before there is a
     // task, nothing, while the hours line still speaks for every field on the page.
     var planned = handle.planned ? handle.planned() : true;
     var spaces = ((planned && handle.drawnAirspaces) ? handle.drawnAirspaces()
                                                      : handle.scene().airspaces) || [];
-    for (var i = 0; i < spaces.length; i++) {
-      if (on[spaces[i].k] === false || spaces[i].f > limit) continue;
-      if (open(spaces[i])) shown++; else dimmed++;
-    }
-    var count = document.getElementById('asp-count');
-    if (count) count.textContent = planned ? shown + ' shown' : 'drawn along a task';
+    for (var i = 0; i < spaces.length; i++) if (!open(spaces[i])) dimmed++;
     var says = document.getElementById('asp-when-out');
     if (says) {
       says.textContent = !when ? ''
@@ -73,31 +60,12 @@
                   : 'every field with published hours is open at '
                     + window.aspHours.label(when));
     }
-    handle.setAirspaceFilter(function (space) {
-      return on[space.k] !== false && space.f <= limit && open(space);
-    });
+    handle.setAirspaceFilter(when ? open : null);
   }
-  document.querySelectorAll('[data-asp-class]').forEach(function (box) {
-    box.addEventListener('change', refilter);
-  });
-  var slider = document.getElementById('asp-floor');
-  if (slider) slider.addEventListener('input', refilter);
   var whenBox = document.getElementById('asp-when-on');
   var whenInput = document.getElementById('asp-when');
   if (whenBox) whenBox.addEventListener('change', refilter);
   if (whenInput) whenInput.addEventListener('input', refilter);
-
-  var reset = document.getElementById('asp-reset');
-  if (reset) reset.addEventListener('click', function () {
-    document.querySelectorAll('[data-asp-class]').forEach(function (box) {
-      box.checked = true;
-    });
-    if (slider) slider.value = slider.dataset.top;
-    if (whenBox) whenBox.checked = false;
-    refilter();
-    var act = panel.querySelector('[data-m3="reset"]');
-    if (act) act.click();
-  });
 
   refilter();
   window.__aspRefilter = refilter;
