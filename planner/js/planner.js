@@ -608,8 +608,7 @@
 
   // The takeoff time: the sun over the task (or the map's middle, before there is one) at
   // that moment, handed to the map as the table a flight's map is lit from (`TV.sun`).
-  // The reader's own clock; it opens on today at 11:00, or the next hour after that,
-  // and tomorrow once the afternoon is gone. The aerodrome hours follow it.
+  // The reader's own clock; it opens on tomorrow at 12:00. The aerodrome hours follow it.
   var takeoff = document.getElementById('plan-takeoff');
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
   function localValue(d) {
@@ -618,8 +617,8 @@
   }
   if (takeoff && !takeoff.value) {
     var start = new Date();
-    if (start.getHours() >= 16) { start.setDate(start.getDate() + 1); start.setHours(11, 0, 0, 0); }
-    else start.setHours(Math.max(11, start.getHours() + 1), 0, 0, 0);
+    start.setDate(start.getDate() + 1);
+    start.setHours(12, 0, 0, 0);
     takeoff.value = localValue(start);
   }
   function sunTable() {
