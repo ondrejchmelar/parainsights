@@ -254,6 +254,40 @@ def test_undo_and_clear_take_the_points_back_off():
 
 
 @needs_chrome
+def test_redo_brings_back_what_undo_took_and_a_clear_can_be_undone():
+    """Undo and redo walk the task's history — a point dropped, a clear — and a new point
+    forgets what was undone. Each tool is disabled when it has nothing to do."""
+    answer = _run(_HARNESS + """
+    function state() {
+      return [turnpoints()].concat(['plan-undo', 'plan-redo', 'plan-clear'].map(function (id) {
+        return document.getElementById(id).disabled; }));
+    }
+    var steps = [state()];
+    tap(0.35, 0.40); tap(0.60, 0.40); tap(0.48, 0.62);
+    steps.push(state());
+    document.getElementById('plan-clear').click(); steps.push(state());
+    document.getElementById('plan-undo').click(); steps.push(state());
+    document.getElementById('plan-undo').click(); steps.push(state());
+    document.getElementById('plan-redo').click(); steps.push(state());
+    document.getElementById('plan-undo').click();
+    tap(0.30, 0.70); steps.push(state());
+    return { steps: steps, label: document.querySelector('#plan-draw span').textContent,
+             pressed: document.getElementById('plan-draw').getAttribute('aria-pressed') };
+    """)
+    # [points, undo disabled, redo disabled, clear disabled]
+    assert answer["steps"] == [
+        [0, True, True, True],      # nothing yet
+        [3, False, True, False],    # three dropped
+        [0, False, True, True],     # cleared
+        [3, False, False, False],   # the clear undone
+        [2, False, False, False],   # and the third point
+        [3, False, False, False],   # redone
+        [3, False, True, False],    # undone, then a new point: nothing left to redo
+    ]
+    assert answer["label"] == "Done" and answer["pressed"] == "true"
+
+
+@needs_chrome
 def test_two_points_are_open_distance_and_not_a_triangle():
     """The degenerate case that a triangle-shaped scorer gets wrong: two points have no
     perimeter, and calling them a flat triangle would multiply an out-and-back by 1.2."""

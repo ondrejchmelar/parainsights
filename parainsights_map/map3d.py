@@ -47,6 +47,11 @@ STYLE = """
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px; pointer-events: none; }
 .merged-view .m3-bottom > * { pointer-events: auto; }
 .merged-view .m3-bottom .view3d-controls { position: static; margin-left: auto; }
+/* The page's own tools, at the middle of the foot (the planner's Draw, undo, redo, clear). */
+.merged-view .m3-mid { position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
+  display: flex; gap: 6px; align-items: center; }
+.merged-view .m3-mid > [hidden] { display: none; }
+.merged-view .m3-mid > * { display: flex; gap: 6px; align-items: center; }
 .merged-view .m3-replay { display: flex; gap: 6px; align-items: center; }
 .merged-view .m3-replay[hidden], .merged-view .m3-time[hidden],
 .merged-view .view3d-controls[hidden] { display: none; }

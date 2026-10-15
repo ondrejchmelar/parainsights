@@ -2098,6 +2098,17 @@
         }
       }, true);
 
+      // The page's own tools at the middle of the map's foot (`.m3-bottom-extra`, the
+      // planner's drawing buttons), moved in from the host and given back on `dispose`.
+      var bottomExtra = host.querySelector('.m3-bottom-extra');
+      if (bottomExtra) {
+        var mid = document.createElement('div');
+        mid.className = 'm3-mid';
+        mid.appendChild(bottomExtra);
+        bottomExtra.hidden = false;
+        view.querySelector('.m3-bottom').appendChild(mid);
+      }
+
       // ---- controls --------------------------------------------------------------------
       var GROUNDS = styles.concat(['off']);
       var VERTICALS = offered.length ? offered : [1, 2, 4];
@@ -2438,6 +2449,7 @@
           return h !== filterHook;
         });
         if (aspMenu.extra) { aspMenu.extra.hidden = true; host.appendChild(aspMenu.extra); }
+        if (bottomExtra) { bottomExtra.hidden = true; host.appendChild(bottomExtra); }
         try { map.remove(); } catch (error) { /* a dead context can throw on the way out */ }
         view.remove();
       };

@@ -52,9 +52,13 @@ def _scoring() -> SimpleNamespace:
 xc = _scoring()
 
 STYLE = """
-.plan-bar { display:flex; gap:8px; margin:14px 0 10px; flex-wrap:wrap; }
-.plan-bar .btn { padding:0 14px; }
-.plan-draw[aria-pressed="true"] { background:var(--ink); color:var(--paper); border-color:var(--ink); }
+/* Draw is the accent on or off; pressed, it says Done and carries a ring. */
+.merged-view .plan-draw { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
+.merged-view .plan-draw:hover { background:var(--accent); filter:brightness(1.06); }
+.merged-view .plan-draw[aria-pressed="true"] { background:var(--accent); border-color:var(--accent);
+  color:var(--on-accent); box-shadow:0 0 0 3px var(--paper), 0 0 0 5px var(--accent); }
+.merged-view .plan-mapbar button:disabled { cursor:default; background:var(--float); }
+.merged-view .plan-mapbar button:disabled svg { opacity:.35; }
 .plan-opts { display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center; margin:0 0 6px; }
 .chk { display:inline-flex; align-items:center; gap:9px; font-size:16px; cursor:pointer; min-height:44px; }
 .chk input { width:20px; height:20px; margin:0; accent-color:var(--accent); }
@@ -155,12 +159,6 @@ def controls() -> str:
     import parainsights_common as common
 
     return (
-        '<div class="plan-bar">'
-        f'<button type="button" class="btn primary plan-draw" id="plan-draw" aria-pressed="false">'
-        "Draw a task</button>"
-        '<button type="button" class="btn" id="plan-undo">Undo</button>'
-        '<button type="button" class="btn" id="plan-clear">Clear</button>'
-        "</div>"
         '<div class="plan-opts">'
         '<label class="chk"><input type="checkbox" id="plan-close"> Closed</label>'
         '<label class="chk"><input type="checkbox" id="plan-fai" checked> FAI areas'
@@ -188,6 +186,34 @@ def controls() -> str:
         # Said only before the first point: the button itself turns into "Drawing — click
         # the map" once pressed.
         '<span class="plan-hint" id="plan-hint" hidden></span>'
+    )
+
+
+UNDO_ICON = '<path d="M7.5 5 4 8.5 7.5 12"/><path d="M4 8.5h8a4 4 0 0 1 0 8H9"/>'
+REDO_ICON = '<path d="M12.5 5 16 8.5 12.5 12"/><path d="M16 8.5H8a4 4 0 0 0 0 8h3"/>'
+CLEAR_ICON = ('<path d="M3.5 5.5h13M8 5.5V3.5h4v2"/>'
+              '<path d="M5.5 5.5l.8 11h7.4l.8-11M8.5 8.5v5M11.5 8.5v5"/>')
+
+
+def map_bar() -> str:
+    """The drawing tools, on the map at the middle of its foot (`map3d` moves
+    `.m3-bottom-extra` there): Draw, in the accent whether on or off, and undo, redo and
+    clear as icons. They were buttons in the Task panel until October 2026."""
+    import parainsights_common as common
+
+    def tool(id_, icon, label):
+        return (f'<button type="button" id="{id_}" class="m3-icon" title="{label}" '
+                f'aria-label="{label}">{common.icon(icon)}</button>')
+
+    return (
+        '<div class="m3-bottom-extra plan-mapbar" hidden>'
+        '<button type="button" class="plan-draw" id="plan-draw" aria-pressed="false">'
+        f'{common.icon(common.ICONS["pencil"])}<span>Draw</span></button>'
+        '<div class="view3d-seg" role="group" aria-label="Edit the task">'
+        + tool("plan-undo", UNDO_ICON, "Undo")
+        + tool("plan-redo", REDO_ICON, "Redo")
+        + tool("plan-clear", CLEAR_ICON, "Clear the task")
+        + "</div></div>"
     )
 
 
@@ -269,7 +295,7 @@ def body(uid: str = "planner", *, scene_panel: str = "") -> str:
   {airspace_html.when_control()}
   {controls()}
   <div class="asp-holder">
-    {scene_panel}
+    {scene_panel.replace('<div class="view3d', map_bar() + '<div class="view3d', 1)}
     <div class="asp-name" id="asp-name"></div>
   </div>
   {results()}

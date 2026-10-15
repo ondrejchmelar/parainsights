@@ -79,11 +79,13 @@ STYLE = """
    On a desktop the Task panel floats over that corner, so they start just right of the
    panels (as the help button does at the bottom); on a phone the panels are under the
    map and they take the corner. */
-@media (min-width: 641px) { .asp-stage .merged-view .m3-corner { left: 406px; } }
+@media (min-width: 901px) { .asp-stage .merged-view .m3-corner { left: 406px; } }
 /* The left of the map is the floating panels' too (380 px from 16 px in), down to the
-   airfield layer's download at the bottom, which hid the help button in the corner: on a
-   desktop it starts just right of them. On a phone the panels are under the map. */
-@media (min-width: 641px) { .asp-stage .merged-view .m3-help-box { margin-left: 396px; } }
+   bottom, which can hide the help button in the corner: on a desktop it starts just right
+   of them. Up to 900 px wide the panels are under the map (the media query below). */
+@media (min-width: 901px) { .asp-stage .merged-view .m3-help-box { margin-left: 396px; } }
+/* The drawing tools at the middle of the map the panels leave free, not of the whole map. */
+@media (min-width: 901px) { .asp-stage .merged-view .m3-mid { left: calc(50% + 198px); } }
 /* Full screen takes the whole stage, the task and layers panels floating over the map as
    they do on a desktop (the map's own button, `fullscreen` in map3d). */
 .asp-stage:fullscreen, .asp-stage.is-maximised { background: var(--paper); width: 100%; height: 100%; }
@@ -118,8 +120,11 @@ STYLE = """
   box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; font: italic 700 0.66em/1 Georgia, serif; cursor: help; }
 .m3-airspace-extra button.info::after { inset: -12px; }
 .m3-airspace-extra button.info:hover { background: none; color: var(--ink); border-color: var(--ink); }
-.asp-get-float { margin-top: auto; flex: none; display: flex; align-items: center; justify-content: space-between;
-  gap: 12px; padding: 8px 8px 8px 18px; font-weight: 600; }
+/* The airfield download, under the map on every screen (it floated at the panel's foot on
+   a desktop until October 2026). */
+.asp-get-float { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin: 16px 0 0; max-width: 480px; padding: 8px 8px 8px 18px; font-weight: 600;
+  background: var(--panel); border: 1px solid var(--rule); border-radius: 14px; }
 .asp-get-label { display: inline-flex; align-items: center; }
 .asp-sources { margin: 24px 0 0; }
 .asp-sources > summary { color: var(--accent); font-weight: 600; cursor: pointer; min-height: 44px; display: flex; align-items: center; }
@@ -169,7 +174,6 @@ STYLE = """
     pointer-events: auto; border-top: 1px solid var(--rule); }
   .asp-stage:fullscreen .asp-floats > *, .asp-stage.is-maximised .asp-floats > * {
     flex: none; overflow: visible; }
-  .asp-get-float { margin-top: 16px; }
 }
 """
 
@@ -626,14 +630,15 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
         )
 
     # The planner draws on the 3D view, so the flat fallback carries no planner.
-    plan_bar, plan_results, plan_attr, plan_lede = "", "", "", ""
+    plan_bar, plan_results, plan_attr, plan_lede, map_bar = "", "", "", "", ""
     if scene is not None:
         from planner import render_html as planner_html
 
         plan_bar, plan_results = planner_html.controls(), planner_html.results()
+        map_bar = planner_html.map_bar()
         plan_attr = " data-planner"
-        plan_lede = (" <strong>Plan a task on the same map:</strong> press <em>Draw a "
-                     "task</em> and click turnpoints, and the route is scored as XContest "
+        plan_lede = (" <strong>Plan a task on the same map:</strong> press <em>Draw</em> "
+                     "and click turnpoints, and the route is scored as XContest "
                      "would and checked against every zone it crosses.")
 
     import parainsights_common as common
@@ -659,7 +664,7 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
              "the task reaches. Hover a zone for its name and limits." + boxes)
     get = ""
     if openair_name:
-        get = (f'<div class="float asp-get-float">'
+        get = (f'<div class="asp-get-float">'
                f'<span class="asp-get-label">Airfield layer for XCTrack'
                + common.info(
                    "Aerodrome zones and traffic circuits XCTrack and XContest leave out "
@@ -684,7 +689,7 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
              '</div>')
     task = ""
     if plan_bar:
-        task = (f'<div class="float plan-panel"><h2>Task{common.info("Press Draw a task, then click the map to drop turnpoints; drag, pinch and twist still move the view. The route is scored as XContest would and checked against every zone it crosses.")}</h2>'
+        task = (f'<div class="float plan-panel"><h2>Task{common.info("Press <strong>Draw</strong>, the orange button at the foot of the map, then click the map to drop turnpoints (undo, redo and clear are beside it); drag, pinch and twist still move the view. The route is scored as XContest would and checked against every zone it crosses.")}</h2>'
                 + plan_results.replace('<div class="plan-figures" id="plan-figures"></div>',
                                        '<div class="plan-figures" id="plan-figures"></div>' + plan_bar, 1)
                 + '</div>')
@@ -693,14 +698,14 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
        sheet across its foot. -->
   <div class="asp-stage">
     <div class="asp-holder">
-      {_map(airspaces, project, scene, uid).replace('<div class="renderer-host">', '<div class="renderer-host">' + extra, 1)}
+      {_map(airspaces, project, scene, uid).replace('<div class="renderer-host">', '<div class="renderer-host">' + extra + map_bar, 1)}
       <div class="asp-name" id="asp-name"></div>
     </div>
     <div class="asp-floats">
       {task}
-      {get}
     </div>
   </div>
+  {get}
   <details class="asp-sources"><summary>Sources and dates</summary>{sources_table(overlay, base_version, shift)}</details>
 </article>"""
 

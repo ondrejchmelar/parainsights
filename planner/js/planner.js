@@ -26,6 +26,14 @@
     return RULES[pick && pick.value] || RULES.world;
   }
   var points = [];          // [lon, lat] per turnpoint, in the order dropped
+  // Undo and redo: the turnpoints before each change (a point dropped, one dragged, an
+  // import, a clear), and the ones undone. A new change forgets what was undone.
+  var past = [], future = [];
+  function remember() {
+    past.push(points.map(function (p) { return p.slice(); }));
+    if (past.length > 200) past.shift();
+    future = [];
+  }
 
   // ---- geodesy -----------------------------------------------------------------------
   //
@@ -440,6 +448,11 @@
   // On the map (`map3d`): the course as a line on the ground and the turnpoints numbered
   // (`setRoute`), the FAI areas under them (`setShapes`).
   function redraw() {
+    var undo = document.getElementById('plan-undo'), redo = document.getElementById('plan-redo');
+    var wipe = document.getElementById('plan-clear');
+    if (undo) undo.disabled = !past.length;
+    if (redo) redo.disabled = !future.length;
+    if (wipe) wipe.disabled = !points.length;
     if (takeoff) lightSun();
     var walk = course();
     var merged = mergedEntry();
@@ -593,9 +606,11 @@
     });
     // A turnpoint dragged on the map moves; the task, its distance and the FAI areas follow.
     // Redrawn once a frame at most: the airspace along the task is checked on each redraw.
-    var moved = null;
+    var moved = null, dragged = false;
     if (entry.onDragPoint) entry.onDragPoint(function (index, at, done) {
       if (!points[index]) return;
+      if (!dragged) { remember(); dragged = true; }
+      if (done) dragged = false;
       points[index] = [Math.round(at[0] * 100000) / 100000, Math.round(at[1] * 100000) / 100000];
       if (done) { if (moved) cancelAnimationFrame(moved); moved = null; redraw(); return; }
       if (!moved) moved = requestAnimationFrame(function () { moved = null; redraw(); });
@@ -701,6 +716,7 @@
   hookMerged(mergedEntry());
 
   function addPoint(at) {
+    remember();
     points.push([Math.round(at[0] * 100000) / 100000, Math.round(at[1] * 100000) / 100000]);
     redraw();
   }
@@ -972,6 +988,7 @@
     if (list.length < 2) throw new Error('the task has fewer than two turnpoints');
     var closed = list.length > 3 && distance(list[0], list[list.length - 1]) < 400;
     if (closed) list.pop();
+    remember();
     points = list.map(function (p) { return [Math.round(p[0] * 1e5) / 1e5, Math.round(p[1] * 1e5) / 1e5]; });
     document.getElementById('plan-close').checked = closed;
     drawing(false);
@@ -1159,9 +1176,10 @@
     holder.dataset.drawing = on ? 'on' : 'off';
     if (drawButton) {
       drawButton.setAttribute('aria-pressed', on ? 'true' : 'false');
-      // Pressed, it says what pressing again does; "Drawing — click the map" pushed Clear off
-      // the desktop's panel. How to drop turnpoints is in the Task ⓘ.
-      drawButton.textContent = on ? 'Done drawing' : 'Draw a task';
+      // Pressed, it says what pressing again does. How to drop turnpoints is in the
+      // Task ⓘ.
+      drawButton.querySelector('span').textContent = on ? 'Done' : 'Draw';
+      drawButton.title = on ? 'Stop adding turnpoints' : 'Click the map to add turnpoints';
     }
   }
   if (drawButton) drawButton.addEventListener('click', function () {
@@ -1170,10 +1188,20 @@
   drawing(false);
 
   document.getElementById('plan-undo').addEventListener('click', function () {
-    points.pop();
+    if (!past.length) return;
+    future.push(points);
+    points = past.pop();
+    redraw();
+  });
+  document.getElementById('plan-redo').addEventListener('click', function () {
+    if (!future.length) return;
+    past.push(points);
+    points = future.pop();
     redraw();
   });
   document.getElementById('plan-clear').addEventListener('click', function () {
+    if (!points.length) return;
+    remember();
     points = [];
     redraw();
   });
