@@ -404,7 +404,7 @@ def _local_flymet():
         server.shutdown()
 
 
-def _probe_page(body: str, *, site_count: int = 3) -> dict:
+def _probe_page(body: str, *, site_count: int = 3, hold: bool = False) -> dict:
     """Run the real meteo page against a stubbed Open-Meteo and return what `body` says."""
     chrome = CHROME
     profile = json.dumps(_as_two_models(_fake_profile()))
@@ -426,7 +426,17 @@ def _probe_page(body: str, *, site_count: int = 3) -> dict:
     // them apart the same way the page builds them: only the profile call asks for
     // geopotential height.
     window.__meta = %s;
+    // `hold`: the day's forecast waits until `__release()`, to see the page before it.
+    window.__held = %s;
+    var released = null;
+    window.__release = function () { if (released) released(); };
     window.fetch = function (url) {
+      var surfaceAsk = String(url).indexOf('meta.json') < 0 && String(url).indexOf('geopotential_height') < 0;
+      if (window.__held && surfaceAsk) {
+        return new Promise(function (resolve) { released = resolve; }).then(function () {
+          return { ok: true, json: function () { return Promise.resolve(JSON.parse(JSON.stringify(window.__surface))); } };
+        });
+      }
       var body = String(url).indexOf('meta.json') >= 0 ? window.__meta
         : String(url).indexOf('geopotential_height') >= 0
         ? window.__profile : window.__surface;
@@ -435,7 +445,7 @@ def _probe_page(body: str, *, site_count: int = 3) -> dict:
       } });
     };
     </script>
-    """ % (profile, surface, json.dumps(_FAKE_META))
+    """ % (profile, surface, json.dumps(_FAKE_META), "true" if hold else "false")
     page = cli.page(render_html.body(), "Meteo")
     assert _FLYMET_HOST in page, "flymet's host moved; this test rewrites it by hand"
     probe = """
@@ -443,9 +453,12 @@ def _probe_page(body: str, *, site_count: int = 3) -> dict:
     <script>
     window.addEventListener('load', function () { setTimeout(function () {
       var out;
+      function put(value) { document.getElementById('probe-out').textContent = JSON.stringify(value); }
       try { out = (function () { %s })(); }
       catch (error) { out = { error: String((error && error.stack) || error) }; }
-      document.getElementById('probe-out').textContent = JSON.stringify(out);
+      if (out && typeof out.then === 'function') {
+        out.then(put, function (error) { put({ error: String((error && error.stack) || error) }); });
+      } else put(out);
     }, 700); });
     </script>
     """ % body
@@ -1447,3 +1460,33 @@ def test_the_airgram_draws_the_day_and_reads_the_wind_under_the_pointer():
     assert "m/s from N" in answer["text"], answer["text"]
     assert answer["after"] == "" and answer["gone"] is None, (
         "the readout stayed up after the pointer left")
+
+
+@needs_chrome
+def test_nothing_moves_when_the_first_forecast_arrives():
+    """Layout shift: on a first visit the page waited for the day's forecast with no
+    column at all, and the first takeoff's arrived half a screen tall, pushing the page
+    under it down (0.19 of the 0.23 measured on a phone). A column of the same size
+    stands in until then; the status is a notice floating over the page, not a line in
+    its header, and the day row is its height before its buttons are added."""
+    answer = _probe_page("""
+    function box(selector) {
+      var r = document.querySelector(selector).getBoundingClientRect();
+      return [Math.round(r.top), Math.round(r.left), Math.round(r.width), Math.round(r.height)];
+    }
+    var before = { air: box('.met-col-air'), sounding: box('.met-col-sounding'),
+                   waiting: !!document.querySelector('.met-col-wait'),
+                   status: getComputedStyle(document.getElementById('met-status')).position,
+                   days: document.getElementById('met-days').getBoundingClientRect().height };
+    window.__release();
+    return new Promise(function (done) { setTimeout(done, 600); }).then(function () {
+      return { before: before, after: { air: box('.met-col-air'), sounding: box('.met-col-sounding'),
+               waiting: !!document.querySelector('.met-col-wait') } };
+    });
+    """, hold=True)
+    before, after = answer["before"], answer["after"]
+    assert before["waiting"] and not after["waiting"]
+    assert before["status"] == "fixed"
+    assert before["days"] >= 44
+    # The charts arrive exactly where the stand-in's were.
+    assert before["air"] == after["air"] and before["sounding"] == after["sounding"], answer

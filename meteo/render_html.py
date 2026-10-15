@@ -87,7 +87,7 @@ STYLE = """
   padding: 14px 0 12px; border-bottom: 1px solid var(--rule); margin: -18px 0 22px; }
 .met-head { display:flex; flex-wrap:wrap; gap:12px 22px; align-items:center; margin: 0 0 14px; }
 .met-day-row { display:flex; flex-wrap:wrap; align-items:center; gap:10px; min-width:0; }
-.met-days { flex:none; }
+.met-days { flex:none; min-height:44px; }   /* its buttons come from the script */
 .met-hour { display:flex; align-items:center; gap:12px; font-size:16px; color:var(--ink-2);
   flex:1 1 300px; min-width:240px; }
 .met-hour label { display:inline-flex; align-items:center; }
@@ -95,8 +95,17 @@ STYLE = """
 .met-hour input { flex:1; min-width:120px; accent-color: var(--accent); height: 28px; }
 .met-hour output { min-width:3.6em; font-size:19px; font-weight:650; color:var(--ink);
   font-variant-numeric:tabular-nums; }
-.met-status { color:var(--ink-2); font-size:15px; margin:0; flex-basis:100%; }
+/* What the page is fetching or could not: a notice floating at the foot of the screen,
+   not a line in the header — appearing and going there it moved everything under it. */
+.met-status { position:fixed; left:50%; bottom:16px; transform:translateX(-50%); z-index:50; margin:0;
+  max-width:calc(100vw - 32px); width:max-content; padding:8px 16px; border-radius:999px;
+  background:var(--pop-bg); color:var(--pop-ink); font-size:15px; box-shadow:var(--float-shadow); }
 .met-status:empty { display:none; }
+/* The column standing in for a takeoff while the forecast loads. */
+.met-col-wait .met-col-tools { visibility:hidden; }
+.met-col-wait .met-canvas { animation: met-wait 1.4s ease-in-out infinite alternate; }
+@keyframes met-wait { from { opacity:.55; } to { opacity:1; } }
+@media (prefers-reduced-motion: reduce) { .met-col-wait .met-canvas { animation:none; } }
 
 /* The chosen takeoffs, as one switcher, then +; the list of every takeoff is behind +.
    Wider than its row the switcher scrolls, and an end with more takeoffs past it fades

@@ -956,6 +956,37 @@
       : ' (' + Math.max(site.alt - site.landing, 0) + ' m above landing)');
   }
 
+  // One takeoff's column, before it is filled in: the head, the rose line, the two charts.
+  var COLUMN = '<p class="met-col-head"><i></i><span class="name"></span>'
+          + '<span class="dirs"></span><span class="met-col-tools">'
+          + '<a class="met-col-pge" rel="noreferrer" target="_blank">' + LINK_ICON + '</a>'
+          + '<button type="button" class="met-col-move" data-by="-1">' + LEFT_ICON + '</button>'
+          + '<button type="button" class="met-col-move" data-by="1">' + RIGHT_ICON + '</button>'
+          + '<button type="button" class="met-col-drop">' + CLOSE_ICON + '</button>'
+          + '</span></p>'
+          + '<p class="met-col-rose"><span></span></p>'
+          + '<canvas class="met-canvas met-col-air" width="380" height="270"'
+          + ' aria-label="The day by hour and height: wind, cloud, boundary layer and cloudbase">'
+          + '</canvas>'
+          + '<canvas class="met-canvas met-col-sounding" width="380" height="300"></canvas>'
+          + '<p class="met-col-top" hidden><span class="txt"></span><span class="info-wrap">'
+          + '<button type="button" class="info" aria-expanded="false" aria-label="About the thermal top">i</button>'
+          + '<span class="info-pop" role="note"></span></span></p>'
+          + '<figure class="met-col-fly" hidden></figure>';
+
+  // While the day's forecast is still on its way on a first visit, a column the size a
+  // takeoff's will be stands where it will go. It used to be nothing, and the page under
+  // it jumped down half a screen when the first takeoff arrived (layout shift, measured
+  // at 0.19 on a phone).
+  function drawWaiting() {
+    var box = document.getElementById('met-columns');
+    box.classList.add('is-single');
+    box.classList.remove('is-two');
+    box.innerHTML = '<div class="met-col met-col-wait" aria-hidden="true">' + COLUMN + '</div>';
+    box.querySelector('.name').textContent = '\u00a0';
+    box.querySelector('.met-col-rose span').textContent = '\u00a0';
+  }
+
   function drawColumns() {
     var box = document.getElementById('met-columns');
     var wanted = chosen();
@@ -974,22 +1005,7 @@
         var cell = document.createElement('div');
         cell.className = 'met-col';
         cell.dataset.site = index;
-        cell.innerHTML = '<p class="met-col-head"><i></i><span class="name"></span>'
-          + '<span class="dirs"></span><span class="met-col-tools">'
-          + '<a class="met-col-pge" rel="noreferrer" target="_blank">' + LINK_ICON + '</a>'
-          + '<button type="button" class="met-col-move" data-by="-1">' + LEFT_ICON + '</button>'
-          + '<button type="button" class="met-col-move" data-by="1">' + RIGHT_ICON + '</button>'
-          + '<button type="button" class="met-col-drop">' + CLOSE_ICON + '</button>'
-          + '</span></p>'
-          + '<p class="met-col-rose"><span></span></p>'
-          + '<canvas class="met-canvas met-col-air" width="380" height="270"'
-          + ' aria-label="The day by hour and height: wind, cloud, boundary layer and cloudbase">'
-          + '</canvas>'
-          + '<canvas class="met-canvas met-col-sounding" width="380" height="300"></canvas>'
-          + '<p class="met-col-top" hidden><span class="txt"></span><span class="info-wrap">'
-          + '<button type="button" class="info" aria-expanded="false" aria-label="About the thermal top">i</button>'
-          + '<span class="info-pop" role="note"></span></span></p>'
-          + '<figure class="met-col-fly" hidden></figure>';
+        cell.innerHTML = COLUMN;
         cell.querySelector('i').style.background = seriesColour(slotOf(index));
         cell.querySelector('.name').textContent = conf.sites[index].name;
         // Clicking a column focuses that takeoff, the same as its chip or its table row.
@@ -1763,11 +1779,13 @@
   function drawSite() {
     var panel = document.getElementById('met-panel');
     var picked = chosen();
-    panel.hidden = !picked.length;
+    var waiting = !picked.length && !state.surface && !state.failed;
+    panel.hidden = !picked.length && !waiting;
     document.getElementById('met-sub').textContent = picked.length > 1
       ? picked.length + ' takeoffs, the same hour and the same model'
       : '';
     if (!picked.length) {
+      if (waiting) drawWaiting();
       drawKeys();
       return;
     }
@@ -2031,6 +2049,8 @@
       loadProfiles();
     }
   }).catch(function (error) {
+    state.failed = true;
+    drawSite();
     say('The forecast could not be fetched (' + error.message + '). '
         + 'This page has no numbers of its own — it needs a network.');
   });

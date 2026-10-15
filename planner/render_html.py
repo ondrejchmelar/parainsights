@@ -275,8 +275,14 @@ def strip() -> str:
     map in full screen: what it is worth, its options and the takeoff time. There was a
     Task panel floating over the map until October 2026."""
     return ('<div class="plan-strip" id="plan-strip" aria-label="The task">'
-            '<div class="plan-strip-score"><div class="plan-figures" id="plan-figures"></div>'
-            '<span class="plan-legs" id="plan-legs"></span></div>'
+            # As `report` in planner.js draws it with no task, so the strip is its own
+            # height before the script runs and nothing under it moves when it does.
+            '<div class="plan-strip-score"><div class="plan-figures" id="plan-figures">'
+            '<span class="plan-row plan-row-head"><div><span class="k">task</span>'
+            '<span class="v">— km</span></div></span>'
+            '<span class="plan-row plan-row-sub"><span class="plan-row-hint">Press <b>Draw</b>, '
+            'then click the map</span><span class="plan-legs" id="plan-legs"></span></span>'
+            '</div></div>'
             + controls() + "</div>")
 
 

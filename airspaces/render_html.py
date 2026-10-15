@@ -75,7 +75,7 @@ STYLE = """
 .asp-stage { position: relative; }
 /* The map's own layers stack among themselves, under the strip's menus. */
 .asp-stage .asp-holder { isolation: isolate; z-index: 0; }
-.asp-stage .view3d { aspect-ratio: auto; height: calc(100vh - 80px - var(--plan-strip-h, 0px)); min-height: 440px; }
+.asp-stage .view3d { aspect-ratio: auto; height: calc(100vh - 80px - var(--plan-strip-h, 82px)); min-height: 440px; }
 /* Full screen takes the whole stage: the map, and the strip at its foot as a flight's
    side view is (the map's own button, `fullscreen` in map3d). */
 .asp-stage:fullscreen, .asp-stage.is-maximised { background: var(--panel); width: 100%; height: 100%;
