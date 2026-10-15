@@ -149,7 +149,13 @@ default, because on a phone a tap on this map names the zone under the finger an
 gesture must not mean two things. The map is built once by `airspaces.render_html.
 SCRIPT3D`, which publishes the handle as `window.__airspaceMap`; the planner's script
 waits on it, and only the airspace script sets the airspace filter (class, floor, time) —
-the planner listens to the time control only to re-mark its list. The ground is the
+the planner listens to the time control only to re-mark its list. What of the airspace to draw is
+the map's own menu, the ▾ beside *Airspaces* (`aspMenu` in `map3d.js`, on a flight's map
+too, where it counts and filters only the zones near the track): the kinds, the floor,
+and on this page the hours row moved in from `.m3-airspace-extra` (October 2026; it was a
+Layers panel under the task). The planner's **Takeoff** time lights the ground and turns
+the rose's sun as a flight's map does (`entry.setSun`, a `TV.sun.dayTrack` table over the
+task), and the hours filter follows it. The ground is the
 planner's wider box (`scene.PLAN_BOX`, Czechia and the Alps, 120 000 nodes) fetched by
 the page (`scene.remote`), opening framed on Czechia (`view.focus`); in the report the
 fetch waits until the view is first opened. A build can therefore no longer lose the

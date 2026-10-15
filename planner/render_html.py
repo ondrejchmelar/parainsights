@@ -59,6 +59,8 @@ STYLE = """
 .chk { display:inline-flex; align-items:center; gap:9px; font-size:16px; cursor:pointer; min-height:44px; }
 .chk input { width:20px; height:20px; margin:0; accent-color:var(--accent); }
 .plan-opts select.btn { height:44px; padding:0 12px; appearance:auto; }
+.plan-takeoff { display:flex; align-items:center; gap:10px; margin:4px 0 6px; font-size:16px; }
+.plan-takeoff input.btn { height:44px; padding:0 10px; font:inherit; min-width:0; }
 .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
 .plan-hint[hidden] { display:none; }
 /* The score: the distance large, the rest as a line under it. The cells are the script's
@@ -165,6 +167,12 @@ def controls() -> str:
         '<option value="world">XContest</option>'
         '<option value="cpp">ČPP (Czech)</option></select></label>'
         "</div>"
+        '<label class="plan-takeoff"><span>Takeoff</span>'
+        '<input type="datetime-local" id="plan-takeoff" class="btn" step="900">'
+        + common.info("The sun at this moment, your own clock: the ground is lit from where "
+                      "it stands and the rose on the map shows it, as on a flight's map. The "
+                      "aerodrome hours on the map's Airspaces menu follow this time too.")
+        + "</label>"
         # Said only before the first point: the button itself turns into "Drawing — click
         # the map" once pressed.
         '<span class="plan-hint" id="plan-hint" hidden></span>'
@@ -271,8 +279,13 @@ def _coverage() -> str:
 # The constants are interpolated from `js/xc.js` rather than typed, so the planner cannot
 # drift from the scorer that later measures the flight. A hand-written 0.28 here would go
 # stale the moment FAI_MIN_SIDE moved, in the one place that exists to agree with it.
+# The sun is the report's (`js/sun.js`, on `js/np.js`): the planner lights its map for the
+# takeoff time as a flight's map is lit for the moment under the cursor.
+_VIEWER_JS = Path(__file__).parent.parent / "tracklog_viewer" / "js"
 SCRIPT = (
-    (Path(__file__).parent / "js/planner.js").read_text(encoding="utf-8")
+    (_VIEWER_JS / "np.js").read_text(encoding="utf-8") + "\n"
+    + (_VIEWER_JS / "sun.js").read_text(encoding="utf-8") + "\n"
+    + (Path(__file__).parent / "js/planner.js").read_text(encoding="utf-8")
     .replace("__FAI_MIN_SIDE__", str(xc.FAI_MIN_SIDE))
     .replace("__MAX_CLOSING__", str(xc.MAX_CLOSING))
     .replace("__MULTIPLIER__", "{" + ", ".join(f"{name}: {value}" for name, value in xc.MULTIPLIER.items()) + "}")

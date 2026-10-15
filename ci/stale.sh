@@ -32,7 +32,7 @@ set -eu
 # map, with the airspace, in every flight, so a change to any of them leaves the
 # published copy a version behind.
 # The planner page is `airspaces.cli`'s, with the planner's section on it and the
-# planner's scoring read out of `tracklog_viewer/js/xc.js`.
+# planner's scoring read out of `tracklog_viewer/js/xc.js`, and its sun (`sun.js`, `np.js`).
 # One file inside those trees cannot change the report, and watching it made the guard
 # fire on a change that could not possibly have mattered. `tracklog_viewer/cli.py` builds
 # the report, so it stays watched; `airspaces/cli.py` is the *standalone* airspace page's
@@ -118,6 +118,6 @@ check public/flights/index.html "tracklog_viewer parainsights_common parainsight
     "the command is in the \"Known gaps\" section of CLAUDE.md"
 check public/meteo/index.html "meteo parainsights_common" \
     "uv run python -m meteo.cli --html public/meteo/index.html"
-check public/planner/index.html "airspaces planner parainsights_common parainsights_map tracklog_viewer/js/xc.js" \
+check public/planner/index.html "airspaces planner parainsights_common parainsights_map tracklog_viewer/js/xc.js tracklog_viewer/js/np.js tracklog_viewer/js/sun.js" \
     "uv run python -m airspaces.cli --html public/planner/index.html (it fetches its sources)"
 exit $failed

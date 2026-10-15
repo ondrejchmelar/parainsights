@@ -440,6 +440,7 @@
   // On the map (`map3d`): the course as a line on the ground and the turnpoints numbered
   // (`setRoute`), the FAI areas under them (`setShapes`).
   function redraw() {
+    if (takeoff) lightSun();
     var walk = course();
     var merged = mergedEntry();
     if (merged) {
@@ -602,7 +603,55 @@
     entry.setRoute(course(), points);
     if (entry.setShapes) entry.setShapes(faiShapes());
     showNear();
+    lightSun();
   }
+
+  // The takeoff time: the sun over the task (or the map's middle, before there is one) at
+  // that moment, handed to the map as the table a flight's map is lit from (`TV.sun`).
+  // The reader's own clock; it opens on today at 11:00, or the next hour after that,
+  // and tomorrow once the afternoon is gone. The aerodrome hours follow it.
+  var takeoff = document.getElementById('plan-takeoff');
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+  function localValue(d) {
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + 'T' +
+      pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  }
+  if (takeoff && !takeoff.value) {
+    var start = new Date();
+    if (start.getHours() >= 16) { start.setDate(start.getDate() + 1); start.setHours(11, 0, 0, 0); }
+    else start.setHours(Math.max(11, start.getHours() + 1), 0, 0, 0);
+    takeoff.value = localValue(start);
+  }
+  function sunTable() {
+    if (!takeoff || !takeoff.value || !window.TV || !TV.sun) return null;
+    var when = new Date(takeoff.value);
+    if (isNaN(when.getTime())) return null;
+    var lon, lat;
+    if (points.length) {
+      lon = points.reduce(function (s, p) { return s + p[0]; }, 0) / points.length;
+      lat = points.reduce(function (s, p) { return s + p[1]; }, 0) / points.length;
+    } else {
+      var dem = handle.scene().terrain || {};
+      lon = (dem.west + dem.east) / 2; lat = (dem.south + dem.north) / 2;
+      if (isNaN(lon) || isNaN(lat)) { lon = 15.5; lat = 49.8; }
+    }
+    var date = { year: when.getUTCFullYear(), month: when.getUTCMonth() + 1, day: when.getUTCDate() };
+    return { track: TV.sun.dayTrack(date, lat, lon), offset: -when.getTimezoneOffset(),
+             at: when.getUTCHours() * 60 + when.getUTCMinutes() };
+  }
+  function lightSun() {
+    var merged = mergedEntry();
+    if (merged && merged.setSun) merged.setSun(sunTable());
+  }
+  function followTakeoff() {
+    lightSun();
+    var hoursAt = document.getElementById('asp-when');
+    if (hoursAt && takeoff && takeoff.value && hoursAt.value !== takeoff.value) {
+      hoursAt.value = takeoff.value;
+      hoursAt.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }
+  if (takeoff) takeoff.addEventListener('input', followTakeoff);
   panel.addEventListener('merged-ready', function (event) { hookMerged(event.detail); });
   hookMerged(mergedEntry());
 
@@ -1094,6 +1143,7 @@
   if (whenBox) whenBox.addEventListener('change', reportAirspace);
   if (whenInput) whenInput.addEventListener('input', reportAirspace);
 
+  followTakeoff();
   redraw();
   }
 })();

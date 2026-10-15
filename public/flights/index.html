@@ -2172,6 +2172,8 @@ function initView3d(root, cursorTrack, preset) {
           if (shapes) shapes.setData({ type: 'FeatureCollection', features: pendingShapes });
         }
         if (vertical !== 1) map.setTerrain({ source: 'dem', exaggeration: vertical });
+        // A sun handed in before the style was ready (`setSun`, the planner's).
+        if (sun && sunMinute !== null) sunTo(sunMinute);
       });
       // Credits from the sources themselves, so switching the basemap changes them.
       // Top left, after the legend of compared flights, in one row: at the bottom left the
@@ -4159,6 +4161,15 @@ function initView3d(root, cursorTrack, preset) {
         setScored: function (points) {
           scored = points && points.length >= 2 ? points : null;
           refresh();
+        },
+        // A sun table from the page (the planner's takeoff time), as `TV.sun` builds one
+        // for a flight: { track, offset, at }. The ground is lit and the rose turned for
+        // `at`; null takes the sun away.
+        setSun: function (table) {
+          sun = table && table.track && table.track.az ? table : null;
+          view.querySelector('.m3-sun').style.display = '';
+          if (sun) sunTo(sun.at);
+          else { drawRose(); if (!wind) rose.hidden = true; }
         },
         // The zones to draw instead of the scene's own: the planner's, near its task.
         setAirspaces: function (list) {

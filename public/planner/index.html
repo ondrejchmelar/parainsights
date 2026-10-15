@@ -540,6 +540,8 @@ html[data-help="off"] .m3-help { display: none; }
 .chk { display:inline-flex; align-items:center; gap:9px; font-size:16px; cursor:pointer; min-height:44px; }
 .chk input { width:20px; height:20px; margin:0; accent-color:var(--accent); }
 .plan-opts select.btn { height:44px; padding:0 12px; appearance:auto; }
+.plan-takeoff { display:flex; align-items:center; gap:10px; margin:4px 0 6px; font-size:16px; }
+.plan-takeoff input.btn { height:44px; padding:0 10px; font:inherit; min-width:0; }
 .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
 .plan-hint[hidden] { display:none; }
 /* The score: the distance large, the rest as a line under it. The cells are the script's
@@ -637,7 +639,7 @@ html[data-help="off"] .m3-help { display: none; }
     </div>
     <div class="asp-floats">
       <div class="float plan-panel"><h2>Task<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="More about this">i</button><span class="info-pop" role="note">Press Draw a task, then click the map to drop turnpoints; drag, pinch and twist still move the view. The route is scored as XContest would and checked against every zone it crosses.</span></span></h2><section class="plan-section" aria-label="The task">
-    <div class="plan-figures" id="plan-figures"></div><div class="plan-bar"><button type="button" class="btn primary plan-draw" id="plan-draw" aria-pressed="false">Draw a task</button><button type="button" class="btn" id="plan-undo">Undo</button><button type="button" class="btn" id="plan-clear">Clear</button></div><div class="plan-opts"><label class="chk"><input type="checkbox" id="plan-close"> Closed</label><label class="chk"><input type="checkbox" id="plan-fai" checked> FAI areas<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="More about this">i</button><span class="info-pop" role="note">Where each turnpoint can go for an FAI triangle (every side at least 28% of the perimeter), the other two staying put: turnpoint 1 green, 2 blue, 3 red. Yellow: where a closed course must finish.</span></span></label><label class="plan-rules-label"><span class="sr">Rules</span><select id="plan-rules" class="btn"><option value="world">XContest</option><option value="cpp">ČPP (Czech)</option></select></label></div><span class="plan-hint" id="plan-hint" hidden></span>
+    <div class="plan-figures" id="plan-figures"></div><div class="plan-bar"><button type="button" class="btn primary plan-draw" id="plan-draw" aria-pressed="false">Draw a task</button><button type="button" class="btn" id="plan-undo">Undo</button><button type="button" class="btn" id="plan-clear">Clear</button></div><div class="plan-opts"><label class="chk"><input type="checkbox" id="plan-close"> Closed</label><label class="chk"><input type="checkbox" id="plan-fai" checked> FAI areas<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="More about this">i</button><span class="info-pop" role="note">Where each turnpoint can go for an FAI triangle (every side at least 28% of the perimeter), the other two staying put: turnpoint 1 green, 2 blue, 3 red. Yellow: where a closed course must finish.</span></span></label><label class="plan-rules-label"><span class="sr">Rules</span><select id="plan-rules" class="btn"><option value="world">XContest</option><option value="cpp">ČPP (Czech)</option></select></label></div><label class="plan-takeoff"><span>Takeoff</span><input type="datetime-local" id="plan-takeoff" class="btn" step="900"><span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="More about this">i</button><span class="info-pop" role="note">The sun at this moment, your own clock: the ground is lit from where it stands and the rose on the map shows it, as on a flight's map. The aerodrome hours on the map's Airspaces menu follow this time too.</span></span></label><span class="plan-hint" id="plan-hint" hidden></span>
     <p class="plan-legs" id="plan-legs"></p>
     <div class="plan-airspace" id="plan-airspace"></div>
     <p class="plan-note">A plan, not a clearance.<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="How the task is scored">i</button><span class="info-pop" role="note">Scored with the same rules as the flight report: every side at least 28% of the perimeter for FAI, a closing gap under 20% of it for a closed course, multipliers 1&thinsp;/&thinsp;1.2&thinsp;/&thinsp;1.4. With ČPP chosen, the Czech cup's: closing under 5%, and in the Central European zone 1&thinsp;/&thinsp;1.8&thinsp;/&thinsp;2.2 (<a href="https://www.xcontest.org/cesko/pravidla/" rel="noreferrer">rules</a>). The map draws the airspace within 5&nbsp;km of the task, and none before there is one: Czechia's from this page, with its traffic circuits; any other European country's from openAIP once the task reaches it.</span></span></p>
@@ -2097,6 +2099,8 @@ function initView3d(root, cursorTrack, preset) {
           if (shapes) shapes.setData({ type: 'FeatureCollection', features: pendingShapes });
         }
         if (vertical !== 1) map.setTerrain({ source: 'dem', exaggeration: vertical });
+        // A sun handed in before the style was ready (`setSun`, the planner's).
+        if (sun && sunMinute !== null) sunTo(sunMinute);
       });
       // Credits from the sources themselves, so switching the basemap changes them.
       // Top left, after the legend of compared flights, in one row: at the bottom left the
@@ -4085,6 +4089,15 @@ function initView3d(root, cursorTrack, preset) {
           scored = points && points.length >= 2 ? points : null;
           refresh();
         },
+        // A sun table from the page (the planner's takeoff time), as `TV.sun` builds one
+        // for a flight: { track, offset, at }. The ground is lit and the rose turned for
+        // `at`; null takes the sun away.
+        setSun: function (table) {
+          sun = table && table.track && table.track.az ? table : null;
+          view.querySelector('.m3-sun').style.display = '';
+          if (sun) sunTo(sun.at);
+          else { drawRose(); if (!wind) rose.hidden = true; }
+        },
         // The zones to draw instead of the scene's own: the planner's, near its task.
         setAirspaces: function (list) {
           boxes = boxesFrom(list || []);
@@ -4211,7 +4224,396 @@ function initView3d(root, cursorTrack, preset) {
   }
 })();
 </script>
-<script>(function () {
+<script>/* The handful of numpy behaviours the flight analysis depends on, reproduced exactly.
+ *
+ * Not a numpy: only what `igc.py`, `flight.py` and `analysis.py` call, each written to
+ * give the *same bits* as numpy where that is achievable — the same interpolation
+ * formula, the same pairwise summation order, Python's round-half-to-even. It was held to
+ * the Python field for field on 63 real tracklogs before the Python was retired, and a
+ * rounded field that disagrees in its last digit is a difference a reader can see, so
+ * "close enough" is not the target where exact is cheap.
+ *
+ * Every function takes and returns plain arrays (or Float64Arrays); none mutates its
+ * input.
+ */
+(function (TV) {
+  'use strict';
+
+  var DEG = Math.PI / 180;      // numpy's deg2rad multiplies by pi / 180
+  var RAD = 180 / Math.PI;      // and rad2deg by 180 / pi
+
+  // numpy's pairwise summation (`pairwise_sum` in numpy/core/src/umath/loops_utils.h):
+  // blocks of eight accumulated in parallel, halves recursed above 128. Sequential
+  // addition differs from it in the last bits, and a total that is then rounded to the
+  // metre can land on the other side of .5.
+  function pairwise(a, start, n) {
+    var i, res;
+    if (n < 8) {
+      res = 0;
+      for (i = 0; i < n; i++) res += a[start + i];
+      return res;
+    }
+    if (n <= 128) {
+      var r0 = a[start], r1 = a[start + 1], r2 = a[start + 2], r3 = a[start + 3];
+      var r4 = a[start + 4], r5 = a[start + 5], r6 = a[start + 6], r7 = a[start + 7];
+      var end = n - (n % 8);
+      for (i = 8; i < end; i += 8) {
+        r0 += a[start + i]; r1 += a[start + i + 1]; r2 += a[start + i + 2];
+        r3 += a[start + i + 3]; r4 += a[start + i + 4]; r5 += a[start + i + 5];
+        r6 += a[start + i + 6]; r7 += a[start + i + 7];
+      }
+      res = ((r0 + r1) + (r2 + r3)) + ((r4 + r5) + (r6 + r7));
+      for (; i < n; i++) res += a[start + i];
+      return res;
+    }
+    var n2 = Math.floor(n / 2);
+    n2 -= n2 % 8;
+    return pairwise(a, start, n2) + pairwise(a, start + n2, n - n2);
+  }
+
+  function sum(a) { return a.length ? pairwise(a, 0, a.length) : 0; }
+  function mean(a) { return a.length ? sum(a) / a.length : NaN; }
+
+  function median(a) {
+    var n = a.length;
+    if (!n) return NaN;
+    var s = Array.prototype.slice.call(a).sort(function (x, y) { return x - y; });
+    var h = n >> 1;
+    // numpy takes the mean of the two middle values, as a sum and a division.
+    return n % 2 ? s[h] : (s[h - 1] + s[h]) / 2;
+  }
+
+  function max(a) { var m = -Infinity; for (var i = 0; i < a.length; i++) if (a[i] > m) m = a[i]; return m; }
+  function min(a) { var m = Infinity; for (var i = 0; i < a.length; i++) if (a[i] < m) m = a[i]; return m; }
+  // nanmax: NaN is skipped, and all-NaN is NaN.
+  function nanmax(a) {
+    var m = -Infinity, seen = false;
+    for (var i = 0; i < a.length; i++) if (a[i] === a[i]) { seen = true; if (a[i] > m) m = a[i]; }
+    return seen ? m : NaN;
+  }
+
+  function diff(a) {
+    var out = new Array(Math.max(a.length - 1, 0));
+    for (var i = 1; i < a.length; i++) out[i - 1] = a[i] - a[i - 1];
+    return out;
+  }
+
+  function cumsum(a) {
+    var out = new Array(a.length), s = 0;
+    for (var i = 0; i < a.length; i++) { s += a[i]; out[i] = s; }
+    return out;
+  }
+
+  function clip(x, lo, hi) { return x < lo ? lo : (x > hi ? hi : x); }
+
+  // np.mod: C fmod, then moved into the divisor's sign (numpy's npy_divmod).
+  function mod(a, b) {
+    var m = a % b;
+    if (m !== 0 && ((b < 0) !== (m < 0))) m += b;
+    return m;
+  }
+
+  // np.interp, as numpy's arr_interp computes it: clamp outside, exact at the last
+  // point, and `slope * (x - xp[j]) + fp[j]` inside with j from a binary search.
+  function interp(x, xp, fp) {
+    var n = xp.length, out = new Array(x.length);
+    var left = fp[0], right = fp[n - 1];
+    for (var k = 0; k < x.length; k++) {
+      var v = x[k];
+      if (v !== v) { out[k] = v; continue; }
+      if (v > xp[n - 1]) { out[k] = right; continue; }
+      if (v < xp[0]) { out[k] = left; continue; }
+      if (v === xp[n - 1]) { out[k] = right; continue; }
+      var lo = 0, hi = n - 1;
+      while (hi - lo > 1) {
+        var mid = (lo + hi) >> 1;
+        if (xp[mid] <= v) lo = mid; else hi = mid;
+      }
+      var j = lo;
+      if (v === xp[j]) { out[k] = fp[j]; continue; }
+      var slope = (fp[j + 1] - fp[j]) / (xp[j + 1] - xp[j]);
+      var r = slope * (v - xp[j]) + fp[j];
+      if (r !== r) r = slope * (v - xp[j + 1]) + fp[j + 1];
+      out[k] = r;
+    }
+    return out;
+  }
+
+  // np.unwrap with the default discontinuity of pi, on radians.
+  function unwrap(p) {
+    var n = p.length, out = new Array(n);
+    if (!n) return out;
+    out[0] = p[0];
+    var correction = 0;
+    for (var i = 1; i < n; i++) {
+      var dd = p[i] - p[i - 1];
+      var ddmod = mod(dd + Math.PI, 2 * Math.PI) - Math.PI;
+      if (ddmod === -Math.PI && dd > 0) ddmod = Math.PI;
+      var fix = ddmod - dd;
+      if (Math.abs(dd) < Math.PI) fix = 0;
+      correction += fix;
+      out[i] = p[i] + correction;
+    }
+    return out;
+  }
+
+  // Least squares line, as np.polyfit(t, x, 1, full=True): slope, intercept and the sum
+  // of squared residuals. numpy solves it by SVD; the closed form agrees to ~1e-15.
+  function linefit(t, x) {
+    var n = t.length, mt = mean(t), mx = mean(x), sxy = 0, sxx = 0, i;
+    for (i = 0; i < n; i++) { sxy += (t[i] - mt) * (x[i] - mx); sxx += (t[i] - mt) * (t[i] - mt); }
+    var slope = sxx ? sxy / sxx : 0, intercept = mx - slope * mt, rss = 0;
+    for (i = 0; i < n; i++) { var e = x[i] - (slope * t[i] + intercept); rss += e * e; }
+    return { slope: slope, intercept: intercept, residuals: rss };
+  }
+
+  // np.histogram with explicit edges: [e_i, e_{i+1}) except the last bin, which also
+  // takes values equal to its right edge; anything outside is not counted.
+  function histogram(values, edges) {
+    var bins = edges.length - 1, counts = new Array(bins).fill(0);
+    for (var k = 0; k < values.length; k++) {
+      var v = values[k];
+      if (!(v >= edges[0] && v <= edges[bins])) continue;
+      if (v === edges[bins]) { counts[bins - 1]++; continue; }
+      var lo = 0, hi = bins;
+      while (hi - lo > 1) { var mid = (lo + hi) >> 1; if (edges[mid] <= v) lo = mid; else hi = mid; }
+      counts[lo]++;
+    }
+    return counts;
+  }
+
+  // Python's round(): correctly rounded on the *exact* binary value, ties to even.
+  // Scaling first (x * 10) is the trap: 23 / 20 is 1.14999999999999991 in binary and
+  // Python rounds it to 1.1, but 1.15 * 10 rounds to exactly 11.5 and then to 12.
+  // `toFixed` rounds the exact value too, and differs only on a true tie, where it goes
+  // away from zero — and a true tie shows as ...5000 in a longer expansion.
+  function pyRound(x, digits) {
+    if (x !== x || x === Infinity || x === -Infinity) return x;
+    digits = digits || 0;
+    var a = Math.abs(x), out;
+    var frac = (a.toFixed(Math.min(digits + 30, 100)).split('.')[1]) || '';
+    if (frac[digits] === '5' && /^0*$/.test(frac.slice(digits + 1))) {
+      // A tie: keep the even neighbour.
+      var down = Number(a.toFixed(digits + 1).slice(0, -1));
+      var step = Math.pow(10, -digits);
+      var last = Math.round(down / step) % 2;
+      out = last ? Number((down + step).toFixed(digits)) : down;
+    } else {
+      out = Number(a.toFixed(digits));
+    }
+    if (x < 0) out = -out;
+    return out === 0 ? 0 : out;   // never -0, which JSON prints as 0 and Python as -0.0
+  }
+
+  // Python's format(x, '.Nf') and friends, for the sentences the debrief writes: rounded
+  // half-to-even on the exact value like `round`, and — unlike `round` — the sign is
+  // kept when the result is zero: f"{-0.004:.2f}" is "-0.00" in Python. `plus` is the
+  // '+' flag; `percent` is the '%' type, which multiplies by 100 first.
+  function fmt(x, digits, options) {
+    options = options || {};
+    if (options.percent) x = x * 100;
+    var negative = x < 0 || Object.is(x, -0);
+    var body = Math.abs(pyRound(x, digits)).toFixed(digits);
+    var sign = negative ? '-' : (options.plus ? '+' : '');
+    var out = sign + body;
+    if (options.thousands) {
+      var parts = body.split('.');
+      parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, options.thousands);
+      out = sign + parts.join('.');
+    }
+    return out + (options.percent ? '%' : '');
+  }
+
+  // Weighted least squares line, as np.polyfit(x, y, 1, w=w): numpy weights the
+  // *residuals* by w, so the squared error is weighted by w².
+  function weightedLinefit(x, y, w) {
+    var W = w.map(function (v) { return v * v; }), sw = 0, sx = 0, sy = 0, i;
+    for (i = 0; i < x.length; i++) { sw += W[i]; sx += W[i] * x[i]; sy += W[i] * y[i]; }
+    var mx = sx / sw, my = sy / sw, sxy = 0, sxx = 0;
+    for (i = 0; i < x.length; i++) { sxy += W[i] * (x[i] - mx) * (y[i] - my); sxx += W[i] * (x[i] - mx) * (x[i] - mx); }
+    var slope = sxx ? sxy / sxx : 0;
+    return { slope: slope, intercept: my - slope * mx };
+  }
+
+  // np.linspace(start, stop, num), endpoint included.
+  function linspace(start, stop, num) {
+    var out = [], step = num > 1 ? (stop - start) / (num - 1) : 0;
+    for (var i = 0; i < num; i++) out.push(i * step + start);
+    if (num > 1) out[num - 1] = stop;
+    return out;
+  }
+
+  // np.gradient(f) at unit spacing: central differences inside, one-sided at the ends.
+  function gradient(f) {
+    var n = f.length, out = new Array(n);
+    if (n < 2) return f.map(function () { return 0; });
+    out[0] = f[1] - f[0];
+    out[n - 1] = f[n - 1] - f[n - 2];
+    for (var i = 1; i < n - 1; i++) out[i] = (f[i + 1] - f[i - 1]) / 2.0;
+    return out;
+  }
+
+  // np.percentile(a, q), 'linear': the virtual index q/100 * (n - 1), and numpy's _lerp,
+  // which interpolates from the upper neighbour once the fraction reaches 0.5.
+  function percentile(a, q) {
+    var s = Array.prototype.slice.call(a).sort(function (x, y) { return x - y; });
+    var n = s.length;
+    if (!n) return NaN;
+    var virtual = (q / 100) * (n - 1);
+    var below = Math.floor(virtual), above = Math.min(below + 1, n - 1);
+    below = Math.min(Math.max(below, 0), n - 1);
+    var t = virtual - Math.floor(virtual);
+    var lo = s[below], hi = s[above], d = hi - lo;
+    return t >= 0.5 ? hi - d * (1 - t) : lo + d * t;
+  }
+
+  TV.np = {
+    gradient: gradient, percentile: percentile,
+    DEG: DEG, RAD: RAD, sum: sum, mean: mean, median: median, max: max, min: min,
+    nanmax: nanmax, diff: diff, cumsum: cumsum, clip: clip, mod: mod, interp: interp,
+    unwrap: unwrap, linefit: linefit, weightedLinefit: weightedLinefit, histogram: histogram,
+    linspace: linspace, pyRound: pyRound, fmt: fmt
+  };
+})(typeof window !== 'undefined' ? (window.TV = window.TV || {}) : (globalThis.TV = globalThis.TV || {}));
+
+/* Where the sun was: `tracklog_viewer/sun.py` (NOAA's solar position algorithm),
+ * ported (the Python is retired; it is in git at `ada5e5b`),
+ * with `view3d._sun` as `forFlight`.
+ *
+ * The Python once tabulated the day so the page would not need the algorithm; with the
+ * analysis itself in the page that reason is gone, and the table is still what the 3D
+ * view interpolates, so `forFlight` builds the same one. No refraction and no
+ * topographic horizon, as in the Python: the question is which slope the light reaches.
+ */
+(function (TV) {
+  'use strict';
+  var np = TV.np, igc = TV.igc;
+  var HORIZON = 0.0;
+  var rad = function (d) { return d * np.DEG; }, deg = function (r) { return r * np.RAD; };
+  var pymod = np.mod;   // Python's float % is floored, as np.mod is
+
+  // Julian centuries since J2000.0 from a UTC epoch in seconds.
+  function julianCentury(seconds) {
+    var d = new Date(seconds * 1000);
+    var year = d.getUTCFullYear(), month = d.getUTCMonth() + 1;
+    if (month <= 2) { year -= 1; month += 12; }
+    var a = Math.floor(year / 100), b = 2 - a + Math.floor(a / 4);
+    var day = d.getUTCDate() + (d.getUTCHours() + (d.getUTCMinutes() + d.getUTCSeconds() / 60) / 60) / 24;
+    var jd = Math.floor(365.25 * (year + 4716)) + Math.floor(30.6001 * (month + 1)) + day + b - 1524.5;
+    return (jd - 2451545.0) / 36525.0;
+  }
+
+  function position(seconds, lat, lon) {
+    var jc = julianCentury(seconds);
+    var meanLong = pymod(280.46646 + jc * (36000.76983 + jc * 0.0003032), 360);
+    var meanAnom = 357.52911 + jc * (35999.05029 - 0.0001537 * jc);
+    var eccentricity = 0.016708634 - jc * (0.000042037 + 0.0000001267 * jc);
+    var centre = Math.sin(rad(meanAnom)) * (1.914602 - jc * (0.004817 + 0.000014 * jc))
+      + Math.sin(rad(2 * meanAnom)) * (0.019993 - 0.000101 * jc)
+      + Math.sin(rad(3 * meanAnom)) * 0.000289;
+    var trueLong = meanLong + centre;
+    var apparent = trueLong - 0.00569 - 0.00478 * Math.sin(rad(125.04 - 1934.136 * jc));
+    var meanObliquity = 23 + (26 + (21.448 - jc * (46.815 + jc * (0.00059 - jc * 0.001813))) / 60) / 60;
+    var obliquity = meanObliquity + 0.00256 * Math.cos(rad(125.04 - 1934.136 * jc));
+    var declination = deg(Math.asin(Math.sin(rad(obliquity)) * Math.sin(rad(apparent))));
+    var vary = Math.pow(Math.tan(rad(obliquity / 2)), 2);
+    var eqTime = 4 * deg(
+      vary * Math.sin(2 * rad(meanLong))
+      - 2 * eccentricity * Math.sin(rad(meanAnom))
+      + 4 * eccentricity * vary * Math.sin(rad(meanAnom)) * Math.cos(2 * rad(meanLong))
+      - 0.5 * vary * vary * Math.sin(4 * rad(meanLong))
+      - 1.25 * eccentricity * eccentricity * Math.sin(2 * rad(meanAnom)));
+    var d = new Date(seconds * 1000);
+    var minutes = d.getUTCHours() * 60 + d.getUTCMinutes() + d.getUTCSeconds() / 60;
+    var trueSolar = pymod(minutes + eqTime + 4 * lon, 1440);
+    var hourAngle = trueSolar / 4 - 180;
+    var latR = rad(lat), decR = rad(declination), haR = rad(hourAngle);
+    var cosZenith = Math.sin(latR) * Math.sin(decR) + Math.cos(latR) * Math.cos(decR) * Math.cos(haR);
+    cosZenith = Math.max(-1.0, Math.min(1.0, cosZenith));
+    var zenith = Math.acos(cosZenith);
+    var elevation = 90 - deg(zenith);
+    var azimuth, sinZenith = Math.sin(zenith);
+    if (Math.abs(sinZenith) < 1e-9 || Math.abs(Math.cos(latR)) < 1e-9) {
+      azimuth = 180.0;
+    } else {
+      var ratio = ((Math.sin(latR) * cosZenith) - Math.sin(decR)) / (Math.cos(latR) * sinZenith);
+      ratio = Math.max(-1.0, Math.min(1.0, ratio));
+      azimuth = deg(Math.acos(ratio));
+      azimuth = hourAngle > 0 ? pymod(azimuth + 180, 360) : pymod(540 - azimuth, 360);
+    }
+    return { azimuth: azimuth, elevation: elevation };
+  }
+
+  function midnight(date) { return Date.UTC(date.year, date.month - 1, date.day) / 1000; }
+
+  // The whole day at one place, every `step` minutes, azimuth unwrapped so interpolation
+  // never sweeps the light the long way round.
+  function dayTrack(date, lat, lon, step) {
+    step = step || 10;
+    var az = [], el = [], previous = null, base = midnight(date);
+    for (var minute = 0; minute < 24 * 60; minute += step) {
+      var where = position(base + minute * 60, lat, lon), bearing = where.azimuth;
+      if (previous !== null) {
+        while (bearing - previous > 180) bearing -= 360;
+        while (previous - bearing > 180) bearing += 360;
+      }
+      previous = bearing;
+      az.push(np.pyRound(bearing, 1));
+      el.push(np.pyRound(where.elevation, 1));
+    }
+    return { step: step, az: az, el: el };
+  }
+
+  function crossing(date, lat, lon, low, high) {
+    var base = midnight(date);
+    function at(minute) { return position(base + minute * 60, lat, lon).elevation; }
+    if ((at(low) > HORIZON) === (at(high) > HORIZON)) return null;
+    for (var i = 0; i < 24; i++) {
+      var mid = (low + high) / 2;
+      if ((at(low) > HORIZON) === (at(mid) > HORIZON)) low = mid; else high = mid;
+    }
+    return (low + high) / 2;
+  }
+
+  function riseAndSet(date, lat, lon) {
+    var base = midnight(date), samples = [];
+    for (var m = 0; m <= 24 * 60; m += 10) samples.push([m, position(base + m * 60, lat, lon).elevation]);
+    var rise = null, set = null;
+    for (var k = 0; k + 1 < samples.length; k++) {
+      var e0 = samples[k][1], e1 = samples[k + 1][1];
+      if (e0 <= HORIZON && HORIZON < e1 && rise === null) rise = crossing(date, lat, lon, samples[k][0], samples[k + 1][0]);
+      if (e0 > HORIZON && HORIZON >= e1 && set === null) set = crossing(date, lat, lon, samples[k][0], samples[k + 1][0]);
+    }
+    return { rise: rise, set: set };
+  }
+
+  // `view3d._sun`: the day over the middle of the flight, in UTC minutes, with the
+  // minutes to add to read them as the pilot's own clock.
+  function forFlight(flight) {
+    var lat = np.median(flight.lat), lon = np.median(flight.lon);
+    var t0 = flight.time[0], n = flight.time.length;
+    var utc0 = new Date(t0 * 1000);
+    var date = { year: utc0.getUTCFullYear(), month: utc0.getUTCMonth() + 1, day: utc0.getUTCDate() };
+    var p = igc.localParts(t0, flight.timezone);
+    var offset = Math.floor((Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second) / 1000 - t0) / 60);
+    function utcMinutes(t) { var d = new Date(t * 1000); return d.getUTCHours() * 60 + d.getUTCMinutes(); }
+    var times = riseAndSet(date, lat, lon);
+    var start = utcMinutes(t0), finish = utcMinutes(flight.time[n - 1]);
+    return {
+      track: dayTrack(date, lat, lon),
+      date: date.year + '-' + (date.month < 10 ? '0' : '') + date.month + '-' + (date.day < 10 ? '0' : '') + date.day,
+      offset: offset, launch: start, landing: finish,
+      at: finish >= start ? Math.floor((start + finish) / 2) : start,
+      rise: times.rise !== null ? np.pyRound(times.rise) : null,
+      set: times.set !== null ? np.pyRound(times.set) : null
+    };
+  }
+
+  TV.sun = { HORIZON: HORIZON, position: position, dayTrack: dayTrack, riseAndSet: riseAndSet,
+             forFlight: forFlight };
+})(typeof window !== 'undefined' ? (window.TV = window.TV || {}) : (globalThis.TV = globalThis.TV || {}));
+
+(function () {
   var holder = document.querySelector('[data-planner]');
   if (!holder) return;
   var panel = holder.querySelector('.view3d-panel');
@@ -4653,6 +5055,7 @@ function initView3d(root, cursorTrack, preset) {
   // On the map (`map3d`): the course as a line on the ground and the turnpoints numbered
   // (`setRoute`), the FAI areas under them (`setShapes`).
   function redraw() {
+    if (takeoff) lightSun();
     var walk = course();
     var merged = mergedEntry();
     if (merged) {
@@ -4815,7 +5218,55 @@ function initView3d(root, cursorTrack, preset) {
     entry.setRoute(course(), points);
     if (entry.setShapes) entry.setShapes(faiShapes());
     showNear();
+    lightSun();
   }
+
+  // The takeoff time: the sun over the task (or the map's middle, before there is one) at
+  // that moment, handed to the map as the table a flight's map is lit from (`TV.sun`).
+  // The reader's own clock; it opens on today at 11:00, or the next hour after that,
+  // and tomorrow once the afternoon is gone. The aerodrome hours follow it.
+  var takeoff = document.getElementById('plan-takeoff');
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+  function localValue(d) {
+    return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()) + 'T' +
+      pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  }
+  if (takeoff && !takeoff.value) {
+    var start = new Date();
+    if (start.getHours() >= 16) { start.setDate(start.getDate() + 1); start.setHours(11, 0, 0, 0); }
+    else start.setHours(Math.max(11, start.getHours() + 1), 0, 0, 0);
+    takeoff.value = localValue(start);
+  }
+  function sunTable() {
+    if (!takeoff || !takeoff.value || !window.TV || !TV.sun) return null;
+    var when = new Date(takeoff.value);
+    if (isNaN(when.getTime())) return null;
+    var lon, lat;
+    if (points.length) {
+      lon = points.reduce(function (s, p) { return s + p[0]; }, 0) / points.length;
+      lat = points.reduce(function (s, p) { return s + p[1]; }, 0) / points.length;
+    } else {
+      var dem = handle.scene().terrain || {};
+      lon = (dem.west + dem.east) / 2; lat = (dem.south + dem.north) / 2;
+      if (isNaN(lon) || isNaN(lat)) { lon = 15.5; lat = 49.8; }
+    }
+    var date = { year: when.getUTCFullYear(), month: when.getUTCMonth() + 1, day: when.getUTCDate() };
+    return { track: TV.sun.dayTrack(date, lat, lon), offset: -when.getTimezoneOffset(),
+             at: when.getUTCHours() * 60 + when.getUTCMinutes() };
+  }
+  function lightSun() {
+    var merged = mergedEntry();
+    if (merged && merged.setSun) merged.setSun(sunTable());
+  }
+  function followTakeoff() {
+    lightSun();
+    var hoursAt = document.getElementById('asp-when');
+    if (hoursAt && takeoff && takeoff.value && hoursAt.value !== takeoff.value) {
+      hoursAt.value = takeoff.value;
+      hoursAt.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }
+  if (takeoff) takeoff.addEventListener('input', followTakeoff);
   panel.addEventListener('merged-ready', function (event) { hookMerged(event.detail); });
   hookMerged(mergedEntry());
 
@@ -5307,6 +5758,7 @@ function initView3d(root, cursorTrack, preset) {
   if (whenBox) whenBox.addEventListener('change', reportAirspace);
   if (whenInput) whenInput.addEventListener('input', reportAirspace);
 
+  followTakeoff();
   redraw();
   }
 })();
