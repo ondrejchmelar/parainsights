@@ -2221,8 +2221,12 @@
             // No further than the map's foot: the map clips what hangs below it, and on a
             // phone the menu is taller than the room under the button.
             menu.style.maxHeight = '';
+            menu.classList.remove('is-scrolled');
             var room = view.getBoundingClientRect().bottom - menu.getBoundingClientRect().top - 10;
-            if (menu.scrollHeight > room) menu.style.maxHeight = Math.max(160, room) + 'px';
+            if (menu.scrollHeight > room) {
+              menu.style.maxHeight = Math.max(160, room) + 'px';
+              menu.classList.add('is-scrolled');
+            }
           }
         }
         chev.addEventListener('click', function () { open(menu.hidden); });

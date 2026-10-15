@@ -158,7 +158,7 @@ the planner listens to the time control only to re-mark its list. Its drawing to
 Draw (the accent, on or off), undo, redo and clear as icons — sit at the middle of the
 map's foot: the page hands `.m3-bottom-extra` to the map, which moves it into `.m3-mid`
 and gives it back on `dispose`. Undo and redo walk a history of the turnpoints (a point,
-a drag, an import, a clear). The airfield layer's download is under the map. What of the airspace to draw is
+a drag, an import, a clear). The ATZ layer's download (the page says *ATZ layer*, October 2026) is under the map. What of the airspace to draw is
 the map's own menu, the ▾ beside *Airspaces* (`aspMenu` in `map3d.js`, on a flight's map
 too, where it counts and filters only the zones near the track): the kinds, the floor,
 and on this page the hours row moved in from `.m3-airspace-extra` (October 2026; it was a

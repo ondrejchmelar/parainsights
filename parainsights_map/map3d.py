@@ -120,8 +120,10 @@ STYLE = """
   padding: 10px 12px; border-radius: 12px; background: var(--float);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   border: 1px solid var(--float-edge); box-shadow: var(--float-shadow);
-  font: 500 14px/1.3 "Noto Sans", ui-sans-serif, system-ui, sans-serif; color: var(--ink);
-  overflow-y: auto; overscroll-behavior: contain; }
+  font: 500 14px/1.3 "Noto Sans", ui-sans-serif, system-ui, sans-serif; color: var(--ink); }
+/* Scrolled only where it is taller than the room under it (a phone): a scrolling box cuts
+   off every ⓘ bubble inside it, as it did "About this map" on a desktop. */
+.merged-view .m3-airspace-menu.is-scrolled { overflow-y: auto; overscroll-behavior: contain; }
 .merged-view .m3-airspace-menu[hidden] { display: none; }
 .merged-view .m3-drop-head { font-weight: 600; color: var(--ink-2); margin-top: 2px; }
 .merged-view .m3-asp-kinds { display: grid; gap: 2px; }

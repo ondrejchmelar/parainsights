@@ -97,6 +97,8 @@ STYLE = """
   border: 1px solid var(--edge); border-radius: 8px; background: var(--panel); color: var(--ink); min-width: 0; }
 .m3-airspace-extra .asp-readout { font-size: 14px; }
 .m3-asp-about { display: inline-flex; align-items: center; gap: 2px; }
+/* Its bubble opens upwards, over the menu: below, the map's foot cut it off. */
+.m3-asp-about .info-pop { top: auto; bottom: calc(100% + 10px); }
 .m3-airspace-extra .asp-when-row .chk { flex: 1 1 auto; }
 .m3-airspace-extra input[type="datetime-local"] { flex: 1 1 150px; }
 .m3-airspace-extra .asp-when-row .btn { height: 34px; }
@@ -560,15 +562,11 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
         from .scene import DRAWN_TOP
 
         capped = sum(1 for ring in scene.get("airspaces", []) if ring.get("t"))
+        # Short, in a bubble: how to turn and tilt the map is the map's own ? button.
         boxes = (
-            " Each zone is the box it really is — floor to ceiling — so drag with the "
-            "right button to tilt and see what sits over what. The map opens at true scale; "
-            "\u00d75 and \u00d715, under the layers button, stretch the height so thin "
-            "zones such as a 300 m traffic circuit stand out, and the limits in each label "
-            "are the real ones whichever setting you are on."
-            + (f" The {capped} that run above {DRAWN_TOP / 1000:.0f} km are cut off at a "
-               "dashed lid, which is a cap and not their ceiling; the label says how high "
-               "they go." if capped else "")
+            " Each zone is drawn floor to ceiling; \u00d75 and \u00d715 under the layers "
+            "button stretch the height."
+            + (f" The {capped} above {DRAWN_TOP / 1000:.0f} km stop at a dashed lid." if capped else "")
         )
 
     download = ""
@@ -577,7 +575,7 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
             '<div class="asp-get">'
             + download_link(
                 openair_href or openair_name,
-                "Download the airfield layer",
+                "Download the ATZ layer",
                 f"OpenAir · {overlay.atz_count} aerodrome zones, {overlay.circuits} "
                 f"circuits at {overlay.circuit_fields} fields "
                 f"· {openair_size / 1024:.0f} KB",
@@ -621,16 +619,14 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
   <details class="asp-sources"><summary>Sources</summary>{sources_table(overlay, base_version, shift)}</details>
 </article>"""
 
-    about = ("Drawn only within 5 km of a planned task, and nothing before there is one. "
-             "Over Czechia: everything openAIP carries, plus what no published source draws: "
-             f"the traffic circuit at {overlay.circuit_fields} fields and ultralight strips. A "
-             "paraglider may fly inside an aerodrome zone but must stay out of its circuit, and "
-             "no instrument draws the circuit. Elsewhere in Europe: openAIP's zones for the country "
-             "the task reaches. Hover a zone for its name and limits." + boxes)
+    about = ("Only the zones within 5 km of a planned task. openAIP's, plus the traffic "
+             f"circuits at {overlay.circuit_fields} Czech fields no published source draws: fly "
+             "inside an aerodrome zone, but stay out of its circuit. Hover a zone for its "
+             "name and limits." + boxes)
     get = ""
     if openair_name:
         get = (f'<div class="asp-get-float">'
-               f'<span class="asp-get-label">Airfield layer for XCTrack'
+               f'<span class="asp-get-label">ATZ layer for XCTrack'
                + common.info(
                    "Aerodrome zones and traffic circuits XCTrack and XContest leave out "
                    f"(OpenAir · {overlay.atz_count} zones, {overlay.circuits} circuits at "
@@ -640,7 +636,7 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
                    "obstacles → Files → Import OpenAir files, or copy it into the "
                    "XCTrack/Airspaces folder. Provided with no guarantee — it may be out of "
                    "date or wrong; you are responsible for the airspace you fly in.",
-                   "About the airfield layer")
+                   "About the ATZ layer")
                + '</span>'
                f'<a class="btn primary" download="{_escape((openair_href or openair_name).rsplit("/", 1)[-1])}" '
                f'href="{_escape(openair_href or openair_name)}">'
