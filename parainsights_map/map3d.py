@@ -155,13 +155,6 @@ STYLE = """
 .merged-view .m3-others .is-far { color: var(--ink-2); }
 .merged-view .m3-status { position: absolute; left: 12px; top: 56px; z-index: 3; margin: 0;
   font-size: 15px; color: var(--ink-2); }
-/* MapLibre's credits. The page's footer names every source, so on the page the (i) is
-   one help symbol too many; in full screen, where the footer is out of sight, it is back. */
-.merged-view .maplibregl-ctrl-attrib { display: none; font-size: 13px; }
-:fullscreen .merged-view .maplibregl-ctrl-attrib, .is-maximised .merged-view .maplibregl-ctrl-attrib,
-.merged-view:fullscreen .maplibregl-ctrl-attrib { display: block; }
-.merged-view .maplibregl-ctrl-bottom-left { bottom: calc(var(--m3-bottom-h, 0px) + 6px); }
-.merged-view .maplibregl-ctrl-bottom-left { z-index: 2; }
 """
 
 SCRIPT = (Path(__file__).parent / "js/map3d.js").read_text(encoding="utf-8")

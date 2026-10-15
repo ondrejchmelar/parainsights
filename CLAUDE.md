@@ -586,8 +586,8 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   `spanEnd`), and follow frames whichever gliders are in the air, this one only while it
   is; the figures stay relative to the selected flight. Compared tracks are drawn flat
   like the own one — billboarded they faced the camera and read thicker. The legend sits
-  top left (this flight bold; how each is aligned in time is in its tooltip), MapLibre's (i)
-  beside it in the same corner row (at the bottom left it never lined up with the bar).
+  top left (this flight bold; how each is aligned in time is in its tooltip). The map carries no
+  credits control: every source is named in the page's footer (October 2026).
   Every flight is drawn alike in the replay: its track, its climbs and a dot at "now" —
   this one too — and no white leading stretch while comparing; each flight is one colour
   everywhere (track, climb dots, the "now" dot, its line in the height readout, which

@@ -577,36 +577,12 @@
       // Credits from the sources themselves, so switching the basemap changes them.
       // Top left, after the legend of compared flights, in one row: at the bottom left the
       // (i) never lined up with the bar beside it.
-      // The credits: in the page's footer, and on the map in full screen only (`STYLE`).
-      map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
-      // Help now holds the bottom-left corner, where MapLibre puts its credits (shown in
-      // full screen); they sit just above the bottom controls, however tall those are.
-      (function () {
-        var bottom = view.querySelector('.m3-bottom');
-        if (!bottom || !window.ResizeObserver) return;
-        new ResizeObserver(function () {
-          view.style.setProperty('--m3-bottom-h', bottom.offsetHeight + 'px');
-        }).observe(bottom);
-      })();
+      // The credits are in the page's footer only, full screen included (October 2026: the
+      // reader's call; a compact (i) sat over the map in full screen until then).
       // The legend of compared flights goes under the labels at the top left.
       (function () {
         var corner = view.querySelector('.m3-corner') || view.querySelector('.maplibregl-ctrl-top-left');
         if (corner) corner.appendChild(view.querySelector('.m3-others'));
-      })();
-      // Start closed: MapLibre opens a compact control on a wide map, and the credits then
-      // sit over the flight until someone closes them.
-      // MapLibre opens it by itself the moment the first credit text arrives from a source,
-      // so close it on that first opening and leave every later one to the reader.
-      (function () {
-        var box = view.querySelector('.maplibregl-ctrl-attrib');
-        if (!box || !window.MutationObserver) return;
-        var watch = new MutationObserver(function () {
-          if (!box.classList.contains('maplibregl-compact-show')) return;
-          box.classList.remove('maplibregl-compact-show');
-          box.removeAttribute('open');
-          watch.disconnect();
-        });
-        watch.observe(box, { attributes: true, attributeFilter: ['class'] });
       })();
 
       // The canvas view's mouse, kept: a left drag with any modifier — shift, ctrl, alt or meta —
