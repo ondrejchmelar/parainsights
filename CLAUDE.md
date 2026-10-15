@@ -46,6 +46,17 @@ empty.
   should scroll the page like anywhere else; a tap reads a point, and a press held then
   dragged scrubs (`bindReader` in `meteo/js/meteo.js` is the pattern). Today a drag over
   the side view moves the cursor and the page does not scroll.
+- **Rework the help, and review its texts.** The ⓘ bubbles, the map's ? box, titles and
+  notes grew one at a time; decide what help is for and where it lives, then go through
+  every text on the three pages (several were cut as useless in October 2026).
+- **Planner → XCTrack: a cylinder size?** The export is a waypoints task with no
+  cylinders. Open question whether to offer a radius per turnpoint (or one for all), and
+  what XCTrack does with it in a waypoints task as against a competition task.
+- **Planner: see the airspace without a planned task.** The map draws only the zones
+  within 5 km of a task, and nothing before there is one; give a way to look at the
+  airspace of an area on its own (a toggle, or the zones in view).
+- **One format for the debrief.** Its parts — the figures that open it, the finding cards,
+  the context cards, the note — each have their own shape; make them read as one.
 
 **Where the "no shared code" rule applies, and where it does not.** `airspaces/geo.py`
 exists alongside `tracklog_viewer/js/geo.js` rather than sharing it, because they are not
