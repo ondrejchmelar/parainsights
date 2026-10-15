@@ -721,14 +721,21 @@
     redraw();
   }
 
+  var how = null;     // the strip's ⓘ on how to plan, kept beside the distance
   function report() {
     xctRefresh();
     var answer = score();
     var figures = document.getElementById('plan-figures');
+    // Two rows: the distance with its shape and the ⓘ on how to plan, then the rest. Spans,
+    // so a figure is still the one `div` holding a label and a value.
+    if (!how) how = figures.parentNode.querySelector('.plan-strip-score > .info-wrap');
     figures.innerHTML = '';
+    var head = document.createElement('span'), rest = document.createElement('span');
+    head.className = 'plan-row plan-row-head'; rest.className = 'plan-row';
+    figures.appendChild(head); figures.appendChild(rest);
     if (points.length < 2) {
-      figures.innerHTML = '<div><span class="k">task</span>'
-        + '<span class="v">— km</span></div>';
+      head.innerHTML = '<div><span class="k">task</span><span class="v">— km</span></div>';
+      if (how) head.appendChild(how);
       document.getElementById('plan-legs').textContent = '';
       return;
     }
@@ -744,9 +751,9 @@
       cell.innerHTML = '<span class="k"></span><span class="v"></span>';
       cell.querySelector('.k').textContent = pair[0];
       cell.querySelector('.v').textContent = pair[1];
-      figures.appendChild(cell);
+      (pair[0] === 'distance' ? head : rest).appendChild(cell);
     });
-    // Last in the figures, shown at the panel's top right, level with its heading (CSS).
+    // Last in the figures, shown beside the distance (CSS).
     var shape = document.createElement('div');
     shape.className = 'plan-shape-cell';
     shape.innerHTML = '<span class="k">shape</span>'
@@ -754,7 +761,8 @@
     var chip = shape.querySelector('.plan-shape');
     chip.textContent = names[answer.shape];
     chip.className = 'plan-shape is-' + answer.shape;
-    figures.appendChild(shape);
+    head.appendChild(shape);
+    if (how) head.appendChild(how);
 
     var legs = document.getElementById('plan-legs');
     legs.innerHTML = '';
@@ -1215,6 +1223,15 @@
   var whenInput = document.getElementById('asp-when');
   if (whenBox) whenBox.addEventListener('change', reportAirspace);
   if (whenInput) whenInput.addEventListener('input', reportAirspace);
+
+  // The strip's height, for the map above it to leave room for (`--plan-strip-h`): on a
+  // desktop the two fill the screen together.
+  var strip = document.getElementById('plan-strip'), stage = strip && strip.closest('.asp-stage');
+  if (strip && stage && window.ResizeObserver) {
+    new ResizeObserver(function () {
+      stage.style.setProperty('--plan-strip-h', strip.offsetHeight + 'px');
+    }).observe(strip);
+  }
 
   followTakeoff();
   redraw();

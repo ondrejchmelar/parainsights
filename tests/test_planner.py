@@ -603,29 +603,31 @@ def test_the_task_goes_to_xctrack_as_a_waypoints_task():
 
 
 @needs_chrome
-def test_xctrack_is_one_split_button_at_the_panel_foot():
+def test_xctrack_is_one_split_button_under_the_strip():
     """One button for the device's best way, the other two behind its arrow; a desktop
-    (no coarse pointer here) leads with the QR code, which opens in the dialog."""
+    (no coarse pointer here) leads with the QR code, which opens in the dialog. It sits
+    under the map's strip, ahead of what the task crosses; the score is in the strip."""
     answer = _run(_HARNESS + """
     tap(0.35, 0.40); tap(0.60, 0.40);
-    var section = document.getElementById('plan-xct').closest('.plan-section');
     var more = document.getElementById('plan-xct-more');
     var shut = document.getElementById('plan-xct-menu').hidden;
     more.click();
+    function before(a, b) {
+      return !!(document.getElementById(a).compareDocumentPosition(document.getElementById(b))
+                & Node.DOCUMENT_POSITION_FOLLOWING);
+    }
     return { main: document.getElementById('plan-xct-main').dataset.method,
              menu: Array.prototype.map.call(document.querySelectorAll('#plan-xct-menu button'),
                                             function (b) { return b.dataset.method; }),
              shut: shut, open: !document.getElementById('plan-xct-menu').hidden,
-             last: ['plan-airspace', 'plan-figures'].every(function (id) {
-               return !!(document.getElementById(id).compareDocumentPosition(
-                 document.getElementById('plan-xct')) & Node.DOCUMENT_POSITION_FOLLOWING);
-             }) && !!(section.querySelector('.plan-note').compareDocumentPosition(
-                 document.getElementById('plan-xct')) & Node.DOCUMENT_POSITION_FOLLOWING) };
+             order: before('plan-strip', 'plan-xct') && before('plan-xct', 'plan-airspace'),
+             scoreInStrip: !!document.getElementById('plan-figures').closest('#plan-strip') };
     """)
     assert answer["main"] == "qr"
     assert answer["menu"] == ["file", "code"]
     assert answer["shut"] is True and answer["open"] is True
-    assert answer["last"], "the export is not at the foot of the Task panel"
+    assert answer["order"], "the export is not under the strip, ahead of the crossings"
+    assert answer["scoreInStrip"]
 
 
 def test_the_polyline_encoding_is_googles():
@@ -792,3 +794,21 @@ def test_the_rose_gets_the_forecast_wind_at_the_takeoff_hour():
     assert answer["evening"] is None, "no direction in the forecast, no wind on the rose"
     assert answer["requests"] == 1
     assert "wind_speed_unit=ms" in answer["url"] and "850hPa" in answer["url"]
+
+
+@needs_chrome
+def test_the_strip_stays_under_the_map_in_full_screen():
+    """The task's strip is part of the stage, as a flight's side view is part of its map
+    block: full screen (here the maximised fallback) keeps it at the foot, map above."""
+    answer = _run(_MAP + """
+    var stage = document.querySelector('.asp-stage');
+    stage.classList.add('is-maximised');
+    var strip = document.getElementById('plan-strip').getBoundingClientRect();
+    var map = document.querySelector('.asp-holder').getBoundingClientRect();
+    return { inside: !!document.getElementById('plan-strip').closest('.asp-stage'),
+             bottom: Math.round(strip.bottom), height: innerHeight,
+             mapAbove: Math.round(map.bottom) <= Math.round(strip.top) + 1, mapTall: map.height > 200 };
+    """)
+    assert answer["inside"]
+    assert abs(answer["bottom"] - answer["height"]) <= 1, answer
+    assert answer["mapAbove"] and answer["mapTall"], answer

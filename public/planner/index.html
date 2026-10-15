@@ -187,39 +187,25 @@ html[data-help="off"] .info-wrap { display: none; }
 .asp-name.is-on { opacity: 1; }
 .asp-holder { position: relative; }
 
-/* The stage: the map as tall as the screen, everything else floating over it. */
+/* The stage: the map, and the planner's strip under it, together as tall as the screen
+   on a desktop — the strip's height is measured into --plan-strip-h (planner.js). */
 .asp-stage { position: relative; }
-/* The map's own layers stack among themselves, under the panels. */
+/* The map's own layers stack among themselves, under the strip's menus. */
 .asp-stage .asp-holder { isolation: isolate; z-index: 0; }
-.asp-stage .view3d { aspect-ratio: auto; height: calc(100vh - 80px); min-height: 560px; }
-/* The map's top left, as on a flight's map: the layers button and the Airspaces switch.
-   On a desktop the Task panel floats over that corner, so they start just right of the
-   panels (as the help button does at the bottom); on a phone the panels are under the
-   map and they take the corner. */
-@media (min-width: 901px) { .asp-stage .merged-view .m3-corner { left: 406px; } }
-/* The left of the map is the floating panels' too (380 px from 16 px in), down to the
-   bottom, which can hide the help button in the corner: on a desktop it starts just right
-   of them. Up to 900 px wide the panels are under the map (the media query below). */
-@media (min-width: 901px) { .asp-stage .merged-view .m3-help-box { margin-left: 396px; } }
-/* The drawing tools at the middle of the map the panels leave free, not of the whole map. */
-@media (min-width: 901px) { .asp-stage .merged-view .m3-mid { left: calc(50% + 198px); } }
-/* Full screen takes the whole stage, the task and layers panels floating over the map as
-   they do on a desktop (the map's own button, `fullscreen` in map3d). */
-.asp-stage:fullscreen, .asp-stage.is-maximised { background: var(--paper); width: 100%; height: 100%; }
+.asp-stage .view3d { aspect-ratio: auto; height: calc(100vh - 80px - var(--plan-strip-h, 0px)); min-height: 440px; }
+/* Full screen takes the whole stage: the map, and the strip at its foot as a flight's
+   side view is (the map's own button, `fullscreen` in map3d). */
+.asp-stage:fullscreen, .asp-stage.is-maximised { background: var(--panel); width: 100%; height: 100%;
+  display: flex; flex-direction: column; }
 .asp-stage.is-maximised { position: fixed; inset: 0; z-index: 60; width: auto; height: auto; }
 .asp-stage::backdrop { background: var(--paper); }
+.asp-stage:fullscreen .asp-holder, .asp-stage.is-maximised .asp-holder { flex: 1; min-height: 0; }
 .asp-stage:fullscreen .asp-holder, .asp-stage.is-maximised .asp-holder,
 .asp-stage:fullscreen .renderer-host, .asp-stage.is-maximised .renderer-host,
 .asp-stage:fullscreen .view3d-panel, .asp-stage.is-maximised .view3d-panel { height: 100%; margin: 0; }
 .asp-stage:fullscreen .view3d, .asp-stage.is-maximised .view3d { height: 100%; min-height: 0; aspect-ratio: auto; }
-.asp-stage:fullscreen .asp-floats, .asp-stage.is-maximised .asp-floats { left: 16px; }
-.asp-floats { position: absolute; top: 16px; bottom: 16px; z-index: 6; width: 380px;
-  left: calc(50% - (100vw - var(--scrollbar, 0px)) / 2 + 16px);
-  display: flex; flex-direction: column; gap: 12px; pointer-events: none; }
-.float { pointer-events: auto; background: var(--float); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-  border: 1px solid var(--float-edge); border-radius: 14px; box-shadow: var(--float-shadow); }
-.float h2 { font-size: 20px; margin: 0; display: flex; align-items: center; gap: 4px; }
-.plan-panel { position: relative; padding: 16px 20px; overflow-y: auto; min-height: 0; flex: 0 1 auto; }
+.asp-stage:fullscreen .plan-strip, .asp-stage.is-maximised .plan-strip { flex: none; margin: 0;
+  padding-left: 16px; padding-right: 16px; }
 .m3-airspace-extra { display: grid; gap: 6px; }
 .m3-airspace-extra[hidden] { display: none; }
 .m3-airspace-extra .asp-controls { margin: 0; gap: 6px 8px; font-size: 14px; }
@@ -268,29 +254,10 @@ html[data-help="off"] .info-wrap { display: none; }
 .asp-src-when { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .asp-nw { white-space: nowrap; }
 @media (max-width: 900px) {
-  /* A phone or a narrow window: the map first, the task right under it like a sheet,
-     then the layers and the download. Over a small map the panels would hide it. */
+  /* A phone or a narrow window: the map a portrait box, the strip under it. */
   .asp-stage .view3d { height: auto; min-height: 0; aspect-ratio: 3 / 4; }
-  /* The task right under the map and as wide as it, flat, as the side view sits under a
-     flight's map: an inset card under an edge-to-edge map read as the wrong width, and the
-     sheet that overlapped the map's edge covered its buttons. The layers likewise, one
-     band after it; the download alone stays a card. */
-  .asp-floats { position: static; width: auto; display: flex; gap: 0; margin-top: 0; }
-  .float { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--panel); box-shadow: none; }
-  .plan-panel { position: relative; margin: 0 -14px; border-radius: 0;
-    border-width: 0 0 1px; border-color: var(--rule); }
-  .plan-panel { z-index: 7; padding: 16px 14px; }
   /* The dates wrap between themselves; at one line each the table ran off a phone. */
   .asp-src-when { white-space: normal; }
-  /* Full screen on a phone: the map on the top part, the panels scrolling under it — not
-     over it, where they hid the map's own bar and the button that leaves full screen. */
-  .asp-stage:fullscreen .asp-holder, .asp-stage.is-maximised .asp-holder { height: 58%; }
-  .asp-stage:fullscreen .asp-floats, .asp-stage.is-maximised .asp-floats {
-    position: absolute; left: 0; right: 0; top: 58%; bottom: 0; width: auto;
-    overflow-y: auto; margin: 0; padding: 0 14px 14px; background: var(--panel);
-    pointer-events: auto; border-top: 1px solid var(--rule); }
-  .asp-stage:fullscreen .asp-floats > *, .asp-stage.is-maximised .asp-floats > * {
-    flex: none; overflow: visible; }
 }
 
 
@@ -562,27 +529,46 @@ html[data-help="off"] .m3-help { display: none; }
 #plan-time-out { font-variant-numeric:tabular-nums; font-weight:600; min-width:3.2em; text-align:right; }
 .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
 .plan-hint[hidden] { display:none; }
-/* The score: the distance large, the rest as a line under it. The cells are the script's
-   (`report` in planner.js), labelled in lower case; the first letter is raised here. */
-/* The task's length on a line of its own, then score, multiplier, turnpoints and shape,
-   each kept whole and wrapping as whole figures where a phone runs out of width. */
-.plan-figures { display:flex; flex-wrap:wrap; gap:4px 18px; margin:2px 0 0; }
-.plan-figures div { display:flex; flex-direction:column; }
-.plan-figures div:first-child { flex-basis:100%; }
-.plan-figures .v, .plan-shape { white-space:nowrap; }
-/* The shape: a pill at the panel's top right, beside "Task", not a fifth figure. */
-.plan-figures .plan-shape-cell { position:absolute; top:16px; right:20px; }
+/* The strip under the map, edge to edge as the map is, its content on the page's
+   column: the score, the options, the takeoff time; on a phone one under another. */
+.plan-strip { display:flex; flex-wrap:wrap; align-items:center; gap:10px 32px; position:relative; z-index:1;
+  margin:0 calc(50% - (100vw - var(--scrollbar, 0px)) / 2);
+  padding:12px calc((100vw - var(--scrollbar, 0px)) / 2 - 50%) 14px;
+  background:var(--panel); border-bottom:1px solid var(--rule); }
+.plan-strip-score { flex:0 1 auto; min-width:0; }
+.plan-strip .plan-opts { margin:0; flex:0 1 auto; }
+.plan-strip .plan-takeoff { margin:0 0 0 auto; flex:0 1 380px; }
+.plan-strip .plan-hint:not([hidden]) { flex-basis:100%; }
+@media (max-width: 900px) {
+  .plan-strip { gap:8px 20px; }
+  .plan-strip > * { flex-basis:100% !important; }
+}
+/* The score: the distance large with the shape beside it, then score, multiplier and
+   turnpoints on a line under them. The cells are the script's (`report` in planner.js),
+   labelled in lower case; the first letter is raised here. */
+.plan-figures { display:grid; gap:2px; }
+.plan-row { display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 14px; }
+.plan-row-head { align-items:center; gap:4px 10px; }
+.plan-row-head .info-wrap { margin-left:0; }
+.plan-figures div { display:inline-flex; gap:5px; align-items:baseline; }
 .plan-figures .plan-shape-cell .k { display:none; }
-@media (max-width: 900px) { .plan-figures .plan-shape-cell { right:14px; } }
-.plan-figures div:first-child .v { font-size:38px; font-weight:700; line-height:1.1; }
-.plan-figures div:first-child .k { display:none; }
+.plan-figures .v, .plan-shape { white-space:nowrap; }
+.plan-row-head > div:first-child .v { font-size:32px; font-weight:700; line-height:1.1; }
+.plan-row-head > div:first-child .k { display:none; }
 .plan-figures .k { font-size:15px; color:var(--ink-2); }
 .plan-figures .k::first-letter, .plan-shape::first-letter { text-transform:uppercase; }
-.plan-figures .v { font-size:17px; font-weight:600; font-variant-numeric:tabular-nums; }
-.plan-shape { display:inline-block; padding:2px 10px; border-radius:999px; font-size:15px; font-weight:600;
+.plan-figures .v { font-size:15px; font-weight:600; font-variant-numeric:tabular-nums; }
+.plan-shape { display:inline-block; padding:2px 10px; border-radius:999px; font-size:14px; font-weight:600;
   border:1.5px solid var(--edge); color:var(--ink-2); }
 .plan-shape.is-fai { background:var(--good); border-color:var(--good); color:var(--on-good); }
 .plan-shape.is-flat { background:var(--warn); border-color:var(--warn); color:var(--on-warn); }
+/* Under the strip: to and from XCTrack, then what the task crosses. */
+.plan-section { margin:18px 0 0; display:grid; gap:14px; }
+.plan-section .plan-crossed-head { font-size:20px; font-weight:700; color:var(--ink); margin:0 0 6px; }
+.plan-section .plan-crossed { max-height:none; overflow:visible; }
+.plan-section .plan-xct { margin:0; padding:0; border:0; }
+.plan-section .plan-airspace, .plan-section .plan-note { margin:0; }
+.plan-strip-score .plan-legs { flex-basis:100%; margin:2px 0 0; }
 /* A wrapping row: the sides are spans with nothing between them, so as inline text the
    line had nowhere to break and ran off a phone. */
 .plan-legs { margin:8px 0 0; font-size:15px; color:var(--ink-2); font-variant-numeric:tabular-nums;
@@ -603,7 +589,6 @@ html[data-help="off"] .m3-help { display: none; }
 .plan-when::first-letter { text-transform:uppercase; }
 .plan-when.is-open { background:var(--good); color:var(--on-good); }
 .plan-when.is-shut { border:1.5px solid var(--edge); color:var(--ink-2); }
-.plan-section { margin:0; }
 .plan-note { margin:12px 0 0; font-size:15px; color:var(--ink-2); }
 .plan-xct { display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; margin:14px 0 0;
   padding-top:12px; border-top:1px solid var(--rule); }
@@ -644,8 +629,8 @@ html[data-help="off"] .m3-help { display: none; }
 <div class="wrap">
 <nav class="site-nav" aria-label="The tools here"><a href="../meteo/">Meteo</a><span class="is-on">Planner</span><a href="../flights/">Flights</a><span class="site-sp"></span><button type="button" class="tool text-toggle" aria-pressed="false" title="Larger text" aria-label="Larger text">A<b>A</b></button><button type="button" class="tool help-toggle" aria-pressed="true" title="Show or hide the explanations (ⓘ)">Help<span class="switch" aria-hidden="true"></span></button><button type="button" class="tool theme-toggle" aria-pressed="false" aria-label="Switch between the light and dark theme"><span class="theme-glyph" data-sun="<svg width=&quot;20&quot; height=&quot;20&quot; viewBox=&quot;0 0 20 20&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;1.75&quot; stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; aria-hidden=&quot;true&quot;><circle cx=&quot;10&quot; cy=&quot;10&quot; r=&quot;3.5&quot;/><path d=&quot;M10 2v2M10 16v2M2 10h2M16 10h2M4.3 4.3l1.4 1.4M14.3 14.3l1.4 1.4M4.3 15.7l1.4-1.4M14.3 5.7l1.4-1.4&quot;/></svg>" data-moon="<svg width=&quot;20&quot; height=&quot;20&quot; viewBox=&quot;0 0 20 20&quot; fill=&quot;none&quot; stroke=&quot;currentColor&quot; stroke-width=&quot;1.75&quot; stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; aria-hidden=&quot;true&quot;><path d=&quot;M15.5 12.5A6.5 6.5 0 0 1 7.5 4.5a6.5 6.5 0 1 0 8 8z&quot;/></svg>"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.5 12.5A6.5 6.5 0 0 1 7.5 4.5a6.5 6.5 0 1 0 8 8z"/></svg></span></button></nav>
 <article class="flight airspace-article" id="airspace-article" data-planner>
-  <!-- The map is the page: everything else floats over it, and on a phone the task is a
-       sheet across its foot. -->
+  <!-- The map is the page, the task right under it in a strip (in full screen too), and
+       under that what the task crosses and how it goes to XCTrack. -->
   <div class="asp-stage">
     <div class="asp-holder">
       <div class="renderer-host"><div class="m3-airspace-extra" hidden><span class="m3-drop-head">Hours</span><div class="asp-controls asp-when-row"><label class="chk" for="asp-when-on"><input type="checkbox" id="asp-when-on">Only fields open at</label><span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="More about this">i</button><span class="info-pop" role="note">Czech local time. Aerodrome hours are published for 68 of the 82 aerodromes and for <strong>none</strong> of the 74 ultralight strips, and nothing else on this map carries hours at all — so this hides part of one layer, not the map. <strong>Outside published hours is not “closed”</strong>: almost every field adds “otherwise on request”, and a tow launch needs no published hour.</span></span><input type="datetime-local" id="asp-when" data-holidays="2025-01-01,2025-04-18,2025-04-21,2025-05-01,2025-05-08,2025-07-05,2025-07-06,2025-09-28,2025-10-28,2025-11-17,2025-12-24,2025-12-25,2025-12-26,2026-01-01,2026-04-03,2026-04-06,2026-05-01,2026-05-08,2026-07-05,2026-07-06,2026-09-28,2026-10-28,2026-11-17,2026-12-24,2026-12-25,2026-12-26,2027-01-01,2027-03-26,2027-03-29,2027-05-01,2027-05-08,2027-07-05,2027-07-06,2027-09-28,2027-10-28,2027-11-17,2027-12-24,2027-12-25,2027-12-26,2028-01-01,2028-04-14,2028-04-17,2028-05-01,2028-05-08,2028-07-05,2028-07-06,2028-09-28,2028-10-28,2028-11-17,2028-12-24,2028-12-25,2028-12-26" aria-label="date and time, Czech local"><button type="button" class="btn" id="asp-when-now">Now</button><span class="asp-readout asp-when-out" id="asp-when-out"></span></div><span class="m3-drop-head m3-asp-about">About this map<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="About this map">i</button><span class="info-pop" role="note">Drawn only within 5 km of a planned task, and nothing before there is one. Over Czechia: everything openAIP carries, plus what no published source draws: the traffic circuit at 157 fields and ultralight strips. A paraglider may fly inside an aerodrome zone but must stay out of its circuit, and no instrument draws the circuit. Elsewhere in Europe: openAIP's zones for the country the task reaches. Hover a zone for its name and limits. Each zone is the box it really is — floor to ceiling — so drag with the right button to tilt and see what sits over what. <strong>The vertical is exaggerated five times</strong>, which the × buttons under the map set: at true scale, across 500 km of country, a 300 m traffic circuit is a third of a pixel tall and every box here is two rings on top of each other. ×1 is one press away, and the limits in each label are the real ones whichever setting you are on. The 37 that run above 4 km are cut off at a dashed lid, which is a cap and not their ceiling; the label says how high they go.</span></span></span></div><div class="m3-bottom-extra plan-mapbar" hidden><button type="button" class="plan-draw" id="plan-draw" aria-pressed="false"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 16l1-4 8.5-8.5 3 3L8 15z"/><path d="M11.5 5.5l3 3"/></svg><span>Draw</span></button><div class="view3d-seg" role="group" aria-label="Edit the task"><button type="button" id="plan-undo" class="m3-icon" title="Undo" aria-label="Undo"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 5 4 8.5 7.5 12"/><path d="M4 8.5h8a4 4 0 0 1 0 8H9"/></svg></button><button type="button" id="plan-redo" class="m3-icon" title="Redo" aria-label="Redo"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.5 5 16 8.5 12.5 12"/><path d="M16 8.5H8a4 4 0 0 0 0 8h3"/></svg></button><button type="button" id="plan-clear" class="m3-icon" title="Clear the task" aria-label="Clear the task"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 5.5h13M8 5.5V3.5h4v2"/><path d="M5.5 5.5l.8 11h7.4l.8-11M8.5 8.5v5M11.5 8.5v5"/></svg></button></div></div>
@@ -655,13 +640,10 @@ html[data-help="off"] .m3-help { display: none; }
     </div></div>
       <div class="asp-name" id="asp-name"></div>
     </div>
-    <div class="asp-floats">
-      <div class="float plan-panel"><h2>Task<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="More about this">i</button><span class="info-pop" role="note">Press <strong>Draw</strong>, the orange button at the foot of the map, then click the map to drop turnpoints (undo, redo and clear are beside it); drag, pinch and twist still move the view. The route is scored as XContest would and checked against every zone it crosses.</span></span></h2><section class="plan-section" aria-label="The task">
-    <div class="plan-figures" id="plan-figures"></div><div class="plan-opts"><label class="chk"><input type="checkbox" id="plan-close"> Closed</label><label class="chk"><input type="checkbox" id="plan-fai" checked> FAI areas<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="More about this">i</button><span class="info-pop" role="note">Where each turnpoint can go for an FAI triangle (every side at least 28% of the perimeter), the other two staying put: turnpoint 1 green, 2 blue, 3 red. Yellow: where a closed course must finish.</span></span></label><label class="plan-rules-label"><span class="sr">Rules</span><select id="plan-rules" class="btn"><option value="world">XContest</option><option value="cpp">ČPP (Czech)</option></select></label></div><div class="plan-takeoff"><label for="plan-day">Takeoff</label><input type="date" id="plan-day" class="plan-field"><span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="More about this">i</button><span class="info-pop" role="note">Slide through the day to see which slopes the sun reaches when: the ground is shaded from where the sun stands (strongest on the Relief ground, under the layers button), and the rose on the map shows the sun and the forecast wind at about 1500 m (the 850 hPa level, Open-Meteo) over the task. Your own clock. The aerodrome hours in the map's Airspaces menu follow this time too.</span></span><input type="range" id="plan-time" min="300" max="1260" step="15" value="720" aria-label="Time of day"><output id="plan-time-out" for="plan-time">12:00</output></div><span class="plan-hint" id="plan-hint" hidden></span>
-    <p class="plan-legs" id="plan-legs"></p>
-    <div class="plan-airspace" id="plan-airspace"></div>
-    <p class="plan-note">A plan, not a clearance.<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="How the task is scored">i</button><span class="info-pop" role="note">Scored with the same rules as the flight report: every side at least 28% of the perimeter for FAI, a closing gap under 20% of it for a closed course, multipliers 1&thinsp;/&thinsp;1.2&thinsp;/&thinsp;1.4. With ČPP chosen, the Czech cup's: closing under 5%, and in the Central European zone 1&thinsp;/&thinsp;1.8&thinsp;/&thinsp;2.2 (<a href="https://www.xcontest.org/cesko/pravidla/" rel="noreferrer">rules</a>). The map draws the airspace within 5&nbsp;km of the task, and none before there is one: Czechia's from this page, with its traffic circuits; any other European country's from openAIP once the task reaches it.</span></span></p>
-    <!-- To XCTrack: one split button at the panel's foot, the device's best way first
+    <div class="plan-strip" id="plan-strip" aria-label="The task"><div class="plan-strip-score"><div class="plan-figures" id="plan-figures"></div><span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="How to plan a task">i</button><span class="info-pop" role="note">Press <strong>Draw</strong>, the orange button at the foot of the map, then click the map to drop turnpoints (undo, redo and clear are beside it); drag, pinch and twist still move the view. The route is scored as XContest would and checked against every zone it crosses.</span></span><p class="plan-legs" id="plan-legs"></p></div><div class="plan-opts"><label class="chk"><input type="checkbox" id="plan-close"> Closed</label><label class="chk"><input type="checkbox" id="plan-fai" checked> FAI areas<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="More about this">i</button><span class="info-pop" role="note">Where each turnpoint can go for an FAI triangle (every side at least 28% of the perimeter), the other two staying put: turnpoint 1 green, 2 blue, 3 red. Yellow: where a closed course must finish.</span></span></label><label class="plan-rules-label"><span class="sr">Rules</span><select id="plan-rules" class="btn"><option value="world">XContest</option><option value="cpp">ČPP (Czech)</option></select></label></div><div class="plan-takeoff"><label for="plan-day">Takeoff</label><input type="date" id="plan-day" class="plan-field"><span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="More about this">i</button><span class="info-pop" role="note">Slide through the day to see which slopes the sun reaches when: the ground is shaded from where the sun stands (strongest on the Relief ground, under the layers button), and the rose on the map shows the sun and the forecast wind at about 1500 m (the 850 hPa level, Open-Meteo) over the task. Your own clock. The aerodrome hours in the map's Airspaces menu follow this time too.</span></span><input type="range" id="plan-time" min="300" max="1260" step="15" value="720" aria-label="Time of day"><output id="plan-time-out" for="plan-time">12:00</output></div><span class="plan-hint" id="plan-hint" hidden></span></div>
+  </div>
+  <section class="plan-section" aria-label="The task in detail">
+    <!-- To XCTrack: import, and one split button with the device's best way first
          (`xctMethods` in planner.js); a QR code or a task code opens in the dialog. -->
     <div class="plan-xct" id="plan-xct">
       <div class="plan-split plan-import">
@@ -682,6 +664,8 @@ html[data-help="off"] .m3-help { display: none; }
       </div><span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="Sending the task to XCTrack">i</button><span class="info-pop" role="note">The route as an XCTrack waypoints task: the turnpoints in order, with the ground's height under each, no cylinders. <b>File</b>: a .xctsk file — on the phone XCTrack runs on, open it from the download and choose XCTrack. <b>Task code</b>: the task is stored with XContest for a month and you get four letters to import it by in XCTrack. <b>QR code</b>: to scan from this screen with XCTrack's task import. The code and the QR code send the route to XContest's task service (tools.xcontest.org); the file stays on your device. <b>Import</b> takes a task back the same three ways — an .xctsk file, an XContest task code, or a QR code scanned with the camera or from a photo — and replaces the route drawn.</span></span>
       <p class="plan-xct-out" id="plan-xct-out" role="status"></p>
     </div>
+    <div class="plan-airspace" id="plan-airspace"></div>
+    <p class="plan-note">A plan, not a clearance.<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="How the task is scored">i</button><span class="info-pop" role="note">Scored with the same rules as the flight report: every side at least 28% of the perimeter for FAI, a closing gap under 20% of it for a closed course, multipliers 1&thinsp;/&thinsp;1.2&thinsp;/&thinsp;1.4. With ČPP chosen, the Czech cup's: closing under 5%, and in the Central European zone 1&thinsp;/&thinsp;1.8&thinsp;/&thinsp;2.2 (<a href="https://www.xcontest.org/cesko/pravidla/" rel="noreferrer">rules</a>). The map draws the airspace within 5&nbsp;km of the task, and none before there is one: Czechia's from this page, with its traffic circuits; any other European country's from openAIP once the task reaches it.</span></span></p>
     <dialog class="plan-xct-dlg" id="plan-xct-dlg" aria-labelledby="plan-xct-title">
       <div class="plan-xct-dlg-head"><h2 id="plan-xct-title">Send the task to XCTrack</h2>
         <button type="button" class="tool" id="plan-xct-close" aria-label="Close"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15"/></svg></button></div>
@@ -689,9 +673,7 @@ html[data-help="off"] .m3-help { display: none; }
       <div class="plan-xct-dlg-body" id="plan-xct-body"></div>
     </dialog>
     <script type="application/json" id="plan-coverage">{"name":"Czechia","lon":[18.832,18.75,18.596,18.416,18.365,18.161,18.11,18.086,18.051,17.913,17.893,17.758,17.625,17.483,17.188,17.136,17.063,16.985,16.953,16.884,16.713,16.544,16.478,16.367,16.057,15.825,15.701,15.403,15.311,15.162,15.14,15.067,14.993,14.972,14.923,14.822,14.786,14.707,14.691,14.489,14.431,14.368,14.19,14.049,13.989,13.815,13.77,13.548,13.441,13.401,13.339,13.289,13.228,13.141,12.917,12.813,12.681,12.5,12.391,12.498,12.512,12.458,12.276,12.208,12.175,12.09,12.09,12.135,12.175,12.277,12.453,12.549,12.706,12.765,12.943,12.967,13.016,13.181,13.238,13.306,13.375,13.436,13.473,13.527,13.557,13.701,13.899,14.202,14.369,14.377,14.299,14.256,14.283,14.32,14.507,14.546,14.595,14.624,14.614,14.723,14.767,14.809,14.896,14.983,14.994,15.259,15.277,15.354,15.731,15.894,15.949,16.007,16.066,16.282,16.36,16.42,16.379,16.283,16.21,16.231,16.334,16.488,16.597,16.639,16.679,16.842,16.99,16.993,16.869,16.88,17.152,17.415,17.555,17.655,17.702,17.72,17.735,17.709,17.589,17.627,17.681,17.831,17.875,17.984,18.028,18.099,18.205,18.305,18.348,18.516,18.562,18.595,18.807,18.832],"lat":[49.511,49.494,49.491,49.391,49.336,49.257,49.18,49.065,49.037,48.999,48.971,48.888,48.842,48.828,48.861,48.841,48.781,48.677,48.599,48.704,48.734,48.796,48.8,48.739,48.755,48.864,48.86,48.957,48.974,48.946,48.969,48.998,49.001,48.984,48.771,48.774,48.747,48.672,48.599,48.626,48.616,48.576,48.579,48.602,48.692,48.767,48.816,48.96,48.956,48.978,49.061,49.097,49.112,49.158,49.33,49.329,49.415,49.64,49.74,49.853,49.896,49.956,50.042,50.098,50.176,50.269,50.302,50.311,50.288,50.181,50.35,50.393,50.409,50.431,50.406,50.416,50.49,50.51,50.577,50.586,50.622,50.601,50.617,50.693,50.705,50.717,50.761,50.861,50.899,50.914,50.953,51.002,51.029,51.038,51.01,50.994,50.919,50.915,50.856,50.815,50.818,50.859,50.861,50.887,51.014,50.959,50.883,50.812,50.74,50.677,50.67,50.612,50.63,50.656,50.621,50.574,50.517,50.483,50.424,50.394,50.367,50.248,50.122,50.102,50.097,50.187,50.237,50.26,50.415,50.427,50.378,50.255,50.264,50.284,50.307,50.299,50.231,50.194,50.157,50.116,50.101,49.983,49.972,49.999,50.035,49.993,49.965,49.914,49.93,49.902,49.879,49.758,49.614,49.511]}</script>
-  </section></div>
-    </div>
-  </div>
+  </section>
   <div class="asp-get-float"><span class="asp-get-label">Airfield layer for XCTrack<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="About the airfield layer">i</button><span class="info-pop" role="note">Aerodrome zones and traffic circuits XCTrack and XContest leave out (OpenAir · 82 zones, 206 circuits at 157 fields · 208 KB). <strong>Not a full airspace set</strong>: load it alongside your usual airspace, never instead of it. Import under Preferences → Airspaces and obstacles → Files → Import OpenAir files, or copy it into the XCTrack/Airspaces folder. Provided with no guarantee — it may be out of date or wrong; you are responsible for the airspace you fly in.</span></span></span><a class="btn primary" download="CZ_airfield_zones_20261001.txt" href="CZ_airfield_zones_20261001.txt"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3v10M6 9l4 4 4-4M4 16.5h12"/></svg>Download</a></div>
   <details class="asp-sources"><summary>Sources and dates</summary><table class="asp-src"><caption>What is on this map, and where it came from</caption><thead><tr><th>Layer</th><th>Source</th><th>Effective</th></tr></thead><tbody><tr><td class='asp-src-key'><span class="asp-swatch" style="background:#c2410c"></span><span class="asp-swatch" style="background:#b91c1c"></span>Controlled, restricted, danger, prohibited</td><td><a href="https://www.openaip.net" rel="noreferrer">openAIP</a> — CC BY-NC 4.0</td><td class='asp-src-when'>openAIP <span class="asp-nw">2026-10-05</span></td></tr><tr><td class='asp-src-key'><span class="asp-swatch" style="background:#a16207"></span>Gliding areas, dropzones, PGZ</td><td><a href="https://www.openaip.net" rel="noreferrer">openAIP</a> — CC BY-NC 4.0</td><td class='asp-src-when'>openAIP <span class="asp-nw">2026-10-05</span></td></tr><tr><td class='asp-src-key'><span class="asp-swatch" style="background:#15803d"></span>Aerodrome zones on the map — openAIP's. The download's are this site's own: 82 public aerodromes, 5 500 m radius, ground to 4 000 ft (the AIP calls these ATZ), 15 clipped by an overlying CTR or TMA; positions corrected by 108 m. <strong>An ultralight strip has no zone of its own</strong>, so those 74 fields carry only their traffic circuit</td><td>map: <a href="https://www.openaip.net" rel="noreferrer">openAIP</a> — CC BY-NC 4.0; download: <a href="https://aim.rlp.cz/" rel="noreferrer">ŘLP ČR</a> — UAS zones, <a href="https://aim.rlp.cz/data/uas/2026_10_01/actual/LKR315A.json" rel="noreferrer">LKR315A</a>, <a href="https://aim.rlp.cz/data/uas/2026_10_01/actual/LKR315B.json" rel="noreferrer">LKR315B</a></td><td class='asp-src-when'>openAIP <span class="asp-nw">2026-10-05</span>; <span class="asp-nw">2026-10-01</span></td></tr><tr><td class='asp-src-key'><span class="asp-swatch" style="background:#ea580c"></span>Traffic circuits (okruhy) — <strong>drawn by this tool, not a published boundary.</strong> Shape scaled off the AIP's VOC charts (±10%); altitude published where stated, otherwise 1 000 ft above the field (measured mean 993 ft over five, spread 820–1 150). At an SLZ strip the runway itself is reconstructed from the reference point and a heading rounded to 10°, so those are marked <code>est</code></td><td>circuit drawn from the <a href="https://aim.rlp.cz/vfrmanual/actual/ad/lkcast_voc.jpg" rel="noreferrer">VOC charts</a>, altitudes and runway tables from the <a href="https://aim.rlp.cz/vfrmanual/actual/lkta_text_en.html" rel="noreferrer">AIP VFR manual</a>, thresholds from <a href="https://ourairports.com/countries/CZ/" rel="noreferrer">OurAirports</a></td><td class='asp-src-when'>—</td></tr></tbody></table></details>
 </article>
@@ -2432,16 +2414,9 @@ function initView3d(root, cursorTrack, preset) {
         refresh();
       }
       var framedFor = '';
-      // Room around what is framed: the map's own buttons, and on the planner's page the
-      // task and layers panels where they float over the map's left side.
+      // Room around what is framed: the map's own buttons.
       function framePadding() {
-        var pad = { top: 70, bottom: 110, left: 50, right: 90 };
-        var stage = panel.closest('.asp-stage'), floats = stage && stage.querySelector('.asp-floats');
-        if (floats && getComputedStyle(floats).position === 'absolute') {
-          var over = floats.getBoundingClientRect().right - map.getContainer().getBoundingClientRect().left;
-          if (over > 0 && over < map.getContainer().clientWidth * 0.6) pad.left = over + 40;
-        }
-        return pad;
+        return { top: 70, bottom: 110, left: 50, right: 90 };
       }
       // This flight and every compared one near enough to draw, and a planned task (the
       // planner's map has no flight, and looking straight down it framed nothing), as
@@ -5376,14 +5351,21 @@ function initView3d(root, cursorTrack, preset) {
     redraw();
   }
 
+  var how = null;     // the strip's ⓘ on how to plan, kept beside the distance
   function report() {
     xctRefresh();
     var answer = score();
     var figures = document.getElementById('plan-figures');
+    // Two rows: the distance with its shape and the ⓘ on how to plan, then the rest. Spans,
+    // so a figure is still the one `div` holding a label and a value.
+    if (!how) how = figures.parentNode.querySelector('.plan-strip-score > .info-wrap');
     figures.innerHTML = '';
+    var head = document.createElement('span'), rest = document.createElement('span');
+    head.className = 'plan-row plan-row-head'; rest.className = 'plan-row';
+    figures.appendChild(head); figures.appendChild(rest);
     if (points.length < 2) {
-      figures.innerHTML = '<div><span class="k">task</span>'
-        + '<span class="v">— km</span></div>';
+      head.innerHTML = '<div><span class="k">task</span><span class="v">— km</span></div>';
+      if (how) head.appendChild(how);
       document.getElementById('plan-legs').textContent = '';
       return;
     }
@@ -5399,9 +5381,9 @@ function initView3d(root, cursorTrack, preset) {
       cell.innerHTML = '<span class="k"></span><span class="v"></span>';
       cell.querySelector('.k').textContent = pair[0];
       cell.querySelector('.v').textContent = pair[1];
-      figures.appendChild(cell);
+      (pair[0] === 'distance' ? head : rest).appendChild(cell);
     });
-    // Last in the figures, shown at the panel's top right, level with its heading (CSS).
+    // Last in the figures, shown beside the distance (CSS).
     var shape = document.createElement('div');
     shape.className = 'plan-shape-cell';
     shape.innerHTML = '<span class="k">shape</span>'
@@ -5409,7 +5391,8 @@ function initView3d(root, cursorTrack, preset) {
     var chip = shape.querySelector('.plan-shape');
     chip.textContent = names[answer.shape];
     chip.className = 'plan-shape is-' + answer.shape;
-    figures.appendChild(shape);
+    head.appendChild(shape);
+    if (how) head.appendChild(how);
 
     var legs = document.getElementById('plan-legs');
     legs.innerHTML = '';
@@ -5870,6 +5853,15 @@ function initView3d(root, cursorTrack, preset) {
   var whenInput = document.getElementById('asp-when');
   if (whenBox) whenBox.addEventListener('change', reportAirspace);
   if (whenInput) whenInput.addEventListener('input', reportAirspace);
+
+  // The strip's height, for the map above it to leave room for (`--plan-strip-h`): on a
+  // desktop the two fill the screen together.
+  var strip = document.getElementById('plan-strip'), stage = strip && strip.closest('.asp-stage');
+  if (strip && stage && window.ResizeObserver) {
+    new ResizeObserver(function () {
+      stage.style.setProperty('--plan-strip-h', strip.offsetHeight + 'px');
+    }).observe(strip);
+  }
 
   followTakeoff();
   redraw();

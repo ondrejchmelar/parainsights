@@ -45,9 +45,6 @@ empty.
 - **Planner: tasks kept in the browser (localStorage).** Save a planned task under a name
   and load it back later, alongside the XCTrack export and import (file, task code, QR
   code), so a task survives closing the page without going through XCTrack.
-- **Planner: UX review — more on the map, a smaller panel.** Move more of the Task panel's
-  buttons onto the map (as the 3D map's own controls now are) and shrink the panel, so
-  the map gets more of the screen, on a phone especially.
 - **Side view: a long press to read it, as the sounding has.** A finger on the side view
   should scroll the page like anywhere else; a tap reads a point, and a press held then
   dragged scrubs (`bindReader` in `meteo/js/meteo.js` is the pattern). Today a drag over
@@ -143,8 +140,11 @@ reason it is a 3D view: three zones with the same outline and
 different limits are one red line on a flat map.
 
 **The planner is a section of the airspace page**, not a page of its own (October 2026):
-they were two tabs drawing the same airspace over the same ground. Its bar sits over the
-map, its score and crossing list under it, and drawing is a mode (*Draw a task*), off by
+they were two tabs drawing the same airspace over the same ground. There is no panel over
+the map (October 2026): the drawing tools are on the map, the task's strip — score,
+options, takeoff time — sits under it as a flight's side view does (`planner.strip`,
+inside `.asp-stage`, so full screen keeps it), and the XCTrack import and export and the
+crossings are under that (`planner.results`). Drawing is a mode (*Draw*), off by
 default, because on a phone a tap on this map names the zone under the finger and one
 gesture must not mean two things. The map is built once by `airspaces.render_html.
 SCRIPT3D`, which publishes the handle as `window.__airspaceMap`; the planner's script

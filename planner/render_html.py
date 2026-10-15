@@ -72,27 +72,46 @@ STYLE = """
 #plan-time-out { font-variant-numeric:tabular-nums; font-weight:600; min-width:3.2em; text-align:right; }
 .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
 .plan-hint[hidden] { display:none; }
-/* The score: the distance large, the rest as a line under it. The cells are the script's
-   (`report` in planner.js), labelled in lower case; the first letter is raised here. */
-/* The task's length on a line of its own, then score, multiplier, turnpoints and shape,
-   each kept whole and wrapping as whole figures where a phone runs out of width. */
-.plan-figures { display:flex; flex-wrap:wrap; gap:4px 18px; margin:2px 0 0; }
-.plan-figures div { display:flex; flex-direction:column; }
-.plan-figures div:first-child { flex-basis:100%; }
-.plan-figures .v, .plan-shape { white-space:nowrap; }
-/* The shape: a pill at the panel's top right, beside "Task", not a fifth figure. */
-.plan-figures .plan-shape-cell { position:absolute; top:16px; right:20px; }
+/* The strip under the map, edge to edge as the map is, its content on the page's
+   column: the score, the options, the takeoff time; on a phone one under another. */
+.plan-strip { display:flex; flex-wrap:wrap; align-items:center; gap:10px 32px; position:relative; z-index:1;
+  margin:0 calc(50% - (100vw - var(--scrollbar, 0px)) / 2);
+  padding:12px calc((100vw - var(--scrollbar, 0px)) / 2 - 50%) 14px;
+  background:var(--panel); border-bottom:1px solid var(--rule); }
+.plan-strip-score { flex:0 1 auto; min-width:0; }
+.plan-strip .plan-opts { margin:0; flex:0 1 auto; }
+.plan-strip .plan-takeoff { margin:0 0 0 auto; flex:0 1 380px; }
+.plan-strip .plan-hint:not([hidden]) { flex-basis:100%; }
+@media (max-width: 900px) {
+  .plan-strip { gap:8px 20px; }
+  .plan-strip > * { flex-basis:100% !important; }
+}
+/* The score: the distance large with the shape beside it, then score, multiplier and
+   turnpoints on a line under them. The cells are the script's (`report` in planner.js),
+   labelled in lower case; the first letter is raised here. */
+.plan-figures { display:grid; gap:2px; }
+.plan-row { display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 14px; }
+.plan-row-head { align-items:center; gap:4px 10px; }
+.plan-row-head .info-wrap { margin-left:0; }
+.plan-figures div { display:inline-flex; gap:5px; align-items:baseline; }
 .plan-figures .plan-shape-cell .k { display:none; }
-@media (max-width: 900px) { .plan-figures .plan-shape-cell { right:14px; } }
-.plan-figures div:first-child .v { font-size:38px; font-weight:700; line-height:1.1; }
-.plan-figures div:first-child .k { display:none; }
+.plan-figures .v, .plan-shape { white-space:nowrap; }
+.plan-row-head > div:first-child .v { font-size:32px; font-weight:700; line-height:1.1; }
+.plan-row-head > div:first-child .k { display:none; }
 .plan-figures .k { font-size:15px; color:var(--ink-2); }
 .plan-figures .k::first-letter, .plan-shape::first-letter { text-transform:uppercase; }
-.plan-figures .v { font-size:17px; font-weight:600; font-variant-numeric:tabular-nums; }
-.plan-shape { display:inline-block; padding:2px 10px; border-radius:999px; font-size:15px; font-weight:600;
+.plan-figures .v { font-size:15px; font-weight:600; font-variant-numeric:tabular-nums; }
+.plan-shape { display:inline-block; padding:2px 10px; border-radius:999px; font-size:14px; font-weight:600;
   border:1.5px solid var(--edge); color:var(--ink-2); }
 .plan-shape.is-fai { background:var(--good); border-color:var(--good); color:var(--on-good); }
 .plan-shape.is-flat { background:var(--warn); border-color:var(--warn); color:var(--on-warn); }
+/* Under the strip: to and from XCTrack, then what the task crosses. */
+.plan-section { margin:18px 0 0; display:grid; gap:14px; }
+.plan-section .plan-crossed-head { font-size:20px; font-weight:700; color:var(--ink); margin:0 0 6px; }
+.plan-section .plan-crossed { max-height:none; overflow:visible; }
+.plan-section .plan-xct { margin:0; padding:0; border:0; }
+.plan-section .plan-airspace, .plan-section .plan-note { margin:0; }
+.plan-strip-score .plan-legs { flex-basis:100%; margin:2px 0 0; }
 /* A wrapping row: the sides are spans with nothing between them, so as inline text the
    line had nowhere to break and ran off a phone. */
 .plan-legs { margin:8px 0 0; font-size:15px; color:var(--ink-2); font-variant-numeric:tabular-nums;
@@ -113,7 +132,6 @@ STYLE = """
 .plan-when::first-letter { text-transform:uppercase; }
 .plan-when.is-open { background:var(--good); color:var(--on-good); }
 .plan-when.is-shut { border:1.5px solid var(--edge); color:var(--ink-2); }
-.plan-section { margin:0; }
 .plan-note { margin:12px 0 0; font-size:15px; color:var(--ink-2); }
 .plan-xct { display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; margin:14px 0 0;
   padding-top:12px; border-top:1px solid var(--rule); }
@@ -236,8 +254,25 @@ XCT_HELP = ("The route as an XCTrack waypoints task: the turnpoints in order, wi
             "replaces the route drawn.")
 
 
+def strip() -> str:
+    """The task under the map, as the side view sits under a flight's map, and with the
+    map in full screen: what it is worth, its options and the takeoff time. There was a
+    Task panel floating over the map until October 2026."""
+    import parainsights_common as common
+
+    how = common.info("Press <strong>Draw</strong>, the orange button at the foot of the "
+                      "map, then click the map to drop turnpoints (undo, redo and clear are "
+                      "beside it); drag, pinch and twist still move the view. The route is "
+                      "scored as XContest would and checked against every zone it crosses.",
+                      "How to plan a task")
+    return ('<div class="plan-strip" id="plan-strip" aria-label="The task">'
+            '<div class="plan-strip-score"><div class="plan-figures" id="plan-figures"></div>'
+            f'{how}<p class="plan-legs" id="plan-legs"></p></div>'
+            + controls() + "</div>")
+
+
 def results() -> str:
-    """What the drawn route is worth and what it crosses, in the Task panel."""
+    """Under the strip: to and from XCTrack, what the task crosses, and the caveat."""
     import parainsights_common as common
 
     rules = (f"Scored with the same rules as the flight report: every side at least "
@@ -250,12 +285,8 @@ def results() -> str:
              "The map draws the airspace within 5&nbsp;km of the task, and none before "
              "there is one: Czechia's from this page, with its traffic circuits; any other "
              "European country's from openAIP once the task reaches it.")
-    return f"""<section class="plan-section" aria-label="The task">
-    <div class="plan-figures" id="plan-figures"></div>
-    <p class="plan-legs" id="plan-legs"></p>
-    <div class="plan-airspace" id="plan-airspace"></div>
-    <p class="plan-note">A plan, not a clearance.{common.info(rules, "How the task is scored")}</p>
-    <!-- To XCTrack: one split button at the panel's foot, the device's best way first
+    return f"""<section class="plan-section" aria-label="The task in detail">
+    <!-- To XCTrack: import, and one split button with the device's best way first
          (`xctMethods` in planner.js); a QR code or a task code opens in the dialog. -->
     <div class="plan-xct" id="plan-xct">
       <div class="plan-split plan-import">
@@ -276,6 +307,8 @@ def results() -> str:
       </div>{common.info(XCT_HELP, "Sending the task to XCTrack")}
       <p class="plan-xct-out" id="plan-xct-out" role="status"></p>
     </div>
+    <div class="plan-airspace" id="plan-airspace"></div>
+    <p class="plan-note">A plan, not a clearance.{common.info(rules, "How the task is scored")}</p>
     <dialog class="plan-xct-dlg" id="plan-xct-dlg" aria-labelledby="plan-xct-title">
       <div class="plan-xct-dlg-head"><h2 id="plan-xct-title">Send the task to XCTrack</h2>
         <button type="button" class="tool" id="plan-xct-close" aria-label="Close">{common.icon(common.ICONS["close"])}</button></div>
@@ -293,10 +326,12 @@ def body(uid: str = "planner", *, scene_panel: str = "") -> str:
 
     return f"""<article class="flight airspace-article" id="{uid}-article" data-planner>
   {airspace_html.when_control()}
-  {controls()}
+  <div class="asp-stage">
   <div class="asp-holder">
     {scene_panel.replace('<div class="view3d', map_bar() + '<div class="view3d', 1)}
     <div class="asp-name" id="asp-name"></div>
+  </div>
+  {strip()}
   </div>
   {results()}
 </article>"""

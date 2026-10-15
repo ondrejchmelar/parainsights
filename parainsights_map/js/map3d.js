@@ -886,16 +886,9 @@
         refresh();
       }
       var framedFor = '';
-      // Room around what is framed: the map's own buttons, and on the planner's page the
-      // task and layers panels where they float over the map's left side.
+      // Room around what is framed: the map's own buttons.
       function framePadding() {
-        var pad = { top: 70, bottom: 110, left: 50, right: 90 };
-        var stage = panel.closest('.asp-stage'), floats = stage && stage.querySelector('.asp-floats');
-        if (floats && getComputedStyle(floats).position === 'absolute') {
-          var over = floats.getBoundingClientRect().right - map.getContainer().getBoundingClientRect().left;
-          if (over > 0 && over < map.getContainer().clientWidth * 0.6) pad.left = over + 40;
-        }
-        return pad;
+        return { top: 70, bottom: 110, left: 50, right: 90 };
       }
       // This flight and every compared one near enough to draw, and a planned task (the
       // planner's map has no flight, and looking straight down it framed nothing), as

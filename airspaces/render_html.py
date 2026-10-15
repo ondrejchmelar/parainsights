@@ -70,39 +70,25 @@ STYLE = """
 .asp-name.is-on { opacity: 1; }
 .asp-holder { position: relative; }
 
-/* The stage: the map as tall as the screen, everything else floating over it. */
+/* The stage: the map, and the planner's strip under it, together as tall as the screen
+   on a desktop — the strip's height is measured into --plan-strip-h (planner.js). */
 .asp-stage { position: relative; }
-/* The map's own layers stack among themselves, under the panels. */
+/* The map's own layers stack among themselves, under the strip's menus. */
 .asp-stage .asp-holder { isolation: isolate; z-index: 0; }
-.asp-stage .view3d { aspect-ratio: auto; height: calc(100vh - 80px); min-height: 560px; }
-/* The map's top left, as on a flight's map: the layers button and the Airspaces switch.
-   On a desktop the Task panel floats over that corner, so they start just right of the
-   panels (as the help button does at the bottom); on a phone the panels are under the
-   map and they take the corner. */
-@media (min-width: 901px) { .asp-stage .merged-view .m3-corner { left: 406px; } }
-/* The left of the map is the floating panels' too (380 px from 16 px in), down to the
-   bottom, which can hide the help button in the corner: on a desktop it starts just right
-   of them. Up to 900 px wide the panels are under the map (the media query below). */
-@media (min-width: 901px) { .asp-stage .merged-view .m3-help-box { margin-left: 396px; } }
-/* The drawing tools at the middle of the map the panels leave free, not of the whole map. */
-@media (min-width: 901px) { .asp-stage .merged-view .m3-mid { left: calc(50% + 198px); } }
-/* Full screen takes the whole stage, the task and layers panels floating over the map as
-   they do on a desktop (the map's own button, `fullscreen` in map3d). */
-.asp-stage:fullscreen, .asp-stage.is-maximised { background: var(--paper); width: 100%; height: 100%; }
+.asp-stage .view3d { aspect-ratio: auto; height: calc(100vh - 80px - var(--plan-strip-h, 0px)); min-height: 440px; }
+/* Full screen takes the whole stage: the map, and the strip at its foot as a flight's
+   side view is (the map's own button, `fullscreen` in map3d). */
+.asp-stage:fullscreen, .asp-stage.is-maximised { background: var(--panel); width: 100%; height: 100%;
+  display: flex; flex-direction: column; }
 .asp-stage.is-maximised { position: fixed; inset: 0; z-index: 60; width: auto; height: auto; }
 .asp-stage::backdrop { background: var(--paper); }
+.asp-stage:fullscreen .asp-holder, .asp-stage.is-maximised .asp-holder { flex: 1; min-height: 0; }
 .asp-stage:fullscreen .asp-holder, .asp-stage.is-maximised .asp-holder,
 .asp-stage:fullscreen .renderer-host, .asp-stage.is-maximised .renderer-host,
 .asp-stage:fullscreen .view3d-panel, .asp-stage.is-maximised .view3d-panel { height: 100%; margin: 0; }
 .asp-stage:fullscreen .view3d, .asp-stage.is-maximised .view3d { height: 100%; min-height: 0; aspect-ratio: auto; }
-.asp-stage:fullscreen .asp-floats, .asp-stage.is-maximised .asp-floats { left: 16px; }
-.asp-floats { position: absolute; top: 16px; bottom: 16px; z-index: 6; width: 380px;
-  left: calc(50% - (100vw - var(--scrollbar, 0px)) / 2 + 16px);
-  display: flex; flex-direction: column; gap: 12px; pointer-events: none; }
-.float { pointer-events: auto; background: var(--float); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-  border: 1px solid var(--float-edge); border-radius: 14px; box-shadow: var(--float-shadow); }
-.float h2 { font-size: 20px; margin: 0; display: flex; align-items: center; gap: 4px; }
-.plan-panel { position: relative; padding: 16px 20px; overflow-y: auto; min-height: 0; flex: 0 1 auto; }
+.asp-stage:fullscreen .plan-strip, .asp-stage.is-maximised .plan-strip { flex: none; margin: 0;
+  padding-left: 16px; padding-right: 16px; }
 .m3-airspace-extra { display: grid; gap: 6px; }
 .m3-airspace-extra[hidden] { display: none; }
 .m3-airspace-extra .asp-controls { margin: 0; gap: 6px 8px; font-size: 14px; }
@@ -151,29 +137,10 @@ STYLE = """
 .asp-src-when { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .asp-nw { white-space: nowrap; }
 @media (max-width: 900px) {
-  /* A phone or a narrow window: the map first, the task right under it like a sheet,
-     then the layers and the download. Over a small map the panels would hide it. */
+  /* A phone or a narrow window: the map a portrait box, the strip under it. */
   .asp-stage .view3d { height: auto; min-height: 0; aspect-ratio: 3 / 4; }
-  /* The task right under the map and as wide as it, flat, as the side view sits under a
-     flight's map: an inset card under an edge-to-edge map read as the wrong width, and the
-     sheet that overlapped the map's edge covered its buttons. The layers likewise, one
-     band after it; the download alone stays a card. */
-  .asp-floats { position: static; width: auto; display: flex; gap: 0; margin-top: 0; }
-  .float { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--panel); box-shadow: none; }
-  .plan-panel { position: relative; margin: 0 -14px; border-radius: 0;
-    border-width: 0 0 1px; border-color: var(--rule); }
-  .plan-panel { z-index: 7; padding: 16px 14px; }
   /* The dates wrap between themselves; at one line each the table ran off a phone. */
   .asp-src-when { white-space: normal; }
-  /* Full screen on a phone: the map on the top part, the panels scrolling under it — not
-     over it, where they hid the map's own bar and the button that leaves full screen. */
-  .asp-stage:fullscreen .asp-holder, .asp-stage.is-maximised .asp-holder { height: 58%; }
-  .asp-stage:fullscreen .asp-floats, .asp-stage.is-maximised .asp-floats {
-    position: absolute; left: 0; right: 0; top: 58%; bottom: 0; width: auto;
-    overflow-y: auto; margin: 0; padding: 0 14px 14px; background: var(--panel);
-    pointer-events: auto; border-top: 1px solid var(--rule); }
-  .asp-stage:fullscreen .asp-floats > *, .asp-stage.is-maximised .asp-floats > * {
-    flex: none; overflow: visible; }
 }
 """
 
@@ -634,7 +601,7 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
     if scene is not None:
         from planner import render_html as planner_html
 
-        plan_bar, plan_results = planner_html.controls(), planner_html.results()
+        plan_bar, plan_results = planner_html.strip(), planner_html.results()
         map_bar = planner_html.map_bar()
         plan_attr = " data-planner"
         plan_lede = (" <strong>Plan a task on the same map:</strong> press <em>Draw</em> "
@@ -687,24 +654,17 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
              f'<span class="m3-drop-head">Hours</span>{when_control(WHEN_NOTE)}'
              f'<span class="m3-drop-head m3-asp-about">About this map{common.info(about, "About this map")}</span>'
              '</div>')
-    task = ""
-    if plan_bar:
-        task = (f'<div class="float plan-panel"><h2>Task{common.info("Press <strong>Draw</strong>, the orange button at the foot of the map, then click the map to drop turnpoints (undo, redo and clear are beside it); drag, pinch and twist still move the view. The route is scored as XContest would and checked against every zone it crosses.")}</h2>'
-                + plan_results.replace('<div class="plan-figures" id="plan-figures"></div>',
-                                       '<div class="plan-figures" id="plan-figures"></div>' + plan_bar, 1)
-                + '</div>')
     return f"""<article class="flight airspace-article" id="{uid}-article"{plan_attr}>
-  <!-- The map is the page: everything else floats over it, and on a phone the task is a
-       sheet across its foot. -->
+  <!-- The map is the page, the task right under it in a strip (in full screen too), and
+       under that what the task crosses and how it goes to XCTrack. -->
   <div class="asp-stage">
     <div class="asp-holder">
       {_map(airspaces, project, scene, uid).replace('<div class="renderer-host">', '<div class="renderer-host">' + extra + map_bar, 1)}
       <div class="asp-name" id="asp-name"></div>
     </div>
-    <div class="asp-floats">
-      {task}
-    </div>
+    {plan_bar}
   </div>
+  {plan_results}
   {get}
   <details class="asp-sources"><summary>Sources and dates</summary>{sources_table(overlay, base_version, shift)}</details>
 </article>"""
