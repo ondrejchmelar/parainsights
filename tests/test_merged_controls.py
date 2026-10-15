@@ -67,6 +67,13 @@ def _scene_with_time() -> dict:
     ring["lon"] = [13.9, 14.4, 14.4, 13.9]
     ring["lat"] = [48.9, 48.9, 49.3, 49.3]
     ring["c"] = 6000
+    # A second kind, floored high, for the airspace menu's kinds and floor.
+    scene["airspaces"].append({"k": "restricted", "n": "R TEST  (3000 m – 4000 m)", "f": 3000,
+                               "c": 4000, "lon": [14.0, 14.3, 14.3, 14.0],
+                               "lat": [49.0, 49.0, 49.2, 49.2]})
+    scene["airspaceColours"]["restricted"] = "#b91c1c"
+    scene["airspaceClasses"] = [["base", "Controlled"], ["restricted", "Restricted"],
+                                ["gliding", "Gliding"]]
     scene["tiles"] = dict(view3d.TILE_SOURCES)
     return scene
 
@@ -269,6 +276,80 @@ def test_the_airspace_hides_nothing(browser):
     for name in ("airspace", "airspace-edges", "airspace-corners"):
         assert layers[name] and layers[name].get("depthWriteEnabled") is False, name
     assert any(name.startswith("track") for name in layers), layers
+
+
+def test_the_airspace_menu_filters_by_kind_and_floor(browser):
+    """The ▾ beside Airspaces: a row per kind with how many this map draws (a kind with
+    none is offered greyed), a floor, and Reset. Choosing a filter turns the airspace on,
+    and Escape closes the menu."""
+    _reset(browser)
+    q = "document.querySelector('.merged-view %s')"
+    shown = f"({ENTRY}).airspaceShown()"
+    rows = """[...document.querySelectorAll('.merged-view .m3-asp-kinds label')].map(r =>
+      [r.querySelector('span').textContent, r.querySelector('b').textContent,
+       r.querySelector('input').disabled, r.querySelector('input').checked])"""
+    assert browser.js((q % ".m3-airspace-menu") + ".hidden") is True
+    browser.js((q % "[data-m3=airspace-menu]") + ".click(); 1")
+    assert browser.js((q % ".m3-airspace-menu") + ".hidden") is False
+    assert browser.js(rows) == [["Controlled", "1", False, True], ["Restricted", "1", False, True],
+                                ["Gliding", "0", True, True]]
+    assert browser.js(shown) == 0, "the airspace starts off on a flight's map"
+
+    # Untick a kind: the airspace comes on, without it.
+    browser.js((q % ".m3-asp-kinds label:nth-child(2) input") + ".click(); 1")
+    assert browser.js(f"({ENTRY}).state().airspace") is True
+    assert browser.js(shown) == 1
+    # The floor: the restricted zone is back, then dropped by a floor under its 3 000 m.
+    browser.js((q % ".m3-asp-kinds label:nth-child(2) input") + ".click(); 1")
+    assert browser.js(shown) == 2
+    assert browser.js((q % ".m3-asp-floor input") + ".max") == "3000"
+    assert browser.js((q % ".m3-asp-floor-out") + ".textContent") == "every floor"
+    browser.js(f"(() => {{ var s = {q % '.m3-asp-floor input'}; s.value = 2950;"
+               " s.dispatchEvent(new Event('input')); })(); 1")
+    assert browser.js(shown) == 1
+    assert browser.js((q % ".m3-asp-floor-out") + ".textContent") == "2950 m"
+    assert browser.js((q % ".m3-asp-count") + ".textContent") == "1 shown"
+    # Reset: everything again.
+    browser.js((q % ".m3-asp-reset") + ".click(); 1")
+    assert browser.js(shown) == 2
+    assert browser.js((q % ".m3-asp-floor-out") + ".textContent") == "every floor"
+    # Escape closes it; the switch's own button turns the airspace back off.
+    browser.js((q % ".m3-asp-reset") + ".focus(); 1")
+    browser.key("Escape", keycode=27)
+    assert browser.js((q % ".m3-airspace-menu") + ".hidden") is True
+    browser.js((q % "[data-m3=airspace]") + ".click(); 1")
+    assert browser.js(shown) == 0
+
+
+def test_the_airspace_split_button_is_one_rounded_group(browser):
+    """The switch and its ▾ are one control: square where they meet, rounded at both
+    outer ends, and the row keeps the same gap as every other button pair."""
+    radii = browser.js("""(() => {
+      var a = getComputedStyle(document.querySelector('.merged-view [data-m3=airspace]'));
+      var c = getComputedStyle(document.querySelector('.merged-view [data-m3=airspace-menu]'));
+      return [a.borderTopLeftRadius, a.borderTopRightRadius, c.borderTopLeftRadius, c.borderTopRightRadius,
+              c.borderBottomRightRadius];
+    })()""")
+    assert radii == ["10px", "0px", "0px", "10px", "10px"]
+    gaps = browser.js("""(() => {
+      var kids = [...document.querySelector('.merged-view .m3-corner-row').children]
+        .map(e => e.getBoundingClientRect());
+      return kids.slice(1).map((r, i) => Math.round(r.left - kids[i].right));
+    })()""")
+    assert gaps and len(set(gaps)) == 1, gaps
+
+
+def test_a_sun_handed_in_lights_the_ground_and_turns_the_rose(browser):
+    """`setSun`, the planner's takeoff time: the map takes a `TV.sun` table, lights the
+    hillshade from its azimuth and says the time on the rose in the page's clock."""
+    _reset(browser)
+    az = [100 + i for i in range(144)]          # a degree every ten minutes, from 100°
+    table = {"track": {"step": 10, "az": az, "el": [30] * 144}, "offset": 60, "at": 600}
+    browser.js(f"({ENTRY}).setSun({json.dumps(table)}); 1")
+    browser.wait(f"({MAP}).getPaintProperty('hillshade-over', 'hillshade-illumination-direction') === 160")
+    text = browser.js("document.querySelector('.merged-view .m3-rose-text').textContent")
+    assert text.startswith("Sun 11:00"), text
+    assert browser.js("!document.querySelector('.merged-view .m3-rose').hidden") is True
 
 
 def test_the_measure_tool_adds_up_the_legs_on_the_sphere(browser):

@@ -688,3 +688,32 @@ def test_something_that_is_not_a_task_is_refused():
     return window.__plannerImport('{"hello": 1}').then(function () { return { ok: true }; },
       function (error) { return { refused: String(error.message || error) }; });""")
     assert "not an XCTrack task" in answer["refused"]
+
+
+@needs_chrome
+def test_the_takeoff_time_opens_on_tomorrow_noon_and_lights_the_map():
+    """The takeoff time is the sun's moment: it opens on tomorrow at 12:00 in the
+    reader's clock, and each change hands the map a sun table (`setSun`) for that moment
+    over the task — the UTC minute of the day, and the offset that reads it back."""
+    answer = _run(_MAP + """
+    var suns = [];
+    entry.setSun = function (table) { suns.push(table); };
+    var input = document.getElementById('plan-takeoff');
+    var opened = input.value;
+    var tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    var expect = tomorrow.getFullYear() + '-' + pad(tomorrow.getMonth() + 1) + '-' +
+      pad(tomorrow.getDate()) + 'T12:00';
+    input.value = '2026-07-04T15:30';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    var last = suns[suns.length - 1], when = new Date('2026-07-04T15:30');
+    return { opened: opened, expect: expect, at: last.at, offset: last.offset,
+             wantAt: when.getUTCHours() * 60 + when.getUTCMinutes(),
+             wantOffset: -when.getTimezoneOffset(), steps: last.track.az.length,
+             step: last.track.step, hours: document.getElementById('asp-when').value };
+    """)
+    assert answer["opened"] == answer["expect"]
+    assert answer["at"] == answer["wantAt"]
+    assert answer["offset"] == answer["wantOffset"]
+    assert answer["step"] == 10 and answer["steps"] == 144
+    assert answer["hours"] == "2026-07-04T15:30", "the aerodrome hours follow the takeoff"
