@@ -137,7 +137,7 @@
 
   // The weather object the debrief and the air mass take, as Python's Meteo is used.
   function weather(m) {
-    return { cloudbase: cloudbase(m), thermal_top: thermalTop(m),
+    return { cloudbase: cloudbase(m), thermal_top: thermalTop(m), boundary_layer_top: boundaryLayerTop(m),
              windAt: function (h) { return windAt(m, h); } };
   }
 

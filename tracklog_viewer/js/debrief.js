@@ -23,7 +23,15 @@
   // A no-break space, as Python's `_num` uses: "2 024 m" must not wrap across a line.
   function num(v) { return fmt(v, 0, { thousands: '\u00a0' }); }
 
-  function costLabel(cost) { return cost.unit === 'min' ? fmt(cost.value, 0) + ' min' : num(cost.value) + ' m'; }
+  // A cost reads in its own unit: minutes, metres of height, kilometres of score, or
+  // turnpoints. The last two were printed as metres until October 2026 — a 2.3 km gap to
+  // closing a triangle read "Costs 2 300 m", and two missed turnpoints "Costs 2 m".
+  function costLabel(cost) {
+    if (cost.unit === 'min') return fmt(cost.value, 0) + ' min';
+    if (cost.unit === 'km') return fmt(cost.value, 1) + ' km of score';
+    if (cost.unit === 'tp') return cost.value + (cost.value === 1 ? ' turnpoint' : ' turnpoints');
+    return num(cost.value) + ' m';
+  }
   function minutes(seconds, a) {
     var airtime = a.summary.duration || 1;
     return { value: R(seconds / 60.0), unit: 'min', share: Math.min(seconds / airtime, 1.0) };
@@ -39,41 +47,62 @@
              confidence: f.confidence === undefined ? 1.0 : f.confidence, evidence: f.evidence || {} };
   }
 
+  // The day's best climb left early: only if it was still going up when the pilot left
+  // (its last minute at least half its average), and measured against the highest climb
+  // top within the hour after — not the flight's highest point, which could be hours
+  // later on a day that had built since (October 2026).
+  var LEFT_WINDOW = 3600, LEFT_STILL_WORKING = 0.5;
   function bestClimbLeft(a) {
     var th = M.thermals(a).slice().sort(function (x, y) { return x.start - y.start; });
     if (th.length < 3) return null;
     var best = M.firstMax(th, function (s) { return s.average_climb; });
     if (best.average_climb <= 0) return null;
-    var ceiling = Math.max.apply(null, th.map(function (s) { return s.finish_altitude; }));
-    var under = ceiling - best.finish_altitude;
-    if (under < THRESHOLDS.best_climb_left_metres) return null;
     var index = th.indexOf(best);
     if (index + 1 >= th.length) return null;
-    var following = th[index + 1], s = a.series;
-    var gap = s.t[following.start] - s.t[best.stop - 1];
+    var s = a.series, left = s.t[best.stop - 1];
+    var k = best.stop - 1;
+    while (k > best.start && s.t[k] > left - 60) k--;
+    var lastMinute = s.t[best.stop - 1] > s.t[k] ? (s.alt[best.stop - 1] - s.alt[k]) / (s.t[best.stop - 1] - s.t[k]) : 0;
+    if (lastMinute < LEFT_STILL_WORKING * best.average_climb) return null;
+    var soon = th.slice(index + 1).filter(function (c) { return s.t[c.start] - left <= LEFT_WINDOW; });
+    if (!soon.length) return null;
+    var ceiling = Math.max.apply(null, soon.map(function (c) { return c.finish_altitude; }));
+    var under = ceiling - best.finish_altitude;
+    if (under < THRESHOLDS.best_climb_left_metres) return null;
+    var following = th[index + 1];
+    var gap = s.t[following.start] - left;
     if (gap <= 0) return null;
     return finding({
       id: 'best-climb-left',
-      title: "You left the day's best climb " + fmt(under, 0) + ' m below the height you later reached',
-      sentence: 'Climb ' + (index + 1) + ' was running at ' + fmt(best.average_climb, 2, { plus: true }) +
-        ' m/s when you left it at ' + num(best.finish_altitude) + ' m. Later in the flight you were at ' +
+      title: "You left the day's best climb " + fmt(under, 0) + ' m below where you were within the hour',
+      sentence: 'Climb ' + (index + 1) + ' averaged ' + fmt(best.average_climb, 2, { plus: true }) +
+        ' m/s and was still giving ' + fmt(lastMinute, 1, { plus: true }) + ' m/s in its last minute when you left it at ' +
+        num(best.finish_altitude) + ' m. Within the hour you climbed to ' +
         num(ceiling) + ' m. The next climb took ' + fmt(gap / 60, 0) + ' min to find and gave ' +
         fmt(following.average_climb, 2, { plus: true }) + ' m/s.',
       cost: minutes(gap, a), at: best.finish_time, cursor: best.stop - 1,
       evidence: { climb: index + 1, average_climb: best.average_climb, finish_altitude: best.finish_altitude,
-                  ceiling: ceiling, next_climb: following.average_climb, gap_seconds: Math.trunc(gap) }
+                  ceiling: ceiling, next_climb: following.average_climb, gap_seconds: Math.trunc(gap),
+                  last_minute: R(lastMinute, 2) }
     });
   }
 
+  // A long stretch between climbs is a search only if it went nowhere: a glide making
+  // ground on course (over GAP_ON_COURSE_KMH straight-line) is the flight's progress, and
+  // it was called a costly search until October 2026.
+  var GAP_ON_COURSE_KMH = 20;
   function expensiveGap(a) {
     var g = M.climbGaps(a);
     if (!g || g.longest < THRESHOLDS.gap_minimum_seconds) return null;
     if (g.longest < g.median * THRESHOLDS.gap_over_median) return null;
+    if (g.longest_metres !== null && g.longest_metres / g.longest * 3.6 > GAP_ON_COURSE_KMH) return null;
     return finding({
       id: 'expensive-gap',
       title: 'Your longest search for a climb ran ' + fmt(g.longest / 60, 0) + ' min',
       sentence: 'It began at ' + g.longest_at + ' and cost ' + num(Math.abs(g.longest_loss)) +
-        ' m of height before you found the next one. Most gaps that day were about ' +
+        ' m of height before you found the next one' +
+        (g.longest_metres !== null ? ', ' + fmt(g.longest_metres / 1000, 1) + ' km from where it started' : '') +
+        '. Most gaps that day were about ' +
         fmt(g.median / 60, 0) + ' min.',
       cost: minutes(g.longest - g.median, a), at: g.longest_at, cursor: g.longest_index,
       evidence: { longest_seconds: g.longest, median_seconds: g.median, loss: g.longest_loss }
@@ -186,8 +215,9 @@
       id: 'ceiling-used',
       title: 'You used ' + fmt(use.fraction, 0, { percent: true }) + ' of the height the day was offering',
       sentence: 'Your highest point was ' + num(use.reached) + ' m against a modelled ' +
-        use.source.replace(/_/g, ' ') + ' of ' + num(use.ceiling) + ' m, so ' +
-        num(use.ceiling - use.reached) + ' m of the column went unused.',
+        M.CEILING_NAMES[use.source] + ' of ' + num(use.ceiling) + ' m' +
+        (use.source === 'cloudbase' ? '' : ' (the model\'s convective layer, below the cloudbase)') +
+        ', so ' + num(use.ceiling - use.reached) + ' m of the column went unused.',
       cost: metres(use.ceiling - use.reached, a),
       evidence: { reached: use.reached, ceiling: use.ceiling, fraction: use.fraction, source: use.source }
     });
@@ -230,7 +260,13 @@
       sentence: 'The route came back to within ' + fmt(gap / 1000, 1) + ' km of where it started, on a ' +
         fmt(perimeter / 1000, 1) + ' km perimeter. Closed, it would have scored as a ' +
         (category === 'fai' ? 'an FAI' : 'a flat') + ' triangle, at ×' + fmt(multiplier, 1) + ' instead of ×1.0.',
-      cost: metres(gap, a),
+      // What closing would have added to the score, against the score flown: the gap is a
+      // distance, and weighed against height gained it outranked every other card.
+      cost: (function () {
+        var flown = (route.distance || 0) / 1000, closed = perimeter / 1000 * multiplier;
+        var more = Math.max(closed - flown, 0);
+        return { value: R(more, 1), unit: 'km', share: Math.min(more / Math.max(flown, 1), 1.0) };
+      })(),
       evidence: { gap: R(gap), perimeter: R(perimeter), category: category, multiplier: multiplier }
     });
   }
@@ -268,7 +304,7 @@
       title: m.reached + ' of ' + m.total + ' planned turnpoints were reached',
       sentence: m.first_missed ? 'The first not reached was ' + escapeHtml(m.first_missed) + '.'
                                : missed + ' planned turnpoints were not reached.',
-      cost: { value: missed, unit: 'm', share: Math.min(missed / Math.max(m.total, 1), 1.0) },
+      cost: { value: missed, unit: 'tp', share: Math.min(missed / Math.max(m.total, 1), 1.0) },
       confidence: m.reconstructed ? 0.6 : 1.0,
       evidence: { reached: m.reached, total: m.total, first_missed: m.first_missed }
     });
@@ -310,7 +346,8 @@
                       key: 'mean_climb' });
     }
     var use = M.ceilingUse(a, weather);
-    if (use) headline.push({ value: fmt(use.fraction, 0, { percent: true }), label: 'of cloudbase', key: 'ceiling_used' });
+    if (use) headline.push({ value: fmt(use.fraction, 0, { percent: true }),
+                             label: use.source === 'cloudbase' ? 'of cloudbase' : 'of thermal top', key: 'ceiling_used' });
     else headline.push({ value: num(summary.max_altitude) + ' m', label: 'highest' });
     return { sentence: parts.join(' '), headline: headline };
   }

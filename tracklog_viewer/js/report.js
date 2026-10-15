@@ -197,7 +197,8 @@
               'at ' + peakTime + (offset ? ' · ' + spaced(summary.max_altitude + offset) + ' m GPS' : '')];
     }
     return ['ceiling used', fmt(use.fraction, 0, { percent: true }), '',
-            (spaced(use.reached) + ' m of a modelled ' + spaced(use.ceiling) + ' m ' + use.source.replace(/_/g, ' ')).replace(/,/g, ' ')];
+            (spaced(use.reached) + ' m of a modelled ' + spaced(use.ceiling) + ' m ' + M.CEILING_NAMES[use.source]).replace(/,/g, ' '),
+            use.source === 'cloudbase' ? 'Of cloudbase' : 'Of thermal top'];
   }
 
   function thermalRows(a, sample, sources) {
@@ -475,7 +476,7 @@
     var moreFigs = [
       figure('Height gained', spaced(summary.total_gain), ' m', 'Best single climb ' + fmt(summary.max_gain, 0) + ' m. ' + altitude),
       ceiling[0] === 'ceiling used'
-        ? figure('Of cloudbase', ceiling[1].replace('%', ''), '%', cap(ceiling[3]) + '.', 'ceiling_used')
+        ? figure(ceiling[4], ceiling[1].replace('%', ''), '%', cap(ceiling[3]) + '. The lower of the modelled cloudbase and the top of the convection: thermals stop at whichever comes first.', 'ceiling_used')
         : figure('Highest', ceiling[1], ' m', cap(ceiling[3]) + '.')
     ];
     if (perf) {

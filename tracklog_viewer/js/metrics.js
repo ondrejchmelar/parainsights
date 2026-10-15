@@ -103,14 +103,16 @@
       var before = th[k], after = th[k + 1];
       var seconds = s.t[after.start] - s.t[before.stop - 1];
       if (seconds <= 0) continue;
-      list.push([seconds, s.alt[after.start] - s.alt[before.stop - 1], before.finish_time, before.stop - 1]);
+      var made = s.x && s.y ? Math.hypot(s.x[after.start] - s.x[before.stop - 1], s.y[after.start] - s.y[before.stop - 1]) : null;
+      list.push([seconds, s.alt[after.start] - s.alt[before.stop - 1], before.finish_time, before.stop - 1, made]);
     }
     if (list.length < 2) return null;
     var longest = firstMax(list, function (g) { return g[0]; });
     return {
       median: Math.trunc(R(np.median(list.map(function (g) { return g[0]; })))),
       longest: Math.trunc(R(longest[0])), longest_at: longest[2],
-      longest_loss: R(longest[1]), longest_index: longest[3]
+      longest_loss: R(longest[1]), longest_index: longest[3],
+      longest_metres: longest[4] === null ? null : R(longest[4])
     };
   }
 
@@ -139,26 +141,42 @@
              hours: R(span, 1) };
   }
 
-  // `weather` carries `cloudbase` and/or `thermal_top`, as numbers or functions.
+  // How much of the height the day offered was used. The day offers the lower of two
+  // heights: the cloudbase (where a thermal's air would condense, from the ground's
+  // temperature and dew point) and the top of the convection (the model's boundary
+  // layer, or failing it where a dry parcel from the ground meets the sounding). The
+  // cloudbase alone was the ceiling until October 2026, and on a dry autumn day under an
+  // inversion it put the ceiling a kilometre above anything that could be flown
+  // (2 799 m against thermals that stopped near 1 800 m on 25 October).
+  // `weather` carries `cloudbase`, `boundary_layer_top` and `thermal_top`, numbers or
+  // functions. The height reached is above sea level, as those are: a barometric track
+  // reads ISA pressure altitude, `baro_offset` below GPS.
   function ceilingUse(a, weather) {
     if (!weather) return null;
-    var ceiling = null, source = '';
-    ['cloudbase', 'thermal_top'].some(function (name) {
+    function read(name) {
       var value = weather[name];
       if (typeof value === 'function') value = value();
-      if (value) { ceiling = value; source = name; return true; }
-      return false;
-    });
-    if (!ceiling || ceiling <= 0) return null;
-    var reached = a.summary.max_altitude;
+      return value && value > 0 ? value : null;
+    }
+    var base = read('cloudbase'), top = read('boundary_layer_top') || read('thermal_top');
+    var topName = read('boundary_layer_top') ? 'boundary_layer_top' : 'thermal_top';
+    var ceiling = null, source = '';
+    if (base && (!top || base <= top)) { ceiling = base; source = 'cloudbase'; }
+    else if (top) { ceiling = top; source = topName; }
+    if (!ceiling) return null;
+    var reached = a.summary.max_altitude +
+      (a.summary.altitude_source === 'baro' ? (a.summary.baro_offset || 0) : 0);
     return { reached: R(reached), ceiling: R(ceiling), fraction: R(reached / ceiling, 2), source: source };
   }
+  // What the ceiling was, in words.
+  var CEILING_NAMES = { cloudbase: 'cloudbase', boundary_layer_top: 'top of the thermals',
+                        thermal_top: 'top of the thermals' };
 
   TV.metrics = {
     thermals: thermals, glides: glides, pySum: pySum,
     firstMax: firstMax, argmax: argmax, argmin: argmin,
     airborneWindow: airborneWindow, climbSelection: climbSelection, workingBand: workingBand,
     centring: centring, climbGaps: climbGaps, concentration: concentration, dayEnvelope: dayEnvelope,
-    ceilingUse: ceilingUse
+    ceilingUse: ceilingUse, CEILING_NAMES: CEILING_NAMES
   };
 })(typeof window !== 'undefined' ? (window.TV = window.TV || {}) : (globalThis.TV = globalThis.TV || {}));

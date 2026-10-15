@@ -867,6 +867,18 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   `2020-08-16-XCT-ROP-01`, whose nearest real turnpoint is 29 km away but whose long
   first leg runs over the flying area — separating that from a genuine abandonment needs
   progress *along* the line, and two files is not enough to tune it on.
+- **The height the day offered is the lower of the cloudbase and the top of the
+  convection** (`metrics.ceilingUse`, October 2026). The cloudbase from the ground's
+  spread is where a thermal *would* condense; under an inversion the thermals stop first.
+  Alone it put a dry 25 October day's ceiling at 2 799 m over thermals that stopped near
+  1 800 m, and the debrief called the kilometre between "unused". The top is the model's
+  boundary layer, else the dry parcel's crossing; the height reached is above sea level
+  (a baro track plus `baro_offset`). Over 100% is shown as it is: the pilot beat the model.
+  The same review (October 2026) tied *best climb left* to the hour after leaving it and to
+  a climb still working when left; dropped *longest search* for a stretch that made over
+  20 km/h of ground (a glide on course); and gave costs their own units — kilometres of
+  score for a near-closed triangle, turnpoints for missed ones — where both had printed
+  as metres of height and the distance gap outranked every card.
 - **A polar that is not monotone is measuring the day, not the wing.** Sink must rise with
   airspeed; when it does not, the fastest bin wins the best-glide comparison by
   construction. On `2020-07-12` the report published *"your best glides came at about

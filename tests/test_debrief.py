@@ -123,7 +123,7 @@ class TestCostAndRanking:
         """A finding with no cost does not ship."""
         for finding in debrief(a_day(tmp_path, "cost.igc", DAY, glide=700)).findings:
             assert finding.cost is not None
-            assert finding.cost.unit in ("min", "m")
+            assert finding.cost.unit in ("min", "m", "km", "tp")
             assert finding.cost.value > 0
             assert finding.cost.label
 
@@ -335,3 +335,104 @@ class TestTriangleCategory:
         multiplier it would have earned compares two different quantities."""
         assert part(self._day(tmp_path), "closeThatWasnt",
                     route("free_3tp", 21.3, gap_km=0.7)).value is None
+
+
+def _sequence(tmp_path, name, legs):
+    """A track from legs: ("climb", seconds, rate) circling, or ("fly", seconds, m/s, rate)
+    straight east, each starting where the last ended."""
+    points, t, alt, x = [], 0.0, 1000.0, 0.0
+    for leg in legs:
+        if leg[0] == "climb":
+            run = circling(leg[1], climb=leg[2], t0=t, alt0=alt, x0=x, y0=0.0)
+        elif leg[0] == "sink":
+            run = circling(leg[1], climb=leg[2], t0=t, alt0=alt, x0=x, y0=0.0)
+        else:
+            run = straight(leg[1], speed=leg[2], climb=leg[3], t0=t, alt0=alt, x0=x, y0=0.0, heading=90.0)
+            x += leg[2] * leg[1]
+        points += run
+        t, alt = run[-1][0] + 1, run[-1][3]
+    return flight(tmp_path, name, points)
+
+
+class TestTheDayOffered:
+    """The height the day offered is the lower of the cloudbase and the top of the
+    convection. The cloudbase alone put a 25 October ceiling at 2 799 m over thermals that
+    stopped near 1 800 m, and called the kilometre between "unused"."""
+
+    def use(self, weather, reached=1777.0, source="gps", offset=0):
+        return js.run("""return TV.metrics.ceilingUse({ summary: { max_altitude: input.reached,
+          altitude_source: input.source, baro_offset: input.offset } }, input.weather);""",
+                      weather=weather, reached=reached, source=source, offset=offset)
+
+    def test_an_inversion_under_the_cloudbase_is_the_ceiling(self):
+        use = self.use({"cloudbase": 2799.0, "boundary_layer_top": 1850.0, "thermal_top": 2100.0})
+        assert use.source == "boundary_layer_top" and use.ceiling == 1850
+        assert use.fraction == pytest.approx(0.96)
+
+    def test_the_cloudbase_is_the_ceiling_when_the_thermals_reach_it(self):
+        use = self.use({"cloudbase": 1900.0, "boundary_layer_top": 2400.0})
+        assert use.source == "cloudbase" and use.ceiling == 1900
+
+    def test_without_a_boundary_layer_the_dry_parcel_stands_in(self):
+        use = self.use({"cloudbase": 2799.0, "thermal_top": 2000.0})
+        assert use.source == "thermal_top" and use.ceiling == 2000
+
+    def test_a_barometric_peak_is_read_against_sea_level(self):
+        use = self.use({"cloudbase": 2000.0}, reached=1700.0, source="baro", offset=150)
+        assert use.reached == 1850
+
+    def test_the_card_names_the_top_of_the_thermals(self, tmp_path):
+        result = debrief(a_day(tmp_path, "inversion.igc", DAY, glide=700),
+                         weather={"cloudbase": 6000.0, "boundary_layer_top": 4000.0})
+        card = next(f for f in result.findings if f.id == "ceiling-used")
+        assert "top of the thermals" in card.sentence and "4\u00a0000" in card.sentence
+
+
+class TestTheBestClimbLeft:
+    """Measured against the hour after leaving it, and only when it was still working."""
+
+    def test_left_working_and_topped_within_the_hour(self, tmp_path):
+        path = _sequence(tmp_path, "left.igc", [("climb", 300, 2.0), ("fly", 200, 12.0, -1.0),
+                                                ("climb", 900, 0.8), ("fly", 200, 12.0, -1.0),
+                                                ("climb", 300, 0.5)])
+        ids = {f.id for f in debrief(path).findings}
+        assert "best-climb-left" in ids
+
+    def test_a_height_reached_hours_later_does_not_count(self, tmp_path):
+        path = _sequence(tmp_path, "later.igc", [("climb", 300, 2.0), ("fly", 200, 12.0, -1.0),
+                                                 ("climb", 300, 0.3), ("fly", 3700, 3.0, 0.0),
+                                                 ("climb", 1800, 0.8), ("fly", 200, 12.0, -1.0),
+                                                 ("climb", 300, 0.5)])
+        assert "best-climb-left" not in {f.id for f in debrief(path).findings}
+
+
+class TestTheLongestGap:
+    """A long stretch between climbs that made ground on course is progress, not a search."""
+
+    def test_an_on_course_glide_is_not_a_search(self, tmp_path):
+        path = _sequence(tmp_path, "glide.igc", [("climb", 300, 2.0), ("fly", 150, 12.0, -1.0),
+                                                 ("climb", 300, 2.0), ("fly", 150, 12.0, -1.0),
+                                                 ("climb", 300, 2.0), ("fly", 900, 12.0, -1.0),
+                                                 ("climb", 300, 2.0)])
+        assert "expensive-gap" not in {f.id for f in debrief(path).findings}
+
+    def test_going_round_in_sink_is(self, tmp_path):
+        path = _sequence(tmp_path, "search.igc", [("climb", 300, 2.0), ("fly", 150, 12.0, -1.0),
+                                                  ("climb", 300, 2.0), ("fly", 150, 12.0, -1.0),
+                                                  ("climb", 300, 2.0), ("sink", 900, -0.8),
+                                                  ("climb", 300, 2.0)])
+        card = next((f for f in debrief(path).findings if f.id == "expensive-gap"), None)
+        assert card is not None and "km from where it started" in card.sentence
+
+
+class TestCostUnits:
+    def test_a_near_close_costs_score_not_height(self, tmp_path):
+        card = part(a_day(tmp_path, "close.igc", DAY, glide=700), "closeThatWasnt",
+                    route("fai_triangle", 20.0, gap_km=1.6, scored_km=48.0)).value
+        assert card.cost["unit"] == "km"
+        # 60 km closed at x1.4 is 84 km of score, against the 48 flown.
+        assert card.cost["value"] == pytest.approx(36.0, abs=0.1)
+        assert js.run("return TV.debrief.costLabel(input.c);", c=card.cost) == "36.0 km of score"
+
+    def test_missed_turnpoints_are_counted_as_turnpoints(self):
+        assert js.run("return TV.debrief.costLabel({ value: 2, unit: 'tp' });") == "2 turnpoints"
