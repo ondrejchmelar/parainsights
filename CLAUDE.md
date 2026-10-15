@@ -144,7 +144,12 @@ they were two tabs drawing the same airspace over the same ground. There is no p
 the map (October 2026): the drawing tools are on the map, the task's strip — score,
 options, takeoff time — sits under it as a flight's side view does (`planner.strip`,
 inside `.asp-stage`, so full screen keeps it), and the XCTrack import and export and the
-crossings are under that (`planner.results`). Drawing is a mode (*Draw*), off by
+crossings — in the order the task reaches them — are under that (`planner.results`). The
+strip carries no ⓘ: what a control does is its title (the scoring rules on the rules
+pill's, from `js/xc.js`). A task stands on the map's own terrain (`planZ` in `map3d`),
+not the page's coarse grid, which floated a turnpoint hundreds of metres off the slope
+clicked; and only a plain left press that stayed put is a click (`plainClick`): a tilt
+ended in one and dropped a point. Drawing is a mode (*Draw*), off by
 default, because on a phone a tap on this map names the zone under the finger and one
 gesture must not mean two things. The map is built once by `airspaces.render_html.
 SCRIPT3D`, which publishes the handle as `window.__airspaceMap`; the planner's script

@@ -95,7 +95,9 @@
   }
 
   // Where along `a`→`b` the segment is inside `ring`, as a fraction of its length.
-  function fractionInside(a, b, ring) {
+  function fractionInside(a, b, ring) { return inside(a, b, ring).fraction; }
+  // The same, and where along it (0–1) it first goes in.
+  function inside(a, b, ring) {
     var ts = [0, 1];
     var n = ring.lon.length;
     var dx = b[0] - a[0], dy = b[1] - a[1];
@@ -110,15 +112,19 @@
     }
     if (ts.length === 2) {
       // No crossing at all: either wholly inside or wholly outside.
-      return pointInRing(a[0] + dx / 2, a[1] + dy / 2, ring) ? 1 : 0;
+      return pointInRing(a[0] + dx / 2, a[1] + dy / 2, ring) ? { fraction: 1, first: 0 }
+                                                             : { fraction: 0, first: null };
     }
     ts.sort(function (x, y) { return x - y; });
-    var total = 0;
+    var total = 0, first = null;
     for (var k = 1; k < ts.length; k++) {
       var mid = (ts[k - 1] + ts[k]) / 2;
-      if (pointInRing(a[0] + dx * mid, a[1] + dy * mid, ring)) total += ts[k] - ts[k - 1];
+      if (pointInRing(a[0] + dx * mid, a[1] + dy * mid, ring)) {
+        total += ts[k] - ts[k - 1];
+        if (first === null) first = ts[k - 1];
+      }
     }
-    return total;
+    return { fraction: total, first: first };
   }
 
   // A leg's worth of ground is only ever compared against rings whose own bounding box it
@@ -143,9 +149,10 @@
     var walk = course(), legs = [];
     for (var i = 1; i < walk.length; i++) legs.push([walk[i - 1], walk[i]]);
 
-    var found = {};
+    var found = {}, along = 0;
     legs.forEach(function (leg) {
-      var length = distance(leg[0], leg[1]);
+      var length = distance(leg[0], leg[1]), start = along;
+      along += length;
       var west = Math.min(leg[0][0], leg[1][0]), east = Math.max(leg[0][0], leg[1][0]);
       var south = Math.min(leg[0][1], leg[1][1]), north = Math.max(leg[0][1], leg[1][1]);
       rings.forEach(function (ring) {
@@ -153,20 +160,22 @@
         if (box.east < west || box.west > east || box.north < south || box.south > north) {
           return;
         }
-        var fraction = fractionInside(leg[0], leg[1], ring);
+        var span = inside(leg[0], leg[1], ring), fraction = span.fraction;
         if (fraction <= 0) return;
         // Keyed by name: one CTR is published as several rings and one okruh is two
         // rectangles, and a list that says "LKPR CTR" four times is a list nobody reads.
         var seen = found[ring.n];
         if (!seen) found[ring.n] = seen = { name: ring.n, k: ring.k, f: ring.f,
-                                            g: ring.g, w: ring.w, metres: 0 };
+                                            g: ring.g, w: ring.w, metres: 0, at: Infinity };
         seen.metres += fraction * length;
+        seen.at = Math.min(seen.at, start + span.first * length);
         seen.f = Math.min(seen.f, ring.f);
       });
     });
-    // Lowest floor first: what a paraglider hits soonest is what it most needs to know.
+    // In the order the task reaches them, as a pilot meets them flying it (October 2026:
+    // it was the lowest floor first).
     return Object.keys(found).map(function (key) { return found[key]; })
-      .sort(function (a, b) { return a.f - b.f || b.metres - a.metres; });
+      .sort(function (a, b) { return a.at - b.at || a.f - b.f; });
   }
 
   // The whole list is always shown, even when the map has hidden a field for being
@@ -351,8 +360,8 @@
     var heading = document.createElement('p');
     heading.className = 'plan-crossed-head';
     heading.textContent = crossed.length + (crossed.length === 1
-      ? ' airspace crossed, lowest floor first'
-      : ' airspaces crossed, lowest floor first');
+      ? ' airspace crossed, in the order the task reaches it'
+      : ' airspaces crossed, in the order the task reaches them');
     box.appendChild(heading);
     var list = document.createElement('ul');
     list.className = 'plan-crossed';
@@ -721,22 +730,24 @@
     redraw();
   }
 
-  var how = null;     // the strip's ⓘ on how to plan, kept beside the distance
+  var legsNode = null;    // the legs' line, moved into the figures' second row
   function report() {
     xctRefresh();
     var answer = score();
     var figures = document.getElementById('plan-figures');
-    // Two rows: the distance with its shape and the ⓘ on how to plan, then the rest. Spans,
-    // so a figure is still the one `div` holding a label and a value.
-    if (!how) how = figures.parentNode.querySelector('.plan-strip-score > .info-wrap');
+    var legs = legsNode || (legsNode = document.getElementById('plan-legs'));
+    // Two rows: the distance with its shape, then the rest on one quiet line — score,
+    // multiplier, the legs — with no labels. Spans, so a figure is still the one `div`
+    // holding a label and a value; the legs are moved into the second row.
     figures.innerHTML = '';
     var head = document.createElement('span'), rest = document.createElement('span');
-    head.className = 'plan-row plan-row-head'; rest.className = 'plan-row';
+    head.className = 'plan-row plan-row-head'; rest.className = 'plan-row plan-row-sub';
     figures.appendChild(head); figures.appendChild(rest);
+    legs.innerHTML = '';
     if (points.length < 2) {
       head.innerHTML = '<div><span class="k">task</span><span class="v">— km</span></div>';
-      if (how) head.appendChild(how);
-      document.getElementById('plan-legs').textContent = '';
+      rest.innerHTML = '<span class="plan-row-hint">Press <b>Draw</b>, then click the map</span>';
+      rest.appendChild(legs);
       return;
     }
     var names = { open: 'open distance', flat: 'flat triangle', fai: 'FAI triangle' };
@@ -748,6 +759,7 @@
     ];
     cells.forEach(function (pair) {
       var cell = document.createElement('div');
+      cell.className = 'plan-fig-' + pair[0];
       cell.innerHTML = '<span class="k"></span><span class="v"></span>';
       cell.querySelector('.k').textContent = pair[0];
       cell.querySelector('.v').textContent = pair[1];
@@ -762,10 +774,8 @@
     chip.textContent = names[answer.shape];
     chip.className = 'plan-shape is-' + answer.shape;
     head.appendChild(shape);
-    if (how) head.appendChild(how);
+    rest.appendChild(legs);
 
-    var legs = document.getElementById('plan-legs');
-    legs.innerHTML = '';
     (answer.sides || answer.legs).forEach(function (metres, i) {
       var span = document.createElement('span');
       span.textContent = (answer.sides ? 'side ' : 'leg ') + (i + 1) + ': '

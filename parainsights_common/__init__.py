@@ -338,8 +338,7 @@ def footer() -> str:
     """The foot of every page: what this is, where its source is, and who to credit."""
     return (
         '<footer class="site-foot">'
-        f'<a href="{SOURCE}" rel="noreferrer">{_GITHUB_MARK}parainsights on GitHub</a> — the source, the '
-        "issues, and how every number on these pages is worked out. Airspace © "
+        f'<a href="{SOURCE}" rel="noreferrer">{_GITHUB_MARK}parainsights on GitHub</a>. Airspace © '
         '<a href="https://www.openaip.net" rel="noreferrer">openAIP</a> (CC BY-NC 4.0); '
         "imagery © Esri, Maxar, Earthstar Geographics; place names © OpenMapTiles, "
         "© OpenStreetMap contributors; terrain: AWS Open Data; weather: Open-Meteo. "

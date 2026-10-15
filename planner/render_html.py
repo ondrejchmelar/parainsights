@@ -59,65 +59,76 @@ STYLE = """
   color:var(--on-accent); box-shadow:0 0 0 3px var(--paper), 0 0 0 5px var(--accent); }
 .merged-view .plan-mapbar button:disabled { cursor:default; background:var(--float); }
 .merged-view .plan-mapbar button:disabled svg { opacity:.35; }
-.plan-opts { display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center; margin:0 0 6px; }
 .chk { display:inline-flex; align-items:center; gap:9px; font-size:16px; cursor:pointer; min-height:44px; }
 .chk input { width:20px; height:20px; margin:0; accent-color:var(--accent); }
-.plan-opts select.btn { height:44px; padding:0 12px; appearance:auto; }
-.plan-takeoff { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px 10px;
-  margin:4px 0 8px; font-size:16px; }
-.plan-takeoff .info-wrap { margin-left:0; justify-self:start; }
-.plan-field { height:44px; padding:0 10px; box-sizing:border-box; font:inherit; min-width:0;
-  border:1px solid var(--edge); border-radius:10px; background:var(--panel); color:var(--ink); }
-#plan-time { grid-column:1 / 3; width:100%; margin:0; accent-color:var(--accent); }
-#plan-time-out { font-variant-numeric:tabular-nums; font-weight:600; min-width:3.2em; text-align:right; }
 .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
 .plan-hint[hidden] { display:none; }
 /* The strip under the map, edge to edge as the map is, its content on the page's
-   column: the score, the options, the takeoff time; on a phone one under another. */
-.plan-strip { display:flex; flex-wrap:wrap; align-items:center; gap:10px 32px; position:relative; z-index:1;
+   column: the score, the options, the takeoff time — three groups on one line on a
+   desktop, divided by a hairline, one under another on a phone. No ⓘ in it: what each
+   control does is its title. */
+.plan-strip { display:flex; flex-wrap:wrap; align-items:center; gap:10px 28px; position:relative; z-index:1;
   margin:0 calc(50% - (100vw - var(--scrollbar, 0px)) / 2);
-  padding:12px calc((100vw - var(--scrollbar, 0px)) / 2 - 50%) 14px;
+  padding:12px calc((100vw - var(--scrollbar, 0px)) / 2 - 50%) 12px;
   background:var(--panel); border-bottom:1px solid var(--rule); }
 .plan-strip-score { flex:0 1 auto; min-width:0; }
-.plan-strip .plan-opts { margin:0; flex:0 1 auto; }
-.plan-strip .plan-takeoff { margin:0 0 0 auto; flex:0 1 380px; }
+.plan-strip .plan-opts { margin:0; flex:0 1 auto; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.plan-strip .plan-takeoff { margin:0 0 0 auto; flex:0 1 420px; }
 .plan-strip .plan-hint:not([hidden]) { flex-basis:100%; }
+@media (min-width: 901px) {
+  .plan-strip .plan-opts, .plan-strip .plan-takeoff { padding-left:28px; border-left:1px solid var(--rule); }
+}
 @media (max-width: 900px) {
-  .plan-strip { gap:8px 20px; }
+  .plan-strip { gap:10px; }
   .plan-strip > * { flex-basis:100% !important; }
 }
-/* The score: the distance large with the shape beside it, then score, multiplier and
-   turnpoints on a line under them. The cells are the script's (`report` in planner.js),
-   labelled in lower case; the first letter is raised here. */
+/* The score: the distance large with its shape, then one quiet line. */
 .plan-figures { display:grid; gap:2px; }
-.plan-row { display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 14px; }
+.plan-row { display:flex; flex-wrap:wrap; align-items:baseline; }
 .plan-row-head { align-items:center; gap:4px 10px; }
-.plan-row-head .info-wrap { margin-left:0; }
-.plan-figures div { display:inline-flex; gap:5px; align-items:baseline; }
-.plan-figures .plan-shape-cell .k { display:none; }
-.plan-figures .v, .plan-shape { white-space:nowrap; }
-.plan-row-head > div:first-child .v { font-size:32px; font-weight:700; line-height:1.1; }
-.plan-row-head > div:first-child .k { display:none; }
-.plan-figures .k { font-size:15px; color:var(--ink-2); }
-.plan-figures .k::first-letter, .plan-shape::first-letter { text-transform:uppercase; }
-.plan-figures .v { font-size:15px; font-weight:600; font-variant-numeric:tabular-nums; }
+.plan-row-head .k, .plan-row-sub .k, .plan-fig-turnpoints { display:none !important; }
+.plan-row-head .v:first-child, .plan-row-head > div:first-child .v { font-size:30px; font-weight:700; line-height:1.1;
+  font-variant-numeric:tabular-nums; white-space:nowrap; }
+.plan-row-sub { font-size:15px; color:var(--ink-2); font-variant-numeric:tabular-nums; }
+.plan-row-sub > div, .plan-legs > span { white-space:nowrap; }
+.plan-row-sub .v { font-weight:500; }
+.plan-row-sub > div + div::before, .plan-row-sub .plan-legs > span::before { content:"·"; padding:0 8px; }
+.plan-legs { display:contents; }
+.plan-figures .plan-row-sub > div { display:inline; }
+@media (max-width: 900px) {
+  .plan-row-sub .plan-legs { display:flex; flex-wrap:wrap; flex-basis:100%; }
+  .plan-row-sub .plan-legs > span:first-child::before { content:none; }
+}
+.plan-row-hint b { color:var(--ink); }
 .plan-shape { display:inline-block; padding:2px 10px; border-radius:999px; font-size:14px; font-weight:600;
-  border:1.5px solid var(--edge); color:var(--ink-2); }
+  border:1.5px solid var(--edge); color:var(--ink-2); white-space:nowrap; }
+.plan-shape::first-letter { text-transform:uppercase; }
 .plan-shape.is-fai { background:var(--good); border-color:var(--good); color:var(--on-good); }
 .plan-shape.is-flat { background:var(--warn); border-color:var(--warn); color:var(--on-warn); }
+.plan-figures div { display:inline-flex; gap:5px; align-items:baseline; }
+/* Toggles as chips, filled when on; the rules as a pill of the same height. */
+.plan-chip { position:relative; display:inline-flex; align-items:center; height:38px; padding:0 14px;
+  border:1px solid var(--edge); border-radius:999px; background:var(--panel); color:var(--ink);
+  font-size:15px; font-weight:600; cursor:pointer; user-select:none; }
+.plan-chip input { position:absolute; opacity:0; width:1px; height:1px; margin:0; }
+.plan-chip:hover { background:var(--panel-2); }
+.plan-chip:has(input:checked) { background:var(--ink); border-color:var(--ink); color:var(--paper); }
+.plan-chip:has(input:focus-visible), .plan-select:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.plan-select { height:38px; padding:0 12px; border:1px solid var(--edge); border-radius:999px;
+  background:var(--panel); color:var(--ink); font:600 15px "Noto Sans", ui-sans-serif, system-ui, sans-serif; }
+/* The takeoff on one line: its day, the time slid through it, the time. */
+.plan-takeoff { display:grid; grid-template-columns:auto auto minmax(80px, 1fr) auto; align-items:center;
+  gap:10px; font-size:15px; color:var(--ink-2); }
+.plan-field { height:38px; padding:0 10px; box-sizing:border-box; font:inherit; color:var(--ink); min-width:0;
+  border:1px solid var(--edge); border-radius:10px; background:var(--panel); }
+#plan-time { width:100%; margin:0; accent-color:var(--accent); }
+#plan-time-out { font-variant-numeric:tabular-nums; font-weight:600; color:var(--ink); min-width:3em; text-align:right; }
 /* Under the strip: to and from XCTrack, then what the task crosses. */
 .plan-section { margin:18px 0 0; display:grid; gap:14px; }
 .plan-section .plan-crossed-head { font-size:20px; font-weight:700; color:var(--ink); margin:0 0 6px; }
 .plan-section .plan-crossed { max-height:none; overflow:visible; }
 .plan-section .plan-xct { margin:0; padding:0; border:0; }
-.plan-section .plan-airspace, .plan-section .plan-note { margin:0; }
-.plan-strip-score .plan-legs { flex-basis:100%; margin:2px 0 0; }
-/* A wrapping row: the sides are spans with nothing between them, so as inline text the
-   line had nowhere to break and ran off a phone. */
-.plan-legs { margin:8px 0 0; font-size:15px; color:var(--ink-2); font-variant-numeric:tabular-nums;
-  display:flex; flex-wrap:wrap; gap:2px 14px; }
-.plan-legs:empty { display:none; }
-.plan-legs span { white-space:nowrap; }
+.plan-section .plan-airspace { margin:0; }
 .plan-airspace { margin:10px 0 0; }
 .plan-crossed-head { margin:0 0 4px; font-size:15px; color:var(--ink-2); }
 .plan-crossed-head::first-letter { text-transform:uppercase; }
@@ -132,7 +143,6 @@ STYLE = """
 .plan-when::first-letter { text-transform:uppercase; }
 .plan-when.is-open { background:var(--good); color:var(--on-good); }
 .plan-when.is-shut { border:1.5px solid var(--edge); color:var(--ink-2); }
-.plan-note { margin:12px 0 0; font-size:15px; color:var(--ink-2); }
 .plan-xct { display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; margin:14px 0 0;
   padding-top:12px; border-top:1px solid var(--rule); }
 .plan-xct[hidden], .plan-split[hidden] { display:none; }
@@ -170,6 +180,15 @@ STYLE = """
 """
 
 
+# The rules the task is scored by, on the rules pill's title — from `js/xc.js`'s own
+# constants, so the page cannot state rules it does not score by.
+RULES_TITLE = (f"XContest: FAI when every side is at least {xc.FAI_MIN_SIDE:.0%} of the "
+               f"perimeter, closed when the gap is under {xc.MAX_CLOSING:.0%} of it, "
+               f"multipliers {xc.MULTIPLIER['open']:g} / {xc.MULTIPLIER['flat']:g} / "
+               f"{xc.MULTIPLIER['fai']:g} (open / flat / FAI). ČPP, the Czech cup: closed "
+               "under 5%, and in the Central European zone 1 / 1.8 / 2.2.")
+
+
 def controls() -> str:
     """The task tools, in the Task panel over the map. Drawing is a mode, off until asked
     for: the same map is the airspace map, where a tap on a phone names the zone under the
@@ -178,26 +197,23 @@ def controls() -> str:
 
     return (
         '<div class="plan-opts">'
-        '<label class="chk"><input type="checkbox" id="plan-close"> Closed</label>'
-        '<label class="chk"><input type="checkbox" id="plan-fai" checked> FAI areas'
-        + common.info("Where each turnpoint can go for an FAI triangle (every side at least "
-                      "28% of the perimeter), the other two staying put: turnpoint 1 green, "
-                      "2 blue, 3 red. Yellow: where a closed course must finish.")
-        + '</label>'
-        '<label class="plan-rules-label"><span class="sr">Rules</span><select id="plan-rules" class="btn">'
+        '<label class="plan-chip" title="Score the task as a closed course: it must end near '
+        'where it starts"><input type="checkbox" id="plan-close">Closed</label>'
+        '<label class="plan-chip" title="Where each turnpoint can go for an FAI triangle (every '
+        'side at least 28% of the perimeter), the other two staying put: turnpoint 1 green, 2 '
+        'blue, 3 red. Yellow: where a closed course must finish.">'
+        '<input type="checkbox" id="plan-fai" checked>FAI areas</label>'
+        f'<label class="plan-rules-label" title="{RULES_TITLE}"><span class="sr">Rules</span>'
+        '<select id="plan-rules" class="plan-select">'
         '<option value="world">XContest</option>'
         '<option value="cpp">ČPP (Czech)</option></select></label>'
         "</div>"
-        '<div class="plan-takeoff">'
+        '<div class="plan-takeoff" title="Slide through the day: the ground is shaded from where '
+        'the sun stands (strongest on the Relief ground), and the rose shows the sun and the '
+        'forecast wind at about 1500 m. Your own clock; the aerodrome hours follow it.">'
         '<label for="plan-day">Takeoff</label>'
         '<input type="date" id="plan-day" class="plan-field">'
-        + common.info("Slide through the day to see which slopes the sun reaches when: the "
-                      "ground is shaded from where the sun stands (strongest on the Relief "
-                      "ground, under the layers button), and the rose on the map shows the "
-                      "sun and the forecast wind at about 1500 m (the 850 hPa level, "
-                      "Open-Meteo) over the task. Your own clock. The aerodrome hours in the "
-                      "map's Airspaces menu follow this time too.")
-        + '<input type="range" id="plan-time" min="300" max="1260" step="15" value="720" '
+        '<input type="range" id="plan-time" min="300" max="1260" step="15" value="720" '
         'aria-label="Time of day">'
         '<output id="plan-time-out" for="plan-time">12:00</output>'
         "</div>"
@@ -258,33 +274,16 @@ def strip() -> str:
     """The task under the map, as the side view sits under a flight's map, and with the
     map in full screen: what it is worth, its options and the takeoff time. There was a
     Task panel floating over the map until October 2026."""
-    import parainsights_common as common
-
-    how = common.info("Press <strong>Draw</strong>, the orange button at the foot of the "
-                      "map, then click the map to drop turnpoints (undo, redo and clear are "
-                      "beside it); drag, pinch and twist still move the view. The route is "
-                      "scored as XContest would and checked against every zone it crosses.",
-                      "How to plan a task")
     return ('<div class="plan-strip" id="plan-strip" aria-label="The task">'
             '<div class="plan-strip-score"><div class="plan-figures" id="plan-figures"></div>'
-            f'{how}<p class="plan-legs" id="plan-legs"></p></div>'
+            '<span class="plan-legs" id="plan-legs"></span></div>'
             + controls() + "</div>")
 
 
 def results() -> str:
-    """Under the strip: to and from XCTrack, what the task crosses, and the caveat."""
+    """Under the strip: to and from XCTrack, and what the task crosses."""
     import parainsights_common as common
 
-    rules = (f"Scored with the same rules as the flight report: every side at least "
-             f"{xc.FAI_MIN_SIDE:.0%} of the perimeter for FAI, a closing gap under "
-             f"{xc.MAX_CLOSING:.0%} of it for a closed course, multipliers "
-             f"{xc.MULTIPLIER['open']:g}&thinsp;/&thinsp;{xc.MULTIPLIER['flat']:g}&thinsp;/&thinsp;{xc.MULTIPLIER['fai']:g}. "
-             "With ČPP chosen, the Czech cup's: closing under 5%, and in the Central European "
-             "zone 1&thinsp;/&thinsp;1.8&thinsp;/&thinsp;2.2 "
-             '(<a href="https://www.xcontest.org/cesko/pravidla/" rel="noreferrer">rules</a>). '
-             "The map draws the airspace within 5&nbsp;km of the task, and none before "
-             "there is one: Czechia's from this page, with its traffic circuits; any other "
-             "European country's from openAIP once the task reaches it.")
     return f"""<section class="plan-section" aria-label="The task in detail">
     <!-- To XCTrack: import, and one split button with the device's best way first
          (`xctMethods` in planner.js); a QR code or a task code opens in the dialog. -->
@@ -308,7 +307,6 @@ def results() -> str:
       <p class="plan-xct-out" id="plan-xct-out" role="status"></p>
     </div>
     <div class="plan-airspace" id="plan-airspace"></div>
-    <p class="plan-note">A plan, not a clearance.{common.info(rules, "How the task is scored")}</p>
     <dialog class="plan-xct-dlg" id="plan-xct-dlg" aria-labelledby="plan-xct-title">
       <div class="plan-xct-dlg-head"><h2 id="plan-xct-title">Send the task to XCTrack</h2>
         <button type="button" class="tool" id="plan-xct-close" aria-label="Close">{common.icon(common.ICONS["close"])}</button></div>

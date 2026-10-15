@@ -392,6 +392,23 @@
         return (g === null || g === undefined || isNaN(g)) ? ((scene.terrain || {}).min || 0) : g;
       }
       function z(alt) { return alt * vertical; }
+      // Where the map's own ground is drawn under a point, exaggeration included: what a
+      // click lands on. The page's grid (`ground`) is coarser — the planner's is cells of
+      // kilometres — and a turnpoint stood on it floated hundreds of metres off the slope
+      // clicked, so tilted it showed beside the click. Off the loaded terrain tiles, and at
+      // ×1 where the map is flat, the grid (or nothing) stands in.
+      function surfaceZ(lon, lat) {
+        if (map && map.terrain && map.terrain.getElevationForLngLatZoom) {
+          var e = map.terrain.getElevationForLngLatZoom(new maplibregl.LngLat(lon, lat),
+                                                       Math.min(15, Math.floor(map.getZoom())));
+          if (isFinite(e) && e !== 0) return e;
+        }
+        return map && map.terrain ? z(ground(lon, lat)) : 0;
+      }
+      // A planned task's height: 60 m over that ground, scaled as the ground is.
+      function planZ(lon, lat) { return surfaceZ(lon, lat) + 60 * vertical; }
+      // Bumped as finer terrain arrives or the zoom settles, so a task is stood on it again.
+      var groundTick = 0;
 
       // ---- the ground ----------------------------------------------------------------
       function sunAt(minute) {
@@ -571,6 +588,16 @@
           if (shapes) shapes.setData({ type: 'FeatureCollection', features: pendingShapes });
         }
         if (vertical !== 1) map.setTerrain({ source: 'dem', exaggeration: vertical });
+        // A task stands on the map's terrain (`planZ`), finer as tiles arrive: once they
+        // settle, and after a zoom, it is placed again.
+        var regrounding = null;
+        function reground() {
+          if (!route) return;
+          clearTimeout(regrounding);
+          regrounding = setTimeout(function () { groundTick++; refresh(); }, 150);
+        }
+        map.on('sourcedata', function (e) { if (e.sourceId === 'dem' && e.tile) reground(); });
+        map.on('zoomend', reground);
         // A sun handed in before the style was ready (`setSun`, the planner's).
         if (sun && sunMinute !== null) sunTo(sunMinute);
       });
@@ -981,33 +1008,33 @@
           out.push(new deck.PathLayer({
             id: 'plan-line', data: kept('plan-line', [route], function () { return [route.walk]; }),
             getPath: function (d) {
-              return d.map(function (p) { return [p[0], p[1], z(ground(p[0], p[1]) + 60)]; });
+              return d.map(function (p) { return [p[0], p[1], planZ(p[0], p[1])]; });
             },
             getColor: [255, 255, 255, 235], getWidth: 3, widthUnits: 'pixels',
             capRounded: true, jointRounded: true, billboard: true,
-            updateTriggers: { getPath: vertical }, parameters: ON_TOP
+            updateTriggers: { getPath: [vertical, groundTick] }, parameters: ON_TOP
           }));
         }
         if (route && route.points.length) {
           var tps = kept('plan-points', [route], function () {
             return route.points.map(function (p, i) {
-              return { label: String(i + 1), position: [p[0], p[1], ground(p[0], p[1]) + 60] };
+              return { label: String(i + 1), lon: p[0], lat: p[1] };
             });
           });
           out.push(new deck.ScatterplotLayer({
           extensions: DOTS,
             id: 'plan-points', data: tps,
-            getPosition: function (d) { return [d.position[0], d.position[1], z(d.position[2])]; },
+            getPosition: function (d) { return [d.lon, d.lat, planZ(d.lon, d.lat)]; },
             getFillColor: [226, 96, 44], getLineColor: [255, 255, 255], stroked: true,
             lineWidthMinPixels: 1.5, radiusUnits: 'pixels', getRadius: 9, billboard: true,
-            updateTriggers: { getPosition: vertical }, parameters: ON_TOP
+            updateTriggers: { getPosition: [vertical, groundTick] }, parameters: ON_TOP
           }));
           out.push(new deck.TextLayer({
             id: 'plan-labels', data: tps, getText: function (d) { return d.label; },
-            getPosition: function (d) { return [d.position[0], d.position[1], z(d.position[2])]; },
+            getPosition: function (d) { return [d.lon, d.lat, planZ(d.lon, d.lat)]; },
             getSize: 11, fontWeight: 700, getColor: [255, 255, 255],
             fontFamily: 'ui-sans-serif, system-ui, sans-serif',
-            updateTriggers: { getPosition: vertical }, parameters: ON_TOP
+            updateTriggers: { getPosition: [vertical, groundTick] }, parameters: ON_TOP
           }));
         }
         if (scored && topDown) {
@@ -2470,7 +2497,7 @@
         var x = event.clientX - box.left, y = event.clientY - box.top;
         var reach = event.pointerType === 'touch' ? 26 : 18, best = -1, bestD = reach;
         route.points.forEach(function (p, i) {
-          var at = screenAt(p[0], p[1], z(ground(p[0], p[1]) + 60));
+          var at = screenAt(p[0], p[1], planZ(p[0], p[1]));
           if (!at) return;
           var d = Math.hypot(at[0] - x, at[1] - y);
           if (d <= bestD) { bestD = d; best = i; }
@@ -2520,9 +2547,32 @@
         map.getCanvas().style.cursor = pointNear(event) >= 0 ? 'grab' : (measuring ? 'crosshair' : '');
       });
 
+      // What a click has to be to count as one: a plain left press that ended where it
+      // started, with no turn or tilt in between. A tilt with shift, ctrl or the right
+      // button ends in a mouseup MapLibre may still call a click, and that dropped a
+      // turnpoint wherever the tilt let go.
+      var press = null, turned = false;
+      // On the view, capturing: it hears a press before the shift-drag handler on the
+      // canvas, which stops it from going any further.
+      view.addEventListener('pointerdown', function (event) {
+        if (!map.getCanvasContainer().contains(event.target)) return;
+        press = { x: event.clientX, y: event.clientY, button: event.button,
+                  modified: event.shiftKey || event.ctrlKey || event.altKey || event.metaKey };
+        turned = false;
+      }, true);
+      map.on('rotate', function () { if (press) turned = true; });
+      map.on('pitch', function () { if (press) turned = true; });
+      function plainClick(event) {
+        var e = event.originalEvent;
+        if (!press) return true;
+        if (press.button !== 0 || press.modified || turned) return false;
+        var reach = e && e.pointerType === 'touch' ? 10 : 5;
+        return !e || Math.hypot(e.clientX - press.x, e.clientY - press.y) <= reach;
+      }
       map.on('click', function (event) {
         // A press on a turnpoint took it; the click it ends in is not a new one.
         if (justDragged || (dragging && dragging.moved)) return;
+        if (!plainClick(event)) return;
         var at = [event.lngLat.lng, event.lngLat.lat];
         // Measuring takes the click: it is not also a turnpoint.
         if (measuring) { measurePoints.push(at); showMeasure(); return; }

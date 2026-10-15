@@ -359,6 +359,28 @@ def test_a_sun_handed_in_lights_the_ground_and_turns_the_rose(browser):
     assert "Wind" not in text, text
 
 
+def test_a_tilt_or_turn_is_not_a_click(browser):
+    """The planner drops a turnpoint on a click (`onClick`). A shift-drag that turns or
+    tilts the map ends in a mouseup MapLibre may call a click, and that dropped a point
+    wherever the tilt let go; only a plain press that stayed put counts."""
+    _reset(browser)
+    browser.js(f"window.__clicks = []; ({ENTRY}).onClick(function (at) {{ __clicks.push(at); }}); 1")
+    x, y, w, h = _box(browser)
+    cx, cy = x + w / 2, y + h / 2
+    browser.drag((cx, cy), (cx + 60, cy + 40), modifiers=8)    # shift: turn and tilt
+    time.sleep(0.4)
+    browser.mouse("mousePressed", cx, cy, modifiers=8, buttons=1)   # shift-click in place
+    browser.mouse("mouseReleased", cx, cy, modifiers=8)
+    time.sleep(0.4)
+    after_tilt = browser.js("__clicks.length")
+    browser.click(cx, cy)
+    time.sleep(0.6)
+    after_click = browser.js("__clicks.length")
+    _reset(browser)
+    assert after_tilt == 0, "a tilt or a modified press dropped a point"
+    assert after_click == 1, "a plain click did not"
+
+
 def test_the_measure_tool_adds_up_the_legs_on_the_sphere(browser):
     """Clicks are points, the readout is the total and the last leg, and a click while
     measuring is not also a turnpoint or anything else."""

@@ -417,23 +417,23 @@ def test_a_leg_that_misses_says_so_rather_than_saying_nothing():
 
 
 @needs_chrome
-def test_the_lowest_floor_comes_first():
-    """What a paraglider hits soonest is what it most needs to know, so the order is by
-    floor and not by how much of the route is inside."""
-    high = _band("HIGH TMA", 14.2, 14.9, 49.0, 50.0, floor="FL 95")
-    low = _band("LOW ZONE", 14.55, 14.6, 49.0, 50.0, floor="1000 ft AMSL")
+def test_zones_are_listed_in_the_order_the_task_reaches_them():
+    """As a pilot meets them flying the task, not by floor: a high zone the route enters
+    first comes before a low one it reaches later, and flown the other way round the
+    order turns round too."""
+    high = _band("HIGH TMA", 14.2, 14.5, 49.0, 50.0, floor="FL 95")
+    low = _band("LOW ZONE", 14.7, 14.8, 49.0, 50.0, floor="1000 ft AMSL")
     answer = _run(_DROP + """
     at(14.1, 49.5); at(14.95, 49.5);
-    return { crossed: crossed() };
+    var east = crossed();
+    document.getElementById('plan-clear').click();
+    at(14.95, 49.5); at(14.1, 49.5);
+    return { east: east, west: crossed() };
     """, spaces=[high, low])
-    names = [row["name"].split(" ")[0] for row in answer["crossed"]]
-    assert names[0] == "LOW", f"the higher floor was listed first: {names}"
-    assert "HIGH" in names[1]
-    # ...even though the high one covers far more of the route.
-    kilometres = [float(row["note"].split(" ")[0]) for row in answer["crossed"]]
-    assert kilometres[1] > kilometres[0]
-    assert "floor 305 m" in answer["crossed"][0]["note"], (
-        f"1 000 ft was not converted to metres: {answer['crossed'][0]['note']}")
+    assert [row["name"].split(" ")[0] for row in answer["east"]] == ["HIGH", "LOW"]
+    assert [row["name"].split(" ")[0] for row in answer["west"]] == ["LOW", "HIGH"]
+    note = next(row["note"] for row in answer["east"] if row["name"].startswith("LOW"))
+    assert "floor 305 m" in note, f"1 000 ft was not converted to metres: {note}"
 
 
 @needs_chrome

@@ -509,65 +509,76 @@ html[data-help="off"] .m3-help { display: none; }
   color:var(--on-accent); box-shadow:0 0 0 3px var(--paper), 0 0 0 5px var(--accent); }
 .merged-view .plan-mapbar button:disabled { cursor:default; background:var(--float); }
 .merged-view .plan-mapbar button:disabled svg { opacity:.35; }
-.plan-opts { display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center; margin:0 0 6px; }
 .chk { display:inline-flex; align-items:center; gap:9px; font-size:16px; cursor:pointer; min-height:44px; }
 .chk input { width:20px; height:20px; margin:0; accent-color:var(--accent); }
-.plan-opts select.btn { height:44px; padding:0 12px; appearance:auto; }
-.plan-takeoff { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:8px 10px;
-  margin:4px 0 8px; font-size:16px; }
-.plan-takeoff .info-wrap { margin-left:0; justify-self:start; }
-.plan-field { height:44px; padding:0 10px; box-sizing:border-box; font:inherit; min-width:0;
-  border:1px solid var(--edge); border-radius:10px; background:var(--panel); color:var(--ink); }
-#plan-time { grid-column:1 / 3; width:100%; margin:0; accent-color:var(--accent); }
-#plan-time-out { font-variant-numeric:tabular-nums; font-weight:600; min-width:3.2em; text-align:right; }
 .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
 .plan-hint[hidden] { display:none; }
 /* The strip under the map, edge to edge as the map is, its content on the page's
-   column: the score, the options, the takeoff time; on a phone one under another. */
-.plan-strip { display:flex; flex-wrap:wrap; align-items:center; gap:10px 32px; position:relative; z-index:1;
+   column: the score, the options, the takeoff time — three groups on one line on a
+   desktop, divided by a hairline, one under another on a phone. No ⓘ in it: what each
+   control does is its title. */
+.plan-strip { display:flex; flex-wrap:wrap; align-items:center; gap:10px 28px; position:relative; z-index:1;
   margin:0 calc(50% - (100vw - var(--scrollbar, 0px)) / 2);
-  padding:12px calc((100vw - var(--scrollbar, 0px)) / 2 - 50%) 14px;
+  padding:12px calc((100vw - var(--scrollbar, 0px)) / 2 - 50%) 12px;
   background:var(--panel); border-bottom:1px solid var(--rule); }
 .plan-strip-score { flex:0 1 auto; min-width:0; }
-.plan-strip .plan-opts { margin:0; flex:0 1 auto; }
-.plan-strip .plan-takeoff { margin:0 0 0 auto; flex:0 1 380px; }
+.plan-strip .plan-opts { margin:0; flex:0 1 auto; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.plan-strip .plan-takeoff { margin:0 0 0 auto; flex:0 1 420px; }
 .plan-strip .plan-hint:not([hidden]) { flex-basis:100%; }
+@media (min-width: 901px) {
+  .plan-strip .plan-opts, .plan-strip .plan-takeoff { padding-left:28px; border-left:1px solid var(--rule); }
+}
 @media (max-width: 900px) {
-  .plan-strip { gap:8px 20px; }
+  .plan-strip { gap:10px; }
   .plan-strip > * { flex-basis:100% !important; }
 }
-/* The score: the distance large with the shape beside it, then score, multiplier and
-   turnpoints on a line under them. The cells are the script's (`report` in planner.js),
-   labelled in lower case; the first letter is raised here. */
+/* The score: the distance large with its shape, then one quiet line. */
 .plan-figures { display:grid; gap:2px; }
-.plan-row { display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 14px; }
+.plan-row { display:flex; flex-wrap:wrap; align-items:baseline; }
 .plan-row-head { align-items:center; gap:4px 10px; }
-.plan-row-head .info-wrap { margin-left:0; }
-.plan-figures div { display:inline-flex; gap:5px; align-items:baseline; }
-.plan-figures .plan-shape-cell .k { display:none; }
-.plan-figures .v, .plan-shape { white-space:nowrap; }
-.plan-row-head > div:first-child .v { font-size:32px; font-weight:700; line-height:1.1; }
-.plan-row-head > div:first-child .k { display:none; }
-.plan-figures .k { font-size:15px; color:var(--ink-2); }
-.plan-figures .k::first-letter, .plan-shape::first-letter { text-transform:uppercase; }
-.plan-figures .v { font-size:15px; font-weight:600; font-variant-numeric:tabular-nums; }
+.plan-row-head .k, .plan-row-sub .k, .plan-fig-turnpoints { display:none !important; }
+.plan-row-head .v:first-child, .plan-row-head > div:first-child .v { font-size:30px; font-weight:700; line-height:1.1;
+  font-variant-numeric:tabular-nums; white-space:nowrap; }
+.plan-row-sub { font-size:15px; color:var(--ink-2); font-variant-numeric:tabular-nums; }
+.plan-row-sub > div, .plan-legs > span { white-space:nowrap; }
+.plan-row-sub .v { font-weight:500; }
+.plan-row-sub > div + div::before, .plan-row-sub .plan-legs > span::before { content:"·"; padding:0 8px; }
+.plan-legs { display:contents; }
+.plan-figures .plan-row-sub > div { display:inline; }
+@media (max-width: 900px) {
+  .plan-row-sub .plan-legs { display:flex; flex-wrap:wrap; flex-basis:100%; }
+  .plan-row-sub .plan-legs > span:first-child::before { content:none; }
+}
+.plan-row-hint b { color:var(--ink); }
 .plan-shape { display:inline-block; padding:2px 10px; border-radius:999px; font-size:14px; font-weight:600;
-  border:1.5px solid var(--edge); color:var(--ink-2); }
+  border:1.5px solid var(--edge); color:var(--ink-2); white-space:nowrap; }
+.plan-shape::first-letter { text-transform:uppercase; }
 .plan-shape.is-fai { background:var(--good); border-color:var(--good); color:var(--on-good); }
 .plan-shape.is-flat { background:var(--warn); border-color:var(--warn); color:var(--on-warn); }
+.plan-figures div { display:inline-flex; gap:5px; align-items:baseline; }
+/* Toggles as chips, filled when on; the rules as a pill of the same height. */
+.plan-chip { position:relative; display:inline-flex; align-items:center; height:38px; padding:0 14px;
+  border:1px solid var(--edge); border-radius:999px; background:var(--panel); color:var(--ink);
+  font-size:15px; font-weight:600; cursor:pointer; user-select:none; }
+.plan-chip input { position:absolute; opacity:0; width:1px; height:1px; margin:0; }
+.plan-chip:hover { background:var(--panel-2); }
+.plan-chip:has(input:checked) { background:var(--ink); border-color:var(--ink); color:var(--paper); }
+.plan-chip:has(input:focus-visible), .plan-select:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.plan-select { height:38px; padding:0 12px; border:1px solid var(--edge); border-radius:999px;
+  background:var(--panel); color:var(--ink); font:600 15px "Noto Sans", ui-sans-serif, system-ui, sans-serif; }
+/* The takeoff on one line: its day, the time slid through it, the time. */
+.plan-takeoff { display:grid; grid-template-columns:auto auto minmax(80px, 1fr) auto; align-items:center;
+  gap:10px; font-size:15px; color:var(--ink-2); }
+.plan-field { height:38px; padding:0 10px; box-sizing:border-box; font:inherit; color:var(--ink); min-width:0;
+  border:1px solid var(--edge); border-radius:10px; background:var(--panel); }
+#plan-time { width:100%; margin:0; accent-color:var(--accent); }
+#plan-time-out { font-variant-numeric:tabular-nums; font-weight:600; color:var(--ink); min-width:3em; text-align:right; }
 /* Under the strip: to and from XCTrack, then what the task crosses. */
 .plan-section { margin:18px 0 0; display:grid; gap:14px; }
 .plan-section .plan-crossed-head { font-size:20px; font-weight:700; color:var(--ink); margin:0 0 6px; }
 .plan-section .plan-crossed { max-height:none; overflow:visible; }
 .plan-section .plan-xct { margin:0; padding:0; border:0; }
-.plan-section .plan-airspace, .plan-section .plan-note { margin:0; }
-.plan-strip-score .plan-legs { flex-basis:100%; margin:2px 0 0; }
-/* A wrapping row: the sides are spans with nothing between them, so as inline text the
-   line had nowhere to break and ran off a phone. */
-.plan-legs { margin:8px 0 0; font-size:15px; color:var(--ink-2); font-variant-numeric:tabular-nums;
-  display:flex; flex-wrap:wrap; gap:2px 14px; }
-.plan-legs:empty { display:none; }
-.plan-legs span { white-space:nowrap; }
+.plan-section .plan-airspace { margin:0; }
 .plan-airspace { margin:10px 0 0; }
 .plan-crossed-head { margin:0 0 4px; font-size:15px; color:var(--ink-2); }
 .plan-crossed-head::first-letter { text-transform:uppercase; }
@@ -582,7 +593,6 @@ html[data-help="off"] .m3-help { display: none; }
 .plan-when::first-letter { text-transform:uppercase; }
 .plan-when.is-open { background:var(--good); color:var(--on-good); }
 .plan-when.is-shut { border:1.5px solid var(--edge); color:var(--ink-2); }
-.plan-note { margin:12px 0 0; font-size:15px; color:var(--ink-2); }
 .plan-xct { display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; margin:14px 0 0;
   padding-top:12px; border-top:1px solid var(--rule); }
 .plan-xct[hidden], .plan-split[hidden] { display:none; }
@@ -633,7 +643,7 @@ html[data-help="off"] .m3-help { display: none; }
     </div></div>
       <div class="asp-name" id="asp-name"></div>
     </div>
-    <div class="plan-strip" id="plan-strip" aria-label="The task"><div class="plan-strip-score"><div class="plan-figures" id="plan-figures"></div><span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="How to plan a task">i</button><span class="info-pop" role="note">Press <strong>Draw</strong>, the orange button at the foot of the map, then click the map to drop turnpoints (undo, redo and clear are beside it); drag, pinch and twist still move the view. The route is scored as XContest would and checked against every zone it crosses.</span></span><p class="plan-legs" id="plan-legs"></p></div><div class="plan-opts"><label class="chk"><input type="checkbox" id="plan-close"> Closed</label><label class="chk"><input type="checkbox" id="plan-fai" checked> FAI areas<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="More about this">i</button><span class="info-pop" role="note">Where each turnpoint can go for an FAI triangle (every side at least 28% of the perimeter), the other two staying put: turnpoint 1 green, 2 blue, 3 red. Yellow: where a closed course must finish.</span></span></label><label class="plan-rules-label"><span class="sr">Rules</span><select id="plan-rules" class="btn"><option value="world">XContest</option><option value="cpp">ČPP (Czech)</option></select></label></div><div class="plan-takeoff"><label for="plan-day">Takeoff</label><input type="date" id="plan-day" class="plan-field"><span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="More about this">i</button><span class="info-pop" role="note">Slide through the day to see which slopes the sun reaches when: the ground is shaded from where the sun stands (strongest on the Relief ground, under the layers button), and the rose on the map shows the sun and the forecast wind at about 1500 m (the 850 hPa level, Open-Meteo) over the task. Your own clock. The aerodrome hours in the map's Airspaces menu follow this time too.</span></span><input type="range" id="plan-time" min="300" max="1260" step="15" value="720" aria-label="Time of day"><output id="plan-time-out" for="plan-time">12:00</output></div><span class="plan-hint" id="plan-hint" hidden></span></div>
+    <div class="plan-strip" id="plan-strip" aria-label="The task"><div class="plan-strip-score"><div class="plan-figures" id="plan-figures"></div><span class="plan-legs" id="plan-legs"></span></div><div class="plan-opts"><label class="plan-chip" title="Score the task as a closed course: it must end near where it starts"><input type="checkbox" id="plan-close">Closed</label><label class="plan-chip" title="Where each turnpoint can go for an FAI triangle (every side at least 28% of the perimeter), the other two staying put: turnpoint 1 green, 2 blue, 3 red. Yellow: where a closed course must finish."><input type="checkbox" id="plan-fai" checked>FAI areas</label><label class="plan-rules-label" title="XContest: FAI when every side is at least 28% of the perimeter, closed when the gap is under 20% of it, multipliers 1 / 1.2 / 1.4 (open / flat / FAI). ČPP, the Czech cup: closed under 5%, and in the Central European zone 1 / 1.8 / 2.2."><span class="sr">Rules</span><select id="plan-rules" class="plan-select"><option value="world">XContest</option><option value="cpp">ČPP (Czech)</option></select></label></div><div class="plan-takeoff" title="Slide through the day: the ground is shaded from where the sun stands (strongest on the Relief ground), and the rose shows the sun and the forecast wind at about 1500 m. Your own clock; the aerodrome hours follow it."><label for="plan-day">Takeoff</label><input type="date" id="plan-day" class="plan-field"><input type="range" id="plan-time" min="300" max="1260" step="15" value="720" aria-label="Time of day"><output id="plan-time-out" for="plan-time">12:00</output></div><span class="plan-hint" id="plan-hint" hidden></span></div>
   </div>
   <section class="plan-section" aria-label="The task in detail">
     <!-- To XCTrack: import, and one split button with the device's best way first
@@ -658,7 +668,6 @@ html[data-help="off"] .m3-help { display: none; }
       <p class="plan-xct-out" id="plan-xct-out" role="status"></p>
     </div>
     <div class="plan-airspace" id="plan-airspace"></div>
-    <p class="plan-note">A plan, not a clearance.<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="How the task is scored">i</button><span class="info-pop" role="note">Scored with the same rules as the flight report: every side at least 28% of the perimeter for FAI, a closing gap under 20% of it for a closed course, multipliers 1&thinsp;/&thinsp;1.2&thinsp;/&thinsp;1.4. With ČPP chosen, the Czech cup's: closing under 5%, and in the Central European zone 1&thinsp;/&thinsp;1.8&thinsp;/&thinsp;2.2 (<a href="https://www.xcontest.org/cesko/pravidla/" rel="noreferrer">rules</a>). The map draws the airspace within 5&nbsp;km of the task, and none before there is one: Czechia's from this page, with its traffic circuits; any other European country's from openAIP once the task reaches it.</span></span></p>
     <dialog class="plan-xct-dlg" id="plan-xct-dlg" aria-labelledby="plan-xct-title">
       <div class="plan-xct-dlg-head"><h2 id="plan-xct-title">Send the task to XCTrack</h2>
         <button type="button" class="tool" id="plan-xct-close" aria-label="Close"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15"/></svg></button></div>
@@ -670,7 +679,7 @@ html[data-help="off"] .m3-help { display: none; }
   <div class="asp-get-float"><span class="asp-get-label">Airfield layer for XCTrack<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="About the airfield layer">i</button><span class="info-pop" role="note">Aerodrome zones and traffic circuits XCTrack and XContest leave out (OpenAir · 82 zones, 206 circuits at 157 fields · 208 KB). <strong>Not a full airspace set</strong>: load it alongside your usual airspace, never instead of it. Import under Preferences → Airspaces and obstacles → Files → Import OpenAir files, or copy it into the XCTrack/Airspaces folder. Provided with no guarantee — it may be out of date or wrong; you are responsible for the airspace you fly in.</span></span></span><a class="btn primary" download="CZ_airfield_zones_20261001.txt" href="CZ_airfield_zones_20261001.txt"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3v10M6 9l4 4 4-4M4 16.5h12"/></svg>Download</a></div>
   <details class="asp-sources"><summary>Sources and dates</summary><table class="asp-src"><caption>What is on this map, and where it came from</caption><thead><tr><th>Layer</th><th>Source</th><th>Effective</th></tr></thead><tbody><tr><td class='asp-src-key'><span class="asp-swatch" style="background:#c2410c"></span><span class="asp-swatch" style="background:#b91c1c"></span>Controlled, restricted, danger, prohibited</td><td><a href="https://www.openaip.net" rel="noreferrer">openAIP</a> — CC BY-NC 4.0</td><td class='asp-src-when'>openAIP <span class="asp-nw">2026-10-05</span></td></tr><tr><td class='asp-src-key'><span class="asp-swatch" style="background:#a16207"></span>Gliding areas, dropzones, PGZ</td><td><a href="https://www.openaip.net" rel="noreferrer">openAIP</a> — CC BY-NC 4.0</td><td class='asp-src-when'>openAIP <span class="asp-nw">2026-10-05</span></td></tr><tr><td class='asp-src-key'><span class="asp-swatch" style="background:#15803d"></span>Aerodrome zones on the map — openAIP's. The download's are this site's own: 82 public aerodromes, 5 500 m radius, ground to 4 000 ft (the AIP calls these ATZ), 15 clipped by an overlying CTR or TMA; positions corrected by 108 m. <strong>An ultralight strip has no zone of its own</strong>, so those 74 fields carry only their traffic circuit</td><td>map: <a href="https://www.openaip.net" rel="noreferrer">openAIP</a> — CC BY-NC 4.0; download: <a href="https://aim.rlp.cz/" rel="noreferrer">ŘLP ČR</a> — UAS zones, <a href="https://aim.rlp.cz/data/uas/2026_10_01/actual/LKR315A.json" rel="noreferrer">LKR315A</a>, <a href="https://aim.rlp.cz/data/uas/2026_10_01/actual/LKR315B.json" rel="noreferrer">LKR315B</a></td><td class='asp-src-when'>openAIP <span class="asp-nw">2026-10-05</span>; <span class="asp-nw">2026-10-01</span></td></tr><tr><td class='asp-src-key'><span class="asp-swatch" style="background:#ea580c"></span>Traffic circuits (okruhy) — <strong>drawn by this tool, not a published boundary.</strong> Shape scaled off the AIP's VOC charts (±10%); altitude published where stated, otherwise 1 000 ft above the field (measured mean 993 ft over five, spread 820–1 150). At an SLZ strip the runway itself is reconstructed from the reference point and a heading rounded to 10°, so those are marked <code>est</code></td><td>circuit drawn from the <a href="https://aim.rlp.cz/vfrmanual/actual/ad/lkcast_voc.jpg" rel="noreferrer">VOC charts</a>, altitudes and runway tables from the <a href="https://aim.rlp.cz/vfrmanual/actual/lkta_text_en.html" rel="noreferrer">AIP VFR manual</a>, thresholds from <a href="https://ourairports.com/countries/CZ/" rel="noreferrer">OurAirports</a></td><td class='asp-src-when'>—</td></tr></tbody></table></details>
 </article>
-<footer class="site-foot"><a href="https://github.com/ondrejchmelar/parainsights" rel="noreferrer"><svg class="gh" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>parainsights on GitHub</a> — the source, the issues, and how every number on these pages is worked out. Airspace © <a href="https://www.openaip.net" rel="noreferrer">openAIP</a> (CC BY-NC 4.0); imagery © Esri, Maxar, Earthstar Geographics; place names © OpenMapTiles, © OpenStreetMap contributors; terrain: AWS Open Data; weather: Open-Meteo. Visits are counted by Cloudflare Web Analytics, without cookies.</footer><script>if (location.hostname === 'ondrejchmelar.github.io') {const s = document.createElement('script'); s.defer = true;s.src = 'https://static.cloudflareinsights.com/beacon.min.js';s.dataset.cfBeacon = '{"token": "fb27179888c0414ca33f514014e088d2"}';document.head.appendChild(s); }</script>
+<footer class="site-foot"><a href="https://github.com/ondrejchmelar/parainsights" rel="noreferrer"><svg class="gh" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>parainsights on GitHub</a>. Airspace © <a href="https://www.openaip.net" rel="noreferrer">openAIP</a> (CC BY-NC 4.0); imagery © Esri, Maxar, Earthstar Geographics; place names © OpenMapTiles, © OpenStreetMap contributors; terrain: AWS Open Data; weather: Open-Meteo. Visits are counted by Cloudflare Web Analytics, without cookies.</footer><script>if (location.hostname === 'ondrejchmelar.github.io') {const s = document.createElement('script'); s.defer = true;s.src = 'https://static.cloudflareinsights.com/beacon.min.js';s.dataset.cfBeacon = '{"token": "fb27179888c0414ca33f514014e088d2"}';document.head.appendChild(s); }</script>
 </div>
 <script>(function () {
   // The published hours are UTC and the reader thinks in Czech local time — two hours
@@ -1913,6 +1922,23 @@ function initView3d(root, cursorTrack, preset) {
         return (g === null || g === undefined || isNaN(g)) ? ((scene.terrain || {}).min || 0) : g;
       }
       function z(alt) { return alt * vertical; }
+      // Where the map's own ground is drawn under a point, exaggeration included: what a
+      // click lands on. The page's grid (`ground`) is coarser — the planner's is cells of
+      // kilometres — and a turnpoint stood on it floated hundreds of metres off the slope
+      // clicked, so tilted it showed beside the click. Off the loaded terrain tiles, and at
+      // ×1 where the map is flat, the grid (or nothing) stands in.
+      function surfaceZ(lon, lat) {
+        if (map && map.terrain && map.terrain.getElevationForLngLatZoom) {
+          var e = map.terrain.getElevationForLngLatZoom(new maplibregl.LngLat(lon, lat),
+                                                       Math.min(15, Math.floor(map.getZoom())));
+          if (isFinite(e) && e !== 0) return e;
+        }
+        return map && map.terrain ? z(ground(lon, lat)) : 0;
+      }
+      // A planned task's height: 60 m over that ground, scaled as the ground is.
+      function planZ(lon, lat) { return surfaceZ(lon, lat) + 60 * vertical; }
+      // Bumped as finer terrain arrives or the zoom settles, so a task is stood on it again.
+      var groundTick = 0;
 
       // ---- the ground ----------------------------------------------------------------
       function sunAt(minute) {
@@ -2092,6 +2118,16 @@ function initView3d(root, cursorTrack, preset) {
           if (shapes) shapes.setData({ type: 'FeatureCollection', features: pendingShapes });
         }
         if (vertical !== 1) map.setTerrain({ source: 'dem', exaggeration: vertical });
+        // A task stands on the map's terrain (`planZ`), finer as tiles arrive: once they
+        // settle, and after a zoom, it is placed again.
+        var regrounding = null;
+        function reground() {
+          if (!route) return;
+          clearTimeout(regrounding);
+          regrounding = setTimeout(function () { groundTick++; refresh(); }, 150);
+        }
+        map.on('sourcedata', function (e) { if (e.sourceId === 'dem' && e.tile) reground(); });
+        map.on('zoomend', reground);
         // A sun handed in before the style was ready (`setSun`, the planner's).
         if (sun && sunMinute !== null) sunTo(sunMinute);
       });
@@ -2502,33 +2538,33 @@ function initView3d(root, cursorTrack, preset) {
           out.push(new deck.PathLayer({
             id: 'plan-line', data: kept('plan-line', [route], function () { return [route.walk]; }),
             getPath: function (d) {
-              return d.map(function (p) { return [p[0], p[1], z(ground(p[0], p[1]) + 60)]; });
+              return d.map(function (p) { return [p[0], p[1], planZ(p[0], p[1])]; });
             },
             getColor: [255, 255, 255, 235], getWidth: 3, widthUnits: 'pixels',
             capRounded: true, jointRounded: true, billboard: true,
-            updateTriggers: { getPath: vertical }, parameters: ON_TOP
+            updateTriggers: { getPath: [vertical, groundTick] }, parameters: ON_TOP
           }));
         }
         if (route && route.points.length) {
           var tps = kept('plan-points', [route], function () {
             return route.points.map(function (p, i) {
-              return { label: String(i + 1), position: [p[0], p[1], ground(p[0], p[1]) + 60] };
+              return { label: String(i + 1), lon: p[0], lat: p[1] };
             });
           });
           out.push(new deck.ScatterplotLayer({
           extensions: DOTS,
             id: 'plan-points', data: tps,
-            getPosition: function (d) { return [d.position[0], d.position[1], z(d.position[2])]; },
+            getPosition: function (d) { return [d.lon, d.lat, planZ(d.lon, d.lat)]; },
             getFillColor: [226, 96, 44], getLineColor: [255, 255, 255], stroked: true,
             lineWidthMinPixels: 1.5, radiusUnits: 'pixels', getRadius: 9, billboard: true,
-            updateTriggers: { getPosition: vertical }, parameters: ON_TOP
+            updateTriggers: { getPosition: [vertical, groundTick] }, parameters: ON_TOP
           }));
           out.push(new deck.TextLayer({
             id: 'plan-labels', data: tps, getText: function (d) { return d.label; },
-            getPosition: function (d) { return [d.position[0], d.position[1], z(d.position[2])]; },
+            getPosition: function (d) { return [d.lon, d.lat, planZ(d.lon, d.lat)]; },
             getSize: 11, fontWeight: 700, getColor: [255, 255, 255],
             fontFamily: 'ui-sans-serif, system-ui, sans-serif',
-            updateTriggers: { getPosition: vertical }, parameters: ON_TOP
+            updateTriggers: { getPosition: [vertical, groundTick] }, parameters: ON_TOP
           }));
         }
         if (scored && topDown) {
@@ -3991,7 +4027,7 @@ function initView3d(root, cursorTrack, preset) {
         var x = event.clientX - box.left, y = event.clientY - box.top;
         var reach = event.pointerType === 'touch' ? 26 : 18, best = -1, bestD = reach;
         route.points.forEach(function (p, i) {
-          var at = screenAt(p[0], p[1], z(ground(p[0], p[1]) + 60));
+          var at = screenAt(p[0], p[1], planZ(p[0], p[1]));
           if (!at) return;
           var d = Math.hypot(at[0] - x, at[1] - y);
           if (d <= bestD) { bestD = d; best = i; }
@@ -4041,9 +4077,32 @@ function initView3d(root, cursorTrack, preset) {
         map.getCanvas().style.cursor = pointNear(event) >= 0 ? 'grab' : (measuring ? 'crosshair' : '');
       });
 
+      // What a click has to be to count as one: a plain left press that ended where it
+      // started, with no turn or tilt in between. A tilt with shift, ctrl or the right
+      // button ends in a mouseup MapLibre may still call a click, and that dropped a
+      // turnpoint wherever the tilt let go.
+      var press = null, turned = false;
+      // On the view, capturing: it hears a press before the shift-drag handler on the
+      // canvas, which stops it from going any further.
+      view.addEventListener('pointerdown', function (event) {
+        if (!map.getCanvasContainer().contains(event.target)) return;
+        press = { x: event.clientX, y: event.clientY, button: event.button,
+                  modified: event.shiftKey || event.ctrlKey || event.altKey || event.metaKey };
+        turned = false;
+      }, true);
+      map.on('rotate', function () { if (press) turned = true; });
+      map.on('pitch', function () { if (press) turned = true; });
+      function plainClick(event) {
+        var e = event.originalEvent;
+        if (!press) return true;
+        if (press.button !== 0 || press.modified || turned) return false;
+        var reach = e && e.pointerType === 'touch' ? 10 : 5;
+        return !e || Math.hypot(e.clientX - press.x, e.clientY - press.y) <= reach;
+      }
       map.on('click', function (event) {
         // A press on a turnpoint took it; the click it ends in is not a new one.
         if (justDragged || (dragging && dragging.moved)) return;
+        if (!plainClick(event)) return;
         var at = [event.lngLat.lng, event.lngLat.lat];
         // Measuring takes the click: it is not also a turnpoint.
         if (measuring) { measurePoints.push(at); showMeasure(); return; }
@@ -4694,7 +4753,9 @@ function initView3d(root, cursorTrack, preset) {
   }
 
   // Where along `a`→`b` the segment is inside `ring`, as a fraction of its length.
-  function fractionInside(a, b, ring) {
+  function fractionInside(a, b, ring) { return inside(a, b, ring).fraction; }
+  // The same, and where along it (0–1) it first goes in.
+  function inside(a, b, ring) {
     var ts = [0, 1];
     var n = ring.lon.length;
     var dx = b[0] - a[0], dy = b[1] - a[1];
@@ -4709,15 +4770,19 @@ function initView3d(root, cursorTrack, preset) {
     }
     if (ts.length === 2) {
       // No crossing at all: either wholly inside or wholly outside.
-      return pointInRing(a[0] + dx / 2, a[1] + dy / 2, ring) ? 1 : 0;
+      return pointInRing(a[0] + dx / 2, a[1] + dy / 2, ring) ? { fraction: 1, first: 0 }
+                                                             : { fraction: 0, first: null };
     }
     ts.sort(function (x, y) { return x - y; });
-    var total = 0;
+    var total = 0, first = null;
     for (var k = 1; k < ts.length; k++) {
       var mid = (ts[k - 1] + ts[k]) / 2;
-      if (pointInRing(a[0] + dx * mid, a[1] + dy * mid, ring)) total += ts[k] - ts[k - 1];
+      if (pointInRing(a[0] + dx * mid, a[1] + dy * mid, ring)) {
+        total += ts[k] - ts[k - 1];
+        if (first === null) first = ts[k - 1];
+      }
     }
-    return total;
+    return { fraction: total, first: first };
   }
 
   // A leg's worth of ground is only ever compared against rings whose own bounding box it
@@ -4742,9 +4807,10 @@ function initView3d(root, cursorTrack, preset) {
     var walk = course(), legs = [];
     for (var i = 1; i < walk.length; i++) legs.push([walk[i - 1], walk[i]]);
 
-    var found = {};
+    var found = {}, along = 0;
     legs.forEach(function (leg) {
-      var length = distance(leg[0], leg[1]);
+      var length = distance(leg[0], leg[1]), start = along;
+      along += length;
       var west = Math.min(leg[0][0], leg[1][0]), east = Math.max(leg[0][0], leg[1][0]);
       var south = Math.min(leg[0][1], leg[1][1]), north = Math.max(leg[0][1], leg[1][1]);
       rings.forEach(function (ring) {
@@ -4752,20 +4818,22 @@ function initView3d(root, cursorTrack, preset) {
         if (box.east < west || box.west > east || box.north < south || box.south > north) {
           return;
         }
-        var fraction = fractionInside(leg[0], leg[1], ring);
+        var span = inside(leg[0], leg[1], ring), fraction = span.fraction;
         if (fraction <= 0) return;
         // Keyed by name: one CTR is published as several rings and one okruh is two
         // rectangles, and a list that says "LKPR CTR" four times is a list nobody reads.
         var seen = found[ring.n];
         if (!seen) found[ring.n] = seen = { name: ring.n, k: ring.k, f: ring.f,
-                                            g: ring.g, w: ring.w, metres: 0 };
+                                            g: ring.g, w: ring.w, metres: 0, at: Infinity };
         seen.metres += fraction * length;
+        seen.at = Math.min(seen.at, start + span.first * length);
         seen.f = Math.min(seen.f, ring.f);
       });
     });
-    // Lowest floor first: what a paraglider hits soonest is what it most needs to know.
+    // In the order the task reaches them, as a pilot meets them flying it (October 2026:
+    // it was the lowest floor first).
     return Object.keys(found).map(function (key) { return found[key]; })
-      .sort(function (a, b) { return a.f - b.f || b.metres - a.metres; });
+      .sort(function (a, b) { return a.at - b.at || a.f - b.f; });
   }
 
   // The whole list is always shown, even when the map has hidden a field for being
@@ -4950,8 +5018,8 @@ function initView3d(root, cursorTrack, preset) {
     var heading = document.createElement('p');
     heading.className = 'plan-crossed-head';
     heading.textContent = crossed.length + (crossed.length === 1
-      ? ' airspace crossed, lowest floor first'
-      : ' airspaces crossed, lowest floor first');
+      ? ' airspace crossed, in the order the task reaches it'
+      : ' airspaces crossed, in the order the task reaches them');
     box.appendChild(heading);
     var list = document.createElement('ul');
     list.className = 'plan-crossed';
@@ -5320,22 +5388,24 @@ function initView3d(root, cursorTrack, preset) {
     redraw();
   }
 
-  var how = null;     // the strip's ⓘ on how to plan, kept beside the distance
+  var legsNode = null;    // the legs' line, moved into the figures' second row
   function report() {
     xctRefresh();
     var answer = score();
     var figures = document.getElementById('plan-figures');
-    // Two rows: the distance with its shape and the ⓘ on how to plan, then the rest. Spans,
-    // so a figure is still the one `div` holding a label and a value.
-    if (!how) how = figures.parentNode.querySelector('.plan-strip-score > .info-wrap');
+    var legs = legsNode || (legsNode = document.getElementById('plan-legs'));
+    // Two rows: the distance with its shape, then the rest on one quiet line — score,
+    // multiplier, the legs — with no labels. Spans, so a figure is still the one `div`
+    // holding a label and a value; the legs are moved into the second row.
     figures.innerHTML = '';
     var head = document.createElement('span'), rest = document.createElement('span');
-    head.className = 'plan-row plan-row-head'; rest.className = 'plan-row';
+    head.className = 'plan-row plan-row-head'; rest.className = 'plan-row plan-row-sub';
     figures.appendChild(head); figures.appendChild(rest);
+    legs.innerHTML = '';
     if (points.length < 2) {
       head.innerHTML = '<div><span class="k">task</span><span class="v">— km</span></div>';
-      if (how) head.appendChild(how);
-      document.getElementById('plan-legs').textContent = '';
+      rest.innerHTML = '<span class="plan-row-hint">Press <b>Draw</b>, then click the map</span>';
+      rest.appendChild(legs);
       return;
     }
     var names = { open: 'open distance', flat: 'flat triangle', fai: 'FAI triangle' };
@@ -5347,6 +5417,7 @@ function initView3d(root, cursorTrack, preset) {
     ];
     cells.forEach(function (pair) {
       var cell = document.createElement('div');
+      cell.className = 'plan-fig-' + pair[0];
       cell.innerHTML = '<span class="k"></span><span class="v"></span>';
       cell.querySelector('.k').textContent = pair[0];
       cell.querySelector('.v').textContent = pair[1];
@@ -5361,10 +5432,8 @@ function initView3d(root, cursorTrack, preset) {
     chip.textContent = names[answer.shape];
     chip.className = 'plan-shape is-' + answer.shape;
     head.appendChild(shape);
-    if (how) head.appendChild(how);
+    rest.appendChild(legs);
 
-    var legs = document.getElementById('plan-legs');
-    legs.innerHTML = '';
     (answer.sides || answer.legs).forEach(function (metres, i) {
       var span = document.createElement('span');
       span.textContent = (answer.sides ? 'side ' : 'leg ') + (i + 1) + ': '
