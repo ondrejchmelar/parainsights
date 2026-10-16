@@ -243,10 +243,9 @@ STYLE = """
 .met-src td { padding:8px 12px 8px 0; border-bottom:1px solid var(--rule); color:var(--ink-2); vertical-align:top; }
 .met-src td:first-child { color:var(--ink); font-weight:600; white-space:nowrap; }
 .met-src a { color:inherit; text-decoration:underline; text-underline-offset:2px; }
-.met-src-when { white-space:nowrap; font-variant-numeric:tabular-nums; }
 .met-terms { margin:16px 0 0; font-size:15px; color:var(--ink-2); }
 .met-terms dt { color:var(--ink); }
-/* On a phone each source is a block: what, then where from, then when. */
+/* On a phone each source is a block: what, then where from. */
 @media (max-width: 640px) {
   .met-src thead { display:none; }
   .met-src, .met-src tbody, .met-src tr, .met-src td { display:block; }
@@ -427,17 +426,16 @@ def body(uid: str = "meteo") -> str:
        (October 2026: it was an ⓘ behind "A forecast is not a decision"). -->
   <details class="met-sources"><summary>Sources and method</summary>
     <table class="met-src">
-      <thead><tr><th>What</th><th>Source</th><th>Date</th></tr></thead>
+      <thead><tr><th>What</th><th>Source</th></tr></thead>
       <tbody>
         <tr><td>Forecast</td><td><a href="https://open-meteo.com/" rel="noreferrer">Open-Meteo</a>:
           DWD ICON-D2 (2&nbsp;km) as far as it reaches, ICON-EU (7&nbsp;km) after, and the
-          boundary layer height from ECMWF IFS, which ICON does not publish</td>
-          <td>Live</td></tr>
+          boundary layer height from ECMWF IFS, which ICON does not publish</td></tr>
         <tr><td>Takeoffs</td><td>Chosen after <a href="https://gfs.pgweb.cz/" rel="noreferrer">gfs.pgweb.cz</a>'s
-          essentials. {site_data.ATTRIBUTION}</td><td class="met-src-when">{site_data.FETCHED}</td></tr>
+          essentials. {site_data.ATTRIBUTION}</td></tr>
         <tr><td>Airfield meteograms</td><td>{flymet_data.ATTRIBUTION}, from
           <a href="{flymet_data.SOURCE}" rel="noreferrer">flymet</a>: {len(flymet_data.STATIONS)}
-          stations, each takeoff shown its nearest</td><td>Live</td></tr>
+          stations, each takeoff shown its nearest</td></tr>
       </tbody>
     </table>
     <!-- What the comparison's columns mean: two ⓘ in the table head until October 2026. -->
