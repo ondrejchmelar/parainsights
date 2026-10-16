@@ -563,10 +563,7 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
 
         capped = sum(1 for ring in scene.get("airspaces", []) if ring.get("t"))
         # Short, in a bubble: how to turn and tilt the map is the map's own ? button.
-        boxes = (
-            " \u00d75 and \u00d715 under the layers button stretch the heights."
-            + (f" Zones above {DRAWN_TOP / 1000:.0f} km end at a dashed lid." if capped else "")
-        )
+        boxes = f" Zones above {DRAWN_TOP / 1000:.0f} km end at a dashed lid." if capped else ""
 
     download = ""
     if openair_name:
