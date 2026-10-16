@@ -95,10 +95,8 @@
   // the detail behind an ⓘ.
   function tile(key, value, sub) {
     var label = key.charAt(0).toUpperCase() + key.slice(1);
-    return '<div class="fig"><span class="v">' + value + '</span><span class="k">' + label +
-      (sub ? '<span class="info-wrap"><button type="button" class="info" aria-expanded="false" ' +
-             'aria-label="About ' + key + '">i</button><span class="info-pop" role="note">' +
-             sub.charAt(0).toUpperCase() + sub.slice(1) + '.</span></span>' : '') + '</span></div>';
+    return '<div class="fig"><span class="v">' + value + '</span><span class="k">' + label + '</span>' +
+      (sub ? '<span class="d">' + sub.charAt(0).toUpperCase() + sub.slice(1) + '</span>' : '') + '</div>';
   }
   function cardinal(deg) {
     var names = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW',
@@ -253,18 +251,9 @@
     if (legend && !legend.querySelector('.model-swatch')) {
       var item = document.createElement('li');
       item.innerHTML = '<span class="swatch model-swatch" ' +
-        'style="background:var(--neutral)"></span>model profile for the day, fetched ' +
-        'when you opened this page';
+        'style="background:var(--neutral)"></span>Model profile for the day';
       legend.appendChild(item);
     }
-    article.querySelectorAll('.caption, .info-pop').forEach(function (caption) {
-      var text = caption.textContent;
-      var at = text.indexOf("The day's forecast profile would be drawn behind these");
-      if (at < 0) return;
-      caption.textContent = text.slice(0, at) +
-        "The day's forecast profile is drawn behind these — fetched when you opened " +
-        'this page, not built into the report.';
-    });
   }
 
   function run() {
@@ -290,14 +279,11 @@
           sayTheModelArrived(article, windChart);
         }
         var used = m.cloudbase > 0 ? Math.round(top / m.cloudbase * 100) : null;
-        var spread = Math.round(m.temperature - m.dew);
         var html =
           tile('surface', Math.round(m.temperature) + ' °C',
-               'dew ' + Math.round(m.dew) + ' °C · spread ' + spread + ' K') +
-          tile('cloudbase', Math.round(m.cloudbase) + ' m',
-               spread + ' K spread, lifted until it closes') +
-          tile('boundary layer', m.blTop ? Math.round(m.blTop) + ' m' : '—',
-               'as high as the day\'s heating reaches') +
+               'dew point ' + Math.round(m.dew) + ' °C') +
+          tile('cloudbase', Math.round(m.cloudbase) + ' m', '') +
+          tile('boundary layer', m.blTop ? Math.round(m.blTop) + ' m' : '—', '') +
           tile('ceiling used', used === null ? '—' : used + '%',
                'you reached ' + Math.round(top) + ' m');
         // No 850 hPa wind in the answer is missing data, and a missing wind is not a calm

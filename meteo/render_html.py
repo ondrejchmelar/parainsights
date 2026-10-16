@@ -244,6 +244,8 @@ STYLE = """
 .met-src td:first-child { color:var(--ink); font-weight:600; white-space:nowrap; }
 .met-src a { color:inherit; text-decoration:underline; text-underline-offset:2px; }
 .met-src-when { white-space:nowrap; font-variant-numeric:tabular-nums; }
+.met-terms { margin:16px 0 0; font-size:15px; color:var(--ink-2); }
+.met-terms dt { color:var(--ink); }
 /* On a phone each source is a block: what, then where from, then when. */
 @media (max-width: 640px) {
   .met-src thead { display:none; }
@@ -377,11 +379,11 @@ def body(uid: str = "meteo") -> str:
   <table class="met-compare" id="met-compare" hidden
          aria-label="The chosen takeoffs at the chosen hour">
     <thead><tr>
-      <th scope="col">Takeoff</th><th scope="col">Verdict{info("Flyable when the forecast wind blows up a slope this takeoff works in. The verdict is about the wind only; the columns beside it say how high the day goes.")}</th>
+      <th scope="col">Takeoff</th><th scope="col">Verdict</th>
       <th scope="col">Wind</th>
       <th scope="col">Thermal top</th><th scope="col">Cloudbase</th>
       <th scope="col" class="hide-narrow">Temp / dew</th>
-      <th scope="col" class="hide-narrow">Lid{info("A stable layer that stops thermals — lapse under " + f"{CAP_LAPSE:.0f}" + " °C/km — if one sits below 4 km. “inv” where the air warms with height.")}</th>
+      <th scope="col" class="hide-narrow">Lid</th>
       <th scope="col" class="hide-narrow">Ground</th>
     </tr></thead>
     <tbody></tbody>
@@ -423,7 +425,7 @@ def body(uid: str = "meteo") -> str:
   </dialog>
   <!-- Where everything on the page comes from, folded at the foot as on the Planner
        (October 2026: it was an ⓘ behind "A forecast is not a decision"). -->
-  <details class="met-sources"><summary>Sources and dates</summary>
+  <details class="met-sources"><summary>Sources and method</summary>
     <table class="met-src">
       <thead><tr><th>What</th><th>Source</th><th>Date</th></tr></thead>
       <tbody>
@@ -439,6 +441,12 @@ def body(uid: str = "meteo") -> str:
           {flymet_data.FETCHED}</td></tr>
       </tbody>
     </table>
+    <!-- What the comparison's columns mean: two ⓘ in the table head until October 2026. -->
+    <dl class="gloss met-terms">
+      <dt>Verdict</dt><dd>Flyable when the wind blows up a slope this takeoff works in. Wind only.</dd>
+      <dt>Lid</dt><dd>A stable layer below 4&nbsp;km: lapse under {CAP_LAPSE:.0f}&nbsp;°C/km; “inv” where it warms with height.</dd>
+      <dt>Thermal top</dt><dd>Two estimates: ECMWF’s mixing height (dashed) and a dry parcel lifted from the 2&nbsp;m air (ring). The parcel is usually lower.</dd>
+    </dl>
   </details>
   <script type="application/json" class="met-data">{payload}</script>
 </article>"""

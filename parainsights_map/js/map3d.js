@@ -226,8 +226,7 @@
       // until the bar's play button opens it: most of the time the reader wants the whole
       // flight, and a slider parked at the end is a row of nothing.
       '<div class="m3-bottom">' +
-      // Help on its own at the bottom-left corner, not between the bar's buttons; shown
-      // only while the page's Help switch is on, like every ⓘ.
+      // Help on its own at the bottom-left corner, not between the bar's buttons.
       '<div class="m3-help-box view3d-controls-extra" hidden>' +
         '<button type="button" data-m3="help" class="m3-icon m3-help" title="Controls" aria-label="How to control this view">' + ICON.help + '</button></div>' +
       (hasTime ?

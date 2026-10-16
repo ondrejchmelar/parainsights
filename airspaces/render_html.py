@@ -102,6 +102,7 @@ STYLE = """
 .m3-airspace-extra .asp-when-row .chk { flex: 1 1 auto; }
 .m3-airspace-extra input[type="datetime-local"] { flex: 1 1 150px; }
 .m3-airspace-extra .asp-when-row .btn { height: 34px; }
+.asp-when-note { margin: 6px 0 0; font-size: 14px; line-height: 1.4; color: var(--ink-2); max-width: 340px; }
 /* The ⓘ in the map's menu, not one of the map's buttons, whose rule it otherwise meets. */
 .m3-airspace-extra button.info { position: relative; height: 1.3em; width: 1.3em; min-width: 13px; min-height: 13px;
   padding: 0; border-radius: 50%; border: 1.5px solid var(--ink-2); background: none; color: var(--ink-2);
@@ -355,21 +356,20 @@ def when_control(note: str = "") -> str:
     return (
         '<div class="asp-controls asp-when-row">'
         '<label class="chk" for="asp-when-on"><input type="checkbox" id="asp-when-on">'
-        f"Only fields open at</label>{common.info(note) if note else ''}"
+        "Only fields open at</label>"
         f'<input type="datetime-local" id="asp-when" data-holidays="{calendar}" '
         'aria-label="date and time, Czech local">'
         '<button type="button" class="btn" id="asp-when-now">Now</button>'
         '<span class="asp-readout asp-when-out" id="asp-when-out"></span>'
         "</div>"
+        # Printed, not behind an ⓘ: it is the caveat on the filter itself.
+        + (f'<p class="asp-when-note">{note}</p>' if note else "")
     )
 
 
 WHEN_NOTE = (
-    "Czech local time. Aerodrome hours are published for 68 of the 82 aerodromes and "
-    "for <strong>none</strong> of the 74 ultralight strips, and nothing else on this map "
-    "carries hours at all — so this hides part of one layer, not the map. "
-    "<strong>Outside published hours is not “closed”</strong>: almost every field adds "
-    "“otherwise on request”, and a tow launch needs no published hour."
+    "Czech local time. Hours are published for 68 of 82 aerodromes and none of the 74 "
+    "UL strips. Outside them is not “closed”: most fields add “otherwise on request”."
 )
 
 
@@ -564,9 +564,8 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
         capped = sum(1 for ring in scene.get("airspaces", []) if ring.get("t"))
         # Short, in a bubble: how to turn and tilt the map is the map's own ? button.
         boxes = (
-            " Each zone is drawn floor to ceiling; \u00d75 and \u00d715 under the layers "
-            "button stretch the height."
-            + (f" The {capped} above {DRAWN_TOP / 1000:.0f} km stop at a dashed lid." if capped else "")
+            " \u00d75 and \u00d715 under the layers button stretch the heights."
+            + (f" Zones above {DRAWN_TOP / 1000:.0f} km end at a dashed lid." if capped else "")
         )
 
     download = ""
@@ -619,23 +618,19 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
   <details class="asp-sources"><summary>Sources</summary>{sources_table(overlay, base_version, shift)}</details>
 </article>"""
 
-    about = ("Only the zones within 5 km of a planned task. openAIP's, plus the traffic "
-             f"circuits at {overlay.circuit_fields} Czech fields no published source draws: fly "
-             "inside an aerodrome zone, but stay out of its circuit. Hover a zone for its "
-             "name and limits." + boxes)
+    about = ("Zones within 5 km of the task: openAIP, plus the traffic circuits at "
+             f"{overlay.circuit_fields} Czech fields no published source draws. Fly in an "
+             "aerodrome zone, stay out of its circuit. Hover a zone for its limits." + boxes)
     get = ""
     if openair_name:
         get = (f'<div class="asp-get-float">'
                f'<span class="asp-get-label">ATZ layer for XCTrack'
                + common.info(
-                   "Aerodrome zones and traffic circuits XCTrack and XContest leave out "
-                   f"(OpenAir · {overlay.atz_count} zones, {overlay.circuits} circuits at "
-                   f"{overlay.circuit_fields} fields · {openair_size / 1024:.0f} KB). "
-                   "<strong>Not a full airspace set</strong>: load it alongside your usual "
-                   "airspace, never instead of it. Import under Preferences → Airspaces and "
-                   "obstacles → Files → Import OpenAir files, or copy it into the "
-                   "XCTrack/Airspaces folder. Provided with no guarantee — it may be out of "
-                   "date or wrong; you are responsible for the airspace you fly in.",
+                   "The aerodrome zones and circuits XCTrack leaves out: "
+                   f"{overlay.atz_count} zones, {overlay.circuits} circuits "
+                   f"(OpenAir, {openair_size / 1024:.0f} KB). <strong>Load it alongside your "
+                   "airspace, not instead.</strong> XCTrack: Preferences → Airspaces and "
+                   "obstacles → Files → Import OpenAir files.",
                    "About the ATZ layer")
                + '</span>'
                f'<a class="btn primary" download="{_escape((openair_href or openair_name).rsplit("/", 1)[-1])}" '

@@ -46,9 +46,6 @@ empty.
   should scroll the page like anywhere else; a tap reads a point, and a press held then
   dragged scrubs (`bindReader` in `meteo/js/meteo.js` is the pattern). Today a drag over
   the side view moves the cursor and the page does not scroll.
-- **Rework the help, and review its texts.** The ⓘ bubbles, the map's ? box, titles and
-  notes grew one at a time; decide what help is for and where it lives, then go through
-  every text on the three pages (several were cut as useless in October 2026).
 - **Planner → XCTrack: a cylinder size?** The export is a waypoints task with no
   cylinders. Open question whether to offer a radius per turnpoint (or one for all), and
   what XCTrack does with it in a waypoints task as against a competition task.
@@ -1009,10 +1006,20 @@ One language across the four pages, stated once in `parainsights_common` (`TOKEN
 - **Icons**: one stroked set, 20 px, 1.75 px round stroke, `currentColor`
   (`common.icon`, and the same paths in `map3d.js` and `meteo.js`). No Unicode glyphs as
   icons.
-- **Explanations go behind an ⓘ** (`common.info`, `info` in `js/report.js`) straight
-  after the label they explain: hover on a desktop, tap on touch, Esc closes, kept on
-  screen by `prefs.js`. The **Help** switch hides every ⓘ and the map's ? (remembered
-  like the theme; desktop only). **aA** zooms the page an eighth, the maps excepted.
+- **Help, as reworked in October 2026** (it was ~26 ⓘ per flight and a Help switch to
+  hide them; both gone). The audience are pilots: no basics, no reasoning, no caveats
+  beyond a short source. Three places, by kind:
+  - **This flight's facts are printed**, never hidden: a grey line under each figure
+    (`figure`'s `detail`, `.fig .d`), under each debrief card, "Not checked: …".
+  - **Fixed definitions: one ⓘ per section** (`glossary` in `js/report.js`, `.gloss`),
+    a term per line, a sentence at most. Flights has three per flight (Climbs, How the
+    air was used, The air that day); no ⓘ on single labels or table heads.
+  - **Where data comes from, and how a number is worked out: the fold** at the foot —
+    "Sources and method" per flight (`sourcesFold`; this flight's rows in ink, the
+    method rows grey) and on Meteo (its table plus the column terms).
+  The Planner keeps an ⓘ each for "About this map", XCTrack and the ATZ layer; the
+  hours caveat is printed under the filter. `common.info` renders the ⓘ, kept on screen
+  by `prefs.js`. **aA** zooms the page an eighth, the maps excepted.
 - Colour is never alone: legends name every segment (time bar, side view, sparklines).
 
 Reports carry their own charts as inline SVG and fetch their imagery. That is no longer

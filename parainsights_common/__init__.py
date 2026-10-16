@@ -104,7 +104,6 @@ try {
   var t = localStorage.getItem('parainsights.theme');
   if (t) document.documentElement.dataset.theme = t;
   if (localStorage.getItem('parainsights.text') === 'large') document.documentElement.dataset.text = 'large';
-  if (localStorage.getItem('parainsights.help') === 'off') document.documentElement.dataset.help = 'off';
 } catch (e) {}
 """
 
@@ -113,7 +112,7 @@ try {
 # think about again — a page that offers it as a third click is a page asking them to
 # manage a preference they already expressed.
 THEME_SCRIPT = (Path(__file__).parent / "js/theme.js").read_text(encoding="utf-8")
-# The text-size and Help switches, and the ⓘ: shipped with the theme's script because
+# The text-size switch and the ⓘ: shipped with the theme's script because
 # every page that has the one has the others.
 THEME_SCRIPT += (Path(__file__).parent / "js/prefs.js").read_text(encoding="utf-8")
 
@@ -165,14 +164,6 @@ def text_button() -> str:
     find 16 px small and would rather not zoom the browser, which zooms the map too."""
     return ('<button type="button" class="tool text-toggle" aria-pressed="false" '
             'title="Larger text" aria-label="Larger text">A<b>A</b></button>')
-
-
-def help_button() -> str:
-    """Help: shows or hides every ⓘ (and the map's ? button). A first-time reader wants
-    the explanations; someone on their fortieth flight wants them gone."""
-    return ('<button type="button" class="tool help-toggle" aria-pressed="true" '
-            'title="Show or hide the explanations (ⓘ)">Help<span class="switch" aria-hidden="true">'
-            '</span></button>')
 
 
 def info(text: str, label: str = "More about this") -> str:
@@ -257,11 +248,16 @@ html[data-text="large"] .view3d-panel { zoom: calc(1 / 1.125); }
 .info-wrap.to-right .info-pop { left: -12px; transform: none; }
 @media (hover: hover) { .info-wrap:hover .info-pop { display: block; } }
 .info[aria-expanded="true"] + .info-pop { display: block; }
-html[data-help="off"] .info-wrap { display: none; }
+/* A section's ⓘ: its terms, one line each. */
+.info-pop:has(.gloss) { max-width: min(420px, 90vw); }
+.gloss { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; }
+.gloss dt { font-weight: 600; white-space: nowrap; }
+.gloss dd { margin: 0; }
+@media (max-width: 640px) { .gloss { grid-template-columns: 1fr; gap: 0; } .gloss dd { margin-bottom: 6px; } }
 """
 
 STYLE = """
-/* The strip: the three tools, then aA, Help, the theme and the source. */
+/* The strip: the three tools, then aA and the theme. */
 .site-nav { display:flex; align-items:center; gap:4px; min-height:62px; margin:0 0 18px;
   border-bottom:1px solid var(--rule); flex-wrap:wrap; }
 .site-nav > a, .site-nav > span:not(.site-sp), .site-nav > .view-tab { height:44px; display:inline-flex;
@@ -280,11 +276,6 @@ STYLE = """
 /* aA and the theme: the same circle, side by side at the end of the strip. */
 .tool.text-toggle, .tool.theme-toggle { width:44px; min-width:44px; padding:0; }
 .text-toggle[aria-pressed="true"] { background:var(--ink); color:var(--paper); border-color:var(--ink); }
-.switch { width:36px; height:21px; border-radius:11px; background:var(--edge); position:relative; flex:none; }
-.switch::after { content:""; position:absolute; left:3px; top:3px; width:15px; height:15px; border-radius:50%;
-  background:#fff; transition:left .15s; }
-.help-toggle[aria-pressed="true"] .switch { background:var(--accent); }
-.help-toggle[aria-pressed="true"] .switch::after { left:18px; }
 .theme-glyph, .theme-glyph svg { display:block; }
 .site-foot { margin:56px 0 0; padding:18px 0 0; border-top:1px solid var(--rule);
   font-size:15px; line-height:1.55; color:var(--ink-2); display:block; }
@@ -295,8 +286,6 @@ STYLE = """
   .site-nav { flex-wrap:nowrap; }
   .site-nav > a, .site-nav > span:not(.site-sp), .site-nav > .view-tab { padding:0 8px; }
   .site-nav > a.tool, .tool { padding:0 9px; min-width:40px; }
-  /* Help is a desktop switch: on a phone the ⓘ are there to tap, and the strip is full. */
-  .help-toggle { display:none; }
 }
 """ + BASE
 
@@ -316,9 +305,10 @@ _GITHUB_MARK = (
 
 
 def strip_end() -> str:
-    """What closes every page's strip: aA, Help and the theme switch. The source is linked
-    from the foot of the page (`footer`), with GitHub's mark beside it."""
-    return '<span class="site-sp"></span>' + text_button() + help_button() + theme_button()
+    """What closes every page's strip: aA and the theme switch. The source is linked from
+    the foot of the page (`footer`), with GitHub's mark beside it. There was a Help switch
+    hiding every ⓘ until October 2026; with one ⓘ per section there is nothing to hide."""
+    return '<span class="site-sp"></span>' + text_button() + theme_button()
 
 
 SITE_HOST = "ondrejchmelar.github.io"

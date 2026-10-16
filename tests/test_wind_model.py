@@ -139,21 +139,7 @@ window.addEventListener('load', function () {
         svg.querySelectorAll('.axis-x'), function (t) { return t.textContent; });
       out.yLabels = Array.prototype.map.call(
         svg.querySelectorAll('.axis-y'), function (t) { return t.textContent; });
-      // Read the elements, never `body.textContent`: the page carries its own script
-      // inline, and every sentence this feature writes appears in that source too — so
-      // a whole-document search says "the caption is there" on a page where it is not.
-      // The wind chart's explanation is its ⓘ bubble, which the page rewrites as a caption.
-      function captions() {
-        return Array.prototype.map.call(
-          document.querySelectorAll('.caption, .info-pop'), function (p) { return p.textContent; });
-      }
       out.legend = !!document.querySelector('.legend .model-swatch');
-      out.caption = captions().some(function (text) {
-        return text.indexOf('forecast profile would be drawn behind these') >= 0;
-      });
-      out.captionSays = captions().some(function (text) {
-        return text.indexOf('forecast profile is drawn behind these') >= 0;
-      });
     } catch (error) {
       out.error = String((error && error.stack) || error);
     }
@@ -264,19 +250,15 @@ class TestThePageFinishesTheChart:
                 f"where the redrawn axis puts {want_x:.1f}")
             assert abs(point["cy"] - want_y) < 1.0
 
-    def test_the_caption_stops_saying_the_model_is_missing(self, tmp_path):
+    def test_the_legend_names_the_model_line_once_it_is_drawn(self, tmp_path):
         answer = _render(a_drifting_day(tmp_path))
-        assert answer["caption"] is False, (
-            "the caption still explains the absence of a line that is now on the chart")
-        assert answer["captionSays"] is True, (
-            "the caption says nothing about where the line came from")
         assert answer["legend"] is True, "the legend never gained the model swatch"
 
     def test_an_answer_with_no_levels_leaves_the_chart_alone(self, tmp_path):
         """The ERA5 archive returns nulls on every pressure level, so a flight older
-        than the 60-day cutoff gets no profile — and the caption has to go on saying
-        why rather than the chart growing an axis with nothing on it."""
+        than the 60-day cutoff gets no profile — and the chart must not grow an axis, or
+        a legend entry, with nothing on it."""
         answer = _render(a_drifting_day(tmp_path), levels_have_wind=False)
         assert answer["modelPoints"] is None
         assert answer["modelDots"] == 0
-        assert answer["caption"] is True
+        assert answer["legend"] is False

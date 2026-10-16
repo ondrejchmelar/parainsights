@@ -251,7 +251,7 @@ class TestWhatHeldTheClimbUp:
 
 
 class TestTheReportExplainsTheLabel:
-    """"How to read this, and what to distrust" makes claims about the rule.
+    """The Climbs ⓘ states the rule.
 
     The section is where a reader goes to find out whether to believe a number, so a
     sentence in it that has drifted from the code is worse than no sentence. The
@@ -266,9 +266,9 @@ class TestTheReportExplainsTheLabel:
 
     def test_the_thresholds_in_the_prose_are_the_ones_the_code_uses(self, tmp_path):
         html = self._report(tmp_path)
-        assert f"steeper than {K['RIDGE_SLOPE']:.0f}°" in html, (
+        assert f"slope over {K['RIDGE_SLOPE']:.0f}°" in html, (
             "the slope threshold in the note is not the one the classifier uses")
-        assert f"within {K['RIDGE_CLEARANCE']:.0f}&nbsp;m of the slope" in html, (
+        assert f"within {K['RIDGE_CLEARANCE']:.0f}&nbsp;m of it" in html, (
             "the clearance threshold in the note is not the one the classifier uses")
 
     def test_the_prose_reads_the_constants_rather_than_repeating_them(self):
@@ -277,12 +277,12 @@ class TestTheReportExplainsTheLabel:
         report least likely to be re-read."""
         import pathlib
         source = (pathlib.Path(js.BRIDGE).parent.parent / "tracklog_viewer" / "js" / "report.js").read_text()
-        start = source.index("Ridge only when three things agree")
-        paragraph = source[start:source.index("</th>", start)]
+        start = source.index("['Lift', 'Ridge:")
+        paragraph = source[start:source.index("]", start + 10)]
         assert "TV.insolation.RIDGE_SLOPE" in paragraph
         assert "TV.insolation.RIDGE_CLEARANCE" in paragraph
 
     def test_convergence_is_named_as_a_deliberate_omission(self, tmp_path):
         """A reader who knows the sky will ask where convergence went, and "we did not
         bother" and "one tracklog cannot support it" are different answers."""
-        assert "Convergence is deliberately not a label" in self._report(tmp_path)
+        assert "Convergence is not a label" in self._report(tmp_path)

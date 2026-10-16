@@ -271,16 +271,10 @@ CODE_ICON = '<path d="M4 7h12M4 13h12M8 3.5 6.5 16.5M13.5 3.5 12 16.5"/>'
 QR_ICON = ('<rect x="3" y="3" width="5" height="5" rx="1"/><rect x="12" y="3" width="5" height="5" rx="1"/>'
            '<rect x="3" y="12" width="5" height="5" rx="1"/><path d="M12 12h2v2M17 12v1M12 17h1M15 15h2v2"/>')
 
-XCT_HELP = ("The route as an XCTrack waypoints task: the turnpoints in order, with the "
-            "ground's height under each, no cylinders. <b>File</b>: a .xctsk file — on the "
-            "phone XCTrack runs on, open it from the download and choose XCTrack. "
-            "<b>Task code</b>: the task is stored with XContest for a month and you get four "
-            "letters to import it by in XCTrack. <b>QR code</b>: to scan from this screen "
-            "with XCTrack's task import. The code and the QR code send the route to "
-            "XContest's task service (tools.xcontest.org); the file stays on your device. "
-            "<b>Import</b> takes a task back the same three ways — an .xctsk file, an "
-            "XContest task code, or a QR code scanned with the camera or from a photo — and "
-            "replaces the route drawn.")
+XCT_HELP = ("Turnpoints in order with the ground height under each, no cylinders. "
+            "<b>File</b>: open it in XCTrack. <b>Task code</b> and <b>QR code</b> go through "
+            "XContest's task service; a code lasts a month. <b>Import</b> takes any of the "
+            "three back and replaces the route.")
 
 
 def strip() -> str:

@@ -969,9 +969,7 @@
           + ' aria-label="The day by hour and height: wind, cloud, boundary layer and cloudbase">'
           + '</canvas>'
           + '<canvas class="met-canvas met-col-sounding" width="380" height="300"></canvas>'
-          + '<p class="met-col-top" hidden><span class="txt"></span><span class="info-wrap">'
-          + '<button type="button" class="info" aria-expanded="false" aria-label="About the thermal top">i</button>'
-          + '<span class="info-pop" role="note"></span></span></p>'
+          + '<p class="met-col-top" hidden><span class="txt"></span></p>'
           + '<figure class="met-col-fly" hidden></figure>';
 
   // While the day's forecast is still on its way on a first visit, a column the size a
@@ -1389,52 +1387,31 @@
     ctx.fillText(text, x, y);
   }
 
-  // The line under a sounding that says what its two thermal tops are, and — folded —
-  // why there are two. Written only when it changes: the pointer redraws the sounding on
+  // The line under a sounding that gives its two thermal tops. Written only when it
+  // changes: the pointer redraws the sounding on
   // every move, and rewriting an open <details> would fight the reader's own tap.
   function drawTop(canvas, model, parcel) {
     var box = canvas.parentNode && canvas.parentNode.querySelector('.met-col-top');
     if (!box) return;
     var metres = function (value) { return Math.round(value).toLocaleString('en-GB')
       .replace(/,/g, '\u2009') + ' m'; };
-    var MODEL = 'The model’s estimate (dashed) is where ECMWF’s own turbulence dies out; '
-      + 'it counts thermals overshooting into the stable air and the wind stirring it. ';
-    var PARCEL = 'The parcel’s (ring) lifts the 2 m air through this sounding (ICON) at '
-      + DRY_LAPSE + ' °C/km until it is no warmer than the air around it, and counts '
-      + 'neither. ';
-    var text = null, ask = null, why = null;
+    // Model (dashed) and parcel (ring): what they are is in the page's "Sources and
+    // method" fold. Each column had its own ⓘ for it until October 2026.
+    var text = null;
     if (model != null && parcel != null) {
       var low = Math.min(model, parcel), high = Math.max(model, parcel);
-      if (Math.abs(model - parcel) < 50) {
-        text = 'Thermal top ' + metres((model + parcel) / 2) + ' (model and parcel agree)';
-        ask = 'How is it estimated?';
-        why = 'Two ways, and this hour they land together. ' + MODEL + PARCEL;
-      } else {
-        text = 'Thermal top ' + metres(low) + '–' + metres(high);
-        ask = 'Why two numbers?';
-        why = 'Two estimates of the same height. ' + MODEL + PARCEL
-          + 'So the parcel usually comes out lower: read it as the cautious figure and the '
-          + 'model as the generous one.';
-      }
+      text = Math.abs(model - parcel) < 50
+        ? 'Thermal top ' + metres((model + parcel) / 2) + ' (model and parcel agree)'
+        : 'Thermal top ' + metres(low) + '–' + metres(high);
     } else if (model != null) {
       text = 'Thermal top ' + metres(model) + ' (model only)';
-      ask = 'Why only one?';
-      why = 'No dry parcel rises from the ground this hour: lifted at ' + DRY_LAPSE
-        + ' °C/km, the 2 m air is already colder than the air above it, so the second '
-        + 'estimate has nothing to mark. ' + MODEL + 'That is why it can still find mixing '
-        + 'the parcel does not.';
     } else if (parcel != null) {
       text = 'Thermal top ' + metres(parcel) + ' (parcel only)';
-      ask = 'Why only one?';
-      why = 'ECMWF gives no boundary layer height for this hour, so only the parcel’s '
-        + 'estimate is drawn. ' + PARCEL;
     }
     box.hidden = text === null;
     if (text === null || box.dataset.text === text) return;
     box.dataset.text = text;
     box.querySelector('.txt').textContent = text;
-    box.querySelector('.info').setAttribute('aria-label', ask);
-    box.querySelector('.info-pop').textContent = why;
   }
 
 

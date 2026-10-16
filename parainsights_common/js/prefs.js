@@ -1,4 +1,4 @@
-// aA, Help and the ⓘ — every page, beside the theme switch.
+// aA and the ⓘ — every page, beside the theme switch.
 (function () {
   var root = document.documentElement;
   function store(key, value) {
@@ -9,22 +9,14 @@
     document.querySelectorAll('.text-toggle').forEach(function (b) {
       b.setAttribute('aria-pressed', root.dataset.text === 'large' ? 'true' : 'false');
     });
-    document.querySelectorAll('.help-toggle').forEach(function (b) {
-      b.setAttribute('aria-pressed', root.dataset.help === 'off' ? 'false' : 'true');
-    });
   }
   document.addEventListener('click', function (event) {
-    var t = event.target.closest && event.target.closest('.text-toggle, .help-toggle');
+    var t = event.target.closest && event.target.closest('.text-toggle');
     if (!t) return;
-    if (t.classList.contains('text-toggle')) {
-      if (root.dataset.text === 'large') { delete root.dataset.text; store('parainsights.text', null); }
-      else { root.dataset.text = 'large'; store('parainsights.text', 'large'); }
-      // The maps measure their box; a page that grew under them needs telling.
-      window.dispatchEvent(new Event('resize'));
-    } else {
-      if (root.dataset.help === 'off') { delete root.dataset.help; store('parainsights.help', null); }
-      else { root.dataset.help = 'off'; store('parainsights.help', 'off'); }
-    }
+    if (root.dataset.text === 'large') { delete root.dataset.text; store('parainsights.text', null); }
+    else { root.dataset.text = 'large'; store('parainsights.text', 'large'); }
+    // The maps measure their box; a page that grew under them needs telling.
+    window.dispatchEvent(new Event('resize'));
     paint();
   });
   paint();

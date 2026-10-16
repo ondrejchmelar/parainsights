@@ -152,7 +152,6 @@ STYLE = """
 .view3d-controls button[aria-pressed="true"], .m3-corner button[aria-pressed="true"], .m3-rail button[aria-pressed="true"], .m3-help-box button[aria-pressed="true"] {
   background: var(--ink); border-color: var(--ink); color: var(--paper); z-index: 1; }
 .view3d-controls button:disabled { opacity: 0.5; cursor: default; }
-html[data-help="off"] .m3-help { display: none; }
 @media (max-width: 640px) {
   .view3d-panel { --mh: 38px; }
   /* Wrapped onto a second row where the screen is too narrow for the bar: on one row at

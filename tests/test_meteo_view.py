@@ -1395,13 +1395,13 @@ class TestTheModelIsNamed:
 @needs_chrome
 def test_the_two_thermal_tops_are_named_and_the_difference_explained():
     """The dashed model top and the parcel's ring are two estimates of one height, and
-    they disagree by hundreds of metres on an ordinary day. The chart names both, and a
-    line under it gives the range with the reason one tap away."""
+    they disagree by hundreds of metres on an ordinary day. The chart names both, a line
+    under it gives the range, and the page's fold says what the two are."""
     temperatures, _ = _mixed_layer()
     answer = _probe_page("""
     var m = window.__meteo;
     var box = document.querySelector('.met-col-top');
-    var stable = box.querySelector('.txt').textContent + ' ' + box.querySelector('.info').getAttribute('aria-label');
+    var stable = box.querySelector('.txt').textContent;
     var profile = m.state.profiles[m.chosen()[0]];
     var wanted = %s;
     Object.keys(wanted).forEach(function (level) {
@@ -1411,13 +1411,9 @@ def test_the_two_thermal_tops_are_named_and_the_difference_explained():
     m.draw();
     var canvas = document.querySelector('.met-col-sounding');
     return { drawn: canvas.__drawn, hidden: box.hidden, stable: stable,
-             summary: box.querySelector('.txt').textContent + ' ' + box.querySelector('.info').getAttribute('aria-label'),
-             why: box.querySelector('.info-pop').textContent,
-             open: box.querySelector('.info').getAttribute('aria-expanded') === 'true' };
+             summary: box.querySelector('.txt').textContent };
     """ % json.dumps(temperatures))
     assert "(model only)" in answer["stable"], answer["stable"]
-    assert "two numbers" not in answer["stable"], "one number, asked why there are two"
-    assert "Why only one?" in answer["stable"]
     drawn = answer["drawn"]
     assert drawn["thermalTop"] and drawn["parcelTop"], drawn
     assert answer["hidden"] is False
@@ -1425,9 +1421,9 @@ def test_the_two_thermal_tops_are_named_and_the_difference_explained():
     shown = [int(n.replace(" ", "")) for n in
              re.findall(r"(\d[\d ]*) m", answer["summary"])]
     assert shown == [low, high], answer["summary"]
-    assert "Why two numbers?" in answer["summary"]
-    assert answer["open"] is False, "the reason should be folded until asked for"
-    assert "ECMWF" in answer["why"] and "parcel" in answer["why"]
+    # What the two are is said once, in the page's fold, not under every column.
+    terms = render_html.body().split('class="gloss met-terms"')[1]
+    assert "ECMWF" in terms and "parcel" in terms
 
 
 @needs_chrome

@@ -83,13 +83,21 @@
   }
   function cap(text) { return text ? text.charAt(0).toUpperCase() + text.slice(1) : text; }
 
-  // One of the key numbers under the title: the value, its label and an ⓘ with the
-  // detail that used to be a grey sub-line. `key` names it for the comparison, which
-  // writes into the `.verdict-delta` slot.
+  // One of the key numbers: the value, its label and, in grey under it, this flight's
+  // detail. What the number *means* is the same on every flight, so it is in the flight's
+  // "Sources and method" fold, not here (October 2026). `key` names it for the
+  // comparison, which writes into the `.verdict-delta` slot.
   function figure(label, value, unit, detail, key) {
     return '<div class="fig"' + (key ? ' data-key="' + key + '"' : '') + '><span class="v">' + value +
-      (unit ? '<small>' + unit + '</small>' : '') + '</span><span class="k">' + label + info(detail, 'About ' + label.toLowerCase()) +
-      '</span>' + (key ? '<span class="verdict-delta" hidden></span>' : '') + '</div>';
+      (unit ? '<small>' + unit + '</small>' : '') + '</span><span class="k">' + label + '</span>' +
+      (detail ? '<span class="d">' + detail + '</span>' : '') + (key ? '<span class="verdict-delta" hidden></span>' : '') + '</div>';
+  }
+
+  // One ⓘ for a whole section: a term per line, each a sentence at most. Only the
+  // definitions that hold on every flight go here; what is particular to this flight is
+  // printed, not hidden.
+  function glossary(terms) {
+    return '<dl class="gloss">' + terms.filter(Boolean).map(function (t) { return '<dt>' + t[0] + '</dt><dd>' + t[1] + '</dd>'; }).join('') + '</dl>';
   }
 
   function stat(key, value, unit, sub) {
@@ -116,20 +124,19 @@
   }
 
   // The same facts as `clearanceNote` and `triggerNote`, as the debrief's context cards:
-  // the number large, what it counts beside it, the reasoning behind an ⓘ.
+  // the number large, what it counts beside it, this flight's detail under it.
   function contextFacts(a, clearance, terrain) {
     var out = [], w = clearance ? M.airborneWindow(clearance) : null;
     if (w) {
       var inside = clearance.slice(w[0], w[1]), median = np.median(inside), low = np.min(inside);
       out.push({ value: fmt(median, 0) + '&nbsp;m', label: 'Median height over the ground directly beneath you',
-                 detail: (low >= 0 ? 'Lowest ' + fmt(low, 0) + '&nbsp;m. ' : '') +
-                         'The launch and the landing are left out, or both would win by being on the ground.' });
+                 detail: (low >= 0 ? 'Lowest ' + fmt(low, 0) + '&nbsp;m. ' : '') + 'Launch and landing left out.' });
     }
     if (!terrain) return out;
     var found = TV.insolation.triggers(a, terrain);
     if (found.length >= 3) {
       var lit = found.filter(function (t) { return t.face.relative > 1.05; }).length;
-      var detail = 'Of the ' + found.length + ' climbs that started over sloping ground.';
+      var detail = '', hm = function (t) { return String(t).slice(0, 5); };
       var half = Math.floor(found.length / 2);
       if (half >= 2) {
         var early = found.slice(0, half), late = found.slice(found.length - half);
@@ -137,18 +144,15 @@
         var second = meanAspect(late.map(function (t) { return t.face.aspect; }));
         var swing = np.mod(second - first + 540, 360) - 180;
         detail += Math.abs(swing) >= 30
-          ? ' The faces swung ' + (swing > 0 ? 'clockwise' : 'anticlockwise') + ' through the day, from ' + geo.cardinal(first) +
-            '-facing (' + early[0].at + '&ndash;' + early[early.length - 1].at + ') to ' + geo.cardinal(second) + '-facing (' +
-            late[0].at + '&ndash;' + late[late.length - 1].at + ')' + (swing > 0 ? ', which is the sun going round' : '') + '.'
-          : ' They stayed on ' + geo.cardinal(first) + '-facing ground from ' + early[0].at + ' to ' + late[late.length - 1].at +
-            ' rather than following the sun round.';
+          ? 'From ' + geo.cardinal(first) + '-facing (' + hm(early[0].at) + '&ndash;' + hm(early[early.length - 1].at) + ') to ' +
+            geo.cardinal(second) + '-facing (' + hm(late[0].at) + '&ndash;' + hm(late[late.length - 1].at) + ').'
+          : cap(geo.cardinal(first)) + '-facing from ' + hm(early[0].at) + ' to ' + hm(late[late.length - 1].at) + '.';
       }
       out.push({ value: lit + ' of ' + found.length, label: 'Climbs began over ground catching more sun than the slopes around it', detail: detail });
     }
     var breeze = TV.insolation.windward(a, terrain);
     if (breeze && breeze.total) {
-      out.push({ value: breeze.windward + ' of ' + breeze.total, label: 'Climbs faced within 60&#176; of the measured wind — where ridge lift would be',
-                 detail: 'A climb is called ridge only when the slope, the wind and your distance from it all agree; see the Lift column.' });
+      out.push({ value: breeze.windward + ' of ' + breeze.total, label: 'Climbs faced within 60&#176; of the measured wind — where ridge lift would be' });
     }
     return out;
   }
@@ -289,12 +293,26 @@
       fmt(sink / total * 100, 0) + '% of the circling in sink';
   }
 
+  // The air section's one ⓘ: what its numbers are. Where they came from is in the fold.
+  var AIR_TERMS = [['Cloudbase', 'Surface air lifted until its dew-point spread closes.'],
+                   ['Thermal top', 'Where the dry adiabat from the surface meets the profile.'],
+                   ['Boundary layer', 'The model\'s mixing height.']];
+
+  // The flight's last fold: where this flight's data came from, then how the numbers
+  // above are worked out — one line each, the same on every flight (October 2026; these
+  // were two dozen ⓘ).
+  function sourcesFold(rows) {
+    return '\n  <details class="flight-sources">\n    <summary>Sources and method</summary>\n    <table>' +
+      rows.filter(Boolean).map(function (r) { return '<tr' + (r[2] ? ' class="method"' : '') + '><th scope="row">' + r[0] + '</th><td>' + r[1] + '</td></tr>'; }).join('') +
+      '</table>\n  </details>\n';
+  }
+
   function airFetchSection(a) {
     var f = a.flight, middle = Math.floor(f.lat.length / 2);
     return '\n  <section class="air-fetch" data-air-lat="' + fmt(f.lat[middle], 3) + '"\n' +
       '           data-air-lon="' + fmt(f.lon[middle], 3) + '" data-air-epoch="' + Math.trunc(f.time[middle]) + '"\n' +
       '           data-air-top="' + fmt(a.summary.max_altitude, 0) + '">\n' +
-      '    <h2>The air that day' + info('Open-Meteo, fetched when you open this page, for the middle of the course line: a model, not a measurement. Treat the ceilings as ±100&nbsp;m.') +
+      '    <h2>The air that day' + info(glossary(AIR_TERMS), 'About the air') +
       '</h2>\n    <div class="figs air air-stats"></div>\n  </section>';
   }
 
@@ -309,22 +327,20 @@
     if (rise < 400) return '';
     var lapse = (above[0].temperature - span.temperature) / rise * 1000.0;
     if (lapse < 6.0) {
-      return ' Above that the profile cools ' + fmt(lapse, 1) + '&nbsp;K/km against the dry adiabat\'s 9.8 — a stable layer, which is what a day that caps out feels like from the harness.';
+      return ' Above it, ' + fmt(lapse, 1) + '&nbsp;K/km: a stable lid.';
     }
-    return ' Above that it still cools ' + fmt(lapse, 1) + '&nbsp;K/km, so nothing in the profile was holding the day down.';
+    return ' Above it, ' + fmt(lapse, 1) + '&nbsp;K/km: no lid.';
   }
 
   function meteoProfile(a, meteo, uid, rows) {
     if (meteo.levels.length < 2) {
-      return '<p class="note">No sounding for this date' + info('The reanalysis archive serves surface fields for any past day but returns nothing on pressure levels, so the sounding and the wind comparison are missing here. Flights from the last two months get the full profile.') + '</p>';
+      return '<p class="note">No sounding: the archive keeps profiles for about ' + RECENT_DAYS + ' days.</p>';
     }
-    return '<div class="two">\n      <div class="chart">\n        <h3>Sounding' +
-      info('Where the dry adiabat crosses the temperature curve is as high as a surface thermal can get without help. The shaded band is the altitude you actually used.') + '</h3>\n' +
+    return '<div class="two">\n      <div class="chart">\n        <h3>Sounding</h3>\n' +
       '        <div class="panel">' + Ch.sounding(meteo, a, uid) + '</div>\n' +
       '        <ul class="legend legend-row"><li><i style="background:var(--climb)"></i>Temperature</li>' +
       '<li><i style="background:var(--sink)"></i>Dew point</li><li><i style="background:var(--neutral)"></i>Dry adiabat from the surface</li></ul>\n      </div>\n' +
-      '      <div class="chart">\n        <h3>Wind against the model' +
-      info('Wind from circle drift against the model at the same height. Agreement here is the strongest evidence that the drift method works — nothing in the flight data knows about the model, and nothing in the model knows about the flight.') + '</h3>\n' +
+      '      <div class="chart">\n        <h3>Wind against the model</h3>\n' +
       '        <div class="panel">\n          <div class="table-scroll">\n            <table>\n' +
       '              <thead><tr><th>Climb</th><th>Start</th><th>Height m</th><th>m/s</th><th>From</th>' +
       '<th>Model m/s</th><th>Model from</th><th>&Delta; dir</th></tr></thead>\n' +
@@ -336,12 +352,12 @@
     var summary = a.summary, offset = summary.baro_offset || 0, flightTop = summary.max_altitude + offset;
     var spread = meteo.surface_temperature - meteo.surface_dew_point;
     var cloudbase = Met.cloudbase(meteo), thermalTop = Met.thermalTop(meteo), blTop = Met.boundaryLayerTop(meteo);
-    var figs = [figure('Surface', fmt(meteo.surface_temperature, 0) + ' °C', '', 'Dew point ' + fmt(meteo.surface_dew_point, 0) + ' °C, a spread of ' + fmt(spread, 0) + ' K.'),
-                figure('Cloudbase', spaced(cloudbase), ' m', 'The surface air lifted until its ' + fmt(spread, 0) + ' K spread closes.')];
-    if (thermalTop) figs.push(figure('Thermal top', spaced(thermalTop), ' m', 'Where the dry adiabat from the surface meets the profile.'));
-    if (blTop) figs.push(figure('Boundary layer', spaced(blTop), ' m', 'As high as the day\'s heating reaches.'));
+    var figs = [figure('Surface', fmt(meteo.surface_temperature, 0) + ' °C', '', 'Dew point ' + fmt(meteo.surface_dew_point, 0) + ' °C'),
+                figure('Cloudbase', spaced(cloudbase), ' m', '')];
+    if (thermalTop) figs.push(figure('Thermal top', spaced(thermalTop), ' m', ''));
+    if (blTop) figs.push(figure('Boundary layer', spaced(blTop), ' m', ''));
     if (meteo.cape !== null) {
-      figs.push(figure('CAPE', fmt(meteo.cape, 0), ' J/kg', meteo.cloud_cover_low !== null ? 'Low cloud ' + fmt(meteo.cloud_cover_low, 0) + '%.' : 'Instability.'));
+      figs.push(figure('CAPE', fmt(meteo.cape, 0), ' J/kg', meteo.cloud_cover_low !== null ? 'Low cloud ' + fmt(meteo.cloud_cover_low, 0) + '%' : ''));
     }
     var rows = [];
     thermals(a).forEach(function (seg, i) {
@@ -357,32 +373,17 @@
     if (thermalTop) {
       var difference = flightTop - thermalTop;
       var verdict = difference > 0 ? fmt(Math.abs(difference), 0) + ' m above' : fmt(Math.abs(difference), 0) + ' m below';
-      ceilingNote = '<p class="note">The sounding puts the dry thermal top at ' + spaced(thermalTop) + '&nbsp;m and you topped out ' + verdict +
-        ' it.' + capNote(meteo) + '</p>';
+      ceilingNote = '<p class="note">You topped out ' + verdict + ' the thermal top.' + capNote(meteo) + '</p>';
     }
-    return '\n  <section>\n    <h2>The air that day' +
-      info(esc(meteo.source) + ' over the middle of the course line, valid ' + esc(meteo.valid_at) + ', fetched once and embedded. ' +
-           'A model\'s analysis, not a radiosonde ascent: treat the ceilings as ±100&nbsp;m and the winds as indicative.') + '</h2>\n' +
+    return '\n  <section>\n    <h2>The air that day' + info(glossary(AIR_TERMS.concat([
+        ['Sounding', 'Shaded: the heights you flew.'], ['Wind against the model', 'Climb drift against the model at the same height.']])), 'About the air') + '</h2>\n' +
       '    <div class="figs air">' + figs.join('') + '</div>\n    ' + ceilingNote + '\n    ' + meteoProfile(a, meteo, uid, rows) + '\n  </section>';
-  }
-
-  function otherNote(a) {
-    var o = a.other;
-    if (!o || !o.seconds) return '';
-    function minutes(s) { return s >= 30 ? fmt(s / 60, 0) + ' min' : 'under a minute'; }
-    var net = o.net_altitude;
-    return ' That last part is ' + minutes(o.straight_sink) + ' of straight sink, ' + minutes(o.scratching) +
-      ' turning without climbing and ' + minutes(o.rising) + ' of rising air no phase claimed — a net ' + Math.abs(net) + ' m ' +
-      (net > 0 ? 'gained' : 'lost') + ' over the whole of it.';
   }
 
   function meteoReason(a, now) {
     var flown = Math.floor(a.flight.time[0] / 86400), age = Math.floor(now / 86400) - flown;
-    if (age > RECENT_DAYS) {
-      return 'this flight is ' + Math.floor(age / 30) + ' months old and the weather archive keeps a vertical profile for about ' +
-        RECENT_DAYS + ' days, so the day\'s sounding can no longer be fetched';
-    }
-    return "the day's sounding was not fetched when this report was built";
+    if (age > RECENT_DAYS) return 'no sounding archived after ' + RECENT_DAYS + ' days';
+    return 'no sounding fetched';
   }
 
   function debriefCards(result, uid, sample, facts, reason, figs) {
@@ -398,15 +399,14 @@
         esc(TV.debrief.costLabel(finding.cost)) + '</span></p><h3>' + esc(finding.title) + '</h3><p class="finding-body">' + esc(finding.sentence) +
         '</p><p class="finding-foot">' + footer + link + '</p></article>';
     });
-    var reasons = { terrain: 'ground clearance needs an elevation model, which this report has none of',
-                    meteo: reason || "the day's sounding is not in this report",
-                    route: 'the route findings need a scored route', sampling: 'this track is too coarse to count circles' };
+    var reasons = { terrain: 'ground clearance (no elevation model)',
+                    meteo: 'the ceiling (' + (reason || 'no sounding') + ')',
+                    route: 'the route (none scored)', sampling: 'circling (track too coarse)' };
     var missing = (result ? result.suppressed : []).filter(function (k) { return k in reasons; }).map(function (k) { return reasons[k]; });
     var ctx = facts.length ? '<div class="context debrief-context">' + facts.map(function (f) {
-      return '<div class="card"><b>' + f.value + '</b><span>' + f.label + info(f.detail) + '</span></div>';
+      return '<div class="card"><b>' + f.value + '</b><span>' + f.label + (f.detail ? '<small>' + f.detail + '</small>' : '') + '</span></div>';
     }).join('') + '</div>' : '';
-    var note = missing.length ? '<p class="note debrief-note">Some findings are not computed here' +
-      info(esc(cap(missing.join('; '))) + '.') + '</p>' : '';
+    var note = missing.length ? '<p class="note debrief-note">Not checked: ' + esc(missing.join('; ')) + '.</p>' : '';
     // The flight's other figures first, then what cost it.
     var more = figs && figs.length ? '    <div class="figs debrief-figs">' + figs.join('') + '</div>\n' : '';
     return '\n  <section id="debrief-' + uid + '">\n    <h2>Debrief</h2>\n' + more +
@@ -433,10 +433,7 @@
     var climbRate = th.length ? gain / held : 0.0;
 
     var wing = TV.certification && options.certificationTable ? TV.certification.lookup(summary.glider || '', options.certificationTable) : null;
-    var chip = wing ? '<span class="cert">' + esc(wing.label) + '</span>' +
-      info(esc(wing.name + ' — ' + wing.certificate + ', ' + wing.source + (wing.note ? ' (' + wing.note + ')' : '')) +
-           ". The certifier's class, looked up on the wing's name; a header names the wing but not its size. It describes the wing's behaviour in a test, and says nothing about this flight.",
-           'About the class') : '';
+    var chip = wing ? '<span class="cert">' + esc(wing.label) + '</span>' : '';
 
     var peakIndex = 0;
     a.series.alt.forEach(function (v, i) { if (v > a.series.alt[peakIndex]) peakIndex = i; });
@@ -448,12 +445,10 @@
     var routeShape = route ? TV.xc.shape(route) : null;
 
     var altitude = summary.altitude_source === 'baro'
-      ? 'Altitude is barometric: climb rates come from the smooth baro trace. It reads ISA pressure altitude, ' +
-        String(summary.baro_offset) + ' m below GPS on the day — absolute heights are indicative, height changes are solid.'
-      : 'Altitude is GPS: this recorder has no pressure sensor, so heights and climb rates are noisier than they look.';
-    var sampling = summary.fixes.toLocaleString('en-US') + ' fixes at ' + fmt(summary.duration / summary.fixes, 1) + ' s, timezone ' +
-      esc(summary.timezone || 'UTC') + '.' + (coarse ? ' A fix every ' + fmt(summary.sample_interval, 0) +
-      ' s is too coarse to resolve a circle: turns, circle radius and peak climb are left blank, and distance flown reads low.' : '');
+      ? 'barometric (ISA, ' + spaced(summary.baro_offset) + ' m below GPS)'
+      : 'GPS only, so heights and climb rates are noisier';
+    var sampling = spaced(summary.fixes) + ' fixes, one every ' + fmt(summary.duration / summary.fixes, 1) + ' s · altitude ' + altitude +
+      ' · ' + esc(summary.timezone || 'UTC') + (coarse ? ' · too coarse to resolve circles: turn columns left blank' : '');
 
     var ceiling = ceilingTile(a, meteo, peakTime, offset);
     var perf = null, field = TV.airmass.field(a, weather);
@@ -463,43 +458,34 @@
     // climbed, the wind. The rest of the flight's figures open the debrief (October 2026).
     var figs = [
       figure('Scored', route ? fmt(route.distance / 1000, 2) : '—', ' km',
-             route ? cap(SHAPE_LABEL[routeShape] || 'open distance') + ', ' + fmt(summary.track_distance / 1000, 0) + ' km flown, ' +
-                     fmt(summary.straight_distance / 1000, 0) + ' km straight.' : 'No scored route.', 'scored_km'),
-      figure('Airtime', duration(summary.duration), '', summary.takeoff_time + ' – ' + summary.landing_time + '. ' + sampling),
-      figure('Mean climb', fmt(climbRate, 2, { plus: true }), ' m/s', th.length + ' climbs' + (!coarse ? ', ' + fmt(totalTurns, 0) + ' turns' : '') +
-             '. Height gained while circling, over the time spent circling.', 'mean_climb'),
-      // Where it came from in the label, as a forecast says it: the speed alone left the
-      // direction in the ⓘ.
+             route ? cap(SHAPE_LABEL[routeShape] || 'open distance') + ' · ' + fmt(summary.track_distance / 1000, 0) + ' km flown' : 'No scored route', 'scored_km'),
+      figure('Airtime', duration(summary.duration), '', String(summary.takeoff_time).slice(0, 5) + ' – ' + String(summary.landing_time).slice(0, 5)),
+      figure('Mean climb', fmt(climbRate, 2, { plus: true }), ' m/s', th.length + ' climbs' + (!coarse ? ', ' + fmt(totalTurns, 0) + ' turns' : ''), 'mean_climb'),
+      // Where it came from in the label, as a forecast says it.
       figure(a.wind ? 'Wind from ' + a.wind.cardinal : 'Wind', a.wind ? fmt(a.wind.speed, 1) : '—', ' m/s',
-        a.wind ? 'From ' + a.wind.cardinal + ', averaged over ' + withWind + ' climbs. Inferred, not measured: while circling the glider\'s own airspeed averages out and the track drifts with the air. Climbs flown fewer than two full turns, or in both directions, are left out.' : 'Too few circled climbs to sound the wind.')
+        a.wind ? 'Drift of ' + withWind + ' climbs' : 'Too few circled climbs')
     ];
     var moreFigs = [
-      figure('Height gained', spaced(summary.total_gain), ' m', 'Best single climb ' + fmt(summary.max_gain, 0) + ' m. ' + altitude),
+      figure('Height gained', spaced(summary.total_gain), ' m', 'Best climb ' + spaced(summary.max_gain) + ' m'),
       ceiling[0] === 'ceiling used'
-        ? figure(ceiling[4], ceiling[1].replace('%', ''), '%', cap(ceiling[3]) + '. The lower of the modelled cloudbase and the top of the convection: thermals stop at whichever comes first.', 'ceiling_used')
-        : figure('Highest', ceiling[1], ' m', cap(ceiling[3]) + '.')
+        ? figure(ceiling[4], ceiling[1].replace('%', ''), '%', cap(ceiling[3]), 'ceiling_used')
+        : figure('Highest', ceiling[1], ' m', cap(ceiling[3]))
     ];
     if (perf) {
       moreFigs.push(figure('Wing’s glide', fmt(perf.air_ld, 1) + '&thinsp;:&thinsp;1', '',
-        'The median glide through the air at ' + fmt(perf.median_airspeed, 0) + ' km/h, the wind taken out; ' + fmt(perf.ground_ld, 1) +
-        ':1 over the ground. The wind is the one sounded from ' + field.soundings.length + ' circled climbs, which this flight supports to about ' +
-        fmt(perf.confidence, 0, { percent: true }) + '.' +
-        (curve && curve.best_glide && curve.monotone ? ' Your best glides came at about ' + fmt(curve.best_glide[0], 0) + ' km/h, where the wing returned ' +
-         fmt(curve.best_glide[1], 1) + ':1.' : '')));
+        'At ' + fmt(perf.median_airspeed, 0) + ' km/h · ' + fmt(perf.ground_ld, 1) + ':1 over the ground' +
+        (curve && curve.best_glide && curve.monotone ? ' · best ' + fmt(curve.best_glide[1], 1) + ':1 at ' + fmt(curve.best_glide[0], 0) + ' km/h' : '')));
     }
     if (tow) {
       moreFigs.push(figure('Off tow at', spaced(tow.finish_altitude), ' m',
-        fmt(tow.altitude_change, 0, { plus: true }) + ' m in ' + shortDuration(tow.duration) + ' at ' + fmt(tow.average_climb, 2, { plus: true }) +
-        ' m/s, flown almost straight' + (tow.swept_turns !== null ? ' (' + fmt(tow.swept_turns, 1) + ' turns of heading)' : '') +
-        '. Kept out of the thermal statistics and the wind estimate.'));
+        fmt(tow.altitude_change, 0, { plus: true }) + ' m in ' + shortDuration(tow.duration) + ' · not counted as a climb'));
     }
 
     // The side view, altitude against the time of day: its legend on a bar under the
     // chart, so the chart sits right under the map, inside the map's block
     // (`.flight-map`), so both go full screen with the map.
     var sideBar = '      <div class="side-bar">\n' +
-      '        <ul class="legend legend-row"><li>Sink <span class="grad"></span> Climb' +
-      info('The trace is coloured by climb rate, from &minus;4 m/s to +4 m/s; the bands behind it are the phases. Time is the time of day there; compared flights from other days run from their own launch, each with its own clock under the axis in its colour.') + '</li>' +
+      '        <ul class="legend legend-row"><li>&minus;4 m/s <span class="grad"></span> +4 m/s</li>' +
       '<li><i style="background:var(--climb);opacity:.5"></i>Climbing</li><li><i style="background:var(--sink);opacity:.5"></i>Gliding</li>' +
       (tow ? '<li><i style="background:var(--tow);opacity:.5"></i>Tow</li>' : '') + '</ul>\n      </div>\n';
     var sideChart = '\n    <div class="panel hero side-view">\n' +
@@ -517,7 +503,7 @@
       // No ground to draw on: the side view alone, and the top view below the tables,
       // which a 3D map looking straight down replaces where there is one.
       mapSection = '\n  <section class="map-section">\n    <div class="flight-map">' + sideChart + '    </div>\n  </section>';
-      topView = '\n  <section>\n    <h2>Top view' + info('The course line over the ground' + (route ? '; the thin straight legs are the scored route.' : '.')) + '</h2>\n' +
+      topView = '\n  <section>\n    <h2>Top view</h2>\n' +
         '    <div class="seg toggle" role="group" aria-label="What the climb circles show">' +
         '<button type="button" class="toggle-button is-on" data-circles="gain" aria-pressed="true">Size: height gained</button>' +
         '<button type="button" class="toggle-button" data-circles="rate" aria-pressed="false">Size: climb rate</button></div>\n' +
@@ -542,7 +528,6 @@
     var compareWho = ' data-compare-pilot="' + esc(summary.pilot || '') + '" data-compare-date="' + esc(summary.date || '') +
       '" data-compare-time="' + esc(String(summary.takeoff_time || '').slice(0, 5)) + '"';
     var glideCount = glides(a).length;
-    var otherFraction = budget.fractions.other;
 
     var budgetLegend = Ch.budgetParts(a).filter(function (p) { return p.fraction > 0; }).map(function (p) {
       return '<li><i style="background:' + p.colour + '"></i>' + p.label + ' ' + (p.seconds >= 60 ? shortDurationWords(p.seconds) : fmt(p.fraction * 100, 0) + '%') + '</li>';
@@ -550,8 +535,8 @@
     var sparkLegend = '<ul class="legend legend-row spark-legend"><li>Over time:</li><li><i style="background:var(--sink-1)"></i>Sinking</li>' +
       '<li><i style="background:var(--neutral)"></i>Around zero</li><li><i style="background:var(--climb-1)"></i>Climbing</li>' +
       '<li><i style="background:var(--climb-2)"></i>Climbing hard</li></ul>';
-    var ldLegend = 'Glide ratio over the ground, so it carries the wind as well as the wing; the wing\'s own is in the debrief. Bar colours: ' +
-      ['under 5', '5–7', '7–9', '9–12', 'over 12'].map(function (t, i) { return '<span class="sw" style="background:var(--ld-' + (i + 1) + ')"></span>' + t; }).join(', ') + '.';
+    var ldLegend = '<ul class="legend legend-row"><li>Glide over the ground:</li>' +
+      ['under 5', '5–7', '7–9', '9–12', 'over 12'].map(function (t, i) { return '<li><i style="background:var(--ld-' + (i + 1) + ')"></i>' + t + '</li>'; }).join('') + '</ul>';
 
     // The page's title while this flight is the one shown (`flightTabs.show`, page/report.js).
     var pageTitle = summary.date + ' · ' + (summary.site || 'flight') + ' — flight review';
@@ -560,41 +545,53 @@
       '  <header class="masthead">\n    <h1>' + esc(summary.site || 'Flight') + ' <span>' + esc(summary.date) + '</span></h1>\n' +
       '    <p class="who"><b>' + esc(summary.pilot || '—') + '</b> · ' + esc(summary.glider || '—') + chip + '</p>\n  </header>\n' +
       '  <div class="figs keys">' + figs.join('') + '</div>\n' + mapSection + '\n' + debriefSection + '\n\n' +
-      '  <section>\n    <h2>Climbs' + info('A climb is the circling, not the run-in to it, which is neither a climb nor a glide. Click a row to see where it began on the map.' +
-        (coarse ? ' This track is sampled every ' + fmt(summary.sample_interval, 0) + ' s, too coarse to resolve a circle, so the turn columns are blank.' : '')) + '</h2>\n' +
+      '  <section>\n    <h2>Climbs' + info(glossary([
+        ['Climb', 'The circling, not the run-in. Click a row to find it on the map.'],
+        ['Core', 'Best 20&nbsp;s of the climb against its average.'],
+        ['Lift', 'Ridge: slope over ' + fmt(TV.insolation.RIDGE_SLOPE, 0) + '°, facing the wind, within ' + fmt(TV.insolation.RIDGE_CLEARANCE, 0) +
+                 '&nbsp;m of it, not circling. Thermal otherwise.'],
+        ['Rev', 'Times the turn changed direction.'],
+        ['Over time', 'Climb rate from entry (left) to exit.']]), 'About the climbs') + '</h2>\n' +
       '    <div class="panel">\n      <div class="table-scroll">\n        <table class="table-climbs">\n          <thead><tr>\n' +
       '            <th>#</th><th>Start</th><th>Time</th><th>Gain m</th><th>Top m</th>\n            <th>Avg m/s</th>' +
-      '<th>Core' + info('Mean climb over the best 20&nbsp;s of the same climb, against the whole climb: the closest single number to “did you stay in the core”.') + '</th>' +
-      '<th>Lift' + info('Ridge only when three things agree: the ground steeper than ' + fmt(TV.insolation.RIDGE_SLOPE, 0) + '°, the wind running into it, and you within ' +
-        fmt(TV.insolation.RIDGE_CLEARANCE, 0) + '&nbsp;m of the slope, beating along it rather than closing circles. Thermal otherwise; a dash means there was nothing to check it against. Convergence is deliberately not a label: its honest signature is a climb drifting differently from the air around it, and one tracklog cannot tell that from a ridge climb holding station or a badly sounded wind.') + '</th>\n' +
-      '            <th class="circling-detail">Turns</th><th class="circling-detail">m/turn</th>\n            <th class="circling-detail">Dir</th><th class="circling-detail">Rev' +
-      info('Reversals: the times the turn changed direction mid-climb. With the radius it says how tidily the climb was flown.') + '</th>\n' +
-      '            <th class="circling-detail">s/turn</th>\n            <th class="circling-detail">Radius m</th>\n            <th class="spark-head">Over time' +
-      info('Climb rate through the climb, entry on the left: where the core was, and whether you left while it was still working.') + '</th>\n          </tr></thead>\n' +
+      '<th>Core</th><th>Lift</th>\n' +
+      '            <th class="circling-detail">Turns</th><th class="circling-detail">m/turn</th>\n            <th class="circling-detail">Dir</th><th class="circling-detail">Rev</th>\n' +
+      '            <th class="circling-detail">s/turn</th>\n            <th class="circling-detail">Radius m</th>\n            <th class="spark-head">Over time</th>\n          </tr></thead>\n' +
       '          <tbody>' + thermalRows(a, sample, sources) + '</tbody>\n        </table>\n      </div>\n    </div>\n' + sparkLegend + '\n' +
       '    <button type="button" class="btn more toggle-button" data-detail="circling" aria-pressed="false">Circling detail</button>\n  </section>\n\n' +
-      '  <section>\n    <h2>Glides' + info(ldLegend + (glideCount > GLIDES_SHOWN ? ' The ' + GLIDES_SHOWN + ' longest of ' + glideCount + ' are shown.' : '')) + '</h2>\n' +
+      '  <section>\n    <h2>Glides</h2>\n' +
       '    <div class="panel">\n      <div class="table-scroll">\n        <table class="table-glides">\n          <thead><tr><th>#</th><th>Start</th><th>Time</th><th>km</th>\n' +
-      '            <th>Glide</th><th>km/h</th></tr></thead>\n          <tbody>' + glideRows(a, sample) + '</tbody>\n        </table>\n      </div>\n    </div>\n' +
+      '            <th>Glide</th><th>km/h</th></tr></thead>\n          <tbody>' + glideRows(a, sample) + '</tbody>\n        </table>\n      </div>\n    </div>\n    ' + ldLegend + '\n' +
       (glideCount > GLIDES_SHOWN ? '    <button type="button" class="btn more" data-show-all="glides" aria-expanded="false">Show all ' + glideCount + ' glides</button>\n' : '') +
       '  </section>\n\n' +
-      '  <section>\n    <h2>How the air was used</h2>\n' +
-      '    <div class="chart">\n      <h3>Time' + info(duration(budget.thermalling) + ' climbing across ' + th.length + ' thermals, ' + duration(budget.gliding) + ' gliding, and ' +
-        duration(budget.other) + ' that was neither.' + otherNote(a) + ' The climbs and glides account for ' + fmt((1 - otherFraction) * 100, 0) +
-        '% of airtime; the rest is transitions too short or too ambiguous to call, which is honest rather than tidy.') + '</h3>\n' +
+      '  <section>\n    <h2>How the air was used' + info(glossary([
+        ['Time', 'Climbing, gliding, and the rest: transitions too short to call.'],
+        ['Lift you sat in', 'Time circling by climb rate, in 0.5&nbsp;m/s bins.'],
+        ['Wind by height', 'One point per climb, from its drift; the tail points downwind.' + (meteo ? ' Grey: the model.' : '')]]),
+        'About these charts') + '</h2>\n' +
+      '    <div class="chart">\n      <h3>Time</h3>\n' +
       '      <div class="panel budget">' + Ch.budgetBar(a, 1040) + '</div>\n      <ul class="legend legend-row">' + budgetLegend + '</ul>\n    </div>\n' +
-      '    <div class="two">\n      <div class="chart">\n        <h3>Lift you sat in' +
-      info('Every second spent circling, sorted into half-metre climb-rate buckets. The tallest bar is the climb rate you spent the most time in — not the best one you found. Bars left of zero are time spent turning in sink; the right-hand tail is the cores.') + '</h3>\n' +
+      '    <div class="two">\n      <div class="chart">\n        <h3>Lift you sat in</h3>\n' +
       '        <p class="sub">' + histogramVerdict(a) + '</p>\n' +
       '        <div class="panel">' + (histogram || '<p class="note">No thermalling time to summarise.</p>') + '</div>\n      </div>\n' +
-      '      <div class="chart">\n        <h3>Wind by height' +
-      info('One point per climb, from circle drift, numbered as in the climbs table and so in the order flown; the first and last carry their clock time, and hovering any point gives the rest. Height is where the climb was worked; the tail points downwind.' +
-           (meteo ? ' The model profile for the day is drawn behind them as a check.' : ' The day\'s forecast profile would be drawn behind these as a check on them, but ' + meteoReason(a, now) + '.'), 'About the wind chart') + '</h3>\n' +
+      '      <div class="chart">\n        <h3>Wind by height</h3>\n' +
       '        <p class="sub">' + windShearNote(a) + '</p>\n' +
       '        <div class="panel">' + (windChart || '<p class="note">Not enough circled climbs to sound the wind.</p>') + '</div>\n' +
       '        <ul class="legend legend-row"><li><i style="background:var(--sink)"></i>Measured from circle drift</li>' +
       (meteo ? '<li><i style="background:var(--neutral)"></i>Model profile for the day</li>' : '') + '</ul>\n      </div>\n    </div>\n  </section>\n\n' +
-      topView + metSection + '\n' +
+      topView + metSection + '\n' + sourcesFold([
+        ['Track', sampling],
+        ['Weather', (meteo ? esc(meteo.source) + ', valid ' + esc(meteo.valid_at) : 'Open-Meteo, fetched as the page opens') +
+                    ', at the middle of the course line. A model: ceilings ±100&nbsp;m.'],
+        wing ? ['Wing class', esc(wing.name + ' — ' + wing.certificate + ', ' + wing.source + (wing.note ? ' (' + wing.note + ')' : '')) +
+                '. Looked up by name; the size is not in the track.'] : null,
+        ['Scored', 'XContest rules: free distance, flat or FAI triangle.', true],
+        ['Mean climb', 'Height gained circling ÷ time circling.', true],
+        ['Wind', 'The drift while circling; climbs of two or more turns one way.', true],
+        perf ? ['Wing’s glide', 'Median glide through the air, the wind taken out (' + field.soundings.length + ' climbs, ' +
+                fmt(perf.confidence, 0, { percent: true }) + ' confidence).', true] : null,
+        ['Ceiling used', 'Your top against the lower of the model cloudbase and thermal top.', true],
+        ['Lift', 'Convergence is not a label: one track cannot tell it from ridge lift.', true]]) +
       '  <script type="application/json" class="cursor-data">' + JSON.stringify(cursorData(a, clearance)) + '</script>\n' +
       '  <script type="application/json" class="chart-data">' + JSON.stringify(Ch.payload(a, meteo, route, sample, planH)) + '</script>\n</article>\n';
   }

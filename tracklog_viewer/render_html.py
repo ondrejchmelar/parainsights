@@ -55,6 +55,8 @@ h1, h2, h3 { margin: 0; font-weight: 650; letter-spacing: -0.01em; }
 .fig .v { font-size: 30px; font-weight: 650; line-height: 1.15; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .fig .v small { font-size: 17px; font-weight: 500; margin-left: 4px; color: var(--ink-2); }
 .fig .k { font-size: 15.5px; color: var(--ink-2); display: inline-flex; align-items: center; }
+/* This flight's detail under the label, where an ⓘ used to hide it. */
+.fig .d { font-size: 15px; color: var(--ink-2); line-height: 1.35; }
 .verdict-delta { font-size: 15px; color: var(--ink-2); display: block; margin-top: 2px; }
 .verdict-delta.is-best { color: var(--accent); font-weight: 600; }
 .verdict-delta[hidden] { display: none; }
@@ -175,7 +177,6 @@ svg.chart { overflow: visible; }
 .budget-label { text-anchor: middle; fill: var(--ink); }
 .panel-divide { height: 1px; background: var(--rule); margin: 2px 6px 4px; }
 .swatch { width: 12px; height: 12px; border-radius: 3px; flex: none; display: inline-block; }
-.info-pop .sw { width: 12px; height: 10px; border-radius: 3px; display: inline-block; margin: 0 4px 0 2px; vertical-align: 0; }
 .legend .legend-title { color: var(--ink-2); }
 
 /* Flight tabs ------------------------------------------------------------------ */
@@ -286,6 +287,22 @@ code { font-family: ui-monospace, "DejaVu Sans Mono", monospace; font-size: 0.92
 .context .card { gap: 2px; }
 .context b { font-size: 22px; font-weight: 650; }
 .context span { color: var(--ink-2); font-size: 16px; }
+.context span small { display: block; font-size: 15px; margin-top: 4px; }
+/* The flight's last fold, as the Meteo page's "Sources and dates". */
+.flight-sources { margin: 40px 0 0; }
+.flight-sources > summary { color: var(--accent); font-weight: 600; cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+.flight-sources table { width: 100%; border-collapse: collapse; margin: 8px 0 0; font-size: 15px; }
+.flight-sources th, .flight-sources td { text-align: left; vertical-align: top; padding: 8px 12px 8px 0; border-bottom: 1px solid var(--rule); }
+.flight-sources th { font-weight: 600; white-space: nowrap; color: var(--ink); }
+.flight-sources td { color: var(--ink); }
+/* How a number is worked out, the same on every flight: quieter than this flight's facts. */
+.flight-sources tr.method td { color: var(--ink-2); }
+.flight-sources tbody tr:hover { background: none; }
+@media (max-width: 640px) {
+  .flight-sources tr, .flight-sources th, .flight-sources td { display: block; }
+  .flight-sources tr { padding: 8px 0; border-bottom: 1px solid var(--rule); }
+  .flight-sources th, .flight-sources td { border: 0; padding: 2px 0; white-space: normal; }
+}
 
 /* Wanted by the page-fetched air figures while they load. */
 .stat .key { color: var(--ink-2); }
