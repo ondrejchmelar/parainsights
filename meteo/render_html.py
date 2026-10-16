@@ -437,8 +437,7 @@ def body(uid: str = "meteo") -> str:
           essentials. {site_data.ATTRIBUTION}</td><td class="met-src-when">{site_data.FETCHED}</td></tr>
         <tr><td>Airfield meteograms</td><td>{flymet_data.ATTRIBUTION}, from
           <a href="{flymet_data.SOURCE}" rel="noreferrer">flymet</a>: {len(flymet_data.STATIONS)}
-          stations, each takeoff shown its nearest</td><td>Live; station list
-          {flymet_data.FETCHED}</td></tr>
+          stations, each takeoff shown its nearest</td><td>Live</td></tr>
       </tbody>
     </table>
     <!-- What the comparison's columns mean: two ⓘ in the table head until October 2026. -->
