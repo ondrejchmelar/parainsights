@@ -432,12 +432,12 @@ def body(uid: str = "meteo") -> str:
         <tr><td>Forecast</td><td><a href="https://open-meteo.com/" rel="noreferrer">Open-Meteo</a>:
           DWD ICON-D2 (2&nbsp;km) as far as it reaches, ICON-EU (7&nbsp;km) after, and the
           boundary layer height from ECMWF IFS, which ICON does not publish</td>
-          <td>fetched by this page as it opens</td></tr>
+          <td>Live</td></tr>
         <tr><td>Takeoffs</td><td>Chosen after <a href="https://gfs.pgweb.cz/" rel="noreferrer">gfs.pgweb.cz</a>'s
           essentials. {site_data.ATTRIBUTION}</td><td class="met-src-when">{site_data.FETCHED}</td></tr>
         <tr><td>Airfield meteograms</td><td>{flymet_data.ATTRIBUTION}, from
           <a href="{flymet_data.SOURCE}" rel="noreferrer">flymet</a>: {len(flymet_data.STATIONS)}
-          stations, each takeoff shown its nearest</td><td>loaded by this page; stations
+          stations, each takeoff shown its nearest</td><td>Live; station list
           {flymet_data.FETCHED}</td></tr>
       </tbody>
     </table>

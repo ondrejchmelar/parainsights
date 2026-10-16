@@ -581,10 +581,9 @@
       (meteo ? '<li><i style="background:var(--neutral)"></i>Model profile for the day</li>' : '') + '</ul>\n      </div>\n    </div>\n  </section>\n\n' +
       topView + metSection + '\n' + sourcesFold([
         ['Track', sampling],
-        ['Weather', (meteo ? esc(meteo.source) + ', valid ' + esc(meteo.valid_at) : 'Open-Meteo, fetched as the page opens') +
+        ['Weather', (meteo ? esc(meteo.source) + ', valid ' + esc(meteo.valid_at) : 'Open-Meteo, live') +
                     ', at the middle of the course line. A model: ceilings ±100&nbsp;m.'],
-        wing ? ['Wing class', esc(wing.name + ' — ' + wing.certificate + ', ' + wing.source + (wing.note ? ' (' + wing.note + ')' : '')) +
-                '. Looked up by name; the size is not in the track.'] : null,
+        wing ? ['Wing class', esc(wing.name + ' — ' + wing.certificate + ', ' + wing.source + (wing.note ? ' (' + wing.note + ')' : ''))] : null,
         ['Scored', 'XContest rules: free distance, flat or FAI triangle.', true],
         ['Mean climb', 'Height gained circling ÷ time circling.', true],
         ['Wind', 'The drift while circling; climbs of two or more turns one way.', true],
