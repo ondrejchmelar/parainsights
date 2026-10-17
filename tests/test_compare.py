@@ -9,7 +9,6 @@ tap meant to add a flight to the comparison removed the flight instead.
 from __future__ import annotations
 
 import json
-import time
 
 import pytest
 
@@ -43,7 +42,7 @@ def _tap(browser, selector):
         "(() => { var r = document.querySelector(%s).getBoundingClientRect();"
         " return [r.left + r.width / 2, r.top + r.height / 2]; })()" % json.dumps(selector))
     browser.click(x, y)
-    time.sleep(0.4)
+    browser.settle(0.4)
     # A compare tap redraws the comparison after a frame is painted, with its button
     # busy until then; on a software renderer a frame can take seconds.
     browser.wait("!document.querySelector('.tab-compare.is-busy')")
@@ -87,7 +86,7 @@ def test_a_second_tap_while_busy_does_not_undo_the_first(page):
 def test_removing_a_compared_flight_leaves_the_comparison(page):
     _tap(page, '[data-flight-tab="f0"] .tab-open')
     _tap(page, '[data-flight-tab="f0"] .tab-close')
-    time.sleep(0.4)
+    page.settle(0.4)
     assert page.js("document.querySelectorAll('[data-flight-report=\"f0\"]').length") == 0
     assert not page.js("document.documentElement.classList.contains('is-comparing')")
 
@@ -106,7 +105,7 @@ def test_the_side_view_tooltip_is_shown_in_full_screen(page):
                        " .side-view .hit').getBoundingClientRect();"
                        " return [r.left + r.width * 0.4, r.top + r.height / 2]; })()")
         page.click(x, y)
-        time.sleep(0.4)
+        page.settle(0.4)
         state = page.js("""(() => { var t = document.getElementById('tip');
           return { on: t.classList.contains('on'),
                    inside: document.fullscreenElement.contains(t) }; })()""")

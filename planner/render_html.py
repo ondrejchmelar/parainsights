@@ -258,8 +258,8 @@ def task_menu() -> str:
         'aria-label="Time of day">'
         '<output id="plan-time-out" for="plan-time">12:00</output>'
         "</div>"
-        '<p class="plan-task-note">Lights the ground and sets the wind rose for this hour. '
-        'Your own clock.</p>'
+        '<p class="plan-task-note">Lights the ground and sets the wind rose for this hour, '
+        'in your device\u2019s timezone.</p>'
         "</div></div>"
     )
 

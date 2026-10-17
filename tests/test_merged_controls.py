@@ -103,6 +103,11 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
+# Every map on the page asked to repaint: the probe page has one, a report one a flight.
+_REPAINT = ("Object.values(window.__mergedAll || {}).forEach(function (e) {"
+            " if (e && e.map) e.map.triggerRepaint(); }); 1")
+
+
 class Browser:
     """One Chrome over the DevTools protocol, the page served from a temporary folder."""
 
@@ -154,9 +159,21 @@ class Browser:
         while time.time() < end:
             if self.js(expression):
                 return
-            self.js(f"window.__mergedAll && ({MAP}).triggerRepaint(); 1")
+            self.js(_REPAINT)
             time.sleep(0.25)
         raise TimeoutError(expression)
+
+    def settle(self, seconds):
+        """Let the page run for `seconds`. A bare sleep does not: headless Chrome serves
+        animation frames only while something is being repainted, so a camera easing
+        towards its target froze where it was, and what the test then measured depended
+        on how many frames happened to run before (October 2026: the follow camera, its
+        glider caught under the bar mid-move). Asking for a repaint every tenth of a
+        second keeps every frame callback running, as a visible page would."""
+        end = time.time() + seconds
+        while time.time() < end:
+            self.js(_REPAINT)
+            time.sleep(0.1)
 
     def mouse(self, kind, x, y, *, modifiers=0, buttons=0, clicks=1, button="left"):
         self.call("Input.dispatchMouseEvent", type=kind, x=x, y=y, modifiers=modifiers,
@@ -212,9 +229,9 @@ def browser(tmp_path_factory):
     try:
         b.wait(f"!!({ENTRY}) && ({MAP}).isStyleLoaded !== undefined")
         b.wait(f"({MAP}).loaded() || true")
-        time.sleep(1.5)
+        b.settle(1.5)
         b.js("document.querySelector('.ml-map').scrollIntoView({block: 'center'}); 1")
-        time.sleep(0.5)
+        b.settle(0.5)
         yield b
     finally:
         b.close()
@@ -228,7 +245,7 @@ def _box(browser):
 def _reset(browser, **camera):
     view = {"center": [14.1, 49.1], "zoom": 10, "pitch": 60, "bearing": 0, **camera}
     browser.js(f"({ENTRY}).setFollow && ({ENTRY}).setFollow(false); ({MAP}).jumpTo({json.dumps(view)}); 1")
-    time.sleep(0.3)
+    browser.settle(0.3)
 
 
 def test_the_map_opens(browser):
@@ -247,7 +264,7 @@ def test_a_shift_drag_turns_about_the_ground_grabbed(browser, grab):
     x, y = width * grab[0], height * grab[1]
     ground = browser.js(f"({MAP}).unproject([{x}, {y}]).toArray()")
     browser.drag((left + x, top + y), (left + x + 80, top + y), modifiers=8)
-    time.sleep(0.4)
+    browser.settle(0.4)
     bearing = browser.js(f"({MAP}).getBearing()")
     where = browser.js(f"(() => {{ var p = ({MAP}).project({json.dumps(ground)}); return [p.x, p.y]; }})()")
     assert abs(bearing) > 30, "the drag turned the view"
@@ -258,7 +275,7 @@ def test_a_plain_drag_pans_and_does_not_turn(browser):
     _reset(browser)
     left, top, width, height = _box(browser)
     browser.drag((left + width / 2, top + height / 2), (left + width / 2 + 120, top + height / 2))
-    time.sleep(0.6)
+    browser.settle(0.6)
     assert abs(browser.js(f"({MAP}).getBearing()")) < 0.5
     centre = browser.js(f"({MAP}).getCenter().toArray()")
     assert centre[0] < 14.1 - 0.01, "dragging right moves the map right: the centre goes west"
@@ -269,7 +286,7 @@ def test_the_airspace_hides_nothing(browser):
     of the flight inside it, which over Krupka was nearly all of it."""
     _reset(browser)
     browser.js("document.querySelector('.merged-view [data-m3=airspace]').click(); 1")
-    time.sleep(0.5)
+    browser.settle(0.5)
     layers = {d["id"]: d["parameters"] for d in browser.js(f"({ENTRY}).layers()")}
     browser.js("document.querySelector('.merged-view [data-m3=airspace]').click(); 1")
     assert "airspace" in layers
@@ -368,13 +385,13 @@ def test_a_tilt_or_turn_is_not_a_click(browser):
     x, y, w, h = _box(browser)
     cx, cy = x + w / 2, y + h / 2
     browser.drag((cx, cy), (cx + 60, cy + 40), modifiers=8)    # shift: turn and tilt
-    time.sleep(0.4)
+    browser.settle(0.4)
     browser.mouse("mousePressed", cx, cy, modifiers=8, buttons=1)   # shift-click in place
     browser.mouse("mouseReleased", cx, cy, modifiers=8)
-    time.sleep(0.4)
+    browser.settle(0.4)
     after_tilt = browser.js("__clicks.length")
     browser.click(cx, cy)
-    time.sleep(0.6)
+    browser.settle(0.6)
     after_click = browser.js("__clicks.length")
     _reset(browser)
     assert after_tilt == 0, "a tilt or a modified press dropped a point"
@@ -391,7 +408,7 @@ def test_the_measure_tool_adds_up_the_legs_on_the_sphere(browser):
     points = []
     for fx, fy in spots:
         browser.click(left + width * fx, top + height * fy)
-        time.sleep(0.4)
+        browser.settle(0.4)
         points.append(browser.js(f"({MAP}).unproject([{width * fx}, {height * fy}]).toArray()"))
     text = browser.js("document.querySelector('.merged-view .m3-measure').textContent")
 
@@ -448,7 +465,7 @@ def test_follow_survives_zooming_and_turning_and_ends_on_a_drag(browser):
     assert browser.js(following), "the arrows turn and tilt the follow camera"
 
     browser.drag((x, y), (x + 60, y + 20))
-    time.sleep(0.5)
+    browser.settle(0.5)
     assert not browser.js(following), "a drag hands the camera back"
 
 
@@ -493,12 +510,12 @@ def test_two_fingers_tilt_and_turn_the_follow_camera(browser):
 def test_handing_the_follow_camera_back_leaves_it_where_it_was(browser):
     _reset(browser)
     _follow(browser)
-    time.sleep(1)
+    browser.settle(1)
     camera = ("(() => { var p = (%s).transform.getCameraPosition();"
               " return [p.lngLat.lng, p.lngLat.lat, p.altitude]; })()" % MAP)
     before = browser.js(camera)
     browser.js(f"({ENTRY}).setFollow(false); 1")
-    time.sleep(0.5)
+    browser.settle(0.5)
     after = browser.js(camera)
     assert after[0] == pytest.approx(before[0], abs=2e-4)
     assert after[1] == pytest.approx(before[1], abs=2e-4)
@@ -519,7 +536,7 @@ def test_compared_flights_are_drawn_on_one_clock_and_far_ones_are_listed(browser
         {{ name: 'NEAR', colour: '#3aa8d0', track: near, start: start + 600 }},
         {{ name: 'FAR', colour: '#c9483c', track: far, start: start }}] }});
       return 1; }})()""")
-    time.sleep(0.5)
+    browser.settle(0.5)
     ids = [d["id"] for d in browser.js(f"({ENTRY}).layers()")]
     legend = browser.js("document.querySelector('.merged-view .m3-others').textContent")
     assert "other-0" in ids and "other-1" not in ids, ids
@@ -536,7 +553,7 @@ def test_compared_flights_are_drawn_on_one_clock_and_far_ones_are_listed(browser
       if (v.querySelector('.m3-replay').hidden) v.querySelector('[data-m3=replay]').click();
       var play = v.querySelector('[data-m3=play]'); if (play.classList.contains('is-on')) play.click();
       (%s).setTime(1800); return 1; })()""" % ENTRY)
-    time.sleep(0.5)
+    browser.settle(0.5)
     ids = [d["id"] for d in browser.js(f"({ENTRY}).layers()")]
     assert "other-now-0" in ids, ids
     # The height at "now", top right: this flight's with its climb, then each compared one.
@@ -571,7 +588,7 @@ def test_follow_keeps_every_compared_glider_in_the_picture(browser):
       var play = v.querySelector('[data-m3=play]'); if (play.classList.contains('is-on')) play.click();
       (%s).setTime(1800); (%s).setFollow(true); return 1; })()""" % (ENTRY, ENTRY))
     browser.wait(f"({MAP}).getZoom() < 12.3 && ({ENTRY}).following()", timeout=30)
-    time.sleep(2)
+    browser.settle(2)
     left, top, width, height = _box(browser)
     spots = browser.js(f"""(() => {{
       var m = {MAP}, tr = __handle.built.scene.track, i = tr.t.indexOf(1800);
@@ -594,3 +611,4 @@ def test_follow_keeps_every_compared_glider_in_the_picture(browser):
 
 def test_no_errors_along_the_way(browser):
     assert browser.js("window.__errors") == []
+
