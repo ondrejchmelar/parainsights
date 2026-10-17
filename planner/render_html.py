@@ -106,6 +106,9 @@ STYLE = """
   border:1px solid var(--float-edge); box-shadow:var(--float-shadow);
   font:600 15px/1.25 "Noto Sans", ui-sans-serif, system-ui, sans-serif; color:var(--ink); }
 .plan-task-menu[hidden] { display:none; }
+/* Under its own button, as the airspace menu is under its; on a phone from the row's
+   left edge, where a panel under the button would run off the screen. */
+@media (min-width: 641px) { .merged-view .plan-task { position:relative; } }
 .plan-task-head { font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-2); margin-bottom:-4px; }
 .plan-task-note { margin:-4px 0 0; font-size:13px; font-weight:400; line-height:1.35; color:var(--ink-2); }
 .plan-switch { display:flex; align-items:center; justify-content:space-between; gap:12px; cursor:pointer; }
