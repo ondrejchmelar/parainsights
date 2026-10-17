@@ -1764,6 +1764,22 @@ function initView3d(root, cursorTrack, preset) {
   var PLACES = 'https://tiles.openfreemap.org/planet';
   var GLYPHS = 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf';
   var LABEL_LAYERS = ['place-labels', 'peak-labels', 'water-labels', 'lake-labels', 'river-labels'];
+  // Which names show. Towns and each tile's highest peak everywhere; villages and the
+  // lesser peaks only in `region`, the ground under the middle of the view (`labelRegion`):
+  // tilted, the far edge and the sides pack kilometres into a few pixels and the names
+  // there piled up. MapLibre 4 has no distance-from-centre expression, so the region is
+  // a polygon, set again after the camera stops.
+  function placeFilter(region) {
+    var village = ['all', ['==', ['get', 'class'], 'village'], ['>=', ['zoom'], 10]];
+    if (region) village.push(['within', region]);
+    return ['any', ['match', ['get', 'class'], ['city', 'town'], true, false], village];
+  }
+  function peakFilter(region) {
+    var rank = ['coalesce', ['get', 'rank'], 99];
+    var lesser = ['<=', rank, ['step', ['zoom'], 1, 11, 2, 13, 3]];
+    return ['all', ['match', ['get', 'class'], ['peak', 'volcano'], true, false], ['has', 'name'],
+            region ? ['any', ['<=', rank, 1], ['all', lesser, ['within', region]]] : lesser];
+  }
   // A peak's text: its name, its height under it (the ▲ is the layer's icon).
   function peakField(name) {
     return ['format', name, {},
@@ -1900,8 +1916,6 @@ function initView3d(root, cursorTrack, preset) {
     // A flight's map offers its airspace behind a switch; the airspace map *is* its
     // airspace, so a scene with rings and no switch draws them always.
     var hasAirspace = !!(scene.airspaceToggle && scene.airspaces && scene.airspaces.length);
-    // Offered but empty: the page has airspace, none of it under this flight.
-    var noAirspace = !!(scene.airspaceToggle && !hasAirspace);
     var alwaysAirspace = !!(!scene.airspaceToggle && scene.airspaces && scene.airspaces.length);
     // What the switch says, from `settleAirspace`: drawn with its credit, or why not.
     var airspaceWhy = String(scene.airspaceWhy || (hasAirspace ? 'Draw the airspace over this flight'
@@ -1990,7 +2004,9 @@ function initView3d(root, cursorTrack, preset) {
             '<span>Ground</span><div class="view3d-seg m3-grounds" role="group" aria-label="Ground"></div>' +
             '<span>Height</span><div class="view3d-seg m3-verticals" role="group" aria-label="Vertical exaggeration"></div>' +
           '</div></div>' +
-        (hasAirspace || alwaysAirspace || noAirspace ?
+        // None under the flight (the layers cover Europe; Hunza is not): no button. A
+        // disabled one with the reason in its title read as broken on a phone.
+        (hasAirspace || alwaysAirspace ?
           // The switch, and beside it what of the airspace to draw: one split button, its
           // menu holding the kinds, the floor, and whatever the page adds (the planner's
           // hours, `.m3-airspace-extra`). On a map that is its airspace (the planner's) the
@@ -1999,11 +2015,10 @@ function initView3d(root, cursorTrack, preset) {
           '<div class="view3d-seg view3d-airspace" role="group" aria-label="Airspace">' +
           '<button type="button" data-m3="airspace"' +
           (alwaysAirspace ? ' class="is-on" aria-pressed="true"' : ' aria-pressed="false"') +
-          (noAirspace ? ' disabled' : '') +
           ' title="' + airspaceWhy + '" aria-label="' + airspaceWhy + '">Airspaces</button>' +
           '<button type="button" data-m3="airspace-menu" class="m3-chev" aria-expanded="false"' +
           ' aria-haspopup="true" title="Which airspace to draw" aria-label="Which airspace to draw"' +
-          (noAirspace ? ' disabled' : '') + '>' + ICON.chevron + '</button></div>' +
+          '>' + ICON.chevron + '</button></div>' +
           '<div class="m3-drop m3-airspace-menu" hidden>' +
             '<span class="m3-drop-head">Show</span><div class="m3-asp-kinds"></div>' +
             '<span class="m3-drop-head">Floor at or below</span>' +
@@ -2243,8 +2258,7 @@ function initView3d(root, cursorTrack, preset) {
           id: 'place-labels', type: 'symbol', source: 'places', 'source-layer': 'place',
           // Villages from zoom 9: hidden by opacity they would still take the room the
           // towns' names need, so they are filtered rather than faded.
-          filter: ['any', ['match', ['get', 'class'], ['city', 'town'], true, false],
-                   ['all', ['==', ['get', 'class'], 'village'], ['>=', ['zoom'], 9]]],
+          filter: placeFilter(null),
           minzoom: 5,
           layout: {
             visibility: vis,
@@ -2265,10 +2279,7 @@ function initView3d(root, cursorTrack, preset) {
           // tiles' own rank (1 the most prominent in its tile) lets more in as you zoom.
           id: 'peak-labels', type: 'symbol', source: 'places', 'source-layer': 'mountain_peak',
           minzoom: 8,
-          filter: ['all', ['match', ['get', 'class'], ['peak', 'volcano'], true, false], ['has', 'name'],
-                   // A few per tile, more as you zoom; all of them buried the ground
-                   // at a ridge's zoom.
-                   ['<=', ['coalesce', ['get', 'rank'], 99], ['step', ['zoom'], 1, 11, 2, 13, 3]]],
+          filter: peakFilter(null),
           layout: {
             visibility: vis,
             // The ▲ is an icon centred on the summit itself, the name under it: as text
@@ -2375,6 +2386,30 @@ function initView3d(root, cursorTrack, preset) {
         }
         speakLocal();
         map.on('moveend', speakLocal);
+        // The middle of the view on the ground: the inner 70 % across, and from a third of
+        // the way down when tilted (the far edge is the crowded one). After the camera has
+        // rested, not on every frame of a replay.
+        var regionTimer = null;
+        function labelRegion() {
+          clearTimeout(regionTimer);
+          regionTimer = setTimeout(function () {
+            if (!map.getLayer('place-labels')) return;
+            var c = map.getContainer(), w = c.clientWidth, h = c.clientHeight;
+            var top = map.getPitch() > 30 ? 0.33 : 0.12;
+            var ring = [[0.15, top], [0.85, top], [0.85, 0.98], [0.15, 0.98]].map(function (f) {
+              var ll = map.unproject([f[0] * w, f[1] * h]);
+              return [ll.lng, ll.lat];
+            });
+            ring.push(ring[0]);
+            if (ring.some(function (p) { return !isFinite(p[0]) || !isFinite(p[1]); })) return;
+            var region = { type: 'Polygon', coordinates: [ring] };
+            map.setFilter('place-labels', placeFilter(region));
+            map.setFilter('peak-labels', peakFilter(region));
+          }, 400);
+        }
+        labelRegion();
+        map.on('moveend', labelRegion);
+        map.on('resize', labelRegion);
         if (pendingShapes.length) {
           var shapes = map.getSource('shapes');
           if (shapes) shapes.setData({ type: 'FeatureCollection', features: pendingShapes });
