@@ -1991,8 +1991,10 @@
               worst = Math.max(worst, at.y / free, Math.abs(at.x - W / 2) / (W / 2));
             } catch (error) { /* no projection yet */ }
           });
-          if (worst > 0.92 && fitBias > -3) { fitBias -= 0.04; fitting = true; }
-          else if (worst < 0.75 && fitBias < 0) { fitBias = Math.min(fitBias + 0.01, 0); fitting = true; }
+          // So much a second, not a frame: at the few frames a second of a slow phone (or
+          // a software-rendered CI browser) a per-frame step left a glider under the bar.
+          if (worst > 0.92 && fitBias > -3) { fitBias -= 2.4 * dt; fitting = true; }
+          else if (worst < 0.75 && fitBias < 0) { fitBias = Math.min(fitBias + 0.6 * dt, 0); fitting = true; }
           p = c;
         }
         var dTurn = turn(camCourse, target), dZoom = Math.min(cam.zoom, fitZoom) - zoom, dPitch = cam.pitch - pitch;
