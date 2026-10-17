@@ -122,15 +122,18 @@
     if (region) village.push(['within', region]);
     return ['any', ['match', ['get', 'class'], ['city', 'town'], true, false], village];
   }
-  // Peaks: the tiles rank them by height within each tile (1 the highest). In the middle
-  // of the view the first three, and more close in; at the edges only the view's giants,
-  // within `EDGE_PEAK` m of the tallest peak in it (`tallest`) — each tile's own highest
-  // there still outnumbered the ones beside the track.
-  var EDGE_PEAK = 250;
-  function peakFilter(region, tallest) {
-    var rank = ['coalesce', ['get', 'rank'], 99];
-    var middle = ['<=', rank, ['step', ['zoom'], 3, 12, 5, 13, 8]];
-    var giant = ['all', ['<=', rank, 1], ['>=', ['coalesce', ['get', 'ele'], 0], (tallest || 0) - EDGE_PEAK]];
+  // Peaks: the tiles rank them by height within each tile (1 the highest). What counts as
+  // a mountain is relative to the view: `peaks` is [the ground under the middle of the
+  // view, the tallest named peak in it], and a peak has to stand in the top
+  // `MIDDLE_PEAKS` of that rise in the middle of the view, the top `EDGE_PEAKS` at its
+  // edges. (The lowest peak in view as the base let one far-off hillock stretch it.) A fixed margin (250 m) was right for the
+  // Dolomites and let every hill of a Czech upland through.
+  var EDGE_PEAKS = 0.2, MIDDLE_PEAKS = 0.6;
+  function peakFilter(region, peaks) {
+    var rank = ['coalesce', ['get', 'rank'], 99], ele = ['coalesce', ['get', 'ele'], 0];
+    var low = peaks ? peaks[0] : 0, top = peaks ? peaks[1] : 0, range = Math.max(top - low, 1);
+    var middle = ['all', ['<=', rank, ['step', ['zoom'], 3, 12, 4, 13, 6]], ['>=', ele, top - MIDDLE_PEAKS * range]];
+    var giant = ['all', ['<=', rank, 1], ['>=', ele, top - EDGE_PEAKS * range]];
     return ['all', ['match', ['get', 'class'], ['peak', 'volcano'], true, false], ['has', 'name'],
             region ? ['any', giant, ['all', middle, ['within', region]]] : ['<=', rank, 2]];
   }
@@ -762,19 +765,23 @@
             ring.push(ring[0]);
             if (ring.some(function (p) { return !isFinite(p[0]) || !isFinite(p[1]); })) return;
             var region = { type: 'Polygon', coordinates: [ring] };
-            // The tallest named peak in view, from the tiles already loaded.
-            var bounds = map.getBounds(), tallest = 0;
+            // The tallest named peak in view, from the tiles loaded, over the ground under
+            // the middle of the view.
+            var bounds = map.getBounds(), tallest = -Infinity;
             map.querySourceFeatures('places', { sourceLayer: 'mountain_peak' }).forEach(function (f) {
               var ele = f.properties.ele, at = f.geometry.coordinates;
-              if (ele > tallest && f.properties.name && bounds.contains(at)) tallest = ele;
+              if (isFinite(ele) && f.properties.name && bounds.contains(at)) tallest = Math.max(tallest, ele);
             });
+            var middle = map.unproject([w / 2, h * (1 + top) / 2]);
+            var base = map.terrain ? map.terrain.getElevationForLngLatZoom(middle, Math.floor(map.getZoom())) : 0;
+            var peaks = isFinite(tallest) ? [Math.round(Math.min(base || 0, tallest)), tallest] : null;
             // Only when it changed: a new filter reloads the labels, and this runs again
             // when the map next rests, so the same one set twice would never stop.
-            var key = JSON.stringify(ring) + '|' + tallest;
+            var key = JSON.stringify(ring) + '|' + peaks;
             if (key === lastRegion) return;
             lastRegion = key;
             map.setFilter('place-labels', placeFilter(region));
-            map.setFilter('peak-labels', peakFilter(region, tallest));
+            map.setFilter('peak-labels', peakFilter(region, peaks));
           }, 400);
         }
         var lastRegion = null;
