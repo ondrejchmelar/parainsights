@@ -689,6 +689,10 @@ code { font-family: ui-monospace, "DejaVu Sans Mono", monospace; font-size: 0.92
   box-shadow: 0 8px 26px rgba(0,0,0,.35); }
 .merged-view .m3-why[hidden] { display: none; }
 .merged-view .view3d-airspace .m3-chev { width: 30px; padding: 0; }
+/* On, the whole split button is: the chevron is half of one control, not a second one. */
+.merged-view .view3d-airspace [data-m3="airspace"][aria-pressed="true"] + .m3-chev {
+  background: var(--ink); border-color: var(--ink); color: var(--paper);
+  box-shadow: inset 1px 0 0 color-mix(in srgb, var(--paper) 35%, transparent); }
 .merged-view .view3d-airspace .m3-chev svg { transition: transform .15s; }
 .merged-view .view3d-airspace .m3-chev[aria-expanded="true"] svg { transform: rotate(180deg); }
 .merged-view .m3-airspace-menu { position: absolute; top: calc(var(--mh) + 8px); left: 0; z-index: 5;
