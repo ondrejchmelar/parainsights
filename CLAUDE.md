@@ -50,7 +50,7 @@ empty.
   cylinders. Open question whether to offer a radius per turnpoint (or one for all), and
   what XCTrack does with it in a waypoints task as against a competition task.
 - **Planner: see the airspace without a planned task.** The map draws only the zones
-  within 5 km of a task, and nothing before there is one; give a way to look at the
+  within 10 km of a task, and nothing before there is one; give a way to look at the
   airspace of an area on its own (a toggle, or the zones in view).
 - **One format for the debrief.** Its parts — the figures that open it, the finding cards,
   the context cards, the note — each have their own shape; make them read as one.
@@ -228,7 +228,7 @@ the airspace…" — then is enabled with the credit as its title, or says why n
 http(s)**; opened from `file://` the switch says it could not load.
 **A flight's map draws only the airspace the flight had to do with** (`relevantAirspace`,
 after the terrain is in, since a limit above ground needs the ground — the pilot's rule,
-October 2026): zones the track came within 5 km of sideways and 200 m vertically (1 km at first: it kept zones floored far above the flight); not the
+October 2026): zones the track came within 10 km of sideways and 200 m vertically (1 km at first, then 5 km: it kept zones floored far above the flight); not the
 kinds that bind nobody (danger and firing areas, sport/aerobatic, alert, warning, gliding
 sectors — protected areas and parks *are* binding and stay); and not zones openAIP marks
 as active only by NOTAM (`nt`, 376 across Europe). NOTAMs are not fetched, for the

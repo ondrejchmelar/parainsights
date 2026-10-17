@@ -23,6 +23,8 @@ The page fetches the ground and the imagery when it is opened (`remote`).
 
 from __future__ import annotations
 
+import re
+
 from . import basemap as border
 from .render_html import CLASSES, ceiling_metres, classify, floor_metres, limit_metres
 
@@ -143,6 +145,45 @@ def _box(airspace) -> dict:
     return out
 
 
+# What a published name says about when the airspace is there (October 2026). openAIP
+# carries it in the name only — `LKTSA26 PRAVONIN (INACTIVE 01 JUL TO 31 AUG)`, `LKTSA44
+# JESENIKY (BY AUP)`, `NTM-SPALOV (BY NOTAM)` — and its own `byNotam` flag is unset on
+# every Czech item, so a Planner date in August drew Pravonín as if it were live, and
+# drew it in September with nothing to say it was live only when booked.
+#
+# Two facts come out of it. `off`: the days it is inactive, [month, day, month, day],
+# which the map hides on a date inside (`aspHours.inactive`). `act`: who switches it on,
+# `AUP` or `NOTAM`, which the map keeps drawn and says: a date says nothing about whether
+# it is booked, and hiding it would be guessing on the wrong side. Checked against the
+# Czech AIP (ENR 5.1, 5.2; AIRAC 2/26): every LKTSA and LKTRA reads "Planned activation
+# specified in AUP" — none by NOTAM, so a TSA or TRA that the name does not mark is AUP;
+# every LKP, LKR and LKD is H24 (LKD9 0600–1800), so none of those is marked at all.
+# Only the NTM- areas say NOTAM.
+_MONTHS = {m: i + 1 for i, m in enumerate(
+    "JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC".split())}
+_INACTIVE = re.compile(r"\(\s*INACTIVE\s+(\d{1,2})\s+([A-Z]{3})\s+TO\s+(\d{1,2})\s+([A-Z]{3})\s*\)")
+_BY = re.compile(r"\(\s*(?:BY\s+)?(AUP|NOTAM)\s*\)")
+TEMPORARY = ("TSA", "TRA")
+
+
+def activation(name: str, airspace_class: str | None) -> tuple[str, str | None, list | None]:
+    """The name with its activation remarks taken out, who activates it (None: nobody
+    has to — it is there), and the days it is off (None: none published)."""
+    upper = (name or "").upper()
+    off = None
+    found = _INACTIVE.search(upper)
+    if found and found.group(2) in _MONTHS and found.group(4) in _MONTHS:
+        off = [_MONTHS[found.group(2)], int(found.group(1)),
+               _MONTHS[found.group(4)], int(found.group(3))]
+    by = _BY.search(upper)
+    act = by.group(1) if by else ("AUP" if airspace_class in TEMPORARY else None)
+    clean = name
+    for pattern in ((_INACTIVE,) if off else ()) + ((_BY,) if by else ()):
+        found = pattern.search(clean.upper())
+        clean = clean[:found.start()] + clean[found.end():]
+    return " ".join(clean.split()), act, off
+
+
 def rings(airspaces, *, source: bool = False) -> list[dict]:
     """Every airspace as a ring the view can draw, ordered back to front.
 
@@ -157,7 +198,7 @@ def rings(airspaces, *, source: bool = False) -> list[dict]:
         if len(airspace.points) < 3:
             continue
         points = _thin(airspace.points, RING_TOLERANCE_DEG)
-        label = airspace.name
+        label, act, off = activation(airspace.name, airspace.airspace_class)
         if airspace.floor or airspace.ceiling:
             label += f"  ({airspace.floor} – {airspace.ceiling})"
         ring = {
@@ -182,6 +223,10 @@ def rings(airspaces, *, source: bool = False) -> list[dict]:
             ring["w"] = airspace.meta["hours"]
         if airspace.meta.get("notam"):
             ring["nt"] = True        # active only by NOTAM (openAIP)
+        if act is not None:
+            ring["act"] = act
+        if off:
+            ring["off"] = off
         if source:
             ring.update(nm=airspace.name, ac=airspace.airspace_class,
                         lo=airspace.floor, hi=airspace.ceiling)

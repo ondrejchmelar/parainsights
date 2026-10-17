@@ -1454,7 +1454,14 @@
           var box = info && info.layer && info.layer.id === 'airspace' && info.object;
           if (!box) { asp.hidden = true; return; }
           asp.hidden = false;
-          asp.textContent = box.name + (box.capped ? ' — drawn to 4 000 m' : '');
+          // What the name no longer says (`scene.activation`): booked, or off for the season.
+          // A flight's page has no date control, and says only the booking.
+          var remark = window.aspHours && window.aspHours.remark
+            ? window.aspHours.remark(box.space, window.aspHours.chosen())
+            : (box.space.act === undefined ? ''
+               : 'only when activated by ' + (box.space.act || 'AUP'));
+          asp.textContent = box.name + (remark ? ' — ' + remark : '') +
+            (box.capped ? ' — drawn to 4 000 m' : '');
           asp.style.left = (info.x + 14) + 'px';
           asp.style.top = (info.y + 14) + 'px';
         }

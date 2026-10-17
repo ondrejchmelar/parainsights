@@ -517,6 +517,48 @@ def test_a_zone_with_no_published_hours_is_never_marked():
     assert answer["under"] is not None, "a ring with no hours was hidden by the clock"
 
 
+# ---- when the zone is booked, or off for the season (October 2026) -------------------
+#
+# openAIP carries both in the name: `LKTSA26 PRAVONIN (INACTIVE 01 JUL TO 31 AUG)` was
+# drawn on an August date, and in September nothing said it is there only when booked.
+
+
+def test_the_name_says_when_the_zone_is_there():
+    from airspaces.scene import activation
+
+    assert activation("LKTSA26 PRAVONIN (INACTIVE 01 JUL TO 31 AUG)", "TSA") == (
+        "LKTSA26 PRAVONIN", "AUP", [7, 1, 8, 31])
+    assert activation("LKTSA44 JESENIKY (BY AUP)", "TSA") == ("LKTSA44 JESENIKY", "AUP", None)
+    assert activation("NTM-SPALOV (BY NOTAM)", "TSA") == ("NTM-SPALOV", "NOTAM", None)
+    assert activation("LKTRA12 UNANOV", "TRA") == ("LKTRA12 UNANOV", "AUP", None), (
+        "ENR 5.2: every LKTSA and LKTRA is activated by AUP")
+    assert activation("LKD2 KOURIM", "D") == ("LKD2 KOURIM", None, None), "ENR 5.1: H24"
+    assert activation("CTR PRAHA", "CTR D") == ("CTR PRAHA", None, None), (
+        "a CTR is there whether or not anybody books it")
+
+
+@needs_chrome
+def test_a_zone_off_for_the_summer_leaves_the_map_and_a_booked_one_says_so():
+    tsa = _band("LKTSA26 PRAVONIN (INACTIVE 01 JUL TO 31 AUG)", 14.4, 14.6, 49.0, 50.0,
+                floor="300ft AGL", ceiling="1000ft AGL", klass="TSA")
+    answer = _run(_DROP + """
+    at(14.1, 49.5); at(14.9, 49.5);
+    askAbout('2026-08-11T11:00');
+    var august = { rows: marks(), under: under(14.5, 49.5),
+                   note: document.getElementById('plan-airspace').textContent };
+    askAbout('2026-09-15T11:00');
+    return { august: august, september: marks(), under: under(14.5, 49.5),
+             note: document.getElementById('plan-airspace').textContent };
+    """, spaces=[tsa])
+    assert answer["august"]["rows"] == [{"name": "LKTSA26 PRAVONIN  (300ft AGL – 1000ft AGL)",
+                                         "mark": "inactive 1 Jul – 31 Aug"}]
+    assert answer["august"]["under"] is None, "drawn in its inactive season"
+    assert "published inactive season" in answer["august"]["note"]
+    assert [row["mark"] for row in answer["september"]] == ["if activated"]
+    assert answer["under"] is not None, "a booked zone is hidden: no date can say it is not"
+    assert "AUP" in answer["note"]
+
+
 # ------------------------------------------- outside the airspace's country
 #
 # The planner's ground reaches the Alps and its airspace is Czech only. A route there

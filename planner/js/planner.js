@@ -166,7 +166,8 @@
         // rectangles, and a list that says "LKPR CTR" four times is a list nobody reads.
         var seen = found[ring.n];
         if (!seen) found[ring.n] = seen = { name: ring.n, k: ring.k, f: ring.f,
-                                            g: ring.g, w: ring.w, metres: 0, at: Infinity };
+                                            g: ring.g, w: ring.w, act: ring.act, off: ring.off,
+                                            metres: 0, at: Infinity };
         seen.metres += fraction * length;
         seen.at = Math.min(seen.at, start + span.first * length);
         seen.f = Math.min(seen.f, ring.f);
@@ -219,7 +220,7 @@
   // where the task reaches another country, that country's layer (`airspaces/openaip.py`,
   // the same files a flight's map loads, `view3d.loadAirspace`) is fetched for it.
   // Czechia's own come from this page, which carries more than its layer — the circuits.
-  var NEAR = 5000;
+  var NEAR = 10000;         // 5 km until October 2026: too tight to see what is coming
   var LAYERS = ((document.querySelector('meta[name="airspace-layers"]') || {}).content) || 'layers/';
   var OWN_FILES = /^(CZ|cz-circuits)\.json$/;
   var remote = {};          // file name -> { bbox: [w, e, s, n], rings }
@@ -356,7 +357,14 @@
     var colours = handle.scene().airspaceColours || {};
     var when = window.aspHours ? window.aspHours.chosen() : null;
     var holidays = window.aspHours ? window.aspHours.holidays() : {};
-    var shut = 0;
+    var shut = 0, off = 0, booked = 0;
+    function tag(state, text, title) {
+      var span = document.createElement('span');
+      span.className = 'plan-when ' + state;
+      span.textContent = text;
+      if (title) span.title = title;
+      return span;
+    }
     var heading = document.createElement('p');
     heading.className = 'plan-crossed-head';
     heading.textContent = crossed.length + (crossed.length === 1
@@ -382,18 +390,47 @@
       row.appendChild(much);
       // Only a ring that carries hours can be marked, and only when a time was asked
       // for. Everything else says nothing, which is the truth about it.
-      if (when && item.w) {
-        var open = window.aspHours.activeAt(item.w, when, holidays);
-        var tag = document.createElement('span');
-        tag.className = 'plan-when ' + (open ? 'is-open' : 'is-shut');
-        tag.textContent = open ? 'operating' : 'outside hours';
-        row.appendChild(tag);
+      var hours = window.aspHours;
+      if (hours && hours.inactive(item, when)) {
+        // Its published off-season: not there at all on this date.
+        row.appendChild(tag('is-shut', 'inactive ' + hours.offLabel(item.off),
+                            'Published inactive ' + hours.offLabel(item.off) + ' every year.'));
+        row.classList.add('is-shut');
+        off++;
+      } else if (hours && hours.activatedBy(item)) {
+        // Booked, not scheduled: a date cannot say, so it stays in and says so.
+        row.appendChild(tag('is-booked', 'if activated',
+                            'Active only when activated ' + hours.activatedBy(item)
+                            + (item.off ? '; inactive ' + hours.offLabel(item.off) + ' every year' : '')
+                            + ' — check before flying.'));
+        booked++;
+      } else if (when && item.w) {
+        var open = hours.activeAt(item.w, when, holidays);
+        row.appendChild(tag(open ? 'is-open' : 'is-shut', open ? 'operating' : 'outside hours'));
         if (!open) { row.classList.add('is-shut'); shut++; }
       }
       list.appendChild(row);
     });
     box.appendChild(list);
-    if (when) {
+    if (booked) {
+      var booking = document.createElement('p');
+      booking.className = 'plan-clear';
+      booking.textContent = (booked === 1 ? 'One of these is' : booked + ' of these are')
+        + ' there only when activated — the day\u2019s AUP (or NOTAM, where the tag says so) '
+        + 'says whether ' + (booked === 1 ? 'it is.' : 'they are.');
+      box.appendChild(booking);
+    }
+    if (off) {
+      var season = document.createElement('p');
+      season.className = 'plan-clear';
+      season.textContent = (off === 1 ? 'One of these is' : off + ' of these are')
+        + ' in ' + (off === 1 ? 'its' : 'their') + ' published inactive season on '
+        + window.aspHours.label(when).replace(/,? \d\d:\d\d$/, '') + '.';
+      box.appendChild(season);
+    }
+    // Said only where there are hours to speak of: "every field is open" beside a list
+    // with none in it read as a verdict on the TSA above it.
+    if (when && crossed.some(function (item) { return item.w; })) {
       var note = document.createElement('p');
       note.className = 'plan-clear';
       note.textContent = shut

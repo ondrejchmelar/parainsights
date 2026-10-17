@@ -143,6 +143,7 @@ STYLE = """
 .plan-when::first-letter { text-transform:uppercase; }
 .plan-when.is-open { background:var(--good); color:var(--on-good); }
 .plan-when.is-shut { border:1.5px solid var(--edge); color:var(--ink-2); }
+.plan-when.is-booked { border:1.5px dashed var(--ink-2); color:var(--ink); cursor:help; }
 .plan-xct { display:flex; flex-wrap:wrap; align-items:center; gap:6px 8px; margin:14px 0 0;
   padding-top:12px; border-top:1px solid var(--rule); }
 .plan-xct[hidden], .plan-split[hidden] { display:none; }

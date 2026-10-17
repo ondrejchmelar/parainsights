@@ -44,7 +44,8 @@
     var when = window.aspHours ? window.aspHours.chosen() : null;
     var holidays = window.aspHours ? window.aspHours.holidays() : {};
     function open(space) {
-      return !when || window.aspHours.activeAt(space.w, when, holidays);
+      return !when || (window.aspHours.activeAt(space.w, when, holidays) &&
+                       !window.aspHours.inactive(space, when));
     }
     var dimmed = 0;
     // What the map draws: with a planner, the zones near its task — and before there is a
@@ -56,7 +57,7 @@
     var says = document.getElementById('asp-when-out');
     if (says) {
       says.textContent = !when ? ''
-        : (dimmed ? dimmed + ' outside published hours at ' + window.aspHours.label(when)
+        : (dimmed ? dimmed + ' outside published hours or season at ' + window.aspHours.label(when)
                   : 'every field with published hours is open at '
                     + window.aspHours.label(when));
     }

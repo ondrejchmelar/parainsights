@@ -66,6 +66,30 @@
     return false;
   }
 
+  // What the published name says (`scene.activation`). `off`: a season the zone is not
+  // there at all — LKTSA20–27 are, every 1 Jul – 31 Aug — so a date inside it hides it.
+  // `act`: it is there only when somebody books it, which no date can tell; the zone stays
+  // drawn and says so. Undefined `act` is a zone that needs no activating.
+  var MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function inactive(space, instant) {
+    return !!(instant && space && space.off &&
+              inSeason(instant.getUTCMonth() + 1, instant.getUTCDate(), space.off));
+  }
+  function offLabel(off) {
+    return off[1] + ' ' + MONTH_NAMES[off[0] - 1] + ' – ' + off[3] + ' ' + MONTH_NAMES[off[2] - 1];
+  }
+  function activatedBy(space) {
+    if (!space || space.act === undefined) return '';
+    return 'by ' + (space.act || 'AUP');
+  }
+  // One line for the map's hover: what is not in the name any more.
+  function remark(space, instant) {
+    if (!space) return '';
+    if (inactive(space, instant)) return 'inactive ' + offLabel(space.off);
+    var by = activatedBy(space);
+    return by ? 'only when activated ' + by + (space.off ? '; inactive ' + offLabel(space.off) : '') : '';
+  }
+
   var cachedHolidays = null;
   function holidays() {
     if (cachedHolidays) return cachedHolidays;
@@ -96,7 +120,8 @@
   }
 
   window.aspHours = { activeAt: activeAt, holidays: holidays, chosen: chosen,
-                      toPrague: toPrague, label: label };
+                      toPrague: toPrague, label: label, inactive: inactive,
+                      offLabel: offLabel, activatedBy: activatedBy, remark: remark };
 
   // Open on the reader's own clock. The page is static and may be read months after it
   // was built, so a build-time default would be a date nobody asked about.
