@@ -2120,9 +2120,11 @@ function initView3d(root, cursorTrack, preset) {
             // reader zoomed in to the ground they were about.
             if (i) { labelled[name] = true; return; }
             // The photograph at half size (sharper), a label layer at full size — halved,
-            // its lettering would be too small to read.
+            // its lettering would be too small to read. The street map is all lettering, so
+            // it is never halved either.
             var consistent = !i && source.consistent_from;
-            sources[id] = { type: 'raster', tileSize: i ? 256 : 128,
+            var size = name === 'map' || i ? 256 : 128;
+            sources[id] = { type: 'raster', tileSize: size,
                             maxzoom: source.max_zoom || 18,
                             tiles: [consistent
                               ? 'm3tiles://' + encodeURIComponent(template) + '/' +
