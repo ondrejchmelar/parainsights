@@ -112,9 +112,9 @@
   var PLACES = 'https://tiles.openfreemap.org/planet';
   var GLYPHS = 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf';
   var LABEL_LAYERS = ['place-labels', 'peak-labels', 'water-labels', 'lake-labels', 'river-labels'];
-  // A peak: ▲ name, its height under it.
+  // A peak's text: its name, its height under it (the ▲ is the layer's icon).
   function peakField(name) {
-    return ['format', '\u25B2 ', { 'font-scale': 0.7 }, name, {},
+    return ['format', name, {},
             ['case', ['has', 'ele'], ['concat', '\n', ['to-string', ['get', 'ele']], ' m'], ''], { 'font-scale': 0.8 }];
   }
   // A bilingual area's name is all its official names joined ("Brixen - Bressanone",
@@ -173,6 +173,87 @@
   window.__m3CountryAt = function (lon, lat) {
     return loadCountries().then(function (data) { return countryAt(data, lon, lat); });
   };
+  // The ground under a point, from the finest terrain tile (z14, ~10 m): what a track's
+  // ends are pinned to. The page's own grid is cells of hundreds of metres, too coarse
+  // for a launch on a ridge.
+  var groundTiles = {};
+  function fineGround(lon, lat) {
+    var z = 14, n = Math.pow(2, z), xf = (lon + 180) / 360 * n;
+    var r = lat * Math.PI / 180, yf = (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n;
+    var x = Math.floor(xf), y = Math.floor(yf), key = x + '/' + y;
+    if (!groundTiles[key]) {
+      var url = window.__mapTerrarium.replace('{z}', z).replace('{x}', x).replace('{y}', y);
+      groundTiles[key] = fetch(url).then(function (res) {
+        if (!res.ok) throw new Error(res.status);
+        return res.blob();
+      }).then(createImageBitmap).then(function (bitmap) {
+        var c = document.createElement('canvas');
+        c.width = bitmap.width; c.height = bitmap.height;
+        var g = c.getContext('2d', { willReadFrequently: true });
+        g.drawImage(bitmap, 0, 0);
+        return g.getImageData(0, 0, c.width, c.height);
+      });
+    }
+    return groundTiles[key].then(function (img) {
+      var px = Math.min(img.width - 1, Math.floor((xf - x) * img.width));
+      var py = Math.min(img.height - 1, Math.floor((yf - y) * img.height));
+      var i = (py * img.width + px) * 4, d = img.data;
+      return d[i] * 256 + d[i + 1] + d[i + 2] / 256 - 32768;
+    });
+  }
+  // A GPS altitude is good to some tens of metres, and the terrain model has errors of
+  // its own, so a track drawn as recorded stood its launch and its landing 10–20 m off
+  // the ground — in the air on a ridge, which every pilot sees. Where the track starts
+  // (or ends) standing still, the recorded height there is set to the ground's, and the
+  // difference is spread linearly in time between the two ends. Only the drawing: the
+  // figures keep the recorded heights. Leaves the scene as it was when the ground cannot
+  // be had, an end is moving (a recorder started in the air), or the gap is over 100 m.
+  function pinToGround(scene, cursorTrack) {
+    var tr = scene && scene.track, n = tr && tr.t ? tr.t.length : 0;
+    if (!n || n < 20 || !window.__mapTerrarium || !window.createImageBitmap) return Promise.resolve();
+    function metres(i, j) {
+      var dy = (tr.lat[j] - tr.lat[i]) * 111320;
+      var dx = (tr.lon[j] - tr.lon[i]) * 111320 * Math.cos(tr.lat[i] * Math.PI / 180);
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+    function still(from, step) {
+      var j = from;
+      while (j + step >= 0 && j + step < n && Math.abs(tr.t[j + step] - tr.t[from]) < 20) j += step;
+      return Math.abs(tr.t[j] - tr.t[from]) >= 10 && metres(from, j) < 30;
+    }
+    function offset(i) {
+      return fineGround(tr.lon[i], tr.lat[i]).then(function (g) {
+        var o = tr.alt[i] - g;
+        return isFinite(o) && Math.abs(o) <= 100 ? o : null;
+      }, function () { return null; });
+    }
+    return Promise.all([still(0, 1) ? offset(0) : null, still(n - 1, -1) ? offset(n - 1) : null]).then(function (o) {
+      var first = o[0] !== null ? o[0] : o[1], last = o[1] !== null ? o[1] : o[0];
+      if (first === null) return;
+      var t0 = tr.t[0], span = Math.max(tr.t[n - 1] - t0, 1);
+      function at(t) { return Math.round(first + (last - first) * (t - t0) / span); }
+      function nearest(lon, lat) {
+        var best = 0, bestD = Infinity;
+        for (var i = 0; i < n; i++) {
+          var d = (tr.lon[i] - lon) * (tr.lon[i] - lon) + (tr.lat[i] - lat) * (tr.lat[i] - lat);
+          if (d < bestD) { bestD = d; best = i; }
+        }
+        return tr.t[best];
+      }
+      for (var i = 0; i < n; i++) tr.alt[i] -= at(tr.t[i]);
+      (scene.climbs || []).forEach(function (c) { c.alt -= at(nearest(c.lon, c.lat)); });
+      (scene.phases || []).forEach(function (p) {
+        for (var k = 0; k < 2; k++) p.alt[k] -= at(nearest(p.lon[k], p.lat[k]));
+      });
+      if (scene.landing) scene.landing.alt -= last;
+      // The cursor's samples are every `step`-th fix (`sampleIndices` in the report).
+      if (cursorTrack && cursorTrack.alt) {
+        var step = Math.max(Math.floor(n / 900), 1);
+        for (var k = 0; k < cursorTrack.alt.length; k++) cursorTrack.alt[k] -= at(tr.t[Math.min(k * step, n - 1)]);
+      }
+      scene.pinned = { first: first, last: last };
+    });
+  }
   function registerStitching() {
     if (window.__m3Stitching) return;
     window.__m3Stitching = true;
@@ -417,7 +498,10 @@
       hide: function () { view.hidden = true; pause(); }
     };
 
-    window.__mapLibs().then(function () {
+    // The track pinned to the ground before anything is drawn from it (`pinToGround`);
+    // at most a second's wait, and drawn as recorded if the ground does not arrive.
+    Promise.all([window.__mapLibs(), Promise.race([pinToGround(scene, cursorTrack),
+                                                   new Promise(function (done) { setTimeout(done, 1500); })])]).then(function () {
       registerStitching();
       view.querySelector('.m3-status').hidden = true;
       view.querySelector('.view3d-controls').hidden = false;
@@ -612,15 +696,21 @@
           id: 'peak-labels', type: 'symbol', source: 'places', 'source-layer': 'mountain_peak',
           minzoom: 8,
           filter: ['all', ['match', ['get', 'class'], ['peak', 'volcano'], true, false], ['has', 'name'],
-                   ['<=', ['coalesce', ['get', 'rank'], 99], ['step', ['zoom'], 1, 10, 3, 12, 6, 13, 99]]],
+                   // A few per tile, more as you zoom; all of them buried the ground
+                   // at a ridge's zoom.
+                   ['<=', ['coalesce', ['get', 'rank'], 99], ['step', ['zoom'], 1, 11, 2, 13, 3]]],
           layout: {
             visibility: vis,
+            // The ▲ is an icon centred on the summit itself, the name under it: as text
+            // anchored at its foot, the whole block stood above the peak and the ▲
+            // floated a line or two over it.
+            'icon-image': 'peak', 'icon-anchor': 'center', 'icon-size': 1,
             'text-field': peakField(LABEL_NAME),
             'text-font': ['literal', ['Noto Sans Italic']],
             'text-size': ['interpolate', ['linear'], ['zoom'], 8, 12.5, 12, 15, 16, 17],
-            'text-anchor': 'bottom',
+            'text-anchor': 'top', 'text-offset': [0, 0.55],
             'symbol-sort-key': ['-', 0, ['coalesce', ['get', 'ele'], 0]],
-            'text-padding': 4
+            'text-padding': 14, 'icon-padding': 14
           },
           paint: paint('#fff3d6')
         }, {
@@ -634,7 +724,7 @@
           id: 'lake-labels', type: 'symbol', source: 'places', 'source-layer': 'water_name',
           minzoom: 7, filter: ['==', ['geometry-type'], 'LineString'],
           layout: { visibility: vis, 'text-field': LABEL_NAME, 'text-font': ['literal', ['Noto Sans Italic']],
-                    'text-size': ['interpolate', ['linear'], ['zoom'], 7, 12, 14, 16], 'symbol-placement': 'line',
+                    'text-size': ['interpolate', ['linear'], ['zoom'], 7, 12, 14, 16], 'symbol-placement': 'line-center',
                     'text-letter-spacing': 0.1 },
           paint: paint('#cfe6ff')
         }, {
@@ -685,6 +775,17 @@
       });
       // 'style.load', not 'load': 'load' waits for the first complete frame, every tile
       // included, which on a slow connection is long after a reader has pressed things.
+      // The peaks' ▲ (`peak-labels`), drawn here rather than from a sprite sheet.
+      map.on('styleimagemissing', function (e) {
+        if (e.id !== 'peak' || map.hasImage('peak')) return;
+        var px = 2, size = 12 * px, c = document.createElement('canvas');
+        c.width = c.height = size;
+        var g = c.getContext('2d');
+        g.beginPath(); g.moveTo(size / 2, 1.5 * px); g.lineTo(size - 1.5 * px, size - 2 * px); g.lineTo(1.5 * px, size - 2 * px); g.closePath();
+        g.lineJoin = 'round'; g.lineWidth = 2.5 * px; g.strokeStyle = 'rgba(12,14,18,0.85)'; g.stroke();
+        g.fillStyle = '#fff3d6'; g.fill();
+        map.addImage('peak', g.getImageData(0, 0, size, size), { pixelRatio: px });
+      });
       map.once('style.load', function () {
         styleReady = true;
         // The names in the language of the country under the map's centre (`labelName`),
