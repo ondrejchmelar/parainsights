@@ -131,19 +131,25 @@
     tab.addEventListener('click', function () { input.click(); });
   });
   input.addEventListener('change', function () { handleFiles(input.files); });
-  ['dragenter', 'dragover'].forEach(function (type) {
-    drop.addEventListener(type, function (event) {
-      event.preventDefault();
-      drop.classList.add('is-over');
+  // Files dropped on the panel, or on the "+" tab from any flight: the tab's loading
+  // card shows the progress there, so the reader stays on the flight they were reading.
+  function dropTarget(target) {
+    ['dragenter', 'dragover'].forEach(function (type) {
+      target.addEventListener(type, function (event) {
+        event.preventDefault();
+        target.classList.add('is-over');
+      });
     });
-  });
-  ['dragleave', 'drop'].forEach(function (type) {
-    drop.addEventListener(type, function (event) {
-      event.preventDefault();
-      drop.classList.remove('is-over');
-      if (type === 'drop' && event.dataTransfer && event.dataTransfer.files.length) {
-        handleFiles(event.dataTransfer.files);
-      }
+    ['dragleave', 'drop'].forEach(function (type) {
+      target.addEventListener(type, function (event) {
+        event.preventDefault();
+        target.classList.remove('is-over');
+        if (type === 'drop' && event.dataTransfer && event.dataTransfer.files.length) {
+          handleFiles(event.dataTransfer.files);
+        }
+      });
     });
-  });
+  }
+  dropTarget(drop);
+  document.querySelectorAll('.tab[data-flight-tab="own"]').forEach(dropTarget);
 })();

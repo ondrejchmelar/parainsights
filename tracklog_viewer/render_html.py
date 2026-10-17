@@ -228,6 +228,7 @@ svg.chart { overflow: visible; }
 .tab-add .tab-open { flex-direction: row; align-items: center; gap: 8px; padding-right: 18px; font-weight: 600; }
 .tab-add .tab-date { font-size: 16px; font-weight: 600; }
 .tab-add .tab-meta { display: none; }
+.tab-add.is-over .tab-open { outline: 2px dashed var(--climb); outline-offset: -4px; background: var(--panel-2); }
 .ramp { display: flex; gap: 2px; align-items: center; }
 .ramp span { width: 22px; height: 10px; border-radius: 2px; }
 
