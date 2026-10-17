@@ -1459,7 +1459,7 @@
           var remark = window.aspHours && window.aspHours.remark
             ? window.aspHours.remark(box.space, window.aspHours.chosen())
             : (box.space.act === undefined ? ''
-               : 'only when activated by ' + (box.space.act || 'AUP'));
+               : 'only when activated' + (box.space.act ? ' by ' + box.space.act : ''));
           asp.textContent = box.name + (remark ? ' — ' + remark : '') +
             (box.capped ? ' — drawn to 4 000 m' : '');
           asp.style.left = (info.x + 14) + 'px';

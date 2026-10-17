@@ -397,10 +397,10 @@
                             'Published inactive ' + hours.offLabel(item.off) + ' every year.'));
         row.classList.add('is-shut');
         off++;
-      } else if (hours && hours.activatedBy(item)) {
+      } else if (hours && hours.activation(item)) {
         // Booked, not scheduled: a date cannot say, so it stays in and says so.
         row.appendChild(tag('is-booked', 'if activated',
-                            'Active only when activated ' + hours.activatedBy(item)
+                            'Active ' + hours.activation(item)
                             + (item.off ? '; inactive ' + hours.offLabel(item.off) + ' every year' : '')
                             + ' — check before flying.'));
         booked++;
@@ -416,8 +416,7 @@
       var booking = document.createElement('p');
       booking.className = 'plan-clear';
       booking.textContent = (booked === 1 ? 'One of these is' : booked + ' of these are')
-        + ' there only when activated — the day\u2019s AUP (or NOTAM, where the tag says so) '
-        + 'says whether ' + (booked === 1 ? 'it is.' : 'they are.');
+        + ' there only when activated — check the AIS for the day (AUP, NOTAM).';
       box.appendChild(booking);
     }
     if (off) {

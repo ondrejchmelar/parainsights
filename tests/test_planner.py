@@ -527,11 +527,11 @@ def test_the_name_says_when_the_zone_is_there():
     from airspaces.scene import activation
 
     assert activation("LKTSA26 PRAVONIN (INACTIVE 01 JUL TO 31 AUG)", "TSA") == (
-        "LKTSA26 PRAVONIN", "AUP", [7, 1, 8, 31])
+        "LKTSA26 PRAVONIN", "", [7, 1, 8, 31])
     assert activation("LKTSA44 JESENIKY (BY AUP)", "TSA") == ("LKTSA44 JESENIKY", "AUP", None)
     assert activation("NTM-SPALOV (BY NOTAM)", "TSA") == ("NTM-SPALOV", "NOTAM", None)
-    assert activation("LKTRA12 UNANOV", "TRA") == ("LKTRA12 UNANOV", "AUP", None), (
-        "ENR 5.2: every LKTSA and LKTRA is activated by AUP")
+    assert activation("LKTRA12 UNANOV", "TRA") == ("LKTRA12 UNANOV", "", None), (
+        "activated, but by what is the AIS's to say")
     assert activation("LKD2 KOURIM", "D") == ("LKD2 KOURIM", None, None), "ENR 5.1: H24"
     assert activation("CTR PRAHA", "CTR D") == ("CTR PRAHA", None, None), (
         "a CTR is there whether or not anybody books it")

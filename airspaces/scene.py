@@ -153,12 +153,11 @@ def _box(airspace) -> dict:
 #
 # Two facts come out of it. `off`: the days it is inactive, [month, day, month, day],
 # which the map hides on a date inside (`aspHours.inactive`). `act`: who switches it on,
-# `AUP` or `NOTAM`, which the map keeps drawn and says: a date says nothing about whether
-# it is booked, and hiding it would be guessing on the wrong side. Checked against the
-# Czech AIP (ENR 5.1, 5.2; AIRAC 2/26): every LKTSA and LKTRA reads "Planned activation
-# specified in AUP" — none by NOTAM, so a TSA or TRA that the name does not mark is AUP;
-# every LKP, LKR and LKD is H24 (LKD9 0600–1800), so none of those is marked at all.
-# Only the NTM- areas say NOTAM.
+# `AUP` or `NOTAM` where the name says, `''` for a TSA or TRA it does not — which the
+# map keeps drawn and says. A nudge, not an answer: the pilot checks the AIS before flying
+# anyway, and this only points at the zones worth checking. Against the Czech AIP (ENR
+# 5.1, 5.2; AIRAC 2/26): every LKTSA and LKTRA is activated by AUP, and every LKP, LKR
+# and LKD is H24 — so none of those is marked. Abroad the mechanism is not claimed.
 _MONTHS = {m: i + 1 for i, m in enumerate(
     "JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC".split())}
 _INACTIVE = re.compile(r"\(\s*INACTIVE\s+(\d{1,2})\s+([A-Z]{3})\s+TO\s+(\d{1,2})\s+([A-Z]{3})\s*\)")
@@ -176,7 +175,7 @@ def activation(name: str, airspace_class: str | None) -> tuple[str, str | None, 
         off = [_MONTHS[found.group(2)], int(found.group(1)),
                _MONTHS[found.group(4)], int(found.group(3))]
     by = _BY.search(upper)
-    act = by.group(1) if by else ("AUP" if airspace_class in TEMPORARY else None)
+    act = by.group(1) if by else ("" if airspace_class in TEMPORARY else None)
     clean = name
     for pattern in ((_INACTIVE,) if off else ()) + ((_BY,) if by else ()):
         found = pattern.search(clean.upper())

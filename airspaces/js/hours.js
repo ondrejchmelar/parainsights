@@ -78,16 +78,18 @@
   function offLabel(off) {
     return off[1] + ' ' + MONTH_NAMES[off[0] - 1] + ' – ' + off[3] + ' ' + MONTH_NAMES[off[2] - 1];
   }
-  function activatedBy(space) {
+  // "only when activated", and by what where the name says (`AUP`, `NOTAM`); '' for a
+  // zone that needs no activating.
+  function activation(space) {
     if (!space || space.act === undefined) return '';
-    return 'by ' + (space.act || 'AUP');
+    return 'only when activated' + (space.act ? ' by ' + space.act : '');
   }
   // One line for the map's hover: what is not in the name any more.
   function remark(space, instant) {
     if (!space) return '';
     if (inactive(space, instant)) return 'inactive ' + offLabel(space.off);
-    var by = activatedBy(space);
-    return by ? 'only when activated ' + by + (space.off ? '; inactive ' + offLabel(space.off) : '') : '';
+    var said = activation(space);
+    return said ? said + (space.off ? '; inactive ' + offLabel(space.off) : '') : '';
   }
 
   var cachedHolidays = null;
@@ -121,7 +123,7 @@
 
   window.aspHours = { activeAt: activeAt, holidays: holidays, chosen: chosen,
                       toPrague: toPrague, label: label, inactive: inactive,
-                      offLabel: offLabel, activatedBy: activatedBy, remark: remark };
+                      offLabel: offLabel, activation: activation, remark: remark };
 
   // Open on the reader's own clock. The page is static and may be read months after it
   // was built, so a build-time default would be a date nobody asked about.
