@@ -54,6 +54,8 @@ empty.
   airspace of an area on its own (a toggle, or the zones in view).
 - **One format for the debrief.** Its parts — the figures that open it, the finding cards,
   the context cards, the note — each have their own shape; make them read as one.
+- **Time slider: a position gauge, as flymet has.** (The user's note, verbatim: "flymet-
+  timeslider position gauge"; details to settle before starting.)
 
 **Where the "no shared code" rule applies, and where it does not.** `airspaces/geo.py`
 exists alongside `tracklog_viewer/js/geo.js` rather than sharing it, because they are not

@@ -73,6 +73,9 @@ section > h2 { font-size: 24px; display: flex; align-items: center; margin-botto
 .chart .sub { margin: 0 0 10px; color: var(--ink-2); font-size: 16px; }
 .chart { margin-bottom: 24px; }
 .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 26px; }
+/* A chart alone where two would sit side by side: the width it has beside another. */
+.chart-half { max-width: calc(50% - 13px); }
+@media (max-width: 720px) { .chart-half { max-width: none; } }
 .panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 14px; padding: 14px 16px 8px; }
 .panel.budget { padding: 18px 20px 10px; }
 p.note, p.caption { margin: 12px 0 0; color: var(--ink-2); font-size: 16px; display: block; }
@@ -169,6 +172,9 @@ svg.chart { overflow: visible; }
 .chart-wind .wind-point.active .wind-dot { fill: var(--climb); stroke: var(--panel); }
 .chart-wind .model polyline { fill: none; stroke: var(--neutral); stroke-width: 2; stroke-dasharray: 5 3; }
 .chart-wind .model .model-dot { fill: var(--neutral); }
+.chart-wind .model .model-arrow { stroke: var(--neutral); stroke-width: 2; stroke-linecap: round; }
+.chart-sounding .your-top { stroke: var(--climb); stroke-width: 2; }
+.chart-sounding .your-top-label { fill: var(--climb); font-weight: 600; }
 .chart-sounding .environment { fill: none; stroke: var(--climb); stroke-width: 2.2; }
 .chart-sounding .dewpoint { fill: none; stroke: var(--sink); stroke-width: 2.2; }
 .chart-sounding .adiabat { fill: none; stroke: var(--neutral); stroke-width: 1.6; stroke-dasharray: 4 3; }
@@ -348,10 +354,6 @@ code { font-family: ui-monospace, "DejaVu Sans Mono", monospace; font-size: 0.92
 """
 
 SCRIPT = (Path(__file__).parent / "page/report.js").read_text(encoding="utf-8")
-# The levels `js/meteo.js` asks Open-Meteo for, so the page's own request for a flight
-# written without the day's weather draws the same profile.
-PRESSURE_LEVELS = (1000, 975, 950, 925, 900, 850, 800, 700, 600, 500)
-SCRIPT = SCRIPT.replace("__PRESSURE_LEVELS__", str(list(PRESSURE_LEVELS)))
 
 
 def escape(text) -> str:

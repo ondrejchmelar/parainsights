@@ -17,6 +17,7 @@
     [-4.0, 'var(--sink-3)'], [-2.0, 'var(--sink-2)'], [-0.7, 'var(--sink-1)'], [0.7, 'var(--neutral)'],
     [2.0, 'var(--climb-1)'], [4.0, 'var(--climb-2)'], [Infinity, 'var(--climb-3)']
   ];
+  var CEILING_OF = { cloudbase: 'cloudbase', boundary_layer_top: 'boundary layer', thermal_top: 'thermal top' };
   var WIND_SPEED_STEP = 1, WIND_ALT_STEP = 250, WIND_MODEL_BAND = 400;
   var LD_STEPS = [[5.0, 'var(--ld-1)'], [7.0, 'var(--ld-2)'], [9.0, 'var(--ld-3)'], [12.0, 'var(--ld-4)'],
                   [Infinity, 'var(--ld-5)']];
@@ -112,7 +113,9 @@
     if (!th.length) return '';
     var left = 52, right = 58, top = 22, bottom = 42, plotW = width - left - right, plotH = height - top - bottom;
     var speeds = th.map(function (s) { return s.wind.speed; });
-    var altitudes = th.map(function (s) { return (s.start_altitude + s.finish_altitude) / 2; });
+    // On the model's heights: a barometric track sits its offset below GPS.
+    var offset = a.summary.baro_offset || 0;
+    var altitudes = th.map(function (s) { return (s.start_altitude + s.finish_altitude) / 2 + offset; });
     var modelLevels = [];
     if (meteo) {
       var lo = Math.min.apply(null, altitudes), hi = Math.max.apply(null, altitudes);
@@ -139,8 +142,11 @@
     var model = '<g class="model"></g>';
     if (modelLevels.length >= 2) {
       var path = modelLevels.map(function (l) { return f1(sx(l.wind_speed)) + ',' + f1(sy(l.height)); }).join(' ');
+      // Each level's direction as the climbs show theirs: a tail pointing downwind.
       var dots = modelLevels.map(function (l) {
-        return '<circle cx="' + f1(sx(l.wind_speed)) + '" cy="' + f1(sy(l.height)) + '" r="2.5" class="model-dot"><title>model ' +
+        var x = sx(l.wind_speed), y = sy(l.height), angle = np.mod(l.wind_direction + 180, 360) * np.DEG;
+        return '<line x1="' + f1(x) + '" y1="' + f1(y) + '" x2="' + f1(x + Math.sin(angle) * 22) + '" y2="' + f1(y - Math.cos(angle) * 22) +
+          '" class="model-arrow" /><circle cx="' + f1(x) + '" cy="' + f1(y) + '" r="4" class="model-dot"><title>model ' +
           f1(l.wind_speed) + ' m/s from ' + fmt(l.wind_direction, 0) + '° at ' + fmt(l.height, 0) + ' m (' + l.pressure + ' hPa)</title></circle>';
       }).join('');
       model = '<g class="model"><polyline points="' + path + '" />' + dots + '</g>';
@@ -158,6 +164,11 @@
           escape(seg.start_time.slice(0, 5)) + '</text>';
       }
       var n = numbers[seg.start] === undefined ? '' : numbers[seg.start];
+      var model = modelLevels.length >= 2 ? Met.windAt(meteo, altitude) : null, against = '';
+      if (model) {
+        against = '; model ' + f1(model[0]) + ' m/s from ' + fmt(model[1], 0) + '°, ' +
+          fmt(Math.abs(np.mod(seg.wind.direction - model[1] + 180, 360) - 180), 0) + '° apart';
+      }
       return '<g class="wind-point" data-segment="' + seg.start + '" data-speed="' + fmt(speed, 2) + '" data-alt="' +
         fmt(altitude, 0) + '" data-dir="' + fmt(seg.wind.direction, 0) + '">' +
         '<line x1="' + f1(startX) + '" y1="' + f1(startY) + '" x2="' + f1(x + dx) + '" y2="' + f1(y + dy) +
@@ -165,14 +176,9 @@
         '<circle cx="' + f1(x) + '" cy="' + f1(y) + '" r="9" class="wind-dot" />' +
         '<text x="' + f1(x) + '" y="' + f1(y) + '" class="wind-number">' + n + '</text>' + timeLabel +
         '<title>climb ' + n + ' at ' + escape(seg.start_time) + ' — ' + f1(speed) + ' m/s from ' +
-        escape(seg.wind.cardinal) + ' at ' + fmt(altitude, 0) + ' m</title></g>';
+        escape(seg.wind.cardinal) + ' at ' + fmt(altitude, 0) + ' m' + against + '</title></g>';
     });
-    var frame = JSON.stringify({ left: left, right: right, top: top, bottom: bottom, width: width, height: height,
-                                 plotW: plotW, plotH: plotH, speedMax: speedMax, altMin: altMin, altMax: altMax,
-                                 speedStep: WIND_SPEED_STEP, altStep: WIND_ALT_STEP, band: WIND_MODEL_BAND,
-                                 hasModel: modelLevels.length >= 2 });
     return '<svg viewBox="0 0 ' + width + ' ' + height + '" class="chart chart-wind" role="img"\n' +
-      "     data-wind-frame='" + frame + "'\n" +
       '     aria-label="Wind speed measured in each thermal against altitude, with the model\n' +
       '     wind profile for comparison">\n  <defs>\n' +
       '    <marker id="arrow' + uid + '" viewBox="0 0 8 8" refX="6" refY="4" markerWidth="5" markerHeight="5"\n' +
@@ -237,6 +243,21 @@
       return '<line class="reference ' + c[2] + '" x1="' + left + '" y1="' + f1(y) + '" x2="' + (width - right) + '" y2="' + f1(y) + '" />' +
         '<text ' + anchor + ' y="' + f1(y - 5) + '">' + c[1] + ' ' + fmt(c[0], 0) + ' m</text>';
     });
+    // Your top against the day's ceiling (`ceilingUse`, the debrief's figure): one line,
+    // beside the cloudbase and thermal top it is measured against.
+    var use = TV.metrics.ceilingUse(a, Met.weather(meteo)), yours = '';
+    if (use && altMin <= use.reached && use.reached <= altMax) {
+      // Its label where no other label is: above or below the line, right or left.
+      var yTop = sy(use.reached), taken = candidates.map(function (c, index) { return [index % 2, sy(c[0]) - 5]; });
+      taken.push([1, sy(flightBottom) - 6]);
+      var spot = [[0, yTop - 5], [0, yTop + 15], [1, yTop - 5], [1, yTop + 15]].filter(function (p) {
+        return p[1] > top + 10 && !taken.some(function (t) { return t[0] === p[0] && Math.abs(t[1] - p[1]) < 16; });
+      })[0] || [0, yTop + 15];
+      yours = '<line class="your-top" x1="' + left + '" y1="' + f1(yTop) + '" x2="' + (width - right) + '" y2="' + f1(yTop) + '" />' +
+        '<text x="' + (spot[0] ? left + 6 : width - right - 4) + '" y="' + f1(spot[1]) + '" class="reference-label your-top-label' +
+        (spot[0] ? ' band-label' : '') + '">Your top ' +
+        fmt(use.reached, 0) + ' m · ' + fmt(use.fraction, 0, { percent: true }) + ' of ' + CEILING_OF[use.source] + '</text>';
+    }
     return '<svg viewBox="0 0 ' + width + ' ' + height + '" class="chart chart-sounding" role="img"\n' +
       '     aria-label="Model temperature and dew point profile for the day of the flight, with the\n' +
       '     altitude band actually flown">\n  <defs>\n    <clipPath id="clip' + uid + '">\n' +
@@ -244,7 +265,7 @@
       '  <g class="grid">' + grid.join('') + '</g>\n  ' + band + '\n  <g class="references">' + references.join('') + '</g>\n' +
       '  <g clip-path="url(#clip' + uid + ')">\n    <polyline class="adiabat" points="' + adiabat.join(' ') + '" />\n' +
       '    <polyline class="dewpoint" points="' + dewpoint + '" />\n    <polyline class="environment" points="' + environment + '" />\n  </g>\n' +
-      '  <g class="axes">' + labels.join('') + '\n' +
+      '  ' + yours + '\n  <g class="axes">' + labels.join('') + '\n' +
       '    <text x="' + f1(left + plotW / 2) + '" y="' + (height - 5) + '" class="axis-title">Temperature, °C</text>\n' +
       '    <text x="12" y="' + f1(top + plotH / 2) + '" class="axis-title"\n' +
       '          transform="rotate(-90 12 ' + f1(top + plotH / 2) + ')">Altitude, m</text>\n  </g>\n</svg>';

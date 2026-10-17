@@ -2,11 +2,10 @@
  * for the report's own flights at build time (`js_build.py`), through `TV.upload.compose`.
  * Ported from `render_html._flight_body` and its helpers, and held to the same markup,
  * sentences and numbers until the Python was retired (it is in git at `ada5e5b`).
- * Where the article reads the clock (the weather archive's reach), `now` is a parameter.
  *
  * `options`: meteo (TV.meteo.parse), route (TV.xc), terrain (a grid with `z`, for the
  * clearance and the faces), sceneTerrain (what the 3D payload carries; the grid itself
- * by default), uid, hidden, flightPlan, airspace, certificationTable, now (epoch seconds).
+ * by default), uid, hidden, flightPlan, airspace, certificationTable.
  */
 (function (TV) {
   'use strict';
@@ -14,7 +13,7 @@
   var fmt = np.fmt, R = np.pyRound, esc = Ch.escape;
 
   var SHAPE_LABEL = { fai: 'FAI triangle', flat: 'flat triangle', open: 'free distance, 3 turnpoints' };
-  var RECENT_DAYS = 60;
+  var NO_WEATHER = 'the weather service did not answer';
 
   function pad(n) { return (n < 10 ? '0' : '') + n; }
   function duration(seconds) {
@@ -296,7 +295,8 @@
   // The air section's one ⓘ: what its numbers are. Where they came from is in the fold.
   var AIR_TERMS = [['Cloudbase', 'Surface air lifted until its dew-point spread closes.'],
                    ['Thermal top', 'Where the dry adiabat from the surface meets the profile.'],
-                   ['Boundary layer', 'The model\'s mixing height.']];
+                   ['Boundary layer', 'The model\'s mixing height.'],
+                   ['Wind', 'Blue: each climb\'s drift, the tail downwind. Grey: the model at its pressure levels.']];
 
   // The flight's last fold: where this flight's data came from, then how the numbers
   // above are worked out — one line each, the same on every flight (October 2026; these
@@ -308,13 +308,10 @@
       '</table></div>\n  </details>\n';
   }
 
-  function airFetchSection(a) {
-    var f = a.flight, middle = Math.floor(f.lat.length / 2);
-    return '\n  <section class="air-fetch" data-air-lat="' + fmt(f.lat[middle], 3) + '"\n' +
-      '           data-air-lon="' + fmt(f.lon[middle], 3) + '" data-air-epoch="' + Math.trunc(f.time[middle]) + '"\n' +
-      '           data-air-top="' + fmt(a.summary.max_altitude, 0) + '">\n' +
-      '    <h2>The air that day' + info(glossary(AIR_TERMS), 'About the air') +
-      '</h2>\n    <div class="figs air air-stats"></div>\n  </section>';
+  // No weather fetched: the section says so, and keeps the climbs' own wind.
+  function noWeatherSection(a, reason, windChart) {
+    return '\n  <section>\n    <h2>The air that day' + info(glossary(AIR_TERMS.slice(3)), 'About the air') + '</h2>\n' +
+      '    <p class="note">No weather: ' + esc(reason) + '.</p>\n    ' + windBox(a, windChart) + '\n  </section>';
   }
 
   function capNote(meteo) {
@@ -328,30 +325,37 @@
     if (rise < 400) return '';
     var lapse = (above[0].temperature - span.temperature) / rise * 1000.0;
     if (lapse < 6.0) {
-      return ' Above it, ' + fmt(lapse, 1) + '&nbsp;K/km: a stable lid.';
+      return 'Above the thermal top, ' + fmt(lapse, 1) + '&nbsp;K/km: a stable lid.';
     }
-    return ' Above it, ' + fmt(lapse, 1) + '&nbsp;K/km: no lid.';
+    return 'Above the thermal top, ' + fmt(lapse, 1) + '&nbsp;K/km: no lid.';
   }
 
-  function meteoProfile(a, meteo, uid, rows) {
+  // The climbs' wind with the model's, one chart (October 2026: it was a chart here and
+  // a table of the same climbs against the model in the next section).
+  function windBox(a, windChart, wide) {
+    var model = windChart && windChart.indexOf('model-dot') >= 0;
+    return '<div class="chart' + (wide ? '' : ' chart-half') + '">\n        <h3>Wind</h3>\n' +
+      '        <p class="sub">' + windShearNote(a) + '</p>\n' +
+      '        <div class="panel">' + (windChart || '<p class="note">Not enough circled climbs to sound the wind.</p>') + '</div>\n' +
+      (windChart ? '        <ul class="legend legend-row"><li><i style="background:var(--sink)"></i>Your climbs\u2019 drift</li>' +
+        (model ? '<li><i style="background:var(--neutral)"></i>Model, by pressure level</li>' : '') + '</ul>\n' : '') + '      </div>';
+  }
+
+  function meteoProfile(a, meteo, uid, windChart) {
     if (meteo.levels.length < 2) {
-      return '<p class="note">No sounding: the archive keeps profiles for about ' + RECENT_DAYS + ' days.</p>';
+      return '<p class="note">No sounding: the archive has only the surface for this day.</p>\n    ' + windBox(a, windChart);
     }
+    var lid = capNote(meteo);
     return '<div class="two">\n      <div class="chart">\n        <h3>Sounding</h3>\n' +
+      (lid ? '        <p class="sub">' + lid.trim() + '</p>\n' : '') +
       '        <div class="panel">' + Ch.sounding(meteo, a, uid) + '</div>\n' +
       '        <ul class="legend legend-row"><li><i style="background:var(--climb)"></i>Temperature</li>' +
       '<li><i style="background:var(--sink)"></i>Dew point</li><li><i style="background:var(--neutral)"></i>Dry adiabat from the surface</li></ul>\n      </div>\n' +
-      '      <div class="chart">\n        <h3>Wind against the model</h3>\n' +
-      '        <div class="panel">\n          <div class="table-scroll">\n            <table>\n' +
-      '              <thead><tr><th>Climb</th><th>Start</th><th>Height m</th><th>m/s</th><th>From</th>' +
-      '<th>Model m/s</th><th>Model from</th><th>&Delta; dir</th></tr></thead>\n' +
-      '              <tbody>' + rows.join('') + '</tbody>\n            </table>\n          </div>\n        </div>\n      </div>\n    </div>';
+      '      ' + windBox(a, windChart, true) + '\n    </div>';
   }
 
-  function meteoSection(a, meteo, uid) {
+  function meteoSection(a, meteo, uid, windChart) {
     if (!meteo) return '';
-    var summary = a.summary, offset = summary.baro_offset || 0, flightTop = summary.max_altitude + offset;
-    var spread = meteo.surface_temperature - meteo.surface_dew_point;
     var cloudbase = Met.cloudbase(meteo), thermalTop = Met.thermalTop(meteo), blTop = Met.boundaryLayerTop(meteo);
     var figs = [figure('Surface', fmt(meteo.surface_temperature, 0) + ' °C', '', 'Dew point ' + fmt(meteo.surface_dew_point, 0) + ' °C'),
                 figure('Cloudbase', spaced(cloudbase), ' m', '')];
@@ -360,31 +364,9 @@
     if (meteo.cape !== null) {
       figs.push(figure('CAPE', fmt(meteo.cape, 0), ' J/kg', meteo.cloud_cover_low !== null ? 'Low cloud ' + fmt(meteo.cloud_cover_low, 0) + '%' : ''));
     }
-    var rows = [];
-    thermals(a).forEach(function (seg, i) {
-      if (!seg.wind || !seg.turns || seg.turns < 2) return;
-      var height = (seg.start_altitude + seg.finish_altitude) / 2 + offset, model = Met.windAt(meteo, height);
-      if (!model) return;
-      var delta = Math.abs(np.mod(seg.wind.direction - model[1] + 180, 360) - 180);
-      rows.push('<tr data-segment="' + seg.start + '"><td>' + (i + 1) + '</td><td>' + seg.start_time + '</td><td>' + fmt(height, 0) + '</td>' +
-        '<td>' + fmt(seg.wind.speed, 1) + '</td><td>' + fmt(seg.wind.direction, 0) + '°</td><td>' + fmt(model[0], 1) + '</td><td>' +
-        fmt(model[1], 0) + '°</td><td>' + fmt(delta, 0) + '°</td></tr>');
-    });
-    var ceilingNote = '';
-    if (thermalTop) {
-      var difference = flightTop - thermalTop;
-      var verdict = difference > 0 ? fmt(Math.abs(difference), 0) + ' m above' : fmt(Math.abs(difference), 0) + ' m below';
-      ceilingNote = '<p class="note">You topped out ' + verdict + ' the thermal top.' + capNote(meteo) + '</p>';
-    }
     return '\n  <section>\n    <h2>The air that day' + info(glossary(AIR_TERMS.concat([
-        ['Sounding', 'Shaded: the heights you flew.'], ['Wind against the model', 'Climb drift against the model at the same height.']])), 'About the air') + '</h2>\n' +
-      '    <div class="figs air">' + figs.join('') + '</div>\n    ' + ceilingNote + '\n    ' + meteoProfile(a, meteo, uid, rows) + '\n  </section>';
-  }
-
-  function meteoReason(a, now) {
-    var flown = Math.floor(a.flight.time[0] / 86400), age = Math.floor(now / 86400) - flown;
-    if (age > RECENT_DAYS) return 'no sounding archived after ' + RECENT_DAYS + ' days';
-    return 'no sounding fetched';
+        ['Sounding', 'Shaded: the heights you flew.']])), 'About the air') + '</h2>\n' +
+      '    <div class="figs air">' + figs.join('') + '</div>\n    ' + meteoProfile(a, meteo, uid, windChart) + '\n  </section>';
   }
 
   function debriefCards(result, uid, sample, facts, reason, figs) {
@@ -424,7 +406,7 @@
   function flightBody(a, options) {
     options = options || {};
     var meteo = options.meteo || null, route = options.route || null, terrain = options.terrain || null;
-    var uid = options.uid || 'f0', now = options.now === undefined ? Date.now() / 1000 : options.now;
+    var uid = options.uid || 'f0';
     var weather = meteo ? Met.weather(meteo) : null;
     var summary = a.summary, f = a.flight, th = thermals(a), budget = a.budget;
     var tow = a.segments.filter(function (s) { return s.phase === 'tow'; })[0] || null;
@@ -513,11 +495,11 @@
     }
 
     var windChart = Ch.windProfile(a, meteo, uid), histogram = Ch.climbHistogram(a);
-    var metSection = meteo ? meteoSection(a, meteo, uid) : airFetchSection(a);
+    var metSection = meteo ? meteoSection(a, meteo, uid, windChart) : noWeatherSection(a, NO_WEATHER, windChart);
 
     var result = TV.debrief.build(a, { route: route, weather: weather, clearance: clearance, valley: valley, flightPlan: options.flightPlan || null });
     var sources = TV.insolation.sources(a, terrain);
-    var debriefSection = debriefCards(result, uid, sample, contextFacts(a, clearance, terrain), meteo ? '' : meteoReason(a, now), moreFigs);
+    var debriefSection = debriefCards(result, uid, sample, contextFacts(a, clearance, terrain), meteo ? '' : NO_WEATHER, moreFigs);
     var use = M.ceilingUse(a, weather);
     var compare = [['scored-km', route ? pyFloat(R(route.distance / 1000.0, 2)) : null],
                    ['mean-climb', th.length ? pyFloat(R(climbRate, 2)) : null],
@@ -567,19 +549,13 @@
       '  </section>\n\n' +
       '  <section>\n    <h2>How the air was used' + info(glossary([
         ['Time', 'Climbing, gliding, and the rest: transitions too short to call.'],
-        ['Lift you sat in', 'Time circling by climb rate, in 0.5&nbsp;m/s bins.'],
-        ['Wind by height', 'One point per climb, from its drift; the tail points downwind.' + (meteo ? ' Grey: the model.' : '')]]),
+        ['Climb rates while circling', 'Time circling by climb rate, in 0.5&nbsp;m/s bins.']]),
         'About these charts') + '</h2>\n' +
       '    <div class="chart">\n      <h3>Time</h3>\n' +
       '      <div class="panel budget">' + Ch.budgetBar(a, 1040) + '</div>\n      <ul class="legend legend-row">' + budgetLegend + '</ul>\n    </div>\n' +
-      '    <div class="two">\n      <div class="chart">\n        <h3>Lift you sat in</h3>\n' +
-      '        <p class="sub">' + histogramVerdict(a) + '</p>\n' +
-      '        <div class="panel">' + (histogram || '<p class="note">No thermalling time to summarise.</p>') + '</div>\n      </div>\n' +
-      '      <div class="chart">\n        <h3>Wind by height</h3>\n' +
-      '        <p class="sub">' + windShearNote(a) + '</p>\n' +
-      '        <div class="panel">' + (windChart || '<p class="note">Not enough circled climbs to sound the wind.</p>') + '</div>\n' +
-      '        <ul class="legend legend-row"><li><i style="background:var(--sink)"></i>Measured from circle drift</li>' +
-      (meteo ? '<li><i style="background:var(--neutral)"></i>Model profile for the day</li>' : '') + '</ul>\n      </div>\n    </div>\n  </section>\n\n' +
+      '    <div class="chart chart-half">\n      <h3>Climb rates while circling</h3>\n' +
+      '      <p class="sub">' + histogramVerdict(a) + '</p>\n' +
+      '      <div class="panel">' + (histogram || '<p class="note">No thermalling time to summarise.</p>') + '</div>\n    </div>\n  </section>\n\n' +
       topView + metSection + '\n' + sourcesFold([
         ['Track', sampling],
         ['Weather', (meteo ? esc(meteo.source) + ', valid ' + esc(meteo.valid_at) : 'Open-Meteo, live') +

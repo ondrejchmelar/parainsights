@@ -33,13 +33,18 @@ var steps = {
     if (fields[1] && fields[1].trim()) annotate.site = fields[1].trim();
     return {
       ok: true, ground: TV.terrain.remoteFor(flight),
-      meteo: { url: TV.meteo.request(middle.lat, middle.lon, middle.when, input.now), when: middle.when },
+      meteo: { url: TV.meteo.request(middle.lat, middle.lon, middle.when, input.now),
+               fallback: TV.meteo.fallback(middle.lat, middle.lon, middle.when, input.now), when: middle.when },
       date: summary.isoDate(flight.time[0], flight.timezone), site: annotate.site || null,
       pilot: annotate.pilot || null, warnings: flight.warnings.slice(0, 5), dropped: flight.dropped
     };
   },
   render: function (job, flight) {
     var meteo = job.meteo ? TV.meteo.parse(job.meteo, job.when, input.now) : null;
+    if (!meteo && job.era5) {
+      job.era5.era5 = true;
+      meteo = TV.meteo.parse(job.era5, job.when, input.now);
+    }
     var made = TV.upload.compose(flight, job.name, {
       terrain: job.terrain, sceneTerrain: job.sceneTerrain, meteo: meteo,
       certificationTable: input.certification, now: input.now

@@ -146,7 +146,12 @@
         : Promise.resolve(null);
       var middle = TV.meteo.middleOf(flight);
       var weather = optional(json(TV.meteo.request(middle.lat, middle.lon, middle.when, now)).then(function (payload) {
-        return TV.meteo.parse(payload, middle.when, now);
+        var parsed = TV.meteo.parse(payload, middle.when, now);
+        var era5 = parsed ? null : TV.meteo.fallback(middle.lat, middle.lon, middle.when, now);
+        return era5 ? json(era5).then(function (answer) {
+          answer.era5 = true;
+          return TV.meteo.parse(answer, middle.when, now);
+        }) : parsed;
       }), TIMEOUTS.meteo);
       var gliders = optional(json('gliders.json'), TIMEOUTS.gliders);
       return Promise.all([ground, weather, gliders]);
@@ -174,9 +179,6 @@
   function place(built, before) {
     before.parentNode.insertBefore(built.article, before);
     if (window.__drawCharts) window.__drawCharts(built.article);
-    // An article written without the day's weather asks for it in the page, as a report
-    // built without --meteo does; `run` saw only the articles there at load.
-    if (window.__fetchAir) window.__fetchAir();
     if (typeof initFlight === 'function') initFlight(built.article);
     return built.article;
   }

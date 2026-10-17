@@ -99,11 +99,14 @@ def main(argv: list[str] | None = None) -> int:
             if ground is None:
                 print(f"warning: no terrain data for {name}", file=sys.stderr)
         weather = _weather(found["meteo"]["url"]) if args.meteo else None
-        if args.meteo and weather is None:
+        # Nothing in the archived forecast (before ~2022): ERA5's surface, as an upload does.
+        era5 = (_weather(found["meteo"]["fallback"])
+                if args.meteo and found["meteo"]["fallback"] and not _has_surface(weather) else None)
+        if args.meteo and weather is None and era5 is None:
             print(f"warning: no weather data for {name}", file=sys.stderr)
         explicit = args.plan_file if index == 0 else None
         reports.append({"path": path, "name": name, "label": labels[index], "ground": ground,
-                        "weather": weather, "when": found["meteo"]["when"],
+                        "weather": weather, "era5": era5, "when": found["meteo"]["when"],
                         "plan": _plan_payload(path, found["date"], found["site"], explicit)})
 
     # The Planner: in this document only when it stands alone (`--airspace` with no
@@ -123,7 +126,7 @@ def main(argv: list[str] | None = None) -> int:
             "terrain": js_build.grid(ground) if ground is not None else None,
             # The page fetches the heights itself, as for every 3D map on this site.
             "sceneTerrain": ground.to_remote() if ground is not None else None,
-            "meteo": report["weather"], "when": report["when"],
+            "meteo": report["weather"], "era5": report["era5"], "when": report["when"],
             "options": {"uid": f"f{index}", "hidden": index > 0, "label": report["label"],
                         # The flight's map loads the airspace under its ground when it is
                         # opened, from the layer files beside the Planner (`openaip.py`).
@@ -185,6 +188,12 @@ def _weather(url: str) -> dict | None:
     WEATHER_CACHE.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload))
     return payload
+
+
+def _has_surface(payload: dict | None) -> bool:
+    """Whether an answer has any surface temperature: `parse` reads nothing without one."""
+    column = ((payload or {}).get("hourly") or {}).get("temperature_2m") or []
+    return any(value is not None for value in column)
 
 
 def _plan_payload(track: Path, date: str, site: str | None, explicit: Path | None,

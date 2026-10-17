@@ -12,6 +12,10 @@
   var geo = TV.geo, np = TV.np;
 
   var FORECAST_ENDPOINT = 'https://api.open-meteo.com/v1/forecast';
+  // Older than RECENT_DAYS: the model's own archived runs, with the pressure levels a
+  // sounding needs (from about 2022), and ERA5 where those have nothing — ERA5 has the
+  // surface only (October 2026; every flight past 60 days had no sounding before).
+  var HISTORY_ENDPOINT = 'https://historical-forecast-api.open-meteo.com/v1/forecast';
   var ARCHIVE_ENDPOINT = 'https://archive-api.open-meteo.com/v1/archive';
   var RECENT_DAYS = 60;
   var PRESSURE_LEVELS = [1000, 975, 950, 925, 900, 850, 800, 700, 600, 500];
@@ -23,8 +27,9 @@
   function dayNumber(seconds) { return Math.floor(seconds / 86400); }
   function isoDay(seconds) { return new Date(seconds * 1000).toISOString().slice(0, 10); }
 
-  // The URL for the hour nearest `when` (UTC epoch seconds) over (lat, lon).
-  function request(lat, lon, when, now) {
+  // The URL for the hour nearest `when` (UTC epoch seconds) over (lat, lon). `era5` asks
+  // the reanalysis instead of the archived forecast (`fallback`).
+  function request(lat, lon, when, now, era5) {
     var hourly = SURFACE_FIELDS.slice();
     PRESSURE_LEVELS.forEach(function (level) {
       LEVEL_FIELDS.forEach(function (field) { hourly.push(field + '_' + level + 'hPa'); });
@@ -34,7 +39,7 @@
                   ['hourly', hourly.join(',')], ['timezone', 'UTC']];
     var endpoint;
     if (daysAgo > RECENT_DAYS) {
-      endpoint = ARCHIVE_ENDPOINT;
+      endpoint = era5 ? ARCHIVE_ENDPOINT : HISTORY_ENDPOINT;
       params.push(['start_date', isoDay(when)], ['end_date', isoDay(when)]);
     } else {
       endpoint = FORECAST_ENDPOINT;
@@ -43,6 +48,12 @@
     return endpoint + '?' + params.map(function (p) {
       return encodeURIComponent(p[0]) + '=' + encodeURIComponent(String(p[1]));
     }).join('&');
+  }
+
+  // Where to ask when the first answer parsed to nothing: ERA5, for a flight old enough
+  // to have one; null otherwise. Its answer is marked `era5: true` before `parse`.
+  function fallback(lat, lon, when, now) {
+    return dayNumber(now) - dayNumber(when) > RECENT_DAYS ? request(lat, lon, when, now, true) : null;
   }
 
   function maybe(v) { return v === null || v === undefined ? null : +v; }
@@ -83,7 +94,8 @@
     return {
       valid_at: d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()) + ' ' +
         pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) + ' UTC',
-      source: old ? (levels.length ? 'ERA5 reanalysis' : 'ERA5 reanalysis, surface only') : 'Open-Meteo operational model',
+      source: !old ? 'Open-Meteo operational model' : !payload.era5 ? 'Open-Meteo archived forecast'
+        : levels.length ? 'ERA5 reanalysis' : 'ERA5 reanalysis, surface only',
       latitude: +or(payload.latitude, 0.0), longitude: +or(payload.longitude, 0.0),
       elevation: +or(payload.elevation, 0.0),
       surface_temperature: +surface, surface_dew_point: +or(value('dew_point_2m'), surface),
@@ -147,7 +159,7 @@
     return { lat: flight.lat[k], lon: flight.lon[k], when: flight.time[k] };
   }
 
-  TV.meteo = { request: request, parse: parse, cloudbase: cloudbase, thermalTop: thermalTop,
+  TV.meteo = { request: request, fallback: fallback, parse: parse, cloudbase: cloudbase, thermalTop: thermalTop,
                boundaryLayerTop: boundaryLayerTop, windAt: windAt, toDict: toDict, weather: weather,
                middleOf: middleOf, cardinal: function (d) { return geo.cardinal(d); } };
 })(typeof window !== 'undefined' ? (window.TV = window.TV || {}) : (globalThis.TV = globalThis.TV || {}));

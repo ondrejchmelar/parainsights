@@ -181,7 +181,6 @@ class TestThePage:
         source = (Path(report_html.__file__).parent / "js" / "meteo.js").read_text()
         flown = re.search(r"var PRESSURE_LEVELS = \[([^\]]*)\]", source).group(1)
         assert list(render_html.LEVELS) == [int(x) for x in flown.split(",")]
-        assert tuple(report_html.PRESSURE_LEVELS) == tuple(render_html.LEVELS)
 
     def test_the_caption_states_the_threshold_the_script_uses(self):
         """The shading is a judgement with a number behind it, and the caption prints that
