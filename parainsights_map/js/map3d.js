@@ -111,6 +111,15 @@
   // Place names (`style`): OpenFreeMap's planet tiles and their fonts, no key.
   var PLACES = 'https://tiles.openfreemap.org/planet';
   var GLYPHS = 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf';
+  var LABEL_LAYERS = ['place-labels', 'peak-labels', 'water-labels', 'lake-labels', 'river-labels'];
+  // A bilingual area's name is all its official names joined ("Brixen - Bressanone",
+  // "Saslonch - Langkofel - Sassolungo"). Where the Italian one is among them, it alone:
+  // that is South Tyrol and the Aosta valley, and nowhere else, since an Italian
+  // exonym ("Monaco di Baviera") is never part of the local name.
+  var LABEL_NAME = ['case',
+    ['all', ['has', 'name'], ['has', 'name:it'], ['!=', ['get', 'name:it'], ['get', 'name']],
+            ['in', ['get', 'name:it'], ['get', 'name']]], ['get', 'name:it'],
+    ['coalesce', ['get', 'name'], ['get', 'name:latin']]];
   function registerStitching() {
     if (window.__m3Stitching) return;
     window.__m3Stitching = true;
@@ -516,28 +525,72 @@
                      'fill-opacity': ['coalesce', ['get', 'opacity'], 0.4] } },
           { id: 'shapes-edge', type: 'line', source: 'shapes',
             paint: { 'line-color': ['coalesce', ['get', 'colour'], '#3b4cc0'], 'line-width': 2 } });
+        // The names, all from OpenFreeMap's OpenStreetMap tiles, everywhere on Earth
+        // (October 2026: towns only until then, villages only from zoom 11). Places,
+        // peaks with their height, lakes and rivers; white for places, warm for peaks,
+        // pale blue for water, so the three read apart on a photograph.
+        var halo = { 'text-halo-color': 'rgba(12,14,18,0.85)', 'text-halo-width': 1.4, 'text-halo-blur': 0.4 };
+        function paint(colour) { return Object.assign({ 'text-color': colour }, halo); }
+        var vis = labelled[key] ? 'visible' : 'none';
         above.push({
           id: 'place-labels', type: 'symbol', source: 'places', 'source-layer': 'place',
-          // Villages only from zoom 11: hidden by opacity they would still take the room
-          // the towns' names need.
+          // Villages from zoom 9: hidden by opacity they would still take the room the
+          // towns' names need, so they are filtered rather than faded.
           filter: ['any', ['match', ['get', 'class'], ['city', 'town'], true, false],
-                   ['all', ['==', ['get', 'class'], 'village'], ['>=', ['zoom'], 11]]],
-          minzoom: 6,
+                   ['all', ['==', ['get', 'class'], 'village'], ['>=', ['zoom'], 9]]],
+          minzoom: 5,
           layout: {
-            visibility: labelled[key] ? 'visible' : 'none',
-            'text-field': ['coalesce', ['get', 'name'], ['get', 'name:latin']],
+            visibility: vis,
+            'text-field': LABEL_NAME,
             'text-font': ['match', ['get', 'class'], 'city', ['literal', ['Noto Sans Bold']],
                           ['literal', ['Noto Sans Regular']]],
             'text-size': ['interpolate', ['linear'], ['zoom'],
-                          6, ['match', ['get', 'class'], 'city', 13, 'town', 10, 9],
-                          12, ['match', ['get', 'class'], 'city', 18, 'town', 15, 12],
-                          16, ['match', ['get', 'class'], 'city', 22, 'town', 18, 15]],
+                          6, ['match', ['get', 'class'], 'city', 14, 'town', 12, 11],
+                          12, ['match', ['get', 'class'], 'city', 19, 'town', 16, 14],
+                          16, ['match', ['get', 'class'], 'city', 22, 'town', 18, 16]],
             // Cities win the room first, then towns, then villages.
             'symbol-sort-key': ['match', ['get', 'class'], 'city', 0, 'town', 1, 2],
             'text-padding': 4
           },
-          paint: { 'text-color': '#ffffff', 'text-halo-color': 'rgba(12,14,18,0.85)',
-                   'text-halo-width': 1.4, 'text-halo-blur': 0.4 }
+          paint: paint('#ffffff')
+        }, {
+          // Peaks: ▲ name, the height under it. The higher one wins a collision, and the
+          // tiles' own rank (1 the most prominent in its tile) lets more in as you zoom.
+          id: 'peak-labels', type: 'symbol', source: 'places', 'source-layer': 'mountain_peak',
+          minzoom: 8,
+          filter: ['all', ['match', ['get', 'class'], ['peak', 'volcano'], true, false], ['has', 'name'],
+                   ['<=', ['coalesce', ['get', 'rank'], 99], ['step', ['zoom'], 1, 10, 3, 12, 6, 13, 99]]],
+          layout: {
+            visibility: vis,
+            'text-field': ['format', '\u25B2 ', { 'font-scale': 0.7 }, LABEL_NAME, {},
+                           ['case', ['has', 'ele'], ['concat', '\n', ['to-string', ['get', 'ele']], ' m'], ''], { 'font-scale': 0.8 }],
+            'text-font': ['literal', ['Noto Sans Italic']],
+            'text-size': ['interpolate', ['linear'], ['zoom'], 8, 12.5, 12, 15, 16, 17],
+            'text-anchor': 'bottom',
+            'symbol-sort-key': ['-', 0, ['coalesce', ['get', 'ele'], 0]],
+            'text-padding': 4
+          },
+          paint: paint('#fff3d6')
+        }, {
+          id: 'water-labels', type: 'symbol', source: 'places', 'source-layer': 'water_name',
+          minzoom: 8, filter: ['==', ['geometry-type'], 'Point'],
+          layout: { visibility: vis, 'text-field': LABEL_NAME, 'text-font': ['literal', ['Noto Sans Italic']],
+                    'text-size': ['interpolate', ['linear'], ['zoom'], 8, 12, 14, 15], 'text-padding': 4 },
+          paint: paint('#cfe6ff')
+        }, {
+          // A large lake is named along its centre line, not at a point.
+          id: 'lake-labels', type: 'symbol', source: 'places', 'source-layer': 'water_name',
+          minzoom: 7, filter: ['==', ['geometry-type'], 'LineString'],
+          layout: { visibility: vis, 'text-field': LABEL_NAME, 'text-font': ['literal', ['Noto Sans Italic']],
+                    'text-size': ['interpolate', ['linear'], ['zoom'], 7, 12, 14, 16], 'symbol-placement': 'line',
+                    'text-letter-spacing': 0.1 },
+          paint: paint('#cfe6ff')
+        }, {
+          id: 'river-labels', type: 'symbol', source: 'places', 'source-layer': 'waterway',
+          minzoom: 11, filter: ['all', ['==', ['get', 'class'], 'river'], ['has', 'name']],
+          layout: { visibility: vis, 'text-field': LABEL_NAME, 'text-font': ['literal', ['Noto Sans Italic']],
+                    'text-size': 13, 'symbol-placement': 'line', 'symbol-spacing': 400 },
+          paint: paint('#cfe6ff')
         });
         above.push(
           { id: 'measure-line', type: 'line', source: 'measure', filter: ['==', ['geometry-type'], 'LineString'],
@@ -2271,7 +2324,9 @@
         SHADES.forEach(function (id) {
           map.setLayoutProperty(id, 'visibility', id === shadeFor(key) ? 'visible' : 'none');
         });
-        map.setLayoutProperty('place-labels', 'visibility', labelled[key] ? 'visible' : 'none');
+        LABEL_LAYERS.forEach(function (id) {
+          map.setLayoutProperty(id, 'visibility', labelled[key] ? 'visible' : 'none');
+        });
         map.setPaintProperty('bg', 'background-color', groundColour(key));
       }
       function setVertical(v) {
