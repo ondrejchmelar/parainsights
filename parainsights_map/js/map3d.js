@@ -270,6 +270,8 @@
     // A flight's map offers its airspace behind a switch; the airspace map *is* its
     // airspace, so a scene with rings and no switch draws them always.
     var hasAirspace = !!(scene.airspaceToggle && scene.airspaces && scene.airspaces.length);
+    // Offered but empty: the page has airspace, none of it under this flight.
+    var noAirspace = !!(scene.airspaceToggle && !hasAirspace);
     var alwaysAirspace = !!(!scene.airspaceToggle && scene.airspaces && scene.airspaces.length);
     // What the switch says, from `settleAirspace`: drawn with its credit, or why not.
     var airspaceWhy = String(scene.airspaceWhy || (hasAirspace ? 'Draw the airspace over this flight'
@@ -358,9 +360,10 @@
             '<span>Ground</span><div class="view3d-seg m3-grounds" role="group" aria-label="Ground"></div>' +
             '<span>Height</span><div class="view3d-seg m3-verticals" role="group" aria-label="Vertical exaggeration"></div>' +
           '</div></div>' +
-        // None under the flight (the layers cover Europe; Hunza is not): no button. A
-        // disabled one with the reason in its title read as broken on a phone.
-        (hasAirspace || alwaysAirspace ?
+        // None under the flight (the layers cover Europe; Hunza is not): the button greyed
+        // and, pressed, saying why under it — a title is no use on a phone, and without
+        // the button the reader wonders where airspace went.
+        (hasAirspace || alwaysAirspace || noAirspace ?
           // The switch, and beside it what of the airspace to draw: one split button, its
           // menu holding the kinds, the floor, and whatever the page adds (the planner's
           // hours, `.m3-airspace-extra`). On a map that is its airspace (the planner's) the
@@ -369,10 +372,12 @@
           '<div class="view3d-seg view3d-airspace" role="group" aria-label="Airspace">' +
           '<button type="button" data-m3="airspace"' +
           (alwaysAirspace ? ' class="is-on" aria-pressed="true"' : ' aria-pressed="false"') +
+          (noAirspace ? ' aria-disabled="true"' : '') +
           ' title="' + airspaceWhy + '" aria-label="' + airspaceWhy + '">Airspaces</button>' +
           '<button type="button" data-m3="airspace-menu" class="m3-chev" aria-expanded="false"' +
           ' aria-haspopup="true" title="Which airspace to draw" aria-label="Which airspace to draw"' +
-          '>' + ICON.chevron + '</button></div>' +
+          (noAirspace ? ' disabled' : '') + '>' + ICON.chevron + '</button></div>' +
+          (noAirspace ? '<p class="m3-why" role="status" hidden>' + airspaceWhy + '</p>' : '') +
           '<div class="m3-drop m3-airspace-menu" hidden>' +
             '<span class="m3-drop-head">Show</span><div class="m3-asp-kinds"></div>' +
             '<span class="m3-drop-head">Floor at or below</span>' +
@@ -2528,6 +2533,11 @@
           labels[b.dataset.m3Label] = !labels[b.dataset.m3Label];
           toggle(b, labels[b.dataset.m3Label]);
           refresh();
+        } else if (act === 'airspace' && noAirspace) {
+          var why = view.querySelector('.m3-why');
+          why.hidden = !why.hidden;
+          clearTimeout(why.timer);
+          if (!why.hidden) why.timer = setTimeout(function () { why.hidden = true; }, 5000);
         } else if (act === 'airspace') { airspaceOn = !airspaceOn; toggle(b, airspaceOn); refresh(); }
         else if (act === 'zoom-in') { if (following) followZoomBy(1); else map.zoomIn(); }
         else if (act === 'zoom-out') { if (following) followZoomBy(-1); else map.zoomOut(); }

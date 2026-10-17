@@ -112,6 +112,13 @@ STYLE = """
 /* The airspace split button and its menu: the kinds with their colour and count, the
    floor, the page's own rows (the planner's hours), and what is shown with a reset. */
 .merged-view .m3-airspaces { position: relative; display: flex; }
+.merged-view [data-m3="airspace"][aria-disabled="true"], .merged-view .m3-chev:disabled { opacity: 0.5; cursor: default; }
+/* Why there is no airspace, under the greyed button when it is pressed. */
+.merged-view .m3-why { position: absolute; top: calc(100% + 8px); left: 0; z-index: 5; margin: 0;
+  width: max-content; max-width: min(280px, 70vw); padding: 10px 13px; border-radius: 12px;
+  background: var(--pop-bg); color: var(--pop-ink); font-size: 15px; line-height: 1.4;
+  box-shadow: 0 8px 26px rgba(0,0,0,.35); }
+.merged-view .m3-why[hidden] { display: none; }
 .merged-view .view3d-airspace .m3-chev { width: 30px; padding: 0; }
 .merged-view .view3d-airspace .m3-chev svg { transition: transform .15s; }
 .merged-view .view3d-airspace .m3-chev[aria-expanded="true"] svg { transform: rotate(180deg); }
@@ -142,6 +149,7 @@ STYLE = """
 /* On a phone the menu hangs from the corner itself, clear of the rail on the right. */
 @media (max-width: 640px) {
   .merged-view .m3-airspaces { position: static; }
+  .merged-view .m3-why { top: calc(var(--mh) + 8px); }
   .merged-view .m3-airspace-menu { top: calc(var(--mh) + 8px); left: 0; width: auto; right: auto;
     max-width: calc(100vw - 80px); }
 }
