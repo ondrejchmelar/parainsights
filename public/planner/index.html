@@ -1670,14 +1670,16 @@ function initView3d(root, cursorTrack, preset) {
     return ['any', ['match', ['get', 'class'], ['city', 'town'], true, false], village];
   }
   // Peaks: the tiles rank them by height within each tile (1 the highest). In the middle
-  // of the view the first three, and more close in; at the edges only each tile's
-  // highest — the other way round, a tile's top peak at the edge outranked Piz Boè beside
-  // the track.
-  function peakFilter(region) {
+  // of the view the first three, and more close in; at the edges only the view's giants,
+  // within `EDGE_PEAK` m of the tallest peak in it (`tallest`) — each tile's own highest
+  // there still outnumbered the ones beside the track.
+  var EDGE_PEAK = 250;
+  function peakFilter(region, tallest) {
     var rank = ['coalesce', ['get', 'rank'], 99];
     var middle = ['<=', rank, ['step', ['zoom'], 3, 12, 5, 13, 8]];
+    var giant = ['all', ['<=', rank, 1], ['>=', ['coalesce', ['get', 'ele'], 0], (tallest || 0) - EDGE_PEAK]];
     return ['all', ['match', ['get', 'class'], ['peak', 'volcano'], true, false], ['has', 'name'],
-            region ? ['any', ['<=', rank, 1], ['all', middle, ['within', region]]] : ['<=', rank, 2]];
+            region ? ['any', giant, ['all', middle, ['within', region]]] : ['<=', rank, 2]];
   }
   // A peak's text: its name, its height under it (the ▲ is the layer's icon).
   function peakField(name) {
@@ -2302,13 +2304,28 @@ function initView3d(root, cursorTrack, preset) {
             ring.push(ring[0]);
             if (ring.some(function (p) { return !isFinite(p[0]) || !isFinite(p[1]); })) return;
             var region = { type: 'Polygon', coordinates: [ring] };
+            // The tallest named peak in view, from the tiles already loaded.
+            var bounds = map.getBounds(), tallest = 0;
+            map.querySourceFeatures('places', { sourceLayer: 'mountain_peak' }).forEach(function (f) {
+              var ele = f.properties.ele, at = f.geometry.coordinates;
+              if (ele > tallest && f.properties.name && bounds.contains(at)) tallest = ele;
+            });
+            // Only when it changed: a new filter reloads the labels, and this runs again
+            // when the map next rests, so the same one set twice would never stop.
+            var key = JSON.stringify(ring) + '|' + tallest;
+            if (key === lastRegion) return;
+            lastRegion = key;
             map.setFilter('place-labels', placeFilter(region));
-            map.setFilter('peak-labels', peakFilter(region));
+            map.setFilter('peak-labels', peakFilter(region, tallest));
           }, 400);
         }
+        var lastRegion = null;
         labelRegion();
         map.on('moveend', labelRegion);
         map.on('resize', labelRegion);
+        // Again once the tiles are in: measured before they were, the tallest peak in
+        // view was a lower one and the edges kept peaks they should not.
+        map.on('idle', labelRegion);
         if (pendingShapes.length) {
           var shapes = map.getSource('shapes');
           if (shapes) shapes.setData({ type: 'FeatureCollection', features: pendingShapes });
