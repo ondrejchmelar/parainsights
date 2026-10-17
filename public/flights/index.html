@@ -1774,11 +1774,15 @@ function initView3d(root, cursorTrack, preset) {
     if (region) village.push(['within', region]);
     return ['any', ['match', ['get', 'class'], ['city', 'town'], true, false], village];
   }
+  // Peaks: the tiles rank them by height within each tile (1 the highest). In the middle
+  // of the view the first three, and more close in; at the edges only each tile's
+  // highest — the other way round, a tile's top peak at the edge outranked Piz Boè beside
+  // the track.
   function peakFilter(region) {
     var rank = ['coalesce', ['get', 'rank'], 99];
-    var lesser = ['<=', rank, ['step', ['zoom'], 1, 11, 2, 13, 3]];
+    var middle = ['<=', rank, ['step', ['zoom'], 3, 12, 5, 13, 8]];
     return ['all', ['match', ['get', 'class'], ['peak', 'volcano'], true, false], ['has', 'name'],
-            region ? ['any', ['<=', rank, 1], ['all', lesser, ['within', region]]] : lesser];
+            region ? ['any', ['<=', rank, 1], ['all', middle, ['within', region]]] : ['<=', rank, 2]];
   }
   // A peak's text: its name, its height under it (the ▲ is the layer's icon).
   function peakField(name) {
