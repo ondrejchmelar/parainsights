@@ -64,24 +64,12 @@ STYLE = """
 .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
 .plan-hint[hidden] { display:none; }
 /* The strip under the map, edge to edge as the map is, its content on the page's
-   column: the score, the options, the takeoff time — three groups on one line on a
-   desktop, divided by a hairline, one under another on a phone. No ⓘ in it: what each
-   control does is its title. */
+   column: the score, and one line of what the Task menu has set. */
 .plan-strip { display:flex; flex-wrap:wrap; align-items:center; gap:10px 28px; position:relative; z-index:1;
   margin:0 calc(50% - (100vw - var(--scrollbar, 0px)) / 2);
   padding:12px calc((100vw - var(--scrollbar, 0px)) / 2 - 50%) 12px;
   background:var(--panel); border-bottom:1px solid var(--rule); }
 .plan-strip-score { flex:0 1 auto; min-width:0; }
-.plan-strip .plan-opts { margin:0; flex:0 1 auto; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
-.plan-strip .plan-takeoff { margin:0 0 0 auto; flex:0 1 420px; }
-.plan-strip .plan-hint:not([hidden]) { flex-basis:100%; }
-@media (min-width: 901px) {
-  .plan-strip .plan-opts, .plan-strip .plan-takeoff { padding-left:28px; border-left:1px solid var(--rule); }
-}
-@media (max-width: 900px) {
-  .plan-strip { gap:10px; }
-  .plan-strip > * { flex-basis:100% !important; }
-}
 /* The score: the distance large with its shape, then one quiet line. */
 .plan-figures { display:grid; gap:2px; }
 .plan-row { display:flex; flex-wrap:wrap; align-items:baseline; }
@@ -106,23 +94,46 @@ STYLE = """
 .plan-shape.is-fai { background:var(--good); border-color:var(--good); color:var(--on-good); }
 .plan-shape.is-flat { background:var(--warn); border-color:var(--warn); color:var(--on-warn); }
 .plan-figures div { display:inline-flex; gap:5px; align-items:baseline; }
-/* Toggles as chips, filled when on; the rules as a pill of the same height. */
-.plan-chip { position:relative; display:inline-flex; align-items:center; height:38px; padding:0 14px;
-  border:1px solid var(--edge); border-radius:999px; background:var(--panel); color:var(--ink);
-  font-size:15px; font-weight:600; cursor:pointer; user-select:none; }
-.plan-chip input { position:absolute; opacity:0; width:1px; height:1px; margin:0; }
-.plan-chip:hover { background:var(--panel-2); }
-.plan-chip:has(input:checked) { background:var(--ink); border-color:var(--ink); color:var(--paper); }
-.plan-chip:has(input:focus-visible), .plan-select:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
-.plan-select { height:38px; padding:0 12px; border:1px solid var(--edge); border-radius:999px;
-  background:var(--panel); color:var(--ink); font:600 15px "Noto Sans", ui-sans-serif, system-ui, sans-serif; }
-/* The takeoff on one line: its day, the time slid through it, the time. */
-.plan-takeoff { display:grid; grid-template-columns:auto auto minmax(80px, 1fr) auto; align-items:center;
-  gap:10px; font-size:15px; color:var(--ink-2); }
+/* The Task menu, in the map's top row: scoring as two switches and the rules, then the
+   takeoff — a panel as the map's own (the layers, the airspace) are. */
+.merged-view .m3-corner-row { position:relative; }
+.merged-view .plan-task-open { display:inline-flex; align-items:center; gap:6px; }
+.merged-view .plan-task-open svg:last-child { transition:transform .15s; }
+.merged-view .plan-task-open[aria-expanded="true"] svg:last-child { transform:rotate(180deg); }
+.plan-task-menu { position:absolute; top:calc(var(--mh) + 8px); left:0; z-index:5; box-sizing:border-box;
+  width:min(320px, calc(100vw - 96px)); display:grid; gap:12px; padding:12px 14px; border-radius:12px;
+  background:var(--float); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
+  border:1px solid var(--float-edge); box-shadow:var(--float-shadow);
+  font:600 15px/1.25 "Noto Sans", ui-sans-serif, system-ui, sans-serif; color:var(--ink); }
+.plan-task-menu[hidden] { display:none; }
+.plan-task-head { font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-2); margin-bottom:-4px; }
+.plan-task-note { margin:-4px 0 0; font-size:13px; font-weight:400; line-height:1.35; color:var(--ink-2); }
+.plan-switch { display:flex; align-items:center; justify-content:space-between; gap:12px; cursor:pointer; }
+.plan-switch small { display:block; margin-top:2px; font-size:13px; font-weight:400; color:var(--ink-2); }
+.plan-switch input { appearance:none; -webkit-appearance:none; flex:none; position:relative; width:42px; height:24px;
+  margin:0; border-radius:12px; background:var(--edge); cursor:pointer; transition:background .15s; }
+.plan-switch input::after { content:""; position:absolute; top:3px; left:3px; width:18px; height:18px;
+  border-radius:50%; background:var(--paper); transition:left .15s; }
+.plan-switch input:checked { background:var(--ink); }
+.plan-switch input:checked::after { left:21px; }
+.plan-switch input:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.merged-view .plan-rules-seg { display:flex; }
+.merged-view .plan-rules-seg button { flex:1; }
+/* The takeoff: its day and the time, then the slider the whole width under them, so a
+   finger can slide it through the day. */
+.plan-takeoff { display:grid; grid-template-columns:1fr auto; grid-template-areas:"day out" "time time";
+  align-items:center; gap:8px 10px; font-size:15px; color:var(--ink-2); }
+#plan-day { grid-area:day; justify-self:start; }
+#plan-time-out { grid-area:out; }
 .plan-field { height:38px; padding:0 10px; box-sizing:border-box; font:inherit; color:var(--ink); min-width:0;
   border:1px solid var(--edge); border-radius:10px; background:var(--panel); }
-#plan-time { width:100%; margin:0; accent-color:var(--accent); }
+#plan-time { grid-area:time; width:100%; margin:0; accent-color:var(--accent); }
 #plan-time-out { font-variant-numeric:tabular-nums; font-weight:600; color:var(--ink); min-width:3em; text-align:right; }
+/* Under the score, what the Task menu has set; pressed, it opens the menu. */
+.plan-opts-sum { display:block; margin:4px 0 0; padding:0; border:0; background:none; text-align:left;
+  font:400 15px/1.35 "Noto Sans", ui-sans-serif, system-ui, sans-serif; color:var(--ink-2); cursor:pointer; }
+.plan-opts-sum:hover { color:var(--ink); text-decoration:underline; }
+.plan-opts-sum:empty { display:none; }
 /* Under the strip: to and from XCTrack, then what the task crosses. */
 .plan-section { margin:18px 0 0; display:grid; gap:14px; }
 .plan-section .plan-crossed-head { font-size:20px; font-weight:700; color:var(--ink); margin:0 0 6px; }
@@ -203,37 +214,53 @@ RULES_TITLE = (f"XContest: FAI when every side is at least {xc.FAI_MIN_SIDE:.0%}
                "under 5%, and in the Central European zone 1 / 1.8 / 2.2.")
 
 
-def controls() -> str:
-    """The task tools, in the Task panel over the map. Drawing is a mode, off until asked
-    for: the same map is the airspace map, where a tap on a phone names the zone under the
-    finger, and a tap that also dropped a turnpoint would make the one gesture mean two."""
+TASK_ICON = '<path d="M10 3.5 17 16H3z"/>'
+CHEVRON_ICON = '<path d="M6 8l4 4 4-4"/>'
+
+
+def task_menu() -> str:
+    """How the task is scored and when it is flown: one Task menu in the map's top row,
+    beside the airspace (`map3d` moves `.m3-corner-extra` there). These were chips, a
+    select and a takeoff row in the strip under the map until October 2026; the strip
+    keeps one line saying what is set (`#plan-opts-sum`). What each control does is said
+    under it, which a title on a phone is not."""
     import parainsights_common as common
 
+    def switch(id_, label, sub, title, checked=False):
+        return (f'<label class="plan-switch" title="{title}"><span>{label}<small>{sub}</small></span>'
+                f'<input type="checkbox" role="switch" id="{id_}"{" checked" if checked else ""}></label>')
+
     return (
-        '<div class="plan-opts">'
-        '<label class="plan-chip" title="Score the task as a closed course: it must end near '
-        'where it starts"><input type="checkbox" id="plan-close">Closed</label>'
-        '<label class="plan-chip" title="Where each turnpoint can go for an FAI triangle (every '
-        'side at least 28% of the perimeter), the other two staying put: turnpoint 1 green, 2 '
-        'blue, 3 red. Yellow: where a closed course must finish.">'
-        '<input type="checkbox" id="plan-fai" checked>FAI areas</label>'
-        f'<label class="plan-rules-label" title="{RULES_TITLE}"><span class="sr">Rules</span>'
-        '<select id="plan-rules" class="plan-select">'
-        '<option value="world">XContest</option>'
-        '<option value="cpp">ČPP (Czech)</option></select></label>'
-        "</div>"
-        '<div class="plan-takeoff" title="Slide through the day: the ground is shaded from where '
-        'the sun stands (strongest on the Relief ground), and the rose shows the sun and the '
-        'forecast wind at about 1500 m. Your own clock; the aerodrome hours follow it.">'
-        '<label for="plan-day">Takeoff</label>'
+        '<div class="m3-corner-extra plan-task" hidden>'
+        '<div class="view3d-seg"><button type="button" id="plan-task-open" class="plan-task-open" '
+        'aria-expanded="false" aria-haspopup="true" aria-controls="plan-task-menu" '
+        'title="How the task is scored, and when it is flown">'
+        f'{common.icon(TASK_ICON)}<span>Task</span>{common.icon(CHEVRON_ICON)}</button></div>'
+        '<div class="plan-task-menu" id="plan-task-menu" hidden>'
+        '<span class="plan-task-head">Scoring</span>'
+        + switch("plan-close", "Closed course", "must end near the start",
+                 "Score the task as a closed course: it must end near where it starts")
+        + switch("plan-fai", "FAI areas", "where each turnpoint can go",
+                 "Where each turnpoint can go for an FAI triangle (every side at least 28% of "
+                 "the perimeter), the other two staying put: turnpoint 1 green, 2 blue, 3 red. "
+                 "Yellow: where a closed course must finish.", checked=True)
+        + f'<div class="view3d-seg plan-rules-seg" role="group" aria-label="Rules" title="{RULES_TITLE}">'
+        '<button type="button" data-rules="world" aria-pressed="true">XContest</button>'
+        '<button type="button" data-rules="cpp" aria-pressed="false">ČPP (Czech)</button></div>'
+        # The value the scoring reads, set by the two buttons above.
+        '<select id="plan-rules" class="sr" tabindex="-1" aria-hidden="true">'
+        '<option value="world">XContest</option><option value="cpp">ČPP (Czech)</option></select>'
+        '<span class="plan-task-head">Takeoff</span>'
+        '<div class="plan-takeoff">'
+        '<label for="plan-day" class="sr">Takeoff day</label>'
         '<input type="date" id="plan-day" class="plan-field">'
         '<input type="range" id="plan-time" min="300" max="1260" step="15" value="720" '
         'aria-label="Time of day">'
         '<output id="plan-time-out" for="plan-time">12:00</output>'
         "</div>"
-        # Said only before the first point: the button itself turns into "Drawing — click
-        # the map" once pressed.
-        '<span class="plan-hint" id="plan-hint" hidden></span>'
+        '<p class="plan-task-note">Lights the ground and sets the wind rose for this hour. '
+        'Your own clock.</p>'
+        "</div></div>"
     )
 
 
@@ -280,8 +307,8 @@ XCT_HELP = ("Turnpoints in order with the ground height under each, no cylinders
 
 def strip() -> str:
     """The task under the map, as the side view sits under a flight's map, and with the
-    map in full screen: what it is worth, its options and the takeoff time. There was a
-    Task panel floating over the map until October 2026."""
+    map in full screen: what it is worth, and one line of what the Task menu has set
+    (`task_menu`, whose controls were here until October 2026)."""
     return ('<div class="plan-strip" id="plan-strip" aria-label="The task">'
             # As `report` in planner.js draws it with no task, so the strip is its own
             # height before the script runs and nothing under it moves when it does.
@@ -290,8 +317,12 @@ def strip() -> str:
             '<span class="v">— km</span></div></span>'
             '<span class="plan-row plan-row-sub"><span class="plan-row-hint">Press <b>Draw</b>, '
             'then click the map</span><span class="plan-legs" id="plan-legs"></span></span>'
-            '</div></div>'
-            + controls() + "</div>")
+            '</div><button type="button" class="plan-opts-sum" id="plan-opts-sum" '
+            'aria-controls="plan-task-menu"></button>'
+            # Said only before the first point: the button itself turns into "Drawing — click
+            # the map" once pressed.
+            '<span class="plan-hint" id="plan-hint" hidden></span>'
+            '</div></div>')
 
 
 def results() -> str:
@@ -340,13 +371,23 @@ def body(uid: str = "planner", *, scene_panel: str = "") -> str:
   {airspace_html.when_control()}
   <div class="asp-stage">
   <div class="asp-holder">
-    {scene_panel.replace('<div class="view3d', map_bar() + '<div class="view3d', 1)}
+    {_with_tools(scene_panel)}
     <div class="asp-name" id="asp-name"></div>
   </div>
   {strip()}
   </div>
   {results()}
 </article>"""
+
+
+def _with_tools(scene_panel: str) -> str:
+    """The panel with the planner's own controls inside it, for the map to move in: the
+    drawing tools to its foot, the Task menu to its top row. With no panel (a test of the
+    page alone) the controls are still on the page."""
+    tools = map_bar() + task_menu()
+    if '<div class="view3d' not in scene_panel:
+        return scene_panel + tools
+    return scene_panel.replace('<div class="view3d', tools + '<div class="view3d', 1)
 
 
 def _coverage() -> str:

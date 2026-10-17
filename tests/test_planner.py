@@ -517,6 +517,27 @@ def test_a_zone_with_no_published_hours_is_never_marked():
     assert answer["under"] is not None, "a ring with no hours was hidden by the clock"
 
 
+@needs_chrome
+def test_the_task_menu_sets_the_scoring_and_the_strip_says_what_is_set():
+    """The options moved into a Task menu in the map's top row (October 2026); the strip
+    under the map keeps one line of what is set, and pressing it opens the menu."""
+    answer = _run(_DROP + """
+    var before = document.getElementById('plan-opts-sum').textContent;
+    document.querySelector('.plan-rules-seg [data-rules="cpp"]').click();
+    var close = document.getElementById('plan-close');
+    close.checked = true; close.dispatchEvent(new Event('change'));
+    document.getElementById('plan-opts-sum').click();
+    return { before: before, after: document.getElementById('plan-opts-sum').textContent,
+             rules: document.getElementById('plan-rules').value,
+             pressed: document.querySelector('.plan-rules-seg [data-rules="cpp"]').getAttribute('aria-pressed'),
+             open: !document.getElementById('plan-task-menu').hidden };
+    """)
+    assert answer["before"].startswith("Open · FAI areas · XContest · takeoff ")
+    assert answer["after"].startswith("Closed · FAI areas · ČPP · takeoff ")
+    assert answer["rules"] == "cpp" and answer["pressed"] == "true"
+    assert answer["open"], "the line under the score opens the menu"
+
+
 # ---- when the zone is booked, or off for the season (October 2026) -------------------
 #
 # openAIP carries both in the name: `LKTSA26 PRAVONIN (INACTIVE 01 JUL TO 31 AUG)` was

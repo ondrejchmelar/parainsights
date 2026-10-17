@@ -499,6 +499,7 @@
     if (redo) redo.disabled = !future.length;
     if (wipe) wipe.disabled = !points.length;
     if (takeoff) lightSun();
+    if (summary) describeOptions();      // a saved task or an import sets them too
     var walk = course();
     var merged = mergedEntry();
     if (merged) {
@@ -1390,6 +1391,69 @@
   document.getElementById('plan-close').addEventListener('change', redraw);
   document.getElementById('plan-rules').addEventListener('change', redraw);
   document.getElementById('plan-fai').addEventListener('change', redraw);
+
+  // ---- the Task menu ------------------------------------------------------------------
+  //
+  // In the map's top row (`task_menu`): opened by its button or by the line under the
+  // score that says what it has set; closed by a press anywhere else, or Escape. A choice
+  // leaves it open, as the map's own menus do.
+  var taskOpen = document.getElementById('plan-task-open');
+  var taskMenu = document.getElementById('plan-task-menu');
+  var summary = document.getElementById('plan-opts-sum');
+  function openTask(on) {
+    taskMenu.hidden = !on;
+    taskOpen.setAttribute('aria-expanded', on ? 'true' : 'false');
+    taskOpen.classList.toggle('is-on', on);
+  }
+  taskOpen.addEventListener('click', function () { openTask(taskMenu.hidden); });
+  summary.addEventListener('click', function (event) {
+    event.stopPropagation();
+    taskOpen.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    openTask(true);
+  });
+  document.addEventListener('pointerdown', function (event) {
+    if (!taskMenu.hidden && !event.target.closest('.plan-task') && event.target !== summary) openTask(false);
+  }, true);
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && !taskMenu.hidden) { openTask(false); taskOpen.focus(); }
+  });
+  // The rules: two buttons over the select the scoring reads.
+  var rulesPick = document.getElementById('plan-rules');
+  document.querySelectorAll('.plan-rules-seg button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      if (rulesPick.value === b.dataset.rules) return;
+      rulesPick.value = b.dataset.rules;
+      rulesPick.dispatchEvent(new Event('change'));
+    });
+  });
+  var DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  // What is set, in one line under the score, and the rules' buttons to match — after
+  // anything that changes them: a switch, a saved task loaded, an import.
+  function describeOptions() {
+    document.querySelectorAll('.plan-rules-seg button').forEach(function (b) {
+      var on = b.dataset.rules === rulesPick.value;
+      b.classList.toggle('is-on', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    var parts = [document.getElementById('plan-close').checked ? 'Closed' : 'Open'];
+    if (document.getElementById('plan-fai').checked) parts.push('FAI areas');
+    parts.push(rulesPick.value === 'cpp' ? 'ČPP' : 'XContest');
+    var when = takeoffAt();
+    if (when) {
+      parts.push('takeoff ' + DAY_NAMES[when.getDay()] + ' ' + when.getDate() + ' '
+                 + MONTHS[when.getMonth()] + ' ' + clock(Number(time.value)));
+    }
+    summary.textContent = parts.join(' · ');
+  }
+  ['plan-close', 'plan-fai', 'plan-rules'].forEach(function (id) {
+    document.getElementById(id).addEventListener('change', describeOptions);
+  });
+  if (takeoff) {
+    day.addEventListener('input', describeOptions);
+    time.addEventListener('input', describeOptions);
+  }
+  describeOptions();
 
   // The time control belongs to the airspace map, which takes the shut fields off it;
   // here it only re-marks the list, which keeps every crossing either way.

@@ -592,7 +592,7 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
         from planner import render_html as planner_html
 
         plan_bar, plan_results = planner_html.strip(), planner_html.results()
-        map_bar = planner_html.map_bar()
+        map_bar = planner_html.map_bar() + planner_html.task_menu()
         plan_attr = " data-planner"
         plan_lede = (" <strong>Plan a task on the same map:</strong> press <em>Draw</em> "
                      "and click turnpoints, and the route is scored as XContest "

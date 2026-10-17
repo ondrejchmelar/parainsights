@@ -4039,6 +4039,13 @@ function initView3d(root, cursorTrack, preset) {
         bottomExtra.hidden = false;
         view.querySelector('.m3-bottom').appendChild(mid);
       }
+      // And the page's own menu in the top row, after the airspace (`.m3-corner-extra`,
+      // the planner's Task), the same way.
+      var cornerExtra = host.querySelector('.m3-corner-extra');
+      if (cornerExtra) {
+        view.querySelector('.m3-corner-row').appendChild(cornerExtra);
+        cornerExtra.hidden = false;
+      }
 
       // ---- controls --------------------------------------------------------------------
       var GROUNDS = styles.concat(['off']);
@@ -4392,6 +4399,7 @@ function initView3d(root, cursorTrack, preset) {
         });
         if (aspMenu.extra) { aspMenu.extra.hidden = true; host.appendChild(aspMenu.extra); }
         if (bottomExtra) { bottomExtra.hidden = true; host.appendChild(bottomExtra); }
+        if (cornerExtra) { cornerExtra.hidden = true; host.appendChild(cornerExtra); }
         try { map.remove(); } catch (error) { /* a dead context can throw on the way out */ }
         view.remove();
       };
