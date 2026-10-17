@@ -115,8 +115,6 @@ STYLE = """
   margin: 16px 0 0; max-width: 480px; padding: 8px 8px 8px 18px; font-weight: 600;
   background: var(--panel); border: 1px solid var(--rule); border-radius: 14px; }
 .asp-get-label { display: inline-flex; align-items: center; }
-.asp-sources { margin: 24px 0 0; }
-.asp-sources > summary { color: var(--accent); font-weight: 600; cursor: pointer; min-height: 44px; display: flex; align-items: center; }
 /* The flat fallback's download box. */
 .asp-get { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; margin: 0 0 16px; padding: 14px 16px;
   border: 1px solid var(--rule); border-radius: 14px; background: var(--panel); }
@@ -612,7 +610,7 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
     <div class="asp-name" id="asp-name"></div>
   </div>
   {download}
-  <details class="asp-sources"><summary>Sources</summary>{sources_table(overlay, base_version, shift)}</details>
+  {common.fold("Sources", sources_table(overlay, base_version, shift), "asp-sources")}
 </article>"""
 
     about = ("Zones within 5 km of the task: openAIP, plus the traffic circuits at "
@@ -652,7 +650,7 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
   </div>
   {plan_results}
   {get}
-  <details class="asp-sources"><summary>Sources and dates</summary>{sources_table(overlay, base_version, shift)}</details>
+  {common.fold("Sources and dates", sources_table(overlay, base_version, shift), "asp-sources")}
 </article>"""
 
 

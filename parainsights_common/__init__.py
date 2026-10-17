@@ -166,6 +166,13 @@ def text_button() -> str:
             'title="Larger text" aria-label="Larger text">A<b>A</b></button>')
 
 
+def fold(title: str, body: str, cls: str = "") -> str:
+    """A collapsible panel, closed: the title row opens it (`details.fold`). The same
+    markup as `sourcesFold` in `tracklog_viewer/js/report.js`."""
+    return (f'<details class="fold{(" " + cls) if cls else ""}"><summary><span>{title}</span>'
+            f'{icon(ICONS["down"])}</summary><div class="fold-body">{body}</div></details>')
+
+
 def info(text: str, label: str = "More about this") -> str:
     """The ⓘ: a small circled i straight after the label it explains. Hover on a desktop,
     tap on touch, Esc or a tap elsewhere closes it; `prefs.js` keeps the bubble on
@@ -248,6 +255,19 @@ html[data-text="large"] .view3d-panel { zoom: calc(1 / 1.125); }
 .info-wrap.to-right .info-pop { left: -12px; transform: none; }
 @media (hover: hover) { .info-wrap:hover .info-pop { display: block; } }
 .info[aria-expanded="true"] + .info-pop { display: block; }
+/* A collapsible panel (`fold`): a panel whose title row opens it, the chevron turning.
+   Sources and method on every page; closed until asked for. */
+details.fold { margin: 40px 0 0; background: var(--panel); border: 1px solid var(--rule); border-radius: 14px; }
+details.fold > summary { list-style: none; display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; min-height: 52px; padding: 0 14px 0 18px; font-weight: 600; color: var(--ink); cursor: pointer;
+  border-radius: 14px; }
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold > summary:hover { background: var(--panel-2); }
+details.fold[open] > summary { border-radius: 14px 14px 0 0; }
+details.fold > summary svg { flex: none; color: var(--ink-2); transition: transform .15s; }
+details.fold[open] > summary svg { transform: rotate(180deg); }
+details.fold > .fold-body { padding: 0 18px 14px; }
+details.fold tr:last-child, details.fold tr:last-child > * { border-bottom: 0; }
 /* A section's ⓘ: its terms, one line each. */
 .info-pop:has(.gloss) { max-width: min(420px, 90vw); }
 .gloss { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; }

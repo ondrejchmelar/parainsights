@@ -301,10 +301,11 @@
   // The flight's last fold: where this flight's data came from, then how the numbers
   // above are worked out — one line each, the same on every flight (October 2026; these
   // were two dozen ⓘ).
+  var CHEVRON = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 8l4.5 4.5L14.5 8"/></svg>';
   function sourcesFold(rows) {
-    return '\n  <details class="flight-sources">\n    <summary>Sources and method</summary>\n    <table>' +
+    return '\n  <details class="fold flight-sources">\n    <summary><span>Sources and method</span>' + CHEVRON + '</summary>\n    <div class="fold-body"><table>' +
       rows.filter(Boolean).map(function (r) { return '<tr' + (r[2] ? ' class="method"' : '') + '><th scope="row">' + r[0] + '</th><td>' + r[1] + '</td></tr>'; }).join('') +
-      '</table>\n  </details>\n';
+      '</table></div>\n  </details>\n';
   }
 
   function airFetchSection(a) {

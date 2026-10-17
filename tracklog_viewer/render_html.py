@@ -288,10 +288,8 @@ code { font-family: ui-monospace, "DejaVu Sans Mono", monospace; font-size: 0.92
 .context b { font-size: 22px; font-weight: 650; }
 .context span { color: var(--ink-2); font-size: 16px; }
 .context span small { display: block; font-size: 15px; margin-top: 4px; }
-/* The flight's last fold, as the Meteo page's "Sources and dates". */
-.flight-sources { margin: 40px 0 0; }
-.flight-sources > summary { color: var(--accent); font-weight: 600; cursor: pointer; min-height: 44px; display: flex; align-items: center; }
-.flight-sources table { width: 100%; border-collapse: collapse; margin: 8px 0 0; font-size: 15px; }
+/* The flight's last fold (`common.fold`'s style), as on the Meteo page. */
+.flight-sources table { width: 100%; border-collapse: collapse; font-size: 15px; }
 .flight-sources th, .flight-sources td { text-align: left; vertical-align: top; padding: 8px 12px 8px 0; border-bottom: 1px solid var(--rule); }
 .flight-sources th { font-weight: 600; white-space: nowrap; color: var(--ink); }
 .flight-sources td { color: var(--ink); }

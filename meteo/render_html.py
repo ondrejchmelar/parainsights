@@ -236,9 +236,7 @@ STYLE = """
   font-size:15px; color:var(--ink-2); margin:6px 0 0; }
 .met-col-fly figcaption a { color:var(--ink-2); }
 .met-col-fly .lnk { color:var(--accent); }
-.met-sources { margin:30px 0 0; }
-.met-sources > summary { color:var(--accent); font-weight:600; cursor:pointer; min-height:44px; display:flex; align-items:center; }
-.met-src { width:100%; border-collapse:collapse; margin:8px 0 0; font-size:15px; }
+.met-src { width:100%; border-collapse:collapse; font-size:15px; }
 .met-src th { text-align:left; font-weight:600; color:var(--ink-2); border-bottom:1px solid var(--rule); padding:0 12px 6px 0; }
 .met-src td { padding:8px 12px 8px 0; border-bottom:1px solid var(--rule); color:var(--ink-2); vertical-align:top; }
 .met-src td:first-child { color:var(--ink); font-weight:600; white-space:nowrap; }
@@ -350,6 +348,27 @@ def body(uid: str = "meteo") -> str:
         },
     }, separators=(",", ":"))
     info = common.info
+    sources = common.fold("Sources and method", f"""
+    <table class="met-src">
+      <thead><tr><th>What</th><th>Source</th></tr></thead>
+      <tbody>
+        <tr><td>Forecast</td><td><a href="https://open-meteo.com/" rel="noreferrer">Open-Meteo</a>:
+          DWD ICON-D2 (2&nbsp;km) as far as it reaches, ICON-EU (7&nbsp;km) after, and the
+          boundary layer height from ECMWF IFS, which ICON does not publish</td></tr>
+        <tr><td>Takeoffs</td><td>Chosen after <a href="https://gfs.pgweb.cz/" rel="noreferrer">gfs.pgweb.cz</a>'s
+          essentials. {site_data.ATTRIBUTION}</td></tr>
+        <tr><td>Airfield meteograms</td><td>{flymet_data.ATTRIBUTION}, from
+          <a href="{flymet_data.SOURCE}" rel="noreferrer">flymet</a>: {len(flymet_data.STATIONS)}
+          stations, each takeoff shown its nearest</td></tr>
+      </tbody>
+    </table>
+    <!-- What the comparison's columns mean: two ⓘ in the table head until October 2026. -->
+    <dl class="gloss met-terms">
+      <dt>Verdict</dt><dd>Flyable when the wind blows up a slope this takeoff works in. Wind only.</dd>
+      <dt>Lid</dt><dd>A stable layer below 4&nbsp;km: lapse under {CAP_LAPSE:.0f}&nbsp;°C/km; “inv” where it warms with height.</dd>
+      <dt>Thermal top</dt><dd>Two estimates: ECMWF’s mixing height (dashed) and a dry parcel lifted from the 2&nbsp;m air (ring). The parcel is usually lower.</dd>
+    </dl>
+  """, "met-sources")
     return f"""<article class="flight meteo-article" id="{uid}-article">
   <!-- The day and the hour apply to everything below, so they stay in view. -->
   <div class="met-sticky">
@@ -424,27 +443,7 @@ def body(uid: str = "meteo") -> str:
   </dialog>
   <!-- Where everything on the page comes from, folded at the foot as on the Planner
        (October 2026: it was an ⓘ behind "A forecast is not a decision"). -->
-  <details class="met-sources"><summary>Sources and method</summary>
-    <table class="met-src">
-      <thead><tr><th>What</th><th>Source</th></tr></thead>
-      <tbody>
-        <tr><td>Forecast</td><td><a href="https://open-meteo.com/" rel="noreferrer">Open-Meteo</a>:
-          DWD ICON-D2 (2&nbsp;km) as far as it reaches, ICON-EU (7&nbsp;km) after, and the
-          boundary layer height from ECMWF IFS, which ICON does not publish</td></tr>
-        <tr><td>Takeoffs</td><td>Chosen after <a href="https://gfs.pgweb.cz/" rel="noreferrer">gfs.pgweb.cz</a>'s
-          essentials. {site_data.ATTRIBUTION}</td></tr>
-        <tr><td>Airfield meteograms</td><td>{flymet_data.ATTRIBUTION}, from
-          <a href="{flymet_data.SOURCE}" rel="noreferrer">flymet</a>: {len(flymet_data.STATIONS)}
-          stations, each takeoff shown its nearest</td></tr>
-      </tbody>
-    </table>
-    <!-- What the comparison's columns mean: two ⓘ in the table head until October 2026. -->
-    <dl class="gloss met-terms">
-      <dt>Verdict</dt><dd>Flyable when the wind blows up a slope this takeoff works in. Wind only.</dd>
-      <dt>Lid</dt><dd>A stable layer below 4&nbsp;km: lapse under {CAP_LAPSE:.0f}&nbsp;°C/km; “inv” where it warms with height.</dd>
-      <dt>Thermal top</dt><dd>Two estimates: ECMWF’s mixing height (dashed) and a dry parcel lifted from the 2&nbsp;m air (ring). The parcel is usually lower.</dd>
-    </dl>
-  </details>
+  {sources}
   <script type="application/json" class="met-data">{payload}</script>
 </article>"""
 
