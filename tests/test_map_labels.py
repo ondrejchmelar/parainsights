@@ -52,4 +52,9 @@ def test_a_local_name_is_only_replaced_by_one_of_its_own_parts():
     """`name:it` is preferred only where it is *inside* the joined name: an exonym
     ("Monaco di Baviera" for München) never replaces a local name."""
     body = SCRIPT[SCRIPT.index("function labelName"):SCRIPT.index("var LABEL_NAME")]
-    assert "['in', own, ['get', 'name']]" in body
+    assert "['in', own, plain]" in body
+
+
+def test_names_prefer_latin_letters():
+    body = SCRIPT[SCRIPT.index("function labelName"):SCRIPT.index("var LABEL_NAME")]
+    assert "['coalesce', ['get', 'name:latin'], ['get', 'name']]" in body

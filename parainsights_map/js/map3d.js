@@ -122,12 +122,14 @@
   // the language of the country its centre is in (`countryAt`): Italian in South Tyrol,
   // Czech on the Krkonoše ridge. Only where that name is *part of* the joined one, so an
   // exonym ("Monaco di Baviera") never replaces a local name.
+  // In Latin letters where the tiles have them (`name:latin`: the local name when it is
+  // Latin already, a transliteration when not — Hunza's villages were Urdu script), the
+  // original only when there is nothing else.
   function labelName(lang) {
-    var plain = ['coalesce', ['get', 'name'], ['get', 'name:latin']];
+    var plain = ['coalesce', ['get', 'name:latin'], ['get', 'name']];
     if (!lang) return plain;
     var own = ['get', 'name:' + lang];
-    return ['case', ['all', ['has', 'name'], ['has', 'name:' + lang], ['!=', own, ['get', 'name']],
-                     ['in', own, ['get', 'name']]], own, plain];
+    return ['case', ['all', ['has', 'name:' + lang], ['!=', own, plain], ['in', own, plain]], own, plain];
   }
   var LABEL_NAME = labelName(null);
   // A country's main language, as OpenStreetMap tags it (`name:xx`). Where a country has
