@@ -112,14 +112,67 @@
   var PLACES = 'https://tiles.openfreemap.org/planet';
   var GLYPHS = 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf';
   var LABEL_LAYERS = ['place-labels', 'peak-labels', 'water-labels', 'lake-labels', 'river-labels'];
+  // A peak: ▲ name, its height under it.
+  function peakField(name) {
+    return ['format', '\u25B2 ', { 'font-scale': 0.7 }, name, {},
+            ['case', ['has', 'ele'], ['concat', '\n', ['to-string', ['get', 'ele']], ' m'], ''], { 'font-scale': 0.8 }];
+  }
   // A bilingual area's name is all its official names joined ("Brixen - Bressanone",
-  // "Saslonch - Langkofel - Sassolungo"). Where the Italian one is among them, it alone:
-  // that is South Tyrol and the Aosta valley, and nowhere else, since an Italian
-  // exonym ("Monaco di Baviera") is never part of the local name.
-  var LABEL_NAME = ['case',
-    ['all', ['has', 'name'], ['has', 'name:it'], ['!=', ['get', 'name:it'], ['get', 'name']],
-            ['in', ['get', 'name:it'], ['get', 'name']]], ['get', 'name:it'],
-    ['coalesce', ['get', 'name'], ['get', 'name:latin']]];
+  // "Saslonch - Langkofel - Sassolungo", "Śnieżka / Sněžka"). The map shows the one in
+  // the language of the country its centre is in (`countryAt`): Italian in South Tyrol,
+  // Czech on the Krkonoše ridge. Only where that name is *part of* the joined one, so an
+  // exonym ("Monaco di Baviera") never replaces a local name.
+  function labelName(lang) {
+    var plain = ['coalesce', ['get', 'name'], ['get', 'name:latin']];
+    if (!lang) return plain;
+    var own = ['get', 'name:' + lang];
+    return ['case', ['all', ['has', 'name'], ['has', 'name:' + lang], ['!=', own, ['get', 'name']],
+                     ['in', own, ['get', 'name']]], own, plain];
+  }
+  var LABEL_NAME = labelName(null);
+  // A country's main language, as OpenStreetMap tags it (`name:xx`). Where a country has
+  // several, the one most of it speaks. A country missing here keeps the joined name.
+  var COUNTRY_LANG = {
+    AD: 'ca', AL: 'sq', AR: 'es', AT: 'de', AU: 'en', BA: 'bs', BE: 'nl', BG: 'bg', BO: 'es', BR: 'pt',
+    BY: 'be', CA: 'en', CH: 'de', CL: 'es', CO: 'es', CR: 'es', CY: 'el', CZ: 'cs', DE: 'de', DK: 'da',
+    EC: 'es', EE: 'et', ES: 'es', FI: 'fi', FR: 'fr', GB: 'en', GE: 'ka', GR: 'el', HR: 'hr', HU: 'hu',
+    IE: 'en', IN: 'en', IS: 'is', IT: 'it', LI: 'de', LT: 'lt', LU: 'fr', LV: 'lv', MC: 'fr', MD: 'ro',
+    ME: 'sr', MK: 'mk', MT: 'mt', MX: 'es', NL: 'nl', NO: 'no', NP: 'en', NZ: 'en', PE: 'es', PK: 'en',
+    PL: 'pl', PT: 'pt', RO: 'ro', RS: 'sr', RU: 'ru', SE: 'sv', SI: 'sl', SK: 'sk', SM: 'it', TR: 'tr',
+    UA: 'uk', US: 'en', UY: 'es', VE: 'es', XK: 'sq', ZA: 'en'
+  };
+  // Natural Earth's countries, coarse (`parainsights_map/countries.py`): beside the pages,
+  // fetched once for every map on the page. Unavailable (a file opened from disk), the
+  // names stay joined.
+  var countries = null;
+  function loadCountries() {
+    if (!countries) {
+      countries = fetch(new URL('../countries.json', document.baseURI)).then(function (r) {
+        if (!r.ok) throw new Error(r.status);
+        return r.json();
+      }).catch(function () { return {}; });
+    }
+    return countries;
+  }
+  // Which country a point is in: ray casting over each ring (lon/lat × 10).
+  function countryAt(data, lon, lat) {
+    var x = lon * 10, y = lat * 10;
+    for (var iso in data) {
+      var rings = data[iso];
+      for (var r = 0; r < rings.length; r++) {
+        var ring = rings[r], inside = false;
+        for (var i = 0, j = ring.length - 2; i < ring.length; j = i, i += 2) {
+          var xi = ring[i], yi = ring[i + 1], xj = ring[j], yj = ring[j + 1];
+          if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+        }
+        if (inside) return iso;
+      }
+    }
+    return null;
+  }
+  window.__m3CountryAt = function (lon, lat) {
+    return loadCountries().then(function (data) { return countryAt(data, lon, lat); });
+  };
   function registerStitching() {
     if (window.__m3Stitching) return;
     window.__m3Stitching = true;
@@ -562,8 +615,7 @@
                    ['<=', ['coalesce', ['get', 'rank'], 99], ['step', ['zoom'], 1, 10, 3, 12, 6, 13, 99]]],
           layout: {
             visibility: vis,
-            'text-field': ['format', '\u25B2 ', { 'font-scale': 0.7 }, LABEL_NAME, {},
-                           ['case', ['has', 'ele'], ['concat', '\n', ['to-string', ['get', 'ele']], ' m'], ''], { 'font-scale': 0.8 }],
+            'text-field': peakField(LABEL_NAME),
             'text-font': ['literal', ['Noto Sans Italic']],
             'text-size': ['interpolate', ['linear'], ['zoom'], 8, 12.5, 12, 15, 16, 17],
             'text-anchor': 'bottom',
@@ -635,6 +687,23 @@
       // included, which on a slow connection is long after a reader has pressed things.
       map.once('style.load', function () {
         styleReady = true;
+        // The names in the language of the country under the map's centre (`labelName`),
+        // looked again after every move: a flight can cross a border.
+        var nameLang;
+        function speakLocal() {
+          var c = map.getCenter();
+          loadCountries().then(function (data) {
+            var lang = COUNTRY_LANG[countryAt(data, c.lng, c.lat)] || null;
+            if (lang === nameLang || !map.getLayer('place-labels')) return;
+            nameLang = lang;
+            var name = labelName(lang);
+            LABEL_LAYERS.forEach(function (id) {
+              map.setLayoutProperty(id, 'text-field', id === 'peak-labels' ? peakField(name) : name);
+            });
+          });
+        }
+        speakLocal();
+        map.on('moveend', speakLocal);
         if (pendingShapes.length) {
           var shapes = map.getSource('shapes');
           if (shapes) shapes.setData({ type: 'FeatureCollection', features: pendingShapes });
