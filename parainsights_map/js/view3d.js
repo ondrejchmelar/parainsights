@@ -282,7 +282,7 @@ function settleAirspace(root, scene) {
     ? 'Draw the airspace this flight came near' + (scene.airspaceCredit ? ' (' + scene.airspaceCredit + ')' : '')
     : scene.airspaceFailed ? 'The airspace could not be loaded'
     : scene.airspaceLoaded ? 'No binding airspace within 5 km and 200 m of this flight'
-    : 'No airspace data under this flight — the layers cover Europe';
+    : 'No airspace here: only Europe is covered';
 }
 
 // The scene a panel carries, completed: the ground fetched where it was left to the page,
