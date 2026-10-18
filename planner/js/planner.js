@@ -352,9 +352,10 @@
       return !(box.east < bb[0] || box.west > bb[1] || box.north < bb[2] || box.south > bb[3]);
     });
   }
-  // What the map draws: the column's zones while it is open, else the scope's.
+  // What the map draws: the scope's. The column's panel is about its point, and leaves the
+  // map to show what is on it.
   function showNear() {
-    nearNow = column ? column.rings : scope === 'view' ? inView() : nearTask();
+    nearNow = scope === 'view' ? inView() : nearTask();
     var merged = mergedEntry();
     if (merged && merged.setAirspaces) merged.setAirspaces(nearNow);
     if (window.__aspRefilter) window.__aspRefilter();
@@ -372,8 +373,7 @@
       b.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
     if (!scopeNote) return;
-    if (column) scopeNote.textContent = 'Showing the zones above the point you clicked; close it to go back.';
-    else if (scope === 'view') {
+    if (scope === 'view') {
       scopeNote.textContent = nearNow.length + (nearNow.length === 1 ? ' zone' : ' zones')
         + (clipped() ? ' in the ' + VIEW_MAX / 1000 + ' km around the middle of the view.' : ' in view.');
     } else scopeNote.textContent = points.length < 2
@@ -392,7 +392,7 @@
   // For the tests: the import path a file, a code and a QR code all end in.
   window.__plannerImport = function (text) { return readTask(text).then(function (task) { importTask(task, 'a test'); return points.length; }); };
   // Whether the map is drawing a selection yet (the menu's counts mean nothing before).
-  handle.planned = function () { return points.length >= 2 || scope === 'view' || !!column; };
+  handle.planned = function () { return points.length >= 2 || scope === 'view'; };
   var loading = null;
   function refreshAirspace() {
     showNear();
@@ -410,7 +410,7 @@
   //
   // A click on the map while not drawing reads the column over that point: every zone
   // there, whichever country, listed from the top down with its limits and what its name
-  // says of when it is there, and drawn on its own until closed. The first answer is from
+  // says of when it is there, in a panel; the map goes on drawing what is in view. The first answer is from
   // what is loaded; the point's country's layer is fetched if it is not, and the list
   // redone when it lands. A nudge to look, as the rest of the page is: the AIS decides.
   var COLUMN_TOP = 4000;    // the bar's scale, metres above sea level
@@ -869,7 +869,7 @@
     });
     // All in view follows the map; the column's panel goes back into a rebuilt map.
     if (entry.map && entry.map.on) entry.map.on('moveend', function () {
-      if (scope === 'view' && !column) refreshAirspace();
+      if (scope === 'view') refreshAirspace();
     });
     if (column) drawColumn();
     // A turnpoint dragged on the map moves; the task, its distance and the FAI areas follow.

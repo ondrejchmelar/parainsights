@@ -173,7 +173,8 @@ Layers panel under the task), and at its head (`.m3-airspace-lead`) *Near the ta
 *All in view*: every zone in view, any country, its layers fetched as the map moves, up to
 a 300 km square around the view's middle (`scope`, `VIEW_MAX` in `planner.js`). With Draw
 off a click (a tap) reads the **column** over that point: every zone above it, top down,
-with its limits and activation tags, drawn on its own until closed (`openColumn`). The planner's **Takeoff** — a day and a time slider, opening
+with its limits and activation tags, in a panel; the map goes on drawing its own
+selection and following the view (`openColumn`). The planner's **Takeoff** — a day and a time slider, opening
 on tomorrow at 12:00 — lights the ground and turns the rose's sun as a flight's map does
 (`entry.setSun`, a `TV.sun.dayTrack` table over the task), puts Open-Meteo's 850 hPa wind
 (about 1500 m) on the rose (`entry.setWind`), and the hours filter follows it. MapLibre

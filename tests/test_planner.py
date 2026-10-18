@@ -630,14 +630,20 @@ def test_a_click_off_drawing_lists_every_zone_above_the_point_top_down():
     at(14.5, 49.5);
     var column = window.__plannerColumn().rings.map(function (r) { return r.n.split('  ')[0]; });
     var shown = drawn(), points = turnpoints();
+    bounds = [14.82, 15.0, 49.0, 50.0];                    // all in view, moved off the point
+    window.__plannerScope('view');
+    var moved = drawn(), still = window.__plannerColumn().rings.length;
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-    return { column: column, shown: shown, points: points, closed: window.__plannerColumn(),
-             after: drawn() };
+    return { column: column, shown: shown, points: points, moved: moved, still: still,
+             closed: window.__plannerColumn() };
     """, spaces=[low, high, aside])
     assert answer["points"] == 0, "a click with Draw off dropped a turnpoint"
     assert answer["column"] == ["HIGH", "LOW"], "not every zone above, or not top down"
-    assert answer["shown"] == ["HIGH", "LOW"], "the map did not draw the column's zones"
-    assert answer["closed"] is None and answer["after"] == [], "Escape left the column up"
+    # The panel is about its point; the map draws its own selection — none, with no task.
+    assert answer["shown"] == [], "the column took the map over"
+    assert answer["moved"] == ["ASIDE"], "the map stopped following the view under the panel"
+    assert answer["still"] == 2, "moving the map changed the column"
+    assert answer["closed"] is None, "Escape left the column up"
 
 
 # ------------------------------------------- outside the airspace's country
