@@ -2587,16 +2587,17 @@ function initView3d(root, cursorTrack, preset) {
           }
         }
         // The height the camera orbits at, handed back once the drag is over: the centre
-        // moved onto the ground under it and the zoom changed to match, the picture the
-        // same, as MapLibre's own drag ends. But only once that ground stays put. Tilted
+        // moved onto the ground on the line of sight, the zoom changed to keep the camera
+        // where it is, the picture the same. But only once that ground stays put. Tilted
         // far up, the new centre was in a tile not loaded yet, or only in a coarse parent
         // of it hundreds of metres off, whose finer tile the view asks for only once it
         // has moved there — and when that came, MapLibre lowered the camera onto it and
         // the ground jumped from under the pointer. So: recentre, let the tiles that asks
         // for come in, and again, until the height under the middle holds.
-        // Each look is just after a frame: the ground under the middle is read from the
-        // last frame drawn, and read straight after the drag's last turn it was the view
-        // before — recentred on that, the picture shifted 9 px when CI's frames ran late.
+        // Not with MapLibre's `recalculateZoom`, which reads that ground from the last
+        // frame's coordinate buffer: coarse, and a frame behind the camera, it put the
+        // centre off the line of sight, and each recentre shifted the picture a little
+        // more — 14 px on CI.
         var releaseBy = 0, releasePending = false;
         function releaseAfterFrame() {
           if (releasePending) return;
@@ -2604,22 +2605,47 @@ function initView3d(root, cursorTrack, preset) {
           map.once('render', function () { releasePending = false; releaseHeight(); });
           map.triggerRepaint();
         }
+        // Where the line from the camera through the middle of the view first meets the
+        // ground, with MapLibre's own heights at the zoom it reads them at.
+        function groundOnSightLine() {
+          var t = map.transform, cam = t.getCameraPosition(), z = t.tileZoom;
+          var a = maplibregl.MercatorCoordinate.fromLngLat(cam.lngLat, cam.altitude);
+          var b = maplibregl.MercatorCoordinate.fromLngLat(t.center, t.elevation);
+          function at(f) {
+            var ll = new maplibregl.MercatorCoordinate(a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f).toLngLat();
+            var h = map.terrain.getElevationForLngLatZoom(ll, z);
+            return { lngLat: ll, h: h, above: cam.altitude + (t.elevation - cam.altitude) * f - h };
+          }
+          var lo = 0, hi = 0;
+          for (var f = 0.05; f <= 4 && !hi; f += 0.05) {
+            if (at(f).above <= 0) hi = f; else lo = f;
+          }
+          if (!hi) return null;
+          for (var i = 0; i < 30; i++) {
+            var mid = (lo + hi) / 2;
+            if (at(mid).above > 0) lo = mid; else hi = mid;
+          }
+          return at(hi);
+        }
+        function centreOn(hit) {
+          var cam = map.transform.getCameraPosition();
+          var to = map.calculateCameraOptionsFromTo(cam.lngLat, cam.altitude, hit.lngLat, hit.h);
+          map.transform.elevation = hit.h;
+          map.jumpTo({ center: to.center, zoom: to.zoom });
+        }
         function releaseHeight() {
           if (last || !map._elevationFreeze) return;
-          var t = map.transform;
           // Not with the terrain switched off, nor under the follow camera, which sets
           // the view itself every frame.
-          if (map.terrain && !following && Date.now() < releaseBy) {
-            var settled = map.areTilesLoaded() && Math.abs(map.terrain.getElevationForLngLatZoom(
-              t.pointLocation(t.centerPoint, map.terrain), t.tileZoom) - t.elevation) < 1;
-            if (!settled) {
-              if (map.areTilesLoaded()) t.recalculateZoom(map.terrain);
-              releaseAfterFrame();
-              return;
-            }
+          var hit = map.terrain && !following ? groundOnSightLine() : null;
+          if (hit && Date.now() < releaseBy
+              && (!map.areTilesLoaded() || Math.abs(hit.h - map.transform.elevation) >= 1)) {
+            if (map.areTilesLoaded()) centreOn(hit);
+            releaseAfterFrame();
+            return;
           }
+          if (hit) centreOn(hit);
           map._elevationFreeze = false;
-          if (map.terrain) t.recalculateZoom(map.terrain);
           map.triggerRepaint();
         }
         api.pivot = function () { return pivot; };

@@ -835,9 +835,12 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   (`_elevationFreeze`, as MapLibre's own drag does): re-read under each new centre, it
   slid the grabbed ground off the pointer. A pan moves ground above or below the centre's
   height by more or fewer pixels than asked, so `holdPivot` scales its second pass by what
-  the first moved. The height is handed back (`releaseHeight`, `recalculateZoom`) only
-  once the ground under the centre stops changing — tilted far up, the first tile there
-  is a coarse parent hundreds of metres off, and the view jumped when the real one came.
+  the first moved. The height is handed back (`releaseHeight`) only once the ground under
+  the centre stops changing — tilted far up, the first tile there is a coarse parent
+  hundreds of metres off, and the view jumped when the real one came. Each recentre puts
+  the centre where the line of sight meets MapLibre's own heights (`groundOnSightLine`),
+  camera kept: `recalculateZoom` reads that point from the last frame's coarse coordinate
+  buffer, and its recentres shifted the picture 14 px on CI.
   Climbs are dots, not
   numbers, and the track is the canvas's width (2.6 px over the device ratio, capped at
   2). **Ground and exaggeration are one cycling button each**, against the canvas's
