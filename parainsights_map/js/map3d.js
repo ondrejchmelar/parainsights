@@ -878,7 +878,16 @@
         // has moved there — and when that came, MapLibre lowered the camera onto it and
         // the ground jumped from under the pointer. So: recentre, let the tiles that asks
         // for come in, and again, until the height under the middle holds.
-        var releaseBy = 0;
+        // Each look is just after a frame: the ground under the middle is read from the
+        // last frame drawn, and read straight after the drag's last turn it was the view
+        // before — recentred on that, the picture shifted 9 px when CI's frames ran late.
+        var releaseBy = 0, releasePending = false;
+        function releaseAfterFrame() {
+          if (releasePending) return;
+          releasePending = true;
+          map.once('render', function () { releasePending = false; releaseHeight(); });
+          map.triggerRepaint();
+        }
         function releaseHeight() {
           if (last || !map._elevationFreeze) return;
           var t = map.transform;
@@ -889,8 +898,7 @@
               t.pointLocation(t.centerPoint, map.terrain), t.tileZoom) - t.elevation) < 1;
             if (!settled) {
               if (map.areTilesLoaded()) t.recalculateZoom(map.terrain);
-              map.once('render', releaseHeight);
-              map.triggerRepaint();
+              releaseAfterFrame();
               return;
             }
           }
@@ -930,7 +938,7 @@
           last = null;
           pivot = null;
           releaseBy = Date.now() + 10000;
-          releaseHeight();
+          releaseAfterFrame();
           event.stopImmediatePropagation();
         }
         surface.addEventListener('pointerup', end, true);
