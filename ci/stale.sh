@@ -71,6 +71,13 @@ check() {
     fi
 
     page_commit=$(commit_of "$PAGE")
+    # A rebuild that came out byte for byte the same leaves nothing to commit, so no
+    # commit touches the page — a change to `airspaces` that only the layer files see,
+    # say. It is said instead, in a commit trailer the rebuild's commit carries:
+    #     Rebuilt-unchanged: public/planner/index.html
+    # and that commit stands for the page in the ancestry test below, so a source
+    # changed after it is still caught.
+    rebuilt=$(git log -1 --format=%H --grep="^Rebuilt-unchanged: $PAGE\$" 2>/dev/null || true)
     stale=""
     for source in $SOURCES; do
         source_commit=$(commit_of "$source")
@@ -86,7 +93,8 @@ check() {
         # through — which is not a hypothetical, it is what a scripted "change, then
         # rebuild, then commit" does. Asking whether the page's commit *contains* the
         # source's change has no resolution to run out of.
-        if ! git merge-base --is-ancestor "$source_commit" "$page_commit" 2>/dev/null; then
+        if ! git merge-base --is-ancestor "$source_commit" "$page_commit" 2>/dev/null &&
+           ! { [ -n "$rebuilt" ] && git merge-base --is-ancestor "$source_commit" "$rebuilt" 2>/dev/null; }; then
             stale="$stale $source"
         fi
     done
@@ -101,7 +109,8 @@ check() {
         done
         echo
         echo "Rebuild it locally and commit the result — $REBUILD — or this pipeline"
-        echo "publishes a page that does not match the code in the same commit."
+        echo "publishes a page that does not match the code in the same commit. If the"
+        echo "rebuild changes nothing, say so in the commit: Rebuilt-unchanged: $PAGE"
         echo "-------------------------------------------------------------------------"
         failed=1
         return 0
