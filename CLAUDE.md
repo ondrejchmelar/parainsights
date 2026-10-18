@@ -1267,7 +1267,9 @@ Still wanted:
   `.openair`, `.render_html`, `.scene` and `.sources` — never `.cli`. It fired on a flag
   added to that file, which no report could contain. It cannot
   rebuild the page; it can refuse to publish one that does not match the code beside it.
-  Run `sh ci/stale.sh` before committing a renderer change.
+  Run `sh ci/stale.sh` before committing a renderer change. A rebuild that comes out
+  byte for byte the same has nothing to commit; say so with a commit trailer,
+  `Rebuilt-unchanged: public/planner/index.html`, which counts as the page's rebuild.
   **No page is built in CI any more** (October 2026). The meteo and planner pages were,
   every deploy, and the planner's rebuild was 90 s of fetching four sources for data that
   changes once an AIRAC cycle. Now all three are committed artifacts: the meteo page is
