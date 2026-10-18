@@ -9,8 +9,11 @@ translucent boxes wrote depth and hid everything inside them). The canvas view's
 earned their tests the same way.
 
 The libraries come from a local cache (`tests/vendor.py`) served from localhost, so the
-no-network rule holds; imagery and terrain are not fetched, and the map runs flat over a
-plain background, which is all a control test needs. Input goes in through the DevTools
+no-network rule holds; imagery and terrain are not fetched. The map is still in terrain
+mode — the `dem` source is there and drawn — but its tiles (AWS terrarium) never arrive,
+so the ground is flat at 0 m: terrain's drawing cost without its relief. In software
+GL that is about a frame a second (October 2026), and every input event below waits for
+a frame, which is where these tests' minutes go. Input goes in through the DevTools
 protocol — mouse with modifiers, keys, wheel, touch — because a synthetic DOM event is
 not what MapLibre's handlers see from a reader.
 """
@@ -228,7 +231,10 @@ def browser(tmp_path_factory):
     b = Browser(folder)
     try:
         b.wait(f"!!({ENTRY}) && ({MAP}).isStyleLoaded !== undefined")
-        b.wait(f"({MAP}).loaded() || true")
+        # Not `loaded()`: the place names' source is fetched from the network and never
+        # loads, so that never holds. The ground's tiles, every tile asked for, and a still
+        # camera do — and a first test that drove a map still settling read a NaN bearing.
+        b.wait(f"(m => m.isSourceLoaded('dem') && m.areTilesLoaded() && !m.isMoving())({MAP})")
         b.settle(1.5)
         b.js("document.querySelector('.ml-map').scrollIntoView({block: 'center'}); 1")
         b.settle(0.5)
@@ -485,8 +491,9 @@ def test_two_fingers_tilt_and_turn_the_follow_camera(browser):
 
         before = browser.js(f"({ENTRY}).followCamera()")
         touch("touchStart", [(x - 60, y), (x + 60, y)])
-        for k in range(1, 9):                          # both fingers 40 px up
-            touch("touchMove", [(x - 60, y - 5 * k), (x + 60, y - 5 * k)])
+        # Four moves a gesture: each waits for a frame, and a frame is about a second here.
+        for k in range(1, 5):                          # both fingers 40 px up
+            touch("touchMove", [(x - 60, y - 10 * k), (x + 60, y - 10 * k)])
             time.sleep(0.03)
         touch("touchEnd", [])
         after = browser.js(f"({ENTRY}).followCamera()")
@@ -494,8 +501,8 @@ def test_two_fingers_tilt_and_turn_the_follow_camera(browser):
         assert after["zoom"] == pytest.approx(before["zoom"], abs=0.05), "not a pinch"
 
         touch("touchStart", [(x - 60, y), (x + 60, y)])
-        for k in range(1, 9):                          # a twist, 30° clockwise on screen
-            a = math.radians(30 * k / 8)
+        for k in range(1, 5):                          # a twist, 30° clockwise on screen
+            a = math.radians(30 * k / 4)
             touch("touchMove", [(x - 60 * math.cos(a), y - 60 * math.sin(a)),
                                 (x + 60 * math.cos(a), y + 60 * math.sin(a))])
             time.sleep(0.03)
@@ -568,10 +575,10 @@ def test_follow_keeps_every_compared_glider_in_the_picture(browser):
     """Comparing, the follow camera frames the whole group at the shared "now": a glider
     11 km to the side stays on screen, the view pulled back from 12.5 to hold it.
 
-    Both tracks fly at ground level here: this map has no terrain (no network), and
-    without terrain MapLibre keeps its orbit at 0 m, so a glider 1-2 km up would sit
-    nearer the camera than the plane it orbits — which the real map, always over
-    terrain, avoids by orbiting at the gliders' height."""
+    Both tracks fly at ground level here: this map's ground is flat at 0 m (its terrain
+    tiles are not fetched), so MapLibre orbits at 0 m, and a glider 1-2 km up would sit
+    nearer the camera than the plane it orbits — which the real map, over real ground,
+    avoids by orbiting at the gliders' height."""
     _reset(browser)
     browser.js(f"""(() => {{
       var tr = __handle.built.scene.track, start = __handle.built.scene.start || 1700000000;
