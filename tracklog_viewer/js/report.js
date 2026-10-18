@@ -500,6 +500,12 @@
     var result = TV.debrief.build(a, { route: route, weather: weather, clearance: clearance, valley: valley, flightPlan: options.flightPlan || null });
     var sources = TV.insolation.sources(a, terrain);
     var debriefSection = debriefCards(result, uid, sample, contextFacts(a, clearance, terrain), meteo ? '' : NO_WEATHER, moreFigs);
+    // The airspace against the track: filled in the page once the map has loaded the
+    // zones (`airspace-along`, `parainsights_map.view3d`), which is when the flight is first
+    // shown — the zones come from files beside the Planner, not from this document.
+    var airspaceSection = terrain && options.airspaceRemote
+      ? '\n  <section class="airspace-along" data-airspace-along hidden>\n    <h2>Airspace</h2>\n' +
+        '    <div class="asp-body"></div>\n  </section>' : '';
     var use = M.ceilingUse(a, weather);
     var compare = [['scored-km', route ? pyFloat(R(route.distance / 1000.0, 2)) : null],
                    ['mean-climb', th.length ? pyFloat(R(climbRate, 2)) : null],
@@ -527,7 +533,7 @@
       ' data-title="' + esc(pageTitle) + '"' + (options.hidden ? ' hidden' : '') + '>\n' +
       '  <header class="masthead">\n    <h1>' + esc(summary.site || 'Flight') + ' <span>' + esc(summary.date) + '</span></h1>\n' +
       '    <p class="who"><b>' + esc(summary.pilot || '—') + '</b> · ' + esc(summary.glider || '—') + chip + '</p>\n  </header>\n' +
-      '  <div class="figs keys">' + figs.join('') + '</div>\n' + mapSection + '\n' + debriefSection + '\n\n' +
+      '  <div class="figs keys">' + figs.join('') + '</div>\n' + mapSection + '\n' + debriefSection + airspaceSection + '\n\n' +
       '  <section>\n    <h2>Climbs' + info(glossary([
         ['Climb', 'The circling, not the run-in. Click a row to find it on the map.'],
         ['Core', 'Best 20&nbsp;s of the climb against its average.'],

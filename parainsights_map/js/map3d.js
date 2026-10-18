@@ -2959,6 +2959,26 @@
         airspaceShown: function () {
           return airspaceOn ? boxes.filter(boxShown).length : 0;
         },
+        // One zone, seen as well as the menu can show it (the report's Airspace section):
+        // the airspace on, only its kind, and no floor above its own — the zones stacked
+        // over it, which hid it from a tilted camera, filtered out. Set through the menu,
+        // so the menu says so and Reset undoes it. And the view to `at` ([lon, lat]), the
+        // moment the section names, unless the follow camera has the view.
+        focusAirspace: function (ring, at) {
+          var box = boxes.filter(function (d) { return d.space === ring; })[0];
+          if (!box) return false;
+          kindsOff = {};
+          boxes.forEach(function (d) { if (d.space.k !== ring.k) kindsOff[d.space.k] = true; });
+          (scene.airspaceClasses || []).forEach(function (k) { if (k[0] !== ring.k) kindsOff[k[0]] = true; });
+          floorLimit = Math.ceil(box.floor);
+          aspMenu.update();
+          if (!airspaceOn) { var a = view.querySelector('[data-m3="airspace"]'); if (a) a.click(); }
+          else refresh();
+          if (at && !following) {
+            map.easeTo({ center: at, zoom: Math.max(map.getZoom(), 11.5), duration: 800 });
+          }
+          return true;
+        },
         state: function () {
           return { basemap: basemap, vertical: vertical, labels: labels, airspace: airspaceOn,
                    bearing: map.getBearing(), sunMinute: sunMinute };

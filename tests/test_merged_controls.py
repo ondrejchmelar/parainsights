@@ -447,6 +447,27 @@ def test_the_airspace_menu_filters_by_kind_and_floor(browser):
     assert browser.js(shown) == 0
 
 
+def test_showing_one_zone_sets_the_menu_for_it(browser):
+    """The report's Airspace section shows a zone on the map (`focusAirspace`): the
+    airspace on, only that zone's kind, nothing floored above it — through the menu, so
+    the menu says so and Reset undoes it."""
+    _reset(browser)
+    q = "document.querySelector('.merged-view %s')"
+    rows = """[...document.querySelectorAll('.merged-view .m3-asp-kinds label')].map(r =>
+      [r.querySelector('span').textContent, r.querySelector('input').checked])"""
+    zone = "__handle.built.scene.airspaces.find(z => z.k === 'restricted')"
+    assert browser.js(f"({ENTRY}).focusAirspace({zone}, [14.15, 49.1])") is True
+    assert browser.js(f"({ENTRY}).state().airspace") is True
+    assert browser.js(f"({ENTRY}).airspaceShown()") == 1
+    assert dict(browser.js(rows))["Restricted"] is True
+    assert dict(browser.js(rows))["Controlled"] is False
+    assert browser.js((q % ".m3-asp-floor-out") + ".textContent") == "3000 m"
+    browser.js((q % ".m3-asp-reset") + ".click(); 1")
+    assert browser.js(f"({ENTRY}).airspaceShown()") == 2
+    browser.js((q % "[data-m3=airspace]") + ".click(); 1")
+    assert browser.js(f"({ENTRY}).airspaceShown()") == 0
+
+
 def test_the_airspace_split_button_is_one_rounded_group(browser):
     """The switch and its ▾ are one control: square where they meet, rounded at both
     outer ends, and the row keeps the same gap as every other button pair."""

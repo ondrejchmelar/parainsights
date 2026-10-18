@@ -443,12 +443,21 @@ view in the tracklog report (`tracklog_viewer.cli --airspace`). Both are publish
   Dolomites — gets no layer and so no button. It needs `--airspace` *and* `--terrain`:
   the first is what fetches the airspace at all, the second is what gives the flight a
   3D map to put it on.
-- **Airspace against the track**: which zones a flight entered, how close it came, and
-  at what height — the natural bridge to `tracklog_viewer/js/analysis.js`. Half of it is
-  now cheap: the report already knows which zones are over the flight, in the payload the
-  switch draws from. What is missing is the geometry against the track, and the vertical
-  test in particular — a ring the track crosses at 800 m under a floor of FL95 is not an
-  infringement and must not be reported as one.
+- ~~**Airspace against the track**~~ **Done** (October 2026): the report's Airspace
+  section, after the debrief. The map measures it once it has the zones
+  (`airspaceAlong` in `parainsights_map/js/view3d.js`, beside `relevantAirspace`): for
+  each zone it draws, how long the track was inside and how deep, and where never
+  inside, how close — under the floor or over the top while over the zone's ground, or
+  beside it at a height within its limits. Under a floor is not inside, however long.
+  Nearby is inside, within 500 m above or below, or within 2 km beside; with nothing
+  nearby the section is one line, "No airspace in the vicinity". The page draws it
+  (`renderAirspaceAlong`, `tracklog_viewer/page/report.js`): cards, the height over time
+  with each zone's floor and top where the track was over its ground, and a row per zone
+  whose *Show on map* pins the cursor at the moment and sets the map's airspace menu to
+  that zone's kind at or under its floor (`focusAirspace`, `map3d`). Red "Inside" only
+  where a clearance was needed or entry was barred (classes A–D, R, P, TRA, TSA, MTA,
+  ATZ); class E or G, a radio or transponder zone, a circuit, amber — flown legally every
+  day. Not a debrief card: it has no cost in metres or minutes.
 - **Activation state for the *base* airspace.** Dropzones, TSAs and TRAs are only live
   sometimes, and the AUP and NOTAM feeds say when. The aerodrome layers now carry their
   published hours — see *When the field is open* — but everything red and amber here is

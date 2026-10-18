@@ -427,6 +427,37 @@ code { font-family: ui-monospace, "DejaVu Sans Mono", monospace; font-size: 0.92
 .context b { font-size: 22px; font-weight: 650; }
 .context span { color: var(--ink-2); font-size: 16px; }
 .context span small { display: block; font-size: 15px; margin-top: 4px; }
+/* The airspace against the track, filled in the page (`renderAirspaceAlong`). */
+.airspace-along .context { margin-top: 0; }
+.airspace-along .panel { margin-top: 16px; }
+.asp-side { display: block; max-width: 100%; height: auto; }
+.asp-side .asp-axis { font-size: 15px; fill: var(--ink-3); font-variant-numeric: tabular-nums; }
+.asp-side .asp-grid { stroke: var(--rule); stroke-dasharray: 3 4; }
+.asp-side .asp-ground { fill: var(--ink-3); fill-opacity: 0.18; }
+.asp-side .asp-zone { fill-opacity: 0.12; stroke-opacity: 0.6; stroke-width: 1; }
+.asp-side .asp-zone-name { font-size: 15px; font-weight: 600; }
+.asp-side .asp-track { fill: none; stroke: var(--series-1); stroke-width: 2; stroke-linejoin: round; }
+.asp-side .asp-inside { fill: none; stroke: var(--bad); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+.asp-side .asp-mark { fill: var(--panel); stroke: var(--warn); stroke-width: 2; }
+.asp-chip { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 15px; font-weight: 600;
+  white-space: nowrap; }
+.asp-in { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
+.asp-near { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn); }
+.asp-clear { background: var(--panel-2); color: var(--ink-2); }
+.table-asp td, .table-asp th { white-space: nowrap; }
+.table-asp td.zone { white-space: normal; font-weight: 600; }
+.table-asp td.zone i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 8px; }
+.table-asp .asp-more td { color: var(--ink-2); white-space: normal; }
+.table-asp .asp-class { font-weight: 400; color: var(--ink-2); font-size: 15px; white-space: nowrap; }
+.asp-none { margin: 0; }
+@media (max-width: 640px) {
+  .table-asp thead { display: none; }
+  .table-asp, .table-asp tbody, .table-asp tr, .table-asp td { display: block; width: auto; }
+  .table-asp tr { padding: 12px 0; border-bottom: 1px solid var(--rule); }
+  .table-asp td { padding: 2px 0; text-align: left; border: 0; white-space: normal; }
+  .table-asp .asp-limits::before { content: "Limits "; color: var(--ink-2); }
+  .table-asp .asp-at::before { content: "At "; color: var(--ink-2); }
+}
 /* The flight's last fold (`common.fold`'s style), as on the Meteo page. */
 .flight-sources table { width: 100%; border-collapse: collapse; font-size: 15px; }
 .flight-sources th, .flight-sources td { text-align: left; vertical-align: top; padding: 8px 12px 8px 0; border-bottom: 1px solid var(--rule); }
@@ -820,6 +851,10 @@ code { font-family: ui-monospace, "DejaVu Sans Mono", monospace; font-size: 0.92
     <div class="context debrief-context"><div class="card"><b>480&nbsp;m</b><span>Median height over the ground directly beneath you<small>Launch and landing left out.</small></span></div><div class="card"><b>6 of 13</b><span>Climbs began over ground catching more sun than the slopes around it<small>ESE-facing from 12:07 to 15:19.</small></span></div><div class="card"><b>6 of 13</b><span>Climbs faced within 60&#176; of the measured wind — where ridge lift would be</span></div></div>
     
   </section>
+  <section class="airspace-along" data-airspace-along hidden>
+    <h2>Airspace</h2>
+    <div class="asp-body"></div>
+  </section>
 
   <section>
     <h2>Climbs<span class="info-wrap"><button type="button" class="info" aria-expanded="false" aria-label="About the climbs">i</button><span class="info-pop" role="note"><dl class="gloss"><dt>Climb</dt><dd>The circling, not the run-in. Click a row to find it on the map.</dd><dt>Core</dt><dd>Best 20&nbsp;s of the climb against its average.</dd><dt>Lift</dt><dd>Ridge: slope over 12°, facing the wind, within 250&nbsp;m of it, not circling. Thermal otherwise.</dd><dt>Rev</dt><dd>Times the turn changed direction.</dd><dt>Over time</dt><dd>Climb rate from entry (left) to exit.</dd></dl></span></span></h2>
@@ -949,6 +984,10 @@ code { font-family: ui-monospace, "DejaVu Sans Mono", monospace; font-size: 0.92
     <div class="findings"><article class="finding" data-finding="climb-selection"><p class="finding-cost"><span class="badge accent">Costs 161 min</span></p><h3>You spent 161 of your 205 min circling in the day's weaker climbs</h3><p class="finding-body">27 of your climbs averaged under +2.06 m/s, on a day whose best gave +4.11.</p><p class="finding-foot"><span class="finding-when">16:03:16</span><button type="button" class="lnk finding-link" data-finding-cursor="621">Show on the map <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10h12M12 6l4 4-4 4"/></svg></button></p></article><article class="finding" data-finding="low-point"><p class="finding-cost"><span class="badge accent">Costs 982 m</span></p><h3>Your lowest was 280 m above the valley floor</h3><p class="finding-body">That was at 13:21:17, and you climbed out of it. For most of the flight you had about 1 262 m above the valley floor (the lowest ground within 2 km). Launch and the glide out to land are left out of this, or they would win every time.</p><p class="finding-foot"><span class="finding-when">13:21:17</span><button type="button" class="lnk finding-link" data-finding-cursor="360">Show on the map <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10h12M12 6l4 4-4 4"/></svg></button></p></article><article class="finding" data-finding="best-climb-left"><p class="finding-cost"><span class="badge accent">Costs 17 min</span></p><h3>You left the day's best climb 192 m below where you were within the hour</h3><p class="finding-body">Climb 12 averaged +4.11 m/s and was still giving +4.0 m/s in its last minute when you left it at 1 872 m. Within the hour you climbed to 2 064 m. The next climb took 17 min to find and gave +0.81 m/s.</p><p class="finding-foot"><span class="finding-when">12:11:39</span><button type="button" class="lnk finding-link" data-finding-cursor="251">Show on the map <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10h12M12 6l4 4-4 4"/></svg></button></p></article></div>
     <div class="context debrief-context"><div class="card"><b>1135&nbsp;m</b><span>Median height over the ground directly beneath you<small>Lowest 71&nbsp;m. Launch and landing left out.</small></span></div><div class="card"><b>3 of 17</b><span>Climbs began over ground catching more sun than the slopes around it<small>S-facing from 09:41 to 18:36.</small></span></div><div class="card"><b>2 of 17</b><span>Climbs faced within 60&#176; of the measured wind — where ridge lift would be</span></div></div>
     
+  </section>
+  <section class="airspace-along" data-airspace-along hidden>
+    <h2>Airspace</h2>
+    <div class="asp-body"></div>
   </section>
 
   <section>
@@ -1107,6 +1146,10 @@ code { font-family: ui-monospace, "DejaVu Sans Mono", monospace; font-size: 0.92
     <div class="figs debrief-figs"><div class="fig"><span class="v">44 907<small> m</small></span><span class="k">Height gained</span><span class="d">Best climb 3 745 m</span></div><div class="fig" data-key="ceiling_used"><span class="v">107<small>%</small></span><span class="k">Of thermal top</span><span class="d">6 652 m of a modelled 6 241 m top of the thermals</span><span class="verdict-delta" hidden></span></div><div class="fig"><span class="v">8.4&thinsp;:&thinsp;1</span><span class="k">Wing’s glide</span><span class="d">At 56 km/h · 9.2:1 over the ground · best 9.8:1 at 72 km/h</span></div></div>
     <div class="context debrief-context"><div class="card"><b>1135&nbsp;m</b><span>Median height over the ground directly beneath you<small>Launch and landing left out.</small></span></div><div class="card"><b>16 of 52</b><span>Climbs began over ground catching more sun than the slopes around it<small>From S-facing (07:46&ndash;12:11) to NNW-facing (12:20&ndash;18:36).</small></span></div><div class="card"><b>29 of 52</b><span>Climbs faced within 60&#176; of the measured wind — where ridge lift would be</span></div></div>
     
+  </section>
+  <section class="airspace-along" data-airspace-along hidden>
+    <h2>Airspace</h2>
+    <div class="asp-body"></div>
   </section>
 
   <section>
@@ -1491,6 +1534,34 @@ function loadAirspace(root, scene) {
 // terrain is in, because a limit measured from the ground needs the ground.
 var NON_BINDING = /^(D|Sport|Alert|Warning|Gliding)$/;
 var NEAR_SIDEWAYS = 10000, NEAR_VERTICALLY = 200;   // 5 km sideways until October 2026
+// The ground under a point from the scene's grid, nearest cell; the grid's lowest point
+// where there is no grid.
+function sceneGround(dem, lon, lat) {
+  if (!dem.z || !dem.rows) return dem.min || 0;
+  var gx = Math.max(0, Math.min(dem.cols - 1, (lon - dem.west) / (dem.east - dem.west) * (dem.cols - 1)));
+  var gy = Math.max(0, Math.min(dem.rows - 1, (dem.north - lat) / (dem.north - dem.south) * (dem.rows - 1)));
+  return dem.z[Math.round(gy) * dem.cols + Math.round(gx)];
+}
+// Metres from a point to a zone's ring: 0 inside, else to the nearest edge.
+function ringDistance(ring, p) {
+  var kx = 111320 * Math.cos(p[1] * Math.PI / 180), ky = 111320, inside = false, best = Infinity;
+  var n = ring.lon.length;
+  for (var a = 0, b = n - 1; a < n; b = a++) {
+    var ax = (ring.lon[a] - p[0]) * kx, ay = (ring.lat[a] - p[1]) * ky;
+    var bx = (ring.lon[b] - p[0]) * kx, by = (ring.lat[b] - p[1]) * ky;
+    if ((ay > 0) !== (by > 0) && 0 < (bx - ax) * (0 - ay) / (by - ay) + ax) inside = !inside;
+    var dx = bx - ax, dy = by - ay, len = dx * dx + dy * dy;
+    var t = len ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len)) : 0;
+    best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
+  }
+  return inside ? 0 : best;
+}
+// A zone's floor and top over a point, in metres: limits measured from the ground are
+// measured from the ground there; a top the file caps (`t`) is unbounded.
+function zoneLimits(ring, g) {
+  return [ring.g ? g : (ring.fu !== undefined ? g + ring.fu : ring.f),
+          ring.t ? Infinity : (ring.cu !== undefined ? g + ring.cu : ring.c)];
+}
 function relevantAirspace(scene) {
   var tr = scene.track, dem = scene.terrain || {};
   var all = scene.airspaces || [];
@@ -1498,26 +1569,6 @@ function relevantAirspace(scene) {
   if (!tr || !tr.lon || tr.lon.length < 2 || !all.length) return;
   var step = Math.max(1, Math.floor(tr.lon.length / 2000)), fixes = [];
   for (var i = 0; i < tr.lon.length; i += step) fixes.push([tr.lon[i], tr.lat[i], tr.alt[i]]);
-  function ground(lon, lat) {
-    if (!dem.z || !dem.rows) return dem.min || 0;
-    var gx = Math.max(0, Math.min(dem.cols - 1, (lon - dem.west) / (dem.east - dem.west) * (dem.cols - 1)));
-    var gy = Math.max(0, Math.min(dem.rows - 1, (dem.north - lat) / (dem.north - dem.south) * (dem.rows - 1)));
-    return dem.z[Math.round(gy) * dem.cols + Math.round(gx)];
-  }
-  function sideways(ring, p) {
-    // Metres from the fix to the ring: 0 inside, else to the nearest edge.
-    var kx = 111320 * Math.cos(p[1] * Math.PI / 180), ky = 111320, inside = false, best = Infinity;
-    var n = ring.lon.length;
-    for (var a = 0, b = n - 1; a < n; b = a++) {
-      var ax = (ring.lon[a] - p[0]) * kx, ay = (ring.lat[a] - p[1]) * ky;
-      var bx = (ring.lon[b] - p[0]) * kx, by = (ring.lat[b] - p[1]) * ky;
-      if ((ay > 0) !== (by > 0) && 0 < (bx - ax) * (0 - ay) / (by - ay) + ax) inside = !inside;
-      var dx = bx - ax, dy = by - ay, len = dx * dx + dy * dy;
-      var t = len ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len)) : 0;
-      best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
-    }
-    return inside ? 0 : best;
-  }
   scene.airspaces = all.filter(function (ring) {
     if (ring.ac && NON_BINDING.test(ring.ac)) return false;
     if (ring.nt) return false;     // active only by NOTAM: the file cannot know if it is
@@ -1527,14 +1578,91 @@ function relevantAirspace(scene) {
     for (var k = 0; k < fixes.length; k++) {
       var p = fixes[k];
       if (p[0] < w || p[0] > e || p[1] < s || p[1] > n) continue;
-      if (sideways(ring, p) > NEAR_SIDEWAYS) continue;
-      var g = ground(p[0], p[1]);
-      var floor = ring.g ? g : (ring.fu !== undefined ? g + ring.fu : ring.f);
-      var top = ring.t ? Infinity : (ring.cu !== undefined ? g + ring.cu : ring.c);
-      if (p[2] >= floor - NEAR_VERTICALLY && p[2] <= top + NEAR_VERTICALLY) return true;
+      if (ringDistance(ring, p) > NEAR_SIDEWAYS) continue;
+      var lim = zoneLimits(ring, sceneGround(dem, p[0], p[1]));
+      if (p[2] >= lim[0] - NEAR_VERTICALLY && p[2] <= lim[1] + NEAR_VERTICALLY) return true;
     }
     return false;
   });
+}
+
+// The flight against each zone the map draws (`scene.airspaceAlong`, for the report's
+// Airspace section): how long it was inside and how deep; and where it never was, how
+// close it came — under the floor or over the top while over the zone's ground, or
+// beside it at a height within its limits. Under a floor is *not* inside: a ring the
+// track crosses at 800 m under a floor of FL 95 is no infringement and is not called one.
+// Nearby is inside, within 500 m under or over, or within 2 km beside; the rest of what
+// the map draws is only counted.
+var ALONG_SIDEWAYS = 2000, ALONG_VERTICALLY = 500;
+function airspaceAlong(scene) {
+  var tr = scene.track, dem = scene.terrain || {}, zones = scene.airspaces || [];
+  if (!tr || !tr.lon || tr.lon.length < 2) return null;
+  var step = Math.max(1, Math.floor(tr.lon.length / 3000)), fixes = [];
+  for (var i = 0; i < tr.lon.length; i += step) {
+    fixes.push({ lon: tr.lon[i], lat: tr.lat[i], alt: tr.alt[i], t: tr.t ? tr.t[i] : i,
+                 g: sceneGround(dem, tr.lon[i], tr.lat[i]) });
+  }
+  var inAny = {};
+  var found = zones.map(function (ring, index) {
+    var mx = (ALONG_SIDEWAYS + 1) / (111320 * Math.cos(ring.lat[0] * Math.PI / 180)), my = (ALONG_SIDEWAYS + 1) / 111320;
+    var w = Math.min.apply(null, ring.lon) - mx, e = Math.max.apply(null, ring.lon) + mx;
+    var s = Math.min.apply(null, ring.lat) - my, n = Math.max.apply(null, ring.lat) + my;
+    var inside = null, under = null, over = null, beside = null, spans = [], span = null;
+    fixes.forEach(function (p, k) {
+      var near = !(p.lon < w || p.lon > e || p.lat < s || p.lat > n);
+      var d = near ? ringDistance(ring, [p.lon, p.lat]) : Infinity;
+      var lim = zoneLimits(ring, p.g), dt = k ? p.t - fixes[k - 1].t : 0;
+      // Where the track was over the zone's ground: the stretches its box is drawn over
+      // in the section's height chart.
+      if (d === 0) {
+        if (span && span.k === k - 1) { span.t1 = p.t; span.k = k; span.floor = Math.min(span.floor, lim[0]); span.top = Math.max(span.top, lim[1]); }
+        else spans.push(span = { t0: p.t, t1: p.t, k: k, floor: lim[0], top: lim[1] });
+      }
+      if (d === 0 && p.alt >= lim[0] && p.alt <= lim[1]) {
+        var depth = Math.min(p.alt - lim[0], lim[1] - p.alt);
+        inAny[k] = true;
+        if (!inside) inside = { seconds: 0, from: p.t, to: p.t, depth: depth, low: p.alt, high: p.alt, at: p };
+        if (inside.last === k - 1) inside.seconds += dt;
+        inside.last = k; inside.to = p.t;
+        inside.low = Math.min(inside.low, p.alt); inside.high = Math.max(inside.high, p.alt);
+        if (depth > inside.depth) { inside.depth = depth; inside.at = p; }
+      } else if (d === 0 && p.alt < lim[0]) {
+        if (!under || lim[0] - p.alt < under.m) under = { m: lim[0] - p.alt, at: p };
+      } else if (d === 0) {
+        if (!over || p.alt - lim[1] < over.m) over = { m: p.alt - lim[1], at: p };
+      } else if (d <= ALONG_SIDEWAYS && p.alt >= lim[0] && p.alt <= lim[1]) {
+        if (!beside || d < beside.m) beside = { m: d, at: p };
+      }
+    });
+    // The nearest of the near misses, each against its own threshold.
+    var closest = inside ? 'inside' : null, score = inside ? -1 : Infinity;
+    [['under', under, ALONG_VERTICALLY], ['over', over, ALONG_VERTICALLY], ['beside', beside, ALONG_SIDEWAYS]]
+      .forEach(function (c) {
+        if (c[1] && c[1].m / c[2] < score) { score = c[1].m / c[2]; closest = c[0]; }
+      });
+    var at = closest === 'inside' ? inside.at : closest ? { under: under, over: over, beside: beside }[closest].at : null;
+    return { index: index, ring: ring, name: ring.nm || ring.n, kind: ring.k, cls: ring.ac || null,
+             limits: ring.lo && ring.hi ? ring.lo + ' – ' + ring.hi : null,
+             inside: inside, under: under, over: over, beside: beside,
+             closest: closest, nearby: score <= 1, at: at, spans: spans };
+  });
+  var nearby = found.filter(function (z) { return z.nearby; }).sort(function (a, b) {
+    if (a.inside || b.inside) return (b.inside ? b.inside.seconds + 1 : 0) - (a.inside ? a.inside.seconds + 1 : 0);
+    var ka = { under: ALONG_VERTICALLY, over: ALONG_VERTICALLY, beside: ALONG_SIDEWAYS };
+    return a[a.closest].m / ka[a.closest] - b[b.closest].m / ka[b.closest];
+  });
+  // The height chart's line: the track and the ground under it, at most 600 points.
+  // Inside any zone at a point if any fix it stands for was.
+  var every = Math.max(1, Math.floor(fixes.length / 600)), profile = { t: [], alt: [], ground: [], inside: [] };
+  for (var j = 0; j < fixes.length; j += every) {
+    var any = false;
+    for (var q = j; q < Math.min(j + every, fixes.length); q++) any = any || !!inAny[q];
+    profile.t.push(fixes[j].t); profile.alt.push(fixes[j].alt); profile.ground.push(fixes[j].g);
+    profile.inside.push(any);
+  }
+  return { zones: nearby, others: found.length - nearby.length, profile: profile,
+           start: scene.start || null, offset: scene.utcOffset || 0,
+           colours: scene.airspaceColours || {} };
 }
 
 // What the map's airspace switch says once the airspace is settled (`scene.airspaceWhy`):
@@ -1542,6 +1670,14 @@ function relevantAirspace(scene) {
 function settleAirspace(root, scene) {
   if (!scene.airspaceRemote) return;
   relevantAirspace(scene);
+  // And the flight against them, for whatever on the page reports it (the report's
+  // Airspace section), with why there is nothing when there is nothing.
+  var along = airspaceAlong(scene) || { zones: [], others: 0 };
+  along.status = scene.airspaceFailed ? 'failed' : scene.airspaceLoaded ? 'ok' : 'uncovered';
+  root.__airspaceAlong = along;
+  if (typeof CustomEvent === 'function' && root.dispatchEvent) {
+    root.dispatchEvent(new CustomEvent('airspace-along', { detail: along }));
+  }
   scene.airspaceWhy = scene.airspaces.length
     ? 'Draw the airspace this flight came near' + (scene.airspaceCredit ? ' (' + scene.airspaceCredit + ')' : '')
     : scene.airspaceFailed ? 'The airspace could not be loaded'
@@ -4675,6 +4811,26 @@ function initView3d(root, cursorTrack, preset) {
         airspaceShown: function () {
           return airspaceOn ? boxes.filter(boxShown).length : 0;
         },
+        // One zone, seen as well as the menu can show it (the report's Airspace section):
+        // the airspace on, only its kind, and no floor above its own — the zones stacked
+        // over it, which hid it from a tilted camera, filtered out. Set through the menu,
+        // so the menu says so and Reset undoes it. And the view to `at` ([lon, lat]), the
+        // moment the section names, unless the follow camera has the view.
+        focusAirspace: function (ring, at) {
+          var box = boxes.filter(function (d) { return d.space === ring; })[0];
+          if (!box) return false;
+          kindsOff = {};
+          boxes.forEach(function (d) { if (d.space.k !== ring.k) kindsOff[d.space.k] = true; });
+          (scene.airspaceClasses || []).forEach(function (k) { if (k[0] !== ring.k) kindsOff[k[0]] = true; });
+          floorLimit = Math.ceil(box.floor);
+          aspMenu.update();
+          if (!airspaceOn) { var a = view.querySelector('[data-m3="airspace"]'); if (a) a.click(); }
+          else refresh();
+          if (at && !following) {
+            map.easeTo({ center: at, zoom: Math.max(map.getZoom(), 11.5), duration: 800 });
+          }
+          return true;
+        },
         state: function () {
           return { basemap: basemap, vertical: vertical, labels: labels, airspace: airspaceOn,
                    bearing: map.getBearing(), sunMinute: sunMinute };
@@ -5433,6 +5589,200 @@ function whenShown(element) {
   });
 }
 
+// ---- the airspace against the track ------------------------------------------------
+// The report's Airspace section, from what the map measured once it had the zones
+// (`airspaceAlong`, `parainsights_map.view3d`): cards for what was entered and what came
+// closest, the height over time with each zone's floor and top drawn where the track was
+// over its ground, and a row per nearby zone with a way to it on the map. Nothing
+// nearby, a note that says so. Measurements, not verdicts: no zone is called an
+// infringement here that its limits do not make one, and a pass under a floor is not.
+function aspEsc(text) {
+  return String(text).replace(/[&<>"]/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+  });
+}
+function aspMetres(m) { return String(Math.round(m)).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
+function aspClock(along, t) {
+  if (!along.start) {
+    var e = Math.floor(t / 60);
+    return '+' + Math.floor(e / 60) + ':' + ('0' + e % 60).slice(-2);
+  }
+  var d = new Date((along.start + along.offset + t) * 1000);
+  return ('0' + d.getUTCHours()).slice(-2) + ':' + ('0' + d.getUTCMinutes()).slice(-2);
+}
+// How long, in the unit that says it: a ten-second clip of a zone's corner is not "1 min".
+function aspDuration(seconds, short) {
+  if (seconds < 60) {
+    var s = Math.max(1, Math.round(seconds));
+    return s + (short ? ' s' : s === 1 ? ' second' : ' seconds');
+  }
+  var m = Math.round(seconds / 60);
+  return m + (short ? ' min' : m === 1 ? ' minute' : ' minutes');
+}
+// What came closest, in a few words: the table's chip and the second card.
+function aspClosest(zone) {
+  if (zone.closest === 'inside') {
+    return 'Inside ' + aspDuration(zone.inside.seconds, true) + ' · ' + aspMetres(zone.inside.depth) + ' m in';
+  }
+  if (zone.closest === 'under') return aspMetres(zone.under.m) + ' m under the floor';
+  if (zone.closest === 'over') return aspMetres(zone.over.m) + ' m over the top';
+  return (zone.beside.m / 1000).toFixed(1) + ' km to the side';
+}
+// The zone's class as openAIP gives it (`ac`), in words a pilot reads: "TMA D", "class E",
+// "restricted". And whether being inside needs a clearance or is barred: classes A-D,
+// restricted, prohibited and reserved areas, aerodrome zones. Inside class E or G, a
+// radio or transponder zone or a circuit is flown legally every day, and is not marked
+// as if it were not.
+var ASP_LETTERS = { R: 'restricted', P: 'prohibited', D: 'danger area' };
+function aspClass(zone) {
+  var c = zone.cls;
+  if (!c) return '';
+  return ASP_LETTERS[c] || c.replace(/^Other /, 'class ');
+}
+function aspBarred(zone) {
+  var c = zone.cls || '';
+  if (zone.kind === 'restricted') return /^(R|P|TRA|TSA|MTA|Overflight restriction)$/.test(c);
+  if (zone.kind === 'atz') return true;
+  if (/^(RMZ|TMZ|TIZ|TIA)\b/.test(c)) return false;
+  return /(^| )[A-D]$/.test(c) || /^(CTR|TMA|CTA|MCTR)$/.test(c);
+}
+function aspLimits(zone) {
+  if (zone.limits) return zone.limits;
+  var r = zone.ring;
+  return (r.g ? 'GND' : aspMetres(r.f) + ' m') + ' – ' + (r.t ? 'unlimited' : aspMetres(r.c) + ' m');
+}
+function aspChart(along, width) {
+  var pr = along.profile, n = pr.t.length;
+  if (n < 2) return '';
+  var h = width < 560 ? 210 : 250, left = 54, right = 8, top = 10, bottom = 26;
+  var t0 = pr.t[0], t1 = pr.t[n - 1], high = 0;
+  pr.alt.forEach(function (a) { high = Math.max(high, a); });
+  along.zones.forEach(function (z) {
+    z.spans.forEach(function (sp) { if (isFinite(sp.floor)) high = Math.max(high, sp.floor + 150); });
+  });
+  var stepY = high > 3000 ? 1000 : 500;
+  high = Math.ceil(high * 1.08 / stepY) * stepY;
+  function x(t) { return left + (t - t0) / Math.max(1, t1 - t0) * (width - left - right); }
+  function y(a) { return top + (1 - Math.max(0, Math.min(a, high)) / high) * (h - top - bottom); }
+  var out = [];
+  for (var a = 0; a <= high; a += stepY) {
+    out.push('<line class="asp-grid" x1="' + left + '" x2="' + (width - right) + '" y1="' + y(a) + '" y2="' + y(a) + '"/>' +
+             '<text class="asp-axis" x="' + (left - 6) + '" y="' + (y(a) + 4) + '" text-anchor="end">' + aspMetres(a) + '</text>');
+  }
+  var ticks = Math.max(2, Math.floor((width - left - right) / 110));
+  for (var i = 0; i <= ticks; i++) {
+    var tt = t0 + (t1 - t0) * i / ticks;
+    out.push('<text class="asp-axis" x="' + x(tt) + '" y="' + (h - 6) + '" text-anchor="' +
+             (i === 0 ? 'start' : i === ticks ? 'end' : 'middle') + '">' + aspClock(along, tt) + '</text>');
+  }
+  var ground = 'M' + x(t0) + ' ' + y(0);
+  pr.t.forEach(function (t, k) { ground += 'L' + x(t).toFixed(1) + ' ' + y(pr.ground[k]).toFixed(1); });
+  out.push('<path class="asp-ground" d="' + ground + 'L' + x(t1) + ' ' + y(0) + 'Z"/>');
+  // Each zone's box where the track was over its ground, labelled once, over its widest.
+  along.zones.forEach(function (z) {
+    var colour = along.colours[z.kind] || '#888888', widest = null;
+    z.spans.forEach(function (sp) {
+      var x0 = x(sp.t0), x1 = Math.max(x(sp.t1), x0 + 2);
+      var yTop = isFinite(sp.top) ? y(sp.top) : top, yFloor = y(sp.floor);
+      out.push('<rect class="asp-zone" x="' + x0.toFixed(1) + '" y="' + yTop.toFixed(1) + '" width="' + (x1 - x0).toFixed(1) +
+               '" height="' + Math.max(1, yFloor - yTop).toFixed(1) + '" style="fill:' + colour + ';stroke:' + colour + '"/>');
+      if (!widest || sp.t1 - sp.t0 > widest.t1 - widest.t0) widest = sp;
+    });
+    if (widest) {
+      out.push('<text class="asp-zone-name" x="' + (x(widest.t0) + 4) + '" y="' + ((isFinite(widest.top) ? y(widest.top) : top) + 16) +
+               '" style="fill:' + colour + '">' + aspEsc(z.name) + '</text>');
+    }
+  });
+  var line = '', red = '', was = false;
+  pr.t.forEach(function (t, k) {
+    var pt = x(t).toFixed(1) + ' ' + y(pr.alt[k]).toFixed(1);
+    line += (k ? 'L' : 'M') + pt;
+    if (pr.inside[k]) { red += (was ? 'L' : 'M') + pt; }
+    was = pr.inside[k];
+  });
+  out.push('<path class="asp-track" d="' + line + '"/>');
+  if (red) out.push('<path class="asp-inside" d="' + red + '"/>');
+  // The closest misses, marked where they were.
+  along.zones.forEach(function (z) {
+    if (z.closest === 'inside' || !z.at) return;
+    var cx = x(z.at.t), cy = y(z.at.alt);
+    out.push('<circle class="asp-mark" cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="4"/>');
+  });
+  return '<svg class="asp-side" viewBox="0 0 ' + width + ' ' + h + '" width="' + width + '" height="' + h +
+         '" role="img" aria-label="Height over time against the zones over the track">' + out.join('') + '</svg>';
+}
+function renderAirspaceAlong(section, along, show) {
+  var body = section.querySelector('.asp-body');
+  if (!body) return;
+  section.hidden = false;
+  if (along.status !== 'ok' || !along.zones.length) {
+    body.innerHTML = '<p class="note asp-none">' + (along.status === 'failed' ? 'The airspace could not be loaded.'
+      : along.status === 'uncovered' ? 'No airspace data here: only Europe is covered.'
+      : 'No airspace in the vicinity.') + '</p>';
+    return;
+  }
+  // Zones that needed a clearance first, then the others entered, then the near misses —
+  // each group in the map's order (longest inside, then closest).
+  var zones = along.zones.map(function (z, i) { return [z, i]; }).sort(function (a, b) {
+    function rank(z) { return z.inside ? (aspBarred(z) ? 0 : 1) : 2; }
+    return rank(a[0]) - rank(b[0]) || a[1] - b[1];
+  }).map(function (pair) { return pair[0]; });
+  var entered = zones.filter(function (z) { return z.inside; });
+  var misses = zones.filter(function (z) { return !z.inside; });
+  var cards = [];
+  if (entered.length) {
+    var e = entered[0];
+    cards.push('<div class="card"><b>' + entered.length + (entered.length === 1 ? ' zone' : ' zones') + '</b><span>Entered: ' +
+      aspEsc(e.name) + ', for ' + aspDuration(e.inside.seconds) + ', up to ' + aspMetres(e.inside.depth) + '&nbsp;m inside' +
+      (entered.length > 1 ? ', and ' + (entered.length - 1) + ' more' : '') + '<small>' + aspClock(along, e.inside.from) +
+      ' – ' + aspClock(along, e.inside.to) + ', between ' + aspMetres(e.inside.low) + ' and ' + aspMetres(e.inside.high) + ' m.</small></span></div>');
+  } else {
+    cards.push('<div class="card"><b>None</b><span>No zone entered<small>Passing under a zone’s floor is not entering it.</small></span></div>');
+  }
+  if (misses.length) {
+    var m = misses[0], what = m.closest === 'under' ? 'Closest under a floor' : m.closest === 'over' ? 'Closest over a top' : 'Closest beside';
+    var value = m.closest === 'beside' ? (m.beside.m / 1000).toFixed(1) + '&nbsp;km' : aspMetres(m[m.closest].m) + '&nbsp;m';
+    cards.push('<div class="card"><b>' + value + '</b><span>' + what + ': ' + aspEsc(m.name) + ' (' + aspEsc(aspLimits(m)) + ')<small>At ' +
+      aspClock(along, m.at.t) + ', ' + aspMetres(m.at.alt) + ' m.</small></span></div>');
+  }
+  var notIn = misses.length + along.others;
+  if (notIn) {
+    cards.push('<div class="card"><b>' + notIn + (notIn === 1 ? ' zone' : ' zones') + '</b><span>Over or beside the flight, not entered' +
+      (entered.length ? '<small>Passing under a zone’s floor is not entering it.</small>' : '') + '</span></div>');
+  }
+  var rows = zones.map(function (z, i) {
+    var chip = z.closest === 'inside' ? (aspBarred(z) ? 'asp-in' : 'asp-near')
+      : (z.closest === 'beside' ? z.beside.m > 1000 : z[z.closest].m > 250) ? 'asp-clear' : 'asp-near';
+    var cls = aspClass(z);
+    var when = z.inside ? aspClock(along, z.inside.from) + '–' + aspClock(along, z.inside.to) : aspClock(along, z.at.t);
+    var at = z.inside ? aspMetres(z.inside.low) + '–' + aspMetres(z.inside.high) + ' m' : aspMetres(z.at.alt) + ' m';
+    return '<tr><td class="zone"><i style="background:' + (along.colours[z.kind] || '#888888') + '"></i>' + aspEsc(z.name) +
+      (cls ? ' <small class="asp-class">' + aspEsc(cls) + '</small>' : '') + '</td>' +
+      '<td class="asp-limits">' + aspEsc(aspLimits(z)) + '</td><td><span class="asp-chip ' + chip + '">' + aspClosest(z) + '</span></td>' +
+      '<td class="asp-when">' + when + '</td><td class="asp-at">' + at + '</td>' +
+      '<td><button type="button" class="lnk asp-show" data-asp-zone="' + i + '">Show on map</button></td></tr>';
+  });
+  if (along.others) {
+    rows.push('<tr class="asp-more"><td colspan="6">+ ' + along.others + ' more on the map, none within 500 m above or below or 2 km beside</td></tr>');
+  }
+  body.innerHTML = '<div class="context">' + cards.join('') + '</div>' +
+    '<div class="panel asp-chart"></div>' +
+    '<div class="panel"><div class="table-scroll"><table class="table-asp"><thead><tr><th>Zone</th><th>Limits</th>' +
+    '<th>Closest</th><th>When</th><th>At</th><th></th></tr></thead><tbody>' + rows.join('') + '</tbody></table></div></div>';
+  var chart = body.querySelector('.asp-chart'), drawnAt = 0;
+  function draw() {
+    var width = Math.round(chart.clientWidth - 2 * parseFloat(getComputedStyle(chart).paddingLeft || 0));
+    if (width < 50 || width === drawnAt) return;
+    drawnAt = width;
+    chart.innerHTML = aspChart(along, width);
+  }
+  draw();
+  if (typeof ResizeObserver === 'function') new ResizeObserver(draw).observe(chart);
+  body.querySelectorAll('[data-asp-zone]').forEach(function (button) {
+    button.addEventListener('click', function () { show(zones[Number(button.dataset.aspZone)]); });
+  });
+}
+
 function initFlight(root) {
   var payload = root.querySelector('.cursor-data');
   var tip = document.getElementById('tip');
@@ -5455,6 +5805,30 @@ function initFlight(root) {
         var route = JSON.parse(charts.textContent).route || [];
         entry.setScored(route.map(function (i) { return [data.cursor3d.lon[i], data.cursor3d.lat[i]]; }));
       } catch (error) { /* no route, nothing to draw */ }
+    });
+  }
+  // The map's own controls (`map3d`'s entry), for the Airspace section's way to a zone.
+  var mapEntry = null;
+  if (mapPanel) mapPanel.addEventListener('merged-ready', function (event) { mapEntry = event.detail || null; });
+  var aspSection = root.querySelector('[data-airspace-along]');
+  if (aspSection) {
+    root.addEventListener('airspace-along', function (event) {
+      renderAirspaceAlong(aspSection, event.detail, function (zone) {
+        // The moment on every chart and the map, pinned as a debrief card's is, and the
+        // zone shown as well as the map's airspace menu can show it.
+        if (zone.at && data.t && data.t.length) {
+          var lo = 0, hi = data.t.length - 1;
+          while (lo < hi) { var mid = (lo + hi) >> 1; if (data.t[mid] < zone.at.t) lo = mid + 1; else hi = mid; }
+          var view = visibleView();
+          if (view) pinAt(lo, view);
+          if (terrainView && terrainView.revealTime) terrainView.revealTime(data.t[lo]);
+        }
+        if (mapEntry && mapEntry.focusAirspace) {
+          mapEntry.focusAirspace(zone.ring, zone.at ? [zone.at.lon, zone.at.lat] : null);
+        }
+        var map = root.querySelector('.view3d');
+        if (map) map.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      });
     });
   }
   if (typeof initView3dWhenReady === 'function') {
@@ -10170,6 +10544,12 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
     var result = TV.debrief.build(a, { route: route, weather: weather, clearance: clearance, valley: valley, flightPlan: options.flightPlan || null });
     var sources = TV.insolation.sources(a, terrain);
     var debriefSection = debriefCards(result, uid, sample, contextFacts(a, clearance, terrain), meteo ? '' : NO_WEATHER, moreFigs);
+    // The airspace against the track: filled in the page once the map has loaded the
+    // zones (`airspace-along`, `parainsights_map.view3d`), which is when the flight is first
+    // shown — the zones come from files beside the Planner, not from this document.
+    var airspaceSection = terrain && options.airspaceRemote
+      ? '\n  <section class="airspace-along" data-airspace-along hidden>\n    <h2>Airspace</h2>\n' +
+        '    <div class="asp-body"></div>\n  </section>' : '';
     var use = M.ceilingUse(a, weather);
     var compare = [['scored-km', route ? pyFloat(R(route.distance / 1000.0, 2)) : null],
                    ['mean-climb', th.length ? pyFloat(R(climbRate, 2)) : null],
@@ -10197,7 +10577,7 @@ function tzlookup(Y,W){"use strict";var U="XIXHXHXGXGXQXQXPXPXOXOXN##U6U6UW#$U%U
       ' data-title="' + esc(pageTitle) + '"' + (options.hidden ? ' hidden' : '') + '>\n' +
       '  <header class="masthead">\n    <h1>' + esc(summary.site || 'Flight') + ' <span>' + esc(summary.date) + '</span></h1>\n' +
       '    <p class="who"><b>' + esc(summary.pilot || '—') + '</b> · ' + esc(summary.glider || '—') + chip + '</p>\n  </header>\n' +
-      '  <div class="figs keys">' + figs.join('') + '</div>\n' + mapSection + '\n' + debriefSection + '\n\n' +
+      '  <div class="figs keys">' + figs.join('') + '</div>\n' + mapSection + '\n' + debriefSection + airspaceSection + '\n\n' +
       '  <section>\n    <h2>Climbs' + info(glossary([
         ['Climb', 'The circling, not the run-in. Click a row to find it on the map.'],
         ['Core', 'Best 20&nbsp;s of the climb against its average.'],

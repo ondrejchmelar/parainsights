@@ -9,11 +9,14 @@ deliberately. A regression here is someone typing `font-size: 10.5px` or droppin
 browser job drives the map itself (`test_merged_controls`).
 """
 
+import json
 import pathlib
 import re
+import tempfile
 
 import pytest
 
+from tests.browser import CHROME, CHROME_FLAGS
 from tests.js import needs_node
 from tracklog_viewer import render_html
 from parainsights_map import map3d, view3d
@@ -353,3 +356,93 @@ class TestRendersWithTerrain:
                      path=path, grid=grid)
         assert "<article" in out.html and "view3d" in out.html
         assert isinstance(out.trigger, str) and isinstance(out.clearance, str)
+
+    def test_the_airspace_section_is_there_only_with_airspace(self, tmp_path):
+        """Filled in the page once the map has the zones; an empty, hidden section until
+        then, and none at all on a page without airspace layers."""
+        from tests import js
+
+        path, grid = self._ridged(tmp_path)
+        out = js.run("""var a = TV.analysis.analyse(await load(input.path));
+          function body(o) { return TV.report.flightBody(a, Object.assign({ uid: 'f0', now: Date.now() / 1000,
+                                                  terrain: input.grid, sceneTerrain: input.grid }, o)); }
+          return { with: body({ airspaceRemote: '../planner/layers/' }), without: body({}) };""",
+                     path=path, grid=grid)
+        assert '<section class="airspace-along" data-airspace-along hidden>' in out["with"]
+        assert out["with"].index("airspace-along") > out["with"].index('id="debrief-f0"')
+        assert "airspace-along" not in out["without"]
+
+
+@pytest.mark.skipif(CHROME is None, reason="no Chrome")
+class TestAirspaceSection:
+    """The report's Airspace section as the page draws it (`renderAirspaceAlong` in
+    `page/report.js`), from what the map measured (`airspaceAlong`, tested in
+    `test_airspace_along.py`) — handed in here directly, as the map's event would."""
+
+    ZONE = {"lon": [14, 14.1, 14.1, 14], "lat": [50, 50, 50.1, 50.1]}
+
+    def _render(self, along):
+        import subprocess
+
+        page = (pathlib.Path(render_html.__file__).parent / "page" / "report.js").read_text()
+        html = ('<!doctype html><meta charset="utf-8"><section data-airspace-along hidden><h2>Airspace</h2>'
+                '<div class="asp-body"></div></section><script>' + page + '</script><script>'
+                'var shown = []; renderAirspaceAlong(document.querySelector("[data-airspace-along]"), '
+                + json.dumps(along) + ', function (z) { shown.push(z.name); });'
+                'var b = document.querySelector("[data-asp-zone]"); if (b) b.click();'
+                'document.body.dataset.shown = shown.join("|");</script>')
+        with tempfile.NamedTemporaryFile("w", suffix=".html", delete=False) as handle:
+            handle.write(html)
+        done = subprocess.run([CHROME, *CHROME_FLAGS, "file://" + handle.name],
+                              capture_output=True, text=True, timeout=60)
+        # The section as drawn, and what the button handed on: not the script's own text.
+        section = re.search(r"<section data-airspace-along.*?</section>", done.stdout, re.S).group(0)
+        return section + re.search(r'<body[^>]*>', done.stdout).group(0)
+
+    def _zone(self, name, kind, cls, closest, **found):
+        return {"name": name, "kind": kind, "cls": cls, "limits": "GND – FL95", "closest": closest,
+                "ring": dict(self.ZONE, k=kind), "spans": [{"t0": 600, "t1": 900, "floor": 300, "top": 2900}],
+                "inside": None, "under": None, "over": None, "beside": None, **found}
+
+    def _along(self, zones, status="ok", others=0):
+        profile = {"t": [0, 600, 900, 1800], "alt": [400, 1500, 1500, 400], "ground": [300] * 4,
+                   "inside": [False, True, True, False]}
+        return {"status": status, "zones": zones, "others": others, "profile": profile,
+                "start": 1_650_000_000, "offset": 7200, "colours": {"base": "#c2410c"}}
+
+    def test_zones_are_cards_a_chart_and_rows_clearance_needed_first(self):
+        at = {"t": 700, "alt": 1500, "lon": 14.05, "lat": 50.05}
+        inside = {"seconds": 300, "from": 600, "to": 900, "depth": 120, "low": 1450, "high": 1520, "at": at}
+        dom = self._render(self._along([
+            self._zone("AREA", "base", "Other E", "inside", inside=dict(inside, seconds=1500)),
+            self._zone("CTR X", "base", "CTR D", "inside", inside=inside),
+            self._zone("TMA Y", "base", "TMA C", "under", under={"m": 140, "at": at}, at=at),
+        ], others=4))
+        assert "data-airspace-along hidden" not in dom
+        rows = re.findall(r'<td class="zone">.*?</tr>', dom, re.S)
+        assert [re.search(r"</i>([^<]+)", r).group(1).strip() for r in rows] == ["CTR X", "AREA", "TMA Y"]
+        assert 'asp-chip asp-in">Inside 5 min · 120 m in' in rows[0], "a CTR needs a clearance"
+        assert 'asp-chip asp-near">Inside 25 min' in rows[1], "class E does not"
+        assert '<small class="asp-class">class E</small>' in rows[1]
+        assert "140 m under the floor" in rows[2]
+        assert "Entered: CTR X, for 5 minutes" in dom
+        assert "Closest under a floor: TMA Y" in dom
+        assert "<b>5 zones</b>" in dom, "the near miss and the four further off"
+        assert "+ 4 more on the map" in dom
+        assert 'data-shown="CTR X"' in dom, "the first row's button hands its zone to the map"
+
+    def test_seconds_inside_are_seconds(self):
+        at = {"t": 700, "alt": 1218, "lon": 14.05, "lat": 50.05}
+        dom = self._render(self._along([self._zone("LKUL ATZ", "atz", "ATZ", "inside", inside={
+            "seconds": 10, "from": 690, "to": 700, "depth": 1, "low": 1218, "high": 1219, "at": at})]))
+        assert "Inside 10 s · 1 m in" in dom
+        assert "for 10 seconds" in dom
+
+    def test_nothing_nearby_is_one_note(self):
+        dom = self._render(self._along([], others=3))
+        assert '<p class="note asp-none">No airspace in the vicinity.</p>' in dom
+        assert "<table" not in dom
+
+    def test_outside_the_data_says_so(self):
+        dom = self._render(self._along([], status="uncovered"))
+        assert "No airspace data here: only Europe is covered." in dom

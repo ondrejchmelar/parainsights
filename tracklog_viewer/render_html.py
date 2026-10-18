@@ -295,6 +295,37 @@ code { font-family: ui-monospace, "DejaVu Sans Mono", monospace; font-size: 0.92
 .context b { font-size: 22px; font-weight: 650; }
 .context span { color: var(--ink-2); font-size: 16px; }
 .context span small { display: block; font-size: 15px; margin-top: 4px; }
+/* The airspace against the track, filled in the page (`renderAirspaceAlong`). */
+.airspace-along .context { margin-top: 0; }
+.airspace-along .panel { margin-top: 16px; }
+.asp-side { display: block; max-width: 100%; height: auto; }
+.asp-side .asp-axis { font-size: 15px; fill: var(--ink-3); font-variant-numeric: tabular-nums; }
+.asp-side .asp-grid { stroke: var(--rule); stroke-dasharray: 3 4; }
+.asp-side .asp-ground { fill: var(--ink-3); fill-opacity: 0.18; }
+.asp-side .asp-zone { fill-opacity: 0.12; stroke-opacity: 0.6; stroke-width: 1; }
+.asp-side .asp-zone-name { font-size: 15px; font-weight: 600; }
+.asp-side .asp-track { fill: none; stroke: var(--series-1); stroke-width: 2; stroke-linejoin: round; }
+.asp-side .asp-inside { fill: none; stroke: var(--bad); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+.asp-side .asp-mark { fill: var(--panel); stroke: var(--warn); stroke-width: 2; }
+.asp-chip { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 15px; font-weight: 600;
+  white-space: nowrap; }
+.asp-in { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
+.asp-near { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn); }
+.asp-clear { background: var(--panel-2); color: var(--ink-2); }
+.table-asp td, .table-asp th { white-space: nowrap; }
+.table-asp td.zone { white-space: normal; font-weight: 600; }
+.table-asp td.zone i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 8px; }
+.table-asp .asp-more td { color: var(--ink-2); white-space: normal; }
+.table-asp .asp-class { font-weight: 400; color: var(--ink-2); font-size: 15px; white-space: nowrap; }
+.asp-none { margin: 0; }
+@media (max-width: 640px) {
+  .table-asp thead { display: none; }
+  .table-asp, .table-asp tbody, .table-asp tr, .table-asp td { display: block; width: auto; }
+  .table-asp tr { padding: 12px 0; border-bottom: 1px solid var(--rule); }
+  .table-asp td { padding: 2px 0; text-align: left; border: 0; white-space: normal; }
+  .table-asp .asp-limits::before { content: "Limits "; color: var(--ink-2); }
+  .table-asp .asp-at::before { content: "At "; color: var(--ink-2); }
+}
 /* The flight's last fold (`common.fold`'s style), as on the Meteo page. */
 .flight-sources table { width: 100%; border-collapse: collapse; font-size: 15px; }
 .flight-sources th, .flight-sources td { text-align: left; vertical-align: top; padding: 8px 12px 8px 0; border-bottom: 1px solid var(--rule); }

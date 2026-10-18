@@ -206,6 +206,200 @@ function whenShown(element) {
   });
 }
 
+// ---- the airspace against the track ------------------------------------------------
+// The report's Airspace section, from what the map measured once it had the zones
+// (`airspaceAlong`, `parainsights_map.view3d`): cards for what was entered and what came
+// closest, the height over time with each zone's floor and top drawn where the track was
+// over its ground, and a row per nearby zone with a way to it on the map. Nothing
+// nearby, a note that says so. Measurements, not verdicts: no zone is called an
+// infringement here that its limits do not make one, and a pass under a floor is not.
+function aspEsc(text) {
+  return String(text).replace(/[&<>"]/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+  });
+}
+function aspMetres(m) { return String(Math.round(m)).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
+function aspClock(along, t) {
+  if (!along.start) {
+    var e = Math.floor(t / 60);
+    return '+' + Math.floor(e / 60) + ':' + ('0' + e % 60).slice(-2);
+  }
+  var d = new Date((along.start + along.offset + t) * 1000);
+  return ('0' + d.getUTCHours()).slice(-2) + ':' + ('0' + d.getUTCMinutes()).slice(-2);
+}
+// How long, in the unit that says it: a ten-second clip of a zone's corner is not "1 min".
+function aspDuration(seconds, short) {
+  if (seconds < 60) {
+    var s = Math.max(1, Math.round(seconds));
+    return s + (short ? ' s' : s === 1 ? ' second' : ' seconds');
+  }
+  var m = Math.round(seconds / 60);
+  return m + (short ? ' min' : m === 1 ? ' minute' : ' minutes');
+}
+// What came closest, in a few words: the table's chip and the second card.
+function aspClosest(zone) {
+  if (zone.closest === 'inside') {
+    return 'Inside ' + aspDuration(zone.inside.seconds, true) + ' · ' + aspMetres(zone.inside.depth) + ' m in';
+  }
+  if (zone.closest === 'under') return aspMetres(zone.under.m) + ' m under the floor';
+  if (zone.closest === 'over') return aspMetres(zone.over.m) + ' m over the top';
+  return (zone.beside.m / 1000).toFixed(1) + ' km to the side';
+}
+// The zone's class as openAIP gives it (`ac`), in words a pilot reads: "TMA D", "class E",
+// "restricted". And whether being inside needs a clearance or is barred: classes A-D,
+// restricted, prohibited and reserved areas, aerodrome zones. Inside class E or G, a
+// radio or transponder zone or a circuit is flown legally every day, and is not marked
+// as if it were not.
+var ASP_LETTERS = { R: 'restricted', P: 'prohibited', D: 'danger area' };
+function aspClass(zone) {
+  var c = zone.cls;
+  if (!c) return '';
+  return ASP_LETTERS[c] || c.replace(/^Other /, 'class ');
+}
+function aspBarred(zone) {
+  var c = zone.cls || '';
+  if (zone.kind === 'restricted') return /^(R|P|TRA|TSA|MTA|Overflight restriction)$/.test(c);
+  if (zone.kind === 'atz') return true;
+  if (/^(RMZ|TMZ|TIZ|TIA)\b/.test(c)) return false;
+  return /(^| )[A-D]$/.test(c) || /^(CTR|TMA|CTA|MCTR)$/.test(c);
+}
+function aspLimits(zone) {
+  if (zone.limits) return zone.limits;
+  var r = zone.ring;
+  return (r.g ? 'GND' : aspMetres(r.f) + ' m') + ' – ' + (r.t ? 'unlimited' : aspMetres(r.c) + ' m');
+}
+function aspChart(along, width) {
+  var pr = along.profile, n = pr.t.length;
+  if (n < 2) return '';
+  var h = width < 560 ? 210 : 250, left = 54, right = 8, top = 10, bottom = 26;
+  var t0 = pr.t[0], t1 = pr.t[n - 1], high = 0;
+  pr.alt.forEach(function (a) { high = Math.max(high, a); });
+  along.zones.forEach(function (z) {
+    z.spans.forEach(function (sp) { if (isFinite(sp.floor)) high = Math.max(high, sp.floor + 150); });
+  });
+  var stepY = high > 3000 ? 1000 : 500;
+  high = Math.ceil(high * 1.08 / stepY) * stepY;
+  function x(t) { return left + (t - t0) / Math.max(1, t1 - t0) * (width - left - right); }
+  function y(a) { return top + (1 - Math.max(0, Math.min(a, high)) / high) * (h - top - bottom); }
+  var out = [];
+  for (var a = 0; a <= high; a += stepY) {
+    out.push('<line class="asp-grid" x1="' + left + '" x2="' + (width - right) + '" y1="' + y(a) + '" y2="' + y(a) + '"/>' +
+             '<text class="asp-axis" x="' + (left - 6) + '" y="' + (y(a) + 4) + '" text-anchor="end">' + aspMetres(a) + '</text>');
+  }
+  var ticks = Math.max(2, Math.floor((width - left - right) / 110));
+  for (var i = 0; i <= ticks; i++) {
+    var tt = t0 + (t1 - t0) * i / ticks;
+    out.push('<text class="asp-axis" x="' + x(tt) + '" y="' + (h - 6) + '" text-anchor="' +
+             (i === 0 ? 'start' : i === ticks ? 'end' : 'middle') + '">' + aspClock(along, tt) + '</text>');
+  }
+  var ground = 'M' + x(t0) + ' ' + y(0);
+  pr.t.forEach(function (t, k) { ground += 'L' + x(t).toFixed(1) + ' ' + y(pr.ground[k]).toFixed(1); });
+  out.push('<path class="asp-ground" d="' + ground + 'L' + x(t1) + ' ' + y(0) + 'Z"/>');
+  // Each zone's box where the track was over its ground, labelled once, over its widest.
+  along.zones.forEach(function (z) {
+    var colour = along.colours[z.kind] || '#888888', widest = null;
+    z.spans.forEach(function (sp) {
+      var x0 = x(sp.t0), x1 = Math.max(x(sp.t1), x0 + 2);
+      var yTop = isFinite(sp.top) ? y(sp.top) : top, yFloor = y(sp.floor);
+      out.push('<rect class="asp-zone" x="' + x0.toFixed(1) + '" y="' + yTop.toFixed(1) + '" width="' + (x1 - x0).toFixed(1) +
+               '" height="' + Math.max(1, yFloor - yTop).toFixed(1) + '" style="fill:' + colour + ';stroke:' + colour + '"/>');
+      if (!widest || sp.t1 - sp.t0 > widest.t1 - widest.t0) widest = sp;
+    });
+    if (widest) {
+      out.push('<text class="asp-zone-name" x="' + (x(widest.t0) + 4) + '" y="' + ((isFinite(widest.top) ? y(widest.top) : top) + 16) +
+               '" style="fill:' + colour + '">' + aspEsc(z.name) + '</text>');
+    }
+  });
+  var line = '', red = '', was = false;
+  pr.t.forEach(function (t, k) {
+    var pt = x(t).toFixed(1) + ' ' + y(pr.alt[k]).toFixed(1);
+    line += (k ? 'L' : 'M') + pt;
+    if (pr.inside[k]) { red += (was ? 'L' : 'M') + pt; }
+    was = pr.inside[k];
+  });
+  out.push('<path class="asp-track" d="' + line + '"/>');
+  if (red) out.push('<path class="asp-inside" d="' + red + '"/>');
+  // The closest misses, marked where they were.
+  along.zones.forEach(function (z) {
+    if (z.closest === 'inside' || !z.at) return;
+    var cx = x(z.at.t), cy = y(z.at.alt);
+    out.push('<circle class="asp-mark" cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="4"/>');
+  });
+  return '<svg class="asp-side" viewBox="0 0 ' + width + ' ' + h + '" width="' + width + '" height="' + h +
+         '" role="img" aria-label="Height over time against the zones over the track">' + out.join('') + '</svg>';
+}
+function renderAirspaceAlong(section, along, show) {
+  var body = section.querySelector('.asp-body');
+  if (!body) return;
+  section.hidden = false;
+  if (along.status !== 'ok' || !along.zones.length) {
+    body.innerHTML = '<p class="note asp-none">' + (along.status === 'failed' ? 'The airspace could not be loaded.'
+      : along.status === 'uncovered' ? 'No airspace data here: only Europe is covered.'
+      : 'No airspace in the vicinity.') + '</p>';
+    return;
+  }
+  // Zones that needed a clearance first, then the others entered, then the near misses —
+  // each group in the map's order (longest inside, then closest).
+  var zones = along.zones.map(function (z, i) { return [z, i]; }).sort(function (a, b) {
+    function rank(z) { return z.inside ? (aspBarred(z) ? 0 : 1) : 2; }
+    return rank(a[0]) - rank(b[0]) || a[1] - b[1];
+  }).map(function (pair) { return pair[0]; });
+  var entered = zones.filter(function (z) { return z.inside; });
+  var misses = zones.filter(function (z) { return !z.inside; });
+  var cards = [];
+  if (entered.length) {
+    var e = entered[0];
+    cards.push('<div class="card"><b>' + entered.length + (entered.length === 1 ? ' zone' : ' zones') + '</b><span>Entered: ' +
+      aspEsc(e.name) + ', for ' + aspDuration(e.inside.seconds) + ', up to ' + aspMetres(e.inside.depth) + '&nbsp;m inside' +
+      (entered.length > 1 ? ', and ' + (entered.length - 1) + ' more' : '') + '<small>' + aspClock(along, e.inside.from) +
+      ' – ' + aspClock(along, e.inside.to) + ', between ' + aspMetres(e.inside.low) + ' and ' + aspMetres(e.inside.high) + ' m.</small></span></div>');
+  } else {
+    cards.push('<div class="card"><b>None</b><span>No zone entered<small>Passing under a zone’s floor is not entering it.</small></span></div>');
+  }
+  if (misses.length) {
+    var m = misses[0], what = m.closest === 'under' ? 'Closest under a floor' : m.closest === 'over' ? 'Closest over a top' : 'Closest beside';
+    var value = m.closest === 'beside' ? (m.beside.m / 1000).toFixed(1) + '&nbsp;km' : aspMetres(m[m.closest].m) + '&nbsp;m';
+    cards.push('<div class="card"><b>' + value + '</b><span>' + what + ': ' + aspEsc(m.name) + ' (' + aspEsc(aspLimits(m)) + ')<small>At ' +
+      aspClock(along, m.at.t) + ', ' + aspMetres(m.at.alt) + ' m.</small></span></div>');
+  }
+  var notIn = misses.length + along.others;
+  if (notIn) {
+    cards.push('<div class="card"><b>' + notIn + (notIn === 1 ? ' zone' : ' zones') + '</b><span>Over or beside the flight, not entered' +
+      (entered.length ? '<small>Passing under a zone’s floor is not entering it.</small>' : '') + '</span></div>');
+  }
+  var rows = zones.map(function (z, i) {
+    var chip = z.closest === 'inside' ? (aspBarred(z) ? 'asp-in' : 'asp-near')
+      : (z.closest === 'beside' ? z.beside.m > 1000 : z[z.closest].m > 250) ? 'asp-clear' : 'asp-near';
+    var cls = aspClass(z);
+    var when = z.inside ? aspClock(along, z.inside.from) + '–' + aspClock(along, z.inside.to) : aspClock(along, z.at.t);
+    var at = z.inside ? aspMetres(z.inside.low) + '–' + aspMetres(z.inside.high) + ' m' : aspMetres(z.at.alt) + ' m';
+    return '<tr><td class="zone"><i style="background:' + (along.colours[z.kind] || '#888888') + '"></i>' + aspEsc(z.name) +
+      (cls ? ' <small class="asp-class">' + aspEsc(cls) + '</small>' : '') + '</td>' +
+      '<td class="asp-limits">' + aspEsc(aspLimits(z)) + '</td><td><span class="asp-chip ' + chip + '">' + aspClosest(z) + '</span></td>' +
+      '<td class="asp-when">' + when + '</td><td class="asp-at">' + at + '</td>' +
+      '<td><button type="button" class="lnk asp-show" data-asp-zone="' + i + '">Show on map</button></td></tr>';
+  });
+  if (along.others) {
+    rows.push('<tr class="asp-more"><td colspan="6">+ ' + along.others + ' more on the map, none within 500 m above or below or 2 km beside</td></tr>');
+  }
+  body.innerHTML = '<div class="context">' + cards.join('') + '</div>' +
+    '<div class="panel asp-chart"></div>' +
+    '<div class="panel"><div class="table-scroll"><table class="table-asp"><thead><tr><th>Zone</th><th>Limits</th>' +
+    '<th>Closest</th><th>When</th><th>At</th><th></th></tr></thead><tbody>' + rows.join('') + '</tbody></table></div></div>';
+  var chart = body.querySelector('.asp-chart'), drawnAt = 0;
+  function draw() {
+    var width = Math.round(chart.clientWidth - 2 * parseFloat(getComputedStyle(chart).paddingLeft || 0));
+    if (width < 50 || width === drawnAt) return;
+    drawnAt = width;
+    chart.innerHTML = aspChart(along, width);
+  }
+  draw();
+  if (typeof ResizeObserver === 'function') new ResizeObserver(draw).observe(chart);
+  body.querySelectorAll('[data-asp-zone]').forEach(function (button) {
+    button.addEventListener('click', function () { show(zones[Number(button.dataset.aspZone)]); });
+  });
+}
+
 function initFlight(root) {
   var payload = root.querySelector('.cursor-data');
   var tip = document.getElementById('tip');
@@ -228,6 +422,30 @@ function initFlight(root) {
         var route = JSON.parse(charts.textContent).route || [];
         entry.setScored(route.map(function (i) { return [data.cursor3d.lon[i], data.cursor3d.lat[i]]; }));
       } catch (error) { /* no route, nothing to draw */ }
+    });
+  }
+  // The map's own controls (`map3d`'s entry), for the Airspace section's way to a zone.
+  var mapEntry = null;
+  if (mapPanel) mapPanel.addEventListener('merged-ready', function (event) { mapEntry = event.detail || null; });
+  var aspSection = root.querySelector('[data-airspace-along]');
+  if (aspSection) {
+    root.addEventListener('airspace-along', function (event) {
+      renderAirspaceAlong(aspSection, event.detail, function (zone) {
+        // The moment on every chart and the map, pinned as a debrief card's is, and the
+        // zone shown as well as the map's airspace menu can show it.
+        if (zone.at && data.t && data.t.length) {
+          var lo = 0, hi = data.t.length - 1;
+          while (lo < hi) { var mid = (lo + hi) >> 1; if (data.t[mid] < zone.at.t) lo = mid + 1; else hi = mid; }
+          var view = visibleView();
+          if (view) pinAt(lo, view);
+          if (terrainView && terrainView.revealTime) terrainView.revealTime(data.t[lo]);
+        }
+        if (mapEntry && mapEntry.focusAirspace) {
+          mapEntry.focusAirspace(zone.ring, zone.at ? [zone.at.lon, zone.at.lat] : null);
+        }
+        var map = root.querySelector('.view3d');
+        if (map) map.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      });
     });
   }
   if (typeof initView3dWhenReady === 'function') {

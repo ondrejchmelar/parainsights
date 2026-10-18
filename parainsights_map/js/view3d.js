@@ -227,6 +227,34 @@ function loadAirspace(root, scene) {
 // terrain is in, because a limit measured from the ground needs the ground.
 var NON_BINDING = /^(D|Sport|Alert|Warning|Gliding)$/;
 var NEAR_SIDEWAYS = 10000, NEAR_VERTICALLY = 200;   // 5 km sideways until October 2026
+// The ground under a point from the scene's grid, nearest cell; the grid's lowest point
+// where there is no grid.
+function sceneGround(dem, lon, lat) {
+  if (!dem.z || !dem.rows) return dem.min || 0;
+  var gx = Math.max(0, Math.min(dem.cols - 1, (lon - dem.west) / (dem.east - dem.west) * (dem.cols - 1)));
+  var gy = Math.max(0, Math.min(dem.rows - 1, (dem.north - lat) / (dem.north - dem.south) * (dem.rows - 1)));
+  return dem.z[Math.round(gy) * dem.cols + Math.round(gx)];
+}
+// Metres from a point to a zone's ring: 0 inside, else to the nearest edge.
+function ringDistance(ring, p) {
+  var kx = 111320 * Math.cos(p[1] * Math.PI / 180), ky = 111320, inside = false, best = Infinity;
+  var n = ring.lon.length;
+  for (var a = 0, b = n - 1; a < n; b = a++) {
+    var ax = (ring.lon[a] - p[0]) * kx, ay = (ring.lat[a] - p[1]) * ky;
+    var bx = (ring.lon[b] - p[0]) * kx, by = (ring.lat[b] - p[1]) * ky;
+    if ((ay > 0) !== (by > 0) && 0 < (bx - ax) * (0 - ay) / (by - ay) + ax) inside = !inside;
+    var dx = bx - ax, dy = by - ay, len = dx * dx + dy * dy;
+    var t = len ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len)) : 0;
+    best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
+  }
+  return inside ? 0 : best;
+}
+// A zone's floor and top over a point, in metres: limits measured from the ground are
+// measured from the ground there; a top the file caps (`t`) is unbounded.
+function zoneLimits(ring, g) {
+  return [ring.g ? g : (ring.fu !== undefined ? g + ring.fu : ring.f),
+          ring.t ? Infinity : (ring.cu !== undefined ? g + ring.cu : ring.c)];
+}
 function relevantAirspace(scene) {
   var tr = scene.track, dem = scene.terrain || {};
   var all = scene.airspaces || [];
@@ -234,26 +262,6 @@ function relevantAirspace(scene) {
   if (!tr || !tr.lon || tr.lon.length < 2 || !all.length) return;
   var step = Math.max(1, Math.floor(tr.lon.length / 2000)), fixes = [];
   for (var i = 0; i < tr.lon.length; i += step) fixes.push([tr.lon[i], tr.lat[i], tr.alt[i]]);
-  function ground(lon, lat) {
-    if (!dem.z || !dem.rows) return dem.min || 0;
-    var gx = Math.max(0, Math.min(dem.cols - 1, (lon - dem.west) / (dem.east - dem.west) * (dem.cols - 1)));
-    var gy = Math.max(0, Math.min(dem.rows - 1, (dem.north - lat) / (dem.north - dem.south) * (dem.rows - 1)));
-    return dem.z[Math.round(gy) * dem.cols + Math.round(gx)];
-  }
-  function sideways(ring, p) {
-    // Metres from the fix to the ring: 0 inside, else to the nearest edge.
-    var kx = 111320 * Math.cos(p[1] * Math.PI / 180), ky = 111320, inside = false, best = Infinity;
-    var n = ring.lon.length;
-    for (var a = 0, b = n - 1; a < n; b = a++) {
-      var ax = (ring.lon[a] - p[0]) * kx, ay = (ring.lat[a] - p[1]) * ky;
-      var bx = (ring.lon[b] - p[0]) * kx, by = (ring.lat[b] - p[1]) * ky;
-      if ((ay > 0) !== (by > 0) && 0 < (bx - ax) * (0 - ay) / (by - ay) + ax) inside = !inside;
-      var dx = bx - ax, dy = by - ay, len = dx * dx + dy * dy;
-      var t = len ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len)) : 0;
-      best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
-    }
-    return inside ? 0 : best;
-  }
   scene.airspaces = all.filter(function (ring) {
     if (ring.ac && NON_BINDING.test(ring.ac)) return false;
     if (ring.nt) return false;     // active only by NOTAM: the file cannot know if it is
@@ -263,14 +271,91 @@ function relevantAirspace(scene) {
     for (var k = 0; k < fixes.length; k++) {
       var p = fixes[k];
       if (p[0] < w || p[0] > e || p[1] < s || p[1] > n) continue;
-      if (sideways(ring, p) > NEAR_SIDEWAYS) continue;
-      var g = ground(p[0], p[1]);
-      var floor = ring.g ? g : (ring.fu !== undefined ? g + ring.fu : ring.f);
-      var top = ring.t ? Infinity : (ring.cu !== undefined ? g + ring.cu : ring.c);
-      if (p[2] >= floor - NEAR_VERTICALLY && p[2] <= top + NEAR_VERTICALLY) return true;
+      if (ringDistance(ring, p) > NEAR_SIDEWAYS) continue;
+      var lim = zoneLimits(ring, sceneGround(dem, p[0], p[1]));
+      if (p[2] >= lim[0] - NEAR_VERTICALLY && p[2] <= lim[1] + NEAR_VERTICALLY) return true;
     }
     return false;
   });
+}
+
+// The flight against each zone the map draws (`scene.airspaceAlong`, for the report's
+// Airspace section): how long it was inside and how deep; and where it never was, how
+// close it came — under the floor or over the top while over the zone's ground, or
+// beside it at a height within its limits. Under a floor is *not* inside: a ring the
+// track crosses at 800 m under a floor of FL 95 is no infringement and is not called one.
+// Nearby is inside, within 500 m under or over, or within 2 km beside; the rest of what
+// the map draws is only counted.
+var ALONG_SIDEWAYS = 2000, ALONG_VERTICALLY = 500;
+function airspaceAlong(scene) {
+  var tr = scene.track, dem = scene.terrain || {}, zones = scene.airspaces || [];
+  if (!tr || !tr.lon || tr.lon.length < 2) return null;
+  var step = Math.max(1, Math.floor(tr.lon.length / 3000)), fixes = [];
+  for (var i = 0; i < tr.lon.length; i += step) {
+    fixes.push({ lon: tr.lon[i], lat: tr.lat[i], alt: tr.alt[i], t: tr.t ? tr.t[i] : i,
+                 g: sceneGround(dem, tr.lon[i], tr.lat[i]) });
+  }
+  var inAny = {};
+  var found = zones.map(function (ring, index) {
+    var mx = (ALONG_SIDEWAYS + 1) / (111320 * Math.cos(ring.lat[0] * Math.PI / 180)), my = (ALONG_SIDEWAYS + 1) / 111320;
+    var w = Math.min.apply(null, ring.lon) - mx, e = Math.max.apply(null, ring.lon) + mx;
+    var s = Math.min.apply(null, ring.lat) - my, n = Math.max.apply(null, ring.lat) + my;
+    var inside = null, under = null, over = null, beside = null, spans = [], span = null;
+    fixes.forEach(function (p, k) {
+      var near = !(p.lon < w || p.lon > e || p.lat < s || p.lat > n);
+      var d = near ? ringDistance(ring, [p.lon, p.lat]) : Infinity;
+      var lim = zoneLimits(ring, p.g), dt = k ? p.t - fixes[k - 1].t : 0;
+      // Where the track was over the zone's ground: the stretches its box is drawn over
+      // in the section's height chart.
+      if (d === 0) {
+        if (span && span.k === k - 1) { span.t1 = p.t; span.k = k; span.floor = Math.min(span.floor, lim[0]); span.top = Math.max(span.top, lim[1]); }
+        else spans.push(span = { t0: p.t, t1: p.t, k: k, floor: lim[0], top: lim[1] });
+      }
+      if (d === 0 && p.alt >= lim[0] && p.alt <= lim[1]) {
+        var depth = Math.min(p.alt - lim[0], lim[1] - p.alt);
+        inAny[k] = true;
+        if (!inside) inside = { seconds: 0, from: p.t, to: p.t, depth: depth, low: p.alt, high: p.alt, at: p };
+        if (inside.last === k - 1) inside.seconds += dt;
+        inside.last = k; inside.to = p.t;
+        inside.low = Math.min(inside.low, p.alt); inside.high = Math.max(inside.high, p.alt);
+        if (depth > inside.depth) { inside.depth = depth; inside.at = p; }
+      } else if (d === 0 && p.alt < lim[0]) {
+        if (!under || lim[0] - p.alt < under.m) under = { m: lim[0] - p.alt, at: p };
+      } else if (d === 0) {
+        if (!over || p.alt - lim[1] < over.m) over = { m: p.alt - lim[1], at: p };
+      } else if (d <= ALONG_SIDEWAYS && p.alt >= lim[0] && p.alt <= lim[1]) {
+        if (!beside || d < beside.m) beside = { m: d, at: p };
+      }
+    });
+    // The nearest of the near misses, each against its own threshold.
+    var closest = inside ? 'inside' : null, score = inside ? -1 : Infinity;
+    [['under', under, ALONG_VERTICALLY], ['over', over, ALONG_VERTICALLY], ['beside', beside, ALONG_SIDEWAYS]]
+      .forEach(function (c) {
+        if (c[1] && c[1].m / c[2] < score) { score = c[1].m / c[2]; closest = c[0]; }
+      });
+    var at = closest === 'inside' ? inside.at : closest ? { under: under, over: over, beside: beside }[closest].at : null;
+    return { index: index, ring: ring, name: ring.nm || ring.n, kind: ring.k, cls: ring.ac || null,
+             limits: ring.lo && ring.hi ? ring.lo + ' – ' + ring.hi : null,
+             inside: inside, under: under, over: over, beside: beside,
+             closest: closest, nearby: score <= 1, at: at, spans: spans };
+  });
+  var nearby = found.filter(function (z) { return z.nearby; }).sort(function (a, b) {
+    if (a.inside || b.inside) return (b.inside ? b.inside.seconds + 1 : 0) - (a.inside ? a.inside.seconds + 1 : 0);
+    var ka = { under: ALONG_VERTICALLY, over: ALONG_VERTICALLY, beside: ALONG_SIDEWAYS };
+    return a[a.closest].m / ka[a.closest] - b[b.closest].m / ka[b.closest];
+  });
+  // The height chart's line: the track and the ground under it, at most 600 points.
+  // Inside any zone at a point if any fix it stands for was.
+  var every = Math.max(1, Math.floor(fixes.length / 600)), profile = { t: [], alt: [], ground: [], inside: [] };
+  for (var j = 0; j < fixes.length; j += every) {
+    var any = false;
+    for (var q = j; q < Math.min(j + every, fixes.length); q++) any = any || !!inAny[q];
+    profile.t.push(fixes[j].t); profile.alt.push(fixes[j].alt); profile.ground.push(fixes[j].g);
+    profile.inside.push(any);
+  }
+  return { zones: nearby, others: found.length - nearby.length, profile: profile,
+           start: scene.start || null, offset: scene.utcOffset || 0,
+           colours: scene.airspaceColours || {} };
 }
 
 // What the map's airspace switch says once the airspace is settled (`scene.airspaceWhy`):
@@ -278,6 +363,14 @@ function relevantAirspace(scene) {
 function settleAirspace(root, scene) {
   if (!scene.airspaceRemote) return;
   relevantAirspace(scene);
+  // And the flight against them, for whatever on the page reports it (the report's
+  // Airspace section), with why there is nothing when there is nothing.
+  var along = airspaceAlong(scene) || { zones: [], others: 0 };
+  along.status = scene.airspaceFailed ? 'failed' : scene.airspaceLoaded ? 'ok' : 'uncovered';
+  root.__airspaceAlong = along;
+  if (typeof CustomEvent === 'function' && root.dispatchEvent) {
+    root.dispatchEvent(new CustomEvent('airspace-along', { detail: along }));
+  }
   scene.airspaceWhy = scene.airspaces.length
     ? 'Draw the airspace this flight came near' + (scene.airspaceCredit ? ' (' + scene.airspaceCredit + ')' : '')
     : scene.airspaceFailed ? 'The airspace could not be loaded'
