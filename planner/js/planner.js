@@ -511,6 +511,10 @@
   }
   function openColumn(at) {
     column = { at: at, rings: over(at) };
+    // A tap is a hover too, and the map named the zone under the finger: the panel says
+    // it and the rest, so one tap gives one answer. A mouse brings the name back by moving.
+    var name = document.querySelector('.merged-view .view3d-asp');
+    if (name) name.hidden = true;
     var merged = mergedEntry(), map = merged && merged.map;
     if (map && window.maplibregl && maplibregl.Marker) {
       if (!pin) {
