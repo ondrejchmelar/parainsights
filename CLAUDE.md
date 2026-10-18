@@ -49,9 +49,6 @@ empty.
 - **Planner → XCTrack: a cylinder size?** The export is a waypoints task with no
   cylinders. Open question whether to offer a radius per turnpoint (or one for all), and
   what XCTrack does with it in a waypoints task as against a competition task.
-- **Planner: see the airspace without a planned task.** The map draws only the zones
-  within 10 km of a task, and nothing before there is one; give a way to look at the
-  airspace of an area on its own (a toggle, or the zones in view).
 - **One format for the debrief.** Its parts — the figures that open it, the finding cards,
   the context cards, the note — each have their own shape; make them read as one.
 - **Time slider: a position gauge, as flymet has.** (The user's note, verbatim: "flymet-
@@ -172,7 +169,11 @@ a drag, an import, a clear). The ATZ layer's download (the page says *ATZ layer*
 the map's own menu, the ▾ beside *Airspaces* (`aspMenu` in `map3d.js`, on a flight's map
 too, where it counts and filters only the zones near the track): the kinds, the floor,
 and on this page the hours row moved in from `.m3-airspace-extra` (October 2026; it was a
-Layers panel under the task). The planner's **Takeoff** — a day and a time slider, opening
+Layers panel under the task), and at its head (`.m3-airspace-lead`) *Near the task* or
+*All in view*: every zone in view, any country, its layers fetched as the map moves, up to
+a 300 km square around the view's middle (`scope`, `VIEW_MAX` in `planner.js`). With Draw
+off a click (a tap) reads the **column** over that point: every zone above it, top down,
+with its limits and activation tags, drawn on its own until closed (`openColumn`). The planner's **Takeoff** — a day and a time slider, opening
 on tomorrow at 12:00 — lights the ground and turns the rose's sun as a flight's map does
 (`entry.setSun`, a `TV.sun.dayTrack` table over the task), puts Open-Meteo's 850 hPa wind
 (about 1500 m) on the rose (`entry.setWind`), and the hours filter follows it. MapLibre

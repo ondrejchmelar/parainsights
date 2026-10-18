@@ -89,8 +89,12 @@ STYLE = """
 .asp-stage:fullscreen .view3d, .asp-stage.is-maximised .view3d { height: 100%; min-height: 0; aspect-ratio: auto; }
 .asp-stage:fullscreen .plan-strip, .asp-stage.is-maximised .plan-strip { flex: none; margin: 0;
   padding-left: 16px; padding-right: 16px; }
-.m3-airspace-extra { display: grid; gap: 6px; }
-.m3-airspace-extra[hidden] { display: none; }
+.m3-airspace-extra, .m3-airspace-lead { display: grid; gap: 6px; }
+.m3-airspace-extra[hidden], .m3-airspace-lead[hidden] { display: none; }
+.merged-view .asp-scope { display: flex; }
+.merged-view .asp-scope button { flex: 1; }
+.asp-scope-note { margin: 0; }
+.asp-scope-note:empty { display: none; }
 .m3-airspace-extra .asp-controls { margin: 0; gap: 6px 8px; font-size: 14px; }
 .m3-airspace-extra .chk { display: inline-flex; align-items: center; gap: 8px; min-height: 28px; }
 .m3-airspace-extra input[type="datetime-local"] { font: inherit; height: 34px; padding: 0 6px; box-sizing: border-box;
@@ -613,9 +617,10 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
   {common.fold("Sources", sources_table(overlay, base_version, shift), "asp-sources")}
 </article>"""
 
-    about = ("Zones within 5 km of the task: openAIP, plus the traffic circuits at "
-             f"{overlay.circuit_fields} Czech fields no published source draws. Fly in an "
-             "aerodrome zone, stay out of its circuit. Hover a zone for its limits." + boxes)
+    about = ("Zones within 10 km of the task, or all in view: openAIP, plus the traffic "
+             f"circuits at {overlay.circuit_fields} Czech fields no published source draws. "
+             "Fly in an aerodrome zone, stay out of its circuit. Hover a zone for its limits; "
+             "click the map (not drawing) for every zone above that point." + boxes)
     get = ""
     if openair_name:
         get = (f'<div class="asp-get-float">'
@@ -638,6 +643,15 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
              f'<span class="m3-drop-head">Hours</span>{when_control(WHEN_NOTE)}'
              f'<span class="m3-drop-head m3-asp-about">About this map{common.info(about, "About this map")}</span>'
              '</div>')
+    # At the menu's head, which zones the rest of it filters (`planner.js`, `scope`): the
+    # ones along the task, or every one in view whichever country it is in.
+    extra += ('<div class="m3-airspace-lead" hidden>'
+              '<span class="m3-drop-head">Draw</span>'
+              '<div class="view3d-seg asp-scope" role="group" aria-label="Which zones to draw">'
+              '<button type="button" data-scope="near" class="is-on" aria-pressed="true">Near the task</button>'
+              '<button type="button" data-scope="view" aria-pressed="false">All in view</button></div>'
+              '<p class="asp-when-note asp-scope-note" id="asp-scope-note"></p>'
+              '</div>')
     return f"""<article class="flight airspace-article" id="{uid}-article"{plan_attr}>
   <!-- The map is the page, the task right under it in a strip (in full screen too), and
        under that what the task crosses and how it goes to XCTrack. -->

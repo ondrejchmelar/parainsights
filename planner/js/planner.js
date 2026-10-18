@@ -220,7 +220,15 @@
   // where the task reaches another country, that country's layer (`airspaces/openaip.py`,
   // the same files a flight's map loads, `view3d.loadAirspace`) is fetched for it.
   // Czechia's own come from this page, which carries more than its layer — the circuits.
+  //
+  // Or, chosen at the head of the airspace menu (`scope`), every zone in view, whichever
+  // country it is in — the airspace of an area with no task planned yet. A view wider
+  // than VIEW_MAX draws those in the VIEW_MAX square around its middle: zoomed out to a
+  // continent, "in view" would be every file there is.
   var NEAR = 10000;         // 5 km until October 2026: too tight to see what is coming
+  var VIEW_MAX = 300000;
+  var scope = 'near';
+  var column = null;        // the zones above a clicked point, { at, rings }: below
   var LAYERS = ((document.querySelector('meta[name="airspace-layers"]') || {}).content) || 'layers/';
   var OWN_FILES = /^(CZ|cz-circuits)\.json$/;
   var remote = {};          // file name -> { bbox: [w, e, s, n], rings }
@@ -252,22 +260,53 @@
     var my = NEAR / 111320, mx = NEAR / (111320 * Math.cos((so + n) / 2 * Math.PI / 180));
     return [w - mx, e + mx, so - my, n + my];
   }
-  // Fetch the layers of the countries the task's box reaches and has not yet loaded.
-  // Resolves true when something new arrived.
+  // The box the map shows, as [w, e, s, n], no wider than VIEW_MAX; null before there is
+  // a map to ask.
+  function viewBox() {
+    var merged = mergedEntry(), map = merged && merged.map;
+    if (!map || !map.getBounds) return null;
+    var b = map.getBounds(), c = map.getCenter();
+    var my = VIEW_MAX / 2 / 111320, mx = VIEW_MAX / 2 / (111320 * Math.cos(c.lat * Math.PI / 180));
+    return [Math.max(b.getWest(), c.lng - mx), Math.min(b.getEast(), c.lng + mx),
+            Math.max(b.getSouth(), c.lat - my), Math.min(b.getNorth(), c.lat + my)];
+  }
+  function clipped() {
+    var merged = mergedEntry(), map = merged && merged.map, bb = viewBox();
+    if (!bb) return false;
+    var b = map.getBounds();
+    return b.getWest() < bb[0] || b.getEast() > bb[1] || b.getSouth() < bb[2] || b.getNorth() > bb[3];
+  }
+  // Where the zones are wanted: along the task, in view, and over the point the column
+  // reads. Each as [w, e, s, n].
+  function wantedBoxes() {
+    var out = [];
+    if (scope === 'view') { var v = viewBox(); if (v) out.push(v); }
+    else if (points.length >= 2) out.push(taskBox());
+    if (column) out.push([column.at[0], column.at[0], column.at[1], column.at[1]]);
+    return out;
+  }
+  // Fetch the layers of the countries those boxes reach and not yet loaded. Resolves true
+  // when something new arrived.
   function loadNear() {
-    if (points.length < 2 || typeof airspaceJson !== 'function') return Promise.resolve(false);
-    var bb = taskBox();
+    var wanted = wantedBoxes();
+    if (!wanted.length || typeof airspaceJson !== 'function') return Promise.resolve(false);
     return airspaceJson(LAYERS + 'index.json').then(function (index) {
       var files = index.files || {};
-      var wanted = Object.keys(files).filter(function (name) {
+      var names = Object.keys(files).filter(function (name) {
         var f = files[name].bbox;
-        return !OWN_FILES.test(name) && !remote[name] && f &&
-          !(f[1] < bb[0] || f[0] > bb[1] || f[3] < bb[2] || f[2] > bb[3]);
+        return !OWN_FILES.test(name) && !remote[name] && f && wanted.some(function (bb) {
+          return !(f[1] < bb[0] || f[0] > bb[1] || f[3] < bb[2] || f[2] > bb[3]);
+        });
       });
-      if (!wanted.length) return false;
-      return Promise.all(wanted.map(function (name) {
+      if (!names.length) return false;
+      return Promise.all(names.map(function (name) {
         return airspaceJson(LAYERS + name).then(function (file) {
-          remote[name] = { bbox: files[name].bbox, rings: (file.airspaces || []).map(decodeRing) };
+          var country = name.replace(/\.json$/, '');
+          remote[name] = { bbox: files[name].bbox, rings: (file.airspaces || []).map(function (ring) {
+            var out = decodeRing(ring);
+            out.cc = country;
+            return out;
+          }) };
         }, function () { remote[name] = { bbox: null, rings: [] }; });
       })).then(function () { return true; });
     }, function () { return false; });
@@ -304,27 +343,201 @@
       return false;
     });
   }
+  // Every zone whose box meets the view's.
+  function inView() {
+    var bb = viewBox();
+    if (!bb) return [];
+    return allRings().filter(function (ring) {
+      var box = ringBox(ring);
+      return !(box.east < bb[0] || box.west > bb[1] || box.north < bb[2] || box.south > bb[3]);
+    });
+  }
+  // What the map draws: the column's zones while it is open, else the scope's.
   function showNear() {
-    nearNow = nearTask();
+    nearNow = column ? column.rings : scope === 'view' ? inView() : nearTask();
     var merged = mergedEntry();
     if (merged && merged.setAirspaces) merged.setAirspaces(nearNow);
     if (window.__aspRefilter) window.__aspRefilter();
+    describeScope();
   }
   // What the map's airspace menu counts: these, not the page's whole payload.
   handle.drawnAirspaces = function () { return nearNow; };
+
+  // The menu's head: which zones, and a line on what that is drawing now.
+  var scopeNote = document.getElementById('asp-scope-note');
+  function describeScope() {
+    document.querySelectorAll('.asp-scope button').forEach(function (b) {
+      var on = b.dataset.scope === scope;
+      b.classList.toggle('is-on', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    if (!scopeNote) return;
+    if (column) scopeNote.textContent = 'Showing the zones above the point you clicked; close it to go back.';
+    else if (scope === 'view') {
+      scopeNote.textContent = nearNow.length + (nearNow.length === 1 ? ' zone' : ' zones')
+        + (clipped() ? ' in the ' + VIEW_MAX / 1000 + ' km around the middle of the view.' : ' in view.');
+    } else scopeNote.textContent = points.length < 2
+      ? 'None until there is a task: draw one, or show all in view.'
+      : 'Within ' + NEAR / 1000 + ' km of the task.';
+  }
+  function setScope(value) {
+    scope = value === 'view' ? 'view' : 'near';
+    refreshAirspace();
+  }
+  document.querySelectorAll('.asp-scope button').forEach(function (b) {
+    b.addEventListener('click', function () { setScope(b.dataset.scope); });
+  });
+  window.__plannerScope = setScope;
   window.__plannerTask = function () { return points.length >= 2 ? xctrackTask() : null; };
   // For the tests: the import path a file, a code and a QR code all end in.
   window.__plannerImport = function (text) { return readTask(text).then(function (task) { importTask(task, 'a test'); return points.length; }); };
-  handle.planned = function () { return points.length >= 2; };
+  // Whether the map is drawing a selection yet (the menu's counts mean nothing before).
+  handle.planned = function () { return points.length >= 2 || scope === 'view' || !!column; };
   var loading = null;
   function refreshAirspace() {
     showNear();
     if (loading) return;
     loading = loadNear().then(function (arrived) {
       loading = null;
-      if (arrived) { showNear(); reportAirspace(); refreshAirspace(); }
+      if (arrived) {
+        if (column) { column.rings = over(column.at); drawColumn(); }
+        showNear(); reportAirspace(); refreshAirspace();
+      }
     });
   }
+
+  // ---- what is above a point -----------------------------------------------------------
+  //
+  // A click on the map while not drawing reads the column over that point: every zone
+  // there, whichever country, listed from the top down with its limits and what its name
+  // says of when it is there, and drawn on its own until closed. The first answer is from
+  // what is loaded; the point's country's layer is fetched if it is not, and the list
+  // redone when it lands. A nudge to look, as the rest of the page is: the AIS decides.
+  var COLUMN_TOP = 4000;    // the bar's scale, metres above sea level
+  var pin = null, columnPanel = null;
+  function heights(ring, at) {
+    var ground = handle.groundAt ? handle.groundAt(at[0], at[1]) : null;
+    if (ground === null || ground === undefined || isNaN(ground)) ground = 0;
+    var floor = ring.g ? ground : ring.fu !== undefined ? ground + ring.fu : ring.f;
+    var top = ring.cu !== undefined ? ground + ring.cu : ring.c;
+    return { ground: ground, floor: floor, top: Math.max(top, floor), open: !!ring.t };
+  }
+  function over(at) {
+    return allRings().filter(function (ring) {
+      var b = ringBox(ring);
+      return at[0] >= b.west && at[0] <= b.east && at[1] >= b.south && at[1] <= b.north && pointIn(ring, at);
+    }).sort(function (a, b) {
+      var ha = heights(a, at), hb = heights(b, at);
+      return hb.floor - ha.floor || hb.top - ha.top;
+    });
+  }
+  // What the published name says of when it is there, and the hours at the chosen time,
+  // as the crossings list marks them.
+  function whenMark(ring) {
+    var hours = window.aspHours, when = hours ? hours.chosen() : null;
+    if (!hours) return null;
+    if (hours.inactive(ring, when)) return ['is-shut', 'inactive ' + hours.offLabel(ring.off)];
+    if (hours.activation(ring)) return ['is-booked', 'if activated'];
+    if (when && ring.w) {
+      var open = hours.activeAt(ring.w, when, hours.holidays());
+      return [open ? 'is-open' : 'is-shut', open ? 'operating' : 'outside hours'];
+    }
+    return null;
+  }
+  function columnHost() {
+    return document.querySelector('.merged-view .m3-corner-row');
+  }
+  function drawColumn() {
+    if (!column) return;
+    var host = columnHost();
+    if (!host) return;
+    if (!columnPanel) {
+      columnPanel = document.createElement('div');
+      columnPanel.className = 'plan-column';
+      columnPanel.setAttribute('role', 'dialog');
+      columnPanel.setAttribute('aria-label', 'The airspace above this point');
+    }
+    if (columnPanel.parentNode !== host) host.appendChild(columnPanel);
+    var colours = handle.scene().airspaceColours || {};
+    var rings = column.rings, at = column.at;
+    columnPanel.innerHTML = '<div class="plan-column-head"><span class="plan-task-head"></span>'
+      + '<button type="button" class="plan-column-close" aria-label="Close" title="Close">×</button></div>'
+      + '<div class="plan-column-body"><div class="plan-column-bar" aria-hidden="true"><i class="plan-column-ground"></i></div>'
+      + '<ul class="plan-column-list"></ul></div><p class="plan-task-note"></p>';
+    columnPanel.querySelector('.plan-task-head').textContent = rings.length
+      ? 'Above this point · ' + rings.length + (rings.length === 1 ? ' zone' : ' zones')
+      : 'Above this point';
+    columnPanel.querySelector('.plan-column-close').addEventListener('click', closeColumn);
+    var bar = columnPanel.querySelector('.plan-column-bar'), list = columnPanel.querySelector('.plan-column-list');
+    var ground = heights({ g: true }, at).ground;
+    bar.querySelector('.plan-column-ground').style.height = Math.min(100, ground / COLUMN_TOP * 100) + '%';
+    rings.forEach(function (ring, i) {
+      var h = heights(ring, at), colour = colours[ring.k] || '#888888';
+      // One lane each, so a zone over another's height range does not hide it.
+      var lane = document.createElement('i');
+      lane.className = 'plan-column-zone' + (h.open || h.top > COLUMN_TOP ? ' is-open' : '');
+      var lo = Math.min(h.floor, COLUMN_TOP), hi = Math.min(h.top, COLUMN_TOP);
+      lane.style.cssText = 'background:' + colour + ';left:' + (i / rings.length * 100) + '%;width:'
+        + (100 / rings.length) + '%;bottom:' + (lo / COLUMN_TOP * 100) + '%;height:'
+        + Math.max(1.5, (hi - lo) / COLUMN_TOP * 100) + '%';
+      bar.appendChild(lane);
+      var row = document.createElement('li');
+      var swatch = document.createElement('span');
+      swatch.className = 'plan-swatch';
+      swatch.style.background = colour;
+      var name = document.createElement('b');
+      var limits = ring.lo !== undefined && ring.hi !== undefined;
+      name.textContent = limits ? (ring.nm || ring.n) : ring.n;
+      var text = document.createElement('span');
+      text.appendChild(name);
+      var mark = whenMark(ring);
+      if (mark) {
+        var tag = document.createElement('span');
+        tag.className = 'plan-when ' + mark[0];
+        tag.textContent = mark[1];
+        text.appendChild(tag);
+      }
+      var sub = document.createElement('small');
+      sub.textContent = [ring.cc || 'CZ', ring.ac, limits ? ring.lo + ' – ' + ring.hi : '']
+        .filter(function (part) { return part; }).join(' · ');
+      text.appendChild(sub);
+      row.appendChild(swatch);
+      row.appendChild(text);
+      list.appendChild(row);
+    });
+    columnPanel.querySelector('.plan-task-note').textContent = rings.length
+      ? 'Bar: ground to ' + COLUMN_TOP + ' m. Only what this map has: check the AIS before flying.'
+      : 'No zone in this map’s data above this point. That is not a clearance: check the AIS before flying.';
+  }
+  function openColumn(at) {
+    column = { at: at, rings: over(at) };
+    var merged = mergedEntry(), map = merged && merged.map;
+    if (map && window.maplibregl && maplibregl.Marker) {
+      if (!pin) {
+        var dot = document.createElement('div');
+        dot.className = 'plan-column-pin';
+        pin = new maplibregl.Marker({ element: dot });
+      }
+      pin.setLngLat(at).addTo(map);
+    }
+    drawColumn();
+    refreshAirspace();
+  }
+  function closeColumn() {
+    if (!column) return;
+    column = null;
+    if (pin) pin.remove();
+    if (columnPanel && columnPanel.parentNode) columnPanel.parentNode.removeChild(columnPanel);
+    refreshAirspace();
+  }
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && column) closeColumn();
+  });
+  // For the tests: open at a point, null closes, and nothing reads what is open.
+  window.__plannerColumn = function (at) {
+    if (at) openColumn(at); else if (at === null) closeColumn();
+    return column;
+  };
 
   function reportAirspace() {
     var box = document.getElementById('plan-airspace');
@@ -647,9 +860,14 @@
     if (!entry || entry.__planner) return;
     entry.__planner = true;
     entry.onClick(function (at) {
-      if (holder.dataset.drawing !== 'on') return;
+      if (holder.dataset.drawing !== 'on') { openColumn(at); return; }
       addPoint(at);
     });
+    // All in view follows the map; the column's panel goes back into a rebuilt map.
+    if (entry.map && entry.map.on) entry.map.on('moveend', function () {
+      if (scope === 'view' && !column) refreshAirspace();
+    });
+    if (column) drawColumn();
     // A turnpoint dragged on the map moves; the task, its distance and the FAI areas follow.
     // Redrawn once a frame at most: the airspace along the task is checked on each redraw.
     var moved = null, dragged = false;
@@ -1357,6 +1575,7 @@
   var drawButton = document.getElementById('plan-draw');
   function drawing(on) {
     holder.dataset.drawing = on ? 'on' : 'off';
+    if (on) closeColumn();
     if (drawButton) {
       drawButton.setAttribute('aria-pressed', on ? 'true' : 'false');
       // Pressed, it says what pressing again does. How to drop turnpoints is in the

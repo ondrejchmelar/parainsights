@@ -120,6 +120,31 @@ STYLE = """
 .plan-switch input:checked { background:var(--ink); }
 .plan-switch input:checked::after { left:21px; }
 .plan-switch input:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+/* What is above a clicked point (planner.js, `openColumn`): a panel where the menus open,
+   under them, and a pin on the map where it was clicked. */
+.plan-column { position:absolute; top:calc(var(--mh) + 8px); left:0; z-index:4; box-sizing:border-box;
+  width:min(340px, calc(100vw - 96px)); display:grid; gap:10px; padding:12px 14px;
+  border-radius:12px; background:var(--float); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
+  border:1px solid var(--float-edge); box-shadow:var(--float-shadow);
+  font:500 14px/1.3 "Noto Sans", ui-sans-serif, system-ui, sans-serif; color:var(--ink); }
+.plan-column-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.plan-column-head .plan-task-head { margin:0; }
+.merged-view .plan-column-close { width:30px; height:30px; padding:0; border-radius:8px; font-size:20px; line-height:1; }
+.plan-column-body { display:grid; grid-template-columns:28px 1fr; gap:12px; }
+.plan-column-bar { position:relative; height:150px; border-radius:6px; overflow:hidden;
+  background:color-mix(in srgb, var(--ink) 8%, transparent); }
+.plan-column-bar i { position:absolute; display:block; }
+.plan-column-ground { left:0; right:0; bottom:0; background:color-mix(in srgb, var(--ink) 30%, transparent); }
+.plan-column-zone { opacity:.85; border-radius:2px; }
+.plan-column-zone.is-open { border-top-left-radius:0; border-top-right-radius:0; }
+.plan-column-list { list-style:none; margin:0; padding:0; display:grid; gap:7px; align-content:start; }
+.plan-column-list li { display:grid; grid-template-columns:10px 1fr; gap:8px; align-items:baseline; }
+.plan-column-list b { font-weight:600; margin-right:4px; }
+.plan-column-list small { display:block; font-size:13px; color:var(--ink-2); }
+.plan-column-list .plan-swatch { width:10px; height:10px; border-radius:3px; }
+.plan-column-list .plan-when { font-size:12px; padding:0 7px; }
+.plan-column-pin { width:14px; height:14px; border-radius:50%; background:var(--accent); border:2px solid #fff;
+  box-shadow:0 0 0 2px rgba(0,0,0,.4); }
 .merged-view .plan-rules-seg { display:flex; }
 .merged-view .plan-rules-seg button { flex:1; }
 /* The takeoff: its day and the time, then the slider the whole width under them, so a

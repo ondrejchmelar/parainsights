@@ -580,6 +580,66 @@ def test_a_zone_off_for_the_summer_leaves_the_map_and_a_booked_one_says_so():
     assert "AUP" in answer["note"]
 
 
+# ------------------------------------------- the airspace with no task
+#
+# The map draws only the zones near a task (`NEAR`), and nothing before there is one. Two
+# ways to see the rest: every zone in view (the airspace menu's head), and a click with
+# Draw off, which reads every zone above the point.
+
+# The map's view, as far as the planner asks it: a box, its middle, and a move.
+_VIEW = """
+var bounds = null;
+entry.map = { getBounds: function () { return { getWest: function () { return bounds[0]; },
+                                                getEast: function () { return bounds[1]; },
+                                                getSouth: function () { return bounds[2]; },
+                                                getNorth: function () { return bounds[3]; } }; },
+              getCenter: function () { return { lng: (bounds[0] + bounds[1]) / 2, lat: (bounds[2] + bounds[3]) / 2 }; },
+              on: function () {} };
+function drawn() { return handle.drawnAirspaces().map(function (r) { return r.n.split('  ')[0]; }).sort(); }
+"""
+
+
+@needs_chrome
+def test_all_in_view_draws_the_zones_in_view_with_no_task():
+    west = _band("WEST", 14.1, 14.2, 49.4, 49.6)
+    east = _band("EAST", 14.8, 14.9, 49.4, 49.6)
+    answer = _run(_DROP + _VIEW + """
+    bounds = [14.0, 14.5, 49.0, 50.0];
+    var near = drawn();
+    window.__plannerScope('view');
+    var west = drawn();
+    bounds = [14.6, 15.0, 49.0, 50.0];
+    window.__plannerScope('view');
+    var east = drawn();
+    window.__plannerScope('near');
+    return { near: near, west: west, east: east, after: drawn() };
+    """, spaces=[west, east])
+    assert answer["near"] == [], "a zone was drawn with no task and not all in view"
+    assert answer["west"] == ["WEST"]
+    assert answer["east"] == ["EAST"], "the view moved and the zones did not follow"
+    assert answer["after"] == [], "back to near the task, the view's zones stayed"
+
+
+@needs_chrome
+def test_a_click_off_drawing_lists_every_zone_above_the_point_top_down():
+    low = _band("LOW", 14.3, 14.7, 49.3, 49.7, floor="GND", ceiling="4000ft MSL", klass="D")
+    high = _band("HIGH", 14.2, 14.8, 49.2, 49.8, floor="FL 65", ceiling="FL 95")
+    aside = _band("ASIDE", 14.85, 14.95, 49.4, 49.6)
+    answer = _run(_DROP + _VIEW + """
+    document.getElementById('plan-draw').click();          // Draw off
+    at(14.5, 49.5);
+    var column = window.__plannerColumn().rings.map(function (r) { return r.n.split('  ')[0]; });
+    var shown = drawn(), points = turnpoints();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    return { column: column, shown: shown, points: points, closed: window.__plannerColumn(),
+             after: drawn() };
+    """, spaces=[low, high, aside])
+    assert answer["points"] == 0, "a click with Draw off dropped a turnpoint"
+    assert answer["column"] == ["HIGH", "LOW"], "not every zone above, or not top down"
+    assert answer["shown"] == ["HIGH", "LOW"], "the map did not draw the column's zones"
+    assert answer["closed"] is None and answer["after"] == [], "Escape left the column up"
+
+
 # ------------------------------------------- outside the airspace's country
 #
 # The planner's ground reaches the Alps and its airspace is Czech only. A route there

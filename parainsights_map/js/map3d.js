@@ -2390,6 +2390,10 @@
         var count = menu.querySelector('.m3-asp-count');
         var extra = host.querySelector('.m3-airspace-extra');
         if (extra) { menu.insertBefore(extra, menu.querySelector('.m3-asp-foot')); extra.hidden = false; }
+        // And at its head, what decides the rest (`.m3-airspace-lead`, the planner's
+        // "near the task / all in view").
+        var lead = host.querySelector('.m3-airspace-lead');
+        if (lead) { menu.insertBefore(lead, menu.firstChild); lead.hidden = false; }
         var colours = scene.airspaceColours || {};
         var kinds = (scene.airspaceClasses || []).slice();
         boxes.forEach(function (d) {
@@ -2423,7 +2427,8 @@
           else refresh();
         }
         function update() {
-          // Before the planner has a task nothing is drawn, and the kinds can still be set.
+          // Before the planner draws anything (no task, and not all in view) the kinds can
+          // still be set.
           var planned = handle.planned ? handle.planned() : true;
           var per = {};
           boxes.forEach(function (d) { per[d.space.k] = (per[d.space.k] || 0) + 1; });
@@ -2437,7 +2442,7 @@
           slider.max = top();
           slider.value = floorLimit === Infinity ? slider.max : Math.min(floorLimit, slider.max);
           floorOut.textContent = floorLimit === Infinity ? 'every floor' : floorLimit + ' m';
-          count.textContent = planned ? boxes.filter(boxShown).length + ' shown' : 'drawn along a task';
+          count.textContent = planned ? boxes.filter(boxShown).length + ' shown' : 'none drawn yet';
         }
         function open(on) {
           menu.hidden = !on;
@@ -2472,7 +2477,7 @@
         }
         menu.querySelector('.m3-asp-reset').addEventListener('click', reset);
         update();
-        return { update: update, reset: reset, extra: extra,
+        return { update: update, reset: reset, extra: extra, lead: lead,
                  state: function () { return { off: Object.assign({}, kindsOff), floor: floorLimit }; },
                  restore: function (st) { kindsOff = Object.assign({}, st.off); floorLimit = st.floor; update(); refresh(); } };
       })();
@@ -2682,6 +2687,7 @@
           return h !== filterHook;
         });
         if (aspMenu.extra) { aspMenu.extra.hidden = true; host.appendChild(aspMenu.extra); }
+        if (aspMenu.lead) { aspMenu.lead.hidden = true; host.appendChild(aspMenu.lead); }
         if (bottomExtra) { bottomExtra.hidden = true; host.appendChild(bottomExtra); }
         if (cornerExtra) { cornerExtra.hidden = true; host.appendChild(cornerExtra); }
         try { map.remove(); } catch (error) { /* a dead context can throw on the way out */ }
