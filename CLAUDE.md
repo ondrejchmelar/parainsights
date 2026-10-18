@@ -46,9 +46,6 @@ empty.
   should scroll the page like anywhere else; a tap reads a point, and a press held then
   dragged scrubs (`bindReader` in `meteo/js/meteo.js` is the pattern). Today a drag over
   the side view moves the cursor and the page does not scroll.
-- **Planner → XCTrack: a cylinder size?** The export is a waypoints task with no
-  cylinders. Open question whether to offer a radius per turnpoint (or one for all), and
-  what XCTrack does with it in a waypoints task as against a competition task.
 - **One format for the debrief.** Its parts — the figures that open it, the finding cards,
   the context cards, the note — each have their own shape; make them read as one.
 - **Time slider: a position gauge, as flymet has.** (The user's note, verbatim: "flymet-
@@ -150,8 +147,17 @@ options, takeoff time — sits under it as a flight's side view does (`planner.s
 inside `.asp-stage`, so full screen keeps it), and the XCTrack import and export and the
 crossings — in the order the task reaches them — are under that (`planner.results`). A task can
 be kept in the browser (localStorage `parainsights.planner.tasks`: turnpoints, closed,
-rules) from the export menu's *Save in this browser*, and comes back from the Import
-menu's *Saved in this browser* list, each with its ×. The
+rules, cylinder) from the export menu's *Save in this browser*, and comes back from the Import
+menu's *Saved in this browser* list, each with its ×.
+**The export gives every turnpoint a cylinder** (October 2026; Task menu, *Next
+turnpoint*, 400 m by default): XCTrack's waypoints task ignores any circle and points at a
+turnpoint until the pilot switches it by hand, so the default is a competition task
+(`CLASSIC`, version 2) with no start and no goal set — no gates, no clock — which moves
+on inside each cylinder; flyXC exports the same (400 m, no start, no goal). A closed
+course's last cylinder is the closing circle of the scored triangle, less six radii for
+the corners a cylinder cuts (`goalRadius`). *By hand* is the waypoints task as before. An
+import sets the menu from the turnpoints' commonest radius between the first and the last.
+The
 strip carries no ⓘ: what a control does is its title (the scoring rules on the rules
 pill's, from `js/xc.js`). A task stands on the map's own terrain (`planZ` in `map3d`),
 not the page's coarse grid, which floated a turnpoint hundreds of metres off the slope

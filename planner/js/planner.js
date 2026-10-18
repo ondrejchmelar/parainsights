@@ -1050,10 +1050,17 @@
 
   // ---- to XCTrack -----------------------------------------------------------------------
   //
-  // The route as XCTrack's waypoints task (xctrack.org/Competition_Interfaces.html, "XC /
-  // Waypoints task"): the turnpoints in order with no cylinders — what an XC route is,
-  // where a competition task would want start, goal and radii nobody drew. Three ways in,
-  // because a phone and a desktop want different ones:
+  // The route as an XCTrack task (xctrack.org/Competition_Interfaces.html), in the QR
+  // code's compact form (version 2), which XCTrack also opens as a file. Two kinds, by the
+  // Task menu's "Next turnpoint" (`cylinder`):
+  //  - a cylinder round every turnpoint, the default: a competition task ("CLASSIC") with
+  //    no start and no goal set, so no gates and no clock — XCTrack moves on to the next
+  //    turnpoint on entering one, as flyXC's export does (400 m, no start, no goal). A
+  //    closed course's last cylinder is its closing circle (`goalRadius`), so XCTrack
+  //    says "goal" where the triangle has closed;
+  //  - by hand: the waypoints task ("XC / Waypoints task"), which ignores any circle and
+  //    keeps pointing at a turnpoint until the pilot switches it.
+  // Three ways in, because a phone and a desktop want different ones:
   //  - a .xctsk file, which on the phone XCTrack runs on opens straight into it;
   //  - a task code: the task stored with XContest (tools.xcontest.org, the service XCTrack
   //    itself shares tasks through) for a month, four letters to type into XCTrack;
@@ -1070,18 +1077,55 @@
       return out + String.fromCharCode(v + 63);
     }).join('');
   }
+  // The cylinder's radius in metres, 0 for by hand.
+  function cylinder() {
+    var pick = document.getElementById('plan-cyl');
+    return pick ? Math.max(0, Number(pick.value) || 0) : 0;
+  }
+  // Set from a saved task or an import; a radius the menu does not offer becomes an
+  // option of its own, so a task comes back as it went out.
+  function setCylinder(radius) {
+    var pick = document.getElementById('plan-cyl');
+    radius = Math.max(0, Math.round(Number(radius) || 0));
+    if (!pick) return;
+    if (!pick.querySelector('option[value="' + radius + '"]')) {
+      var option = document.createElement('option');
+      option.value = String(radius);
+      option.textContent = radius < 1000 ? radius + ' m' : radius / 1000 + ' km';
+      var after = Array.prototype.filter.call(pick.options, function (o) { return Number(o.value) > radius; })[0];
+      pick.insertBefore(option, after || null);
+    }
+    pick.value = String(radius);
+  }
+  // A closed course's last cylinder: where the flight has closed the triangle the score
+  // chose, under the rules' closing fraction. Not of the perimeter drawn but of the one
+  // flown, which is shorter — a turn at a cylinder's edge cuts its corner by up to the
+  // diameter, so three corners take up to six radii off. Never under the turnpoints' own.
+  function goalRadius(radius) {
+    if (points.length < 3 || !document.getElementById('plan-close').checked) return radius;
+    var corners = score().corners;
+    if (!corners) return radius;
+    var perimeter = distance(corners[0], corners[1]) + distance(corners[1], corners[2])
+      + distance(corners[2], corners[0]);
+    return Math.max(radius, Math.floor(rules().closing * (perimeter - 6 * radius)));
+  }
+  function cylinderText() {
+    var radius = cylinder();
+    if (!radius) return 'turnpoints by hand';
+    return (radius < 1000 ? radius + ' m' : radius / 1000 + ' km') + ' cylinders';
+  }
   function xctrackTask() {
-    var walk = course();
-    return {
-      T: 'W', V: 2,
-      t: walk.map(function (p, i) {
-        var ground = handle.groundAt ? handle.groundAt(p[0], p[1]) : null;
-        var alt = ground === null || ground === undefined || isNaN(ground) ? 0 : ground;
-        // Named as the map numbers them; a closed course returns to turnpoint 1.
-        var n = i < points.length ? i + 1 : 1;
-        return { n: 'TP' + n, z: polyline([p[0] * 1e5, p[1] * 1e5, alt]) };
-      })
-    };
+    var walk = course(), radius = cylinder(), goal = goalRadius(radius);
+    var t = walk.map(function (p, i) {
+      var ground = handle.groundAt ? handle.groundAt(p[0], p[1]) : null;
+      var alt = ground === null || ground === undefined || isNaN(ground) ? 0 : ground;
+      var values = [p[0] * 1e5, p[1] * 1e5, alt];
+      if (radius) values.push(i === walk.length - 1 && walk.length > points.length ? goal : radius);
+      // Named as the map numbers them; a closed course returns to turnpoint 1.
+      var n = i < points.length ? i + 1 : 1;
+      return { n: 'TP' + n, z: polyline(values) };
+    });
+    return radius ? { taskType: 'CLASSIC', version: 2, t: t } : { T: 'W', V: 2, t: t };
   }
   var xctOut = document.getElementById('plan-xct-out');
   var dlg = document.getElementById('plan-xct-dlg'), dlgBody = document.getElementById('plan-xct-body');
@@ -1095,7 +1139,8 @@
     sub.hidden = !!title;
     sub.textContent = title ? '' : walk.map(function (p, i) {
       return 'TP' + (i < points.length ? i + 1 : 1);
-    }).join(' \u2192 ') + ' \u00b7 ' + (score().total / 1000).toFixed(0) + ' km';
+    }).join(' \u2192 ') + ' \u00b7 ' + (score().total / 1000).toFixed(0) + ' km \u00b7 '
+      + cylinderText();
     dlgBody.innerHTML = html;
     if (dlg.showModal && !dlg.open) dlg.showModal(); else dlg.setAttribute('open', '');
     return dlgBody;
@@ -1271,7 +1316,7 @@
     var entry = { name: name, saved: new Date().toISOString(),
                   points: points.map(function (p) { return p.slice(); }),
                   closed: document.getElementById('plan-close').checked,
-                  rules: document.getElementById('plan-rules').value };
+                  rules: document.getElementById('plan-rules').value, cylinder: cylinder() };
     var list = savedTasks().filter(function (t) { return t.name !== name; });
     list.unshift(entry);
     if (!storeTasks(list)) { xctSay('Could not save: this browser keeps nothing for this page.'); return false; }
@@ -1285,6 +1330,7 @@
     points = task.points.map(function (p) { return [Number(p[0]), Number(p[1])]; });
     document.getElementById('plan-close').checked = !!task.closed;
     if (task.rules) document.getElementById('plan-rules').value = task.rules;
+    if (task.cylinder !== undefined) setCylinder(task.cylinder);
     drawing(false);
     redraw();
     var merged = mergedEntry();
@@ -1344,8 +1390,8 @@
   // (version 1, `turnpoints[].waypoint`), its QR form (version 2, `t[].z` polyline), the
   // waypoints task (`T` "W", which the export here writes), and a QR code compressed with
   // zlib (`XCTSKZ:`). The turnpoints replace the route drawn; one that ends where it
-  // starts comes in closed. Cylinders, start gates and times are not a plan's, and are
-  // left behind.
+  // starts comes in closed, and the turnpoints' cylinder sets the Task menu's
+  // (`cylinderOf`). Start gates and times are not a plan's, and are left behind.
   function decodePolyline(text) {
     var values = [], i = 0;
     while (i < text.length) {
@@ -1354,6 +1400,23 @@
       values.push(result & 1 ? ~(result >> 1) : result >> 1);
     }
     return values;
+  }
+  // The turnpoints' cylinder, as one radius: the commonest over the turnpoints between the
+  // first and the last, which a competition task makes a start and a goal of their own
+  // size. A waypoints task has none, and comes in to be switched by hand.
+  function cylinderOf(task) {
+    var list = task && (task.t || task.turnpoints);
+    if (task.T === 'W' || !Array.isArray(list)) return 0;
+    var radii = list.map(function (tp) {
+      return tp.z ? decodePolyline(tp.z)[3] : (tp.radius !== undefined ? tp.radius : (tp.waypoint || {}).radius);
+    });
+    var middle = radii.length > 2 ? radii.slice(1, -1) : radii, count = {}, best = 0;
+    middle.forEach(function (r) {
+      if (!(r > 0)) return;
+      count[r] = (count[r] || 0) + 1;
+      if (!best || count[r] > count[best] || (count[r] === count[best] && r < best)) best = r;
+    });
+    return best;
   }
   function turnpointsOf(task) {
     var list = task && (task.t || task.turnpoints);
@@ -1387,6 +1450,7 @@
     remember();
     points = list.map(function (p) { return [Math.round(p[0] * 1e5) / 1e5, Math.round(p[1] * 1e5) / 1e5]; });
     document.getElementById('plan-close').checked = closed;
+    setCylinder(cylinderOf(task));
     drawing(false);
     redraw();
     var merged = mergedEntry();
@@ -1667,9 +1731,10 @@
       parts.push('takeoff ' + DAY_NAMES[when.getDay()] + ' ' + when.getDate() + ' '
                  + MONTHS[when.getMonth()] + ' ' + clock(Number(time.value)));
     }
+    parts.push(cylinderText());
     summary.textContent = parts.join(' · ');
   }
-  ['plan-close', 'plan-fai', 'plan-rules'].forEach(function (id) {
+  ['plan-close', 'plan-fai', 'plan-rules', 'plan-cyl'].forEach(function (id) {
     document.getElementById(id).addEventListener('change', describeOptions);
   });
   if (takeoff) {

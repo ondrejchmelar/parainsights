@@ -278,6 +278,17 @@ def task_menu() -> str:
         # The value the scoring reads, set by the two buttons above.
         '<select id="plan-rules" class="sr" tabindex="-1" aria-hidden="true">'
         '<option value="world">XContest</option><option value="cpp">ČPP (Czech)</option></select>'
+        # What the export to XCTrack carries (`cylinder` in planner.js).
+        '<span class="plan-task-head">In XCTrack</span>'
+        '<label class="plan-switch" for="plan-cyl"><span>Next turnpoint<small>inside a cylinder this '
+        'wide, or by hand</small></span><select id="plan-cyl" class="plan-field">'
+        '<option value="0">By hand</option><option value="200">200 m</option>'
+        '<option value="400" selected>400 m</option><option value="1000">1 km</option>'
+        '<option value="3000">3 km</option></select></label>'
+        '<p class="plan-task-note">In a turnpoint’s cylinder XCTrack moves on to the next one. '
+        'A closed course’s last cylinder is the closing circle, a little smaller than the '
+        'yellow one so that cutting the corners still closes it. By hand: a list of waypoints, '
+        'switched in XCTrack’s menu.</p>'
         '<span class="plan-task-head">Takeoff</span>'
         '<div class="plan-takeoff">'
         '<label for="plan-day" class="sr">Takeoff day</label>'
@@ -327,7 +338,9 @@ CODE_ICON = '<path d="M4 7h12M4 13h12M8 3.5 6.5 16.5M13.5 3.5 12 16.5"/>'
 QR_ICON = ('<rect x="3" y="3" width="5" height="5" rx="1"/><rect x="12" y="3" width="5" height="5" rx="1"/>'
            '<rect x="3" y="12" width="5" height="5" rx="1"/><path d="M12 12h2v2M17 12v1M12 17h1M15 15h2v2"/>')
 
-XCT_HELP = ("Turnpoints in order with the ground height under each, no cylinders. "
+XCT_HELP = ("Turnpoints in order with the ground height under each, and the cylinder the "
+            "Task menu sets, so XCTrack moves on to the next turnpoint by itself; set to "
+            "<b>by hand</b>, a list of waypoints you switch in XCTrack. "
             "<b>File</b>: open it in XCTrack. <b>Task code</b> and <b>QR code</b> go through "
             "XContest's task service; a code lasts a month. <b>Import</b> takes any of the "
             "three back and replaces the route.")

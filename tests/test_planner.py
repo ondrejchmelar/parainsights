@@ -703,32 +703,68 @@ def _decode_polyline(text):
     return values
 
 
+_TRIANGLE = """
+    function at(fx, fy) { return [dem.west + (dem.east - dem.west) * fx, dem.north - (dem.north - dem.south) * fy]; }
+    var close = document.getElementById('plan-close');
+    close.checked = true; close.dispatchEvent(new Event('change'));
+    tap(0.35, 0.40); tap(0.60, 0.40); tap(0.48, 0.62);
+"""
+
+
 @needs_chrome
-def test_the_task_goes_to_xctrack_as_a_waypoints_task():
-    """XCTrack's waypoints task (xctrack.org/Competition_Interfaces.html): `T` "W", `V` 2,
-    each turnpoint a name and its longitude, latitude and altitude polyline-encoded. A
-    closed course returns to turnpoint 1, and the export is offered only once there is a
-    route."""
+def test_the_task_goes_to_xctrack_with_a_cylinder_round_every_turnpoint():
+    """By default a competition task (xctrack.org/Competition_Interfaces.html, version 2)
+    with no start and no goal set, so XCTrack moves on to the next turnpoint inside each
+    cylinder: longitude, latitude, altitude and radius polyline-encoded. A closed course
+    returns to turnpoint 1, its last cylinder the closing circle less six radii of cut
+    corners, and the export is offered only once there is a route."""
     answer = _run(_HARNESS + """
     var before = document.getElementById('plan-xct-export').hidden;
-    document.getElementById('plan-close').checked = true;
-    tap(0.35, 0.40); tap(0.60, 0.40); tap(0.48, 0.62);
-    var ground = handle.groundAt(dem.west + (dem.east - dem.west) * 0.35,
-                                 dem.north - (dem.north - dem.south) * 0.40);
+    """ + _TRIANGLE + """
+    var a = at(0.35, 0.40), b = at(0.60, 0.40), c = at(0.48, 0.62);
     return { before: before, after: document.getElementById('plan-xct-export').hidden,
-             task: window.__plannerTask(), ground: ground,
-             first: [dem.west + (dem.east - dem.west) * 0.35, dem.north - (dem.north - dem.south) * 0.40] };
+             task: window.__plannerTask(), ground: handle.groundAt(a[0], a[1]), corners: [a, b, c],
+             summary: document.getElementById('plan-opts-sum').textContent };
     """)
     assert answer["before"] is True, "an export was offered with no route to send"
     assert answer["after"] is False
     task = answer["task"]
-    assert task["T"] == "W" and task["V"] == 2
+    assert task["taskType"] == "CLASSIC" and task["version"] == 2
+    assert "s" not in task and "g" not in task, "a start or a goal would bring gates and a clock"
     assert [tp["n"] for tp in task["t"]] == ["TP1", "TP2", "TP3", "TP1"]
-    lon, lat, alt = _decode_polyline(task["t"][0]["z"])
-    assert lon / 1e5 == pytest.approx(answer["first"][0], abs=2e-5)
-    assert lat / 1e5 == pytest.approx(answer["first"][1], abs=2e-5)
+    decoded = [_decode_polyline(tp["z"]) for tp in task["t"]]
+    lon, lat, alt, radius = decoded[0]
+    assert lon / 1e5 == pytest.approx(answer["corners"][0][0], abs=2e-5)
+    assert lat / 1e5 == pytest.approx(answer["corners"][0][1], abs=2e-5)
     assert alt == pytest.approx(answer["ground"], abs=1), "the turnpoint lost the ground's height"
+    assert [d[3] for d in decoded[:3]] == [400, 400, 400]
+    perimeter = sum(_metres(answer["corners"][i], answer["corners"][(i + 1) % 3]) for i in range(3))
+    assert decoded[3][3] == pytest.approx(0.2 * (perimeter - 6 * 400), abs=2), \
+        "the goal is not the closing circle"
+    assert answer["summary"].endswith(" · 400 m cylinders")
 
+
+@needs_chrome
+def test_by_hand_the_task_goes_as_waypoints():
+    """Next turnpoint "by hand": XCTrack's waypoints task, `T` "W", `V` 2, no radius."""
+    answer = _run(_HARNESS + """
+    var pick = document.getElementById('plan-cyl');
+    pick.value = '0'; pick.dispatchEvent(new Event('change'));
+    """ + _TRIANGLE + """
+    return { task: window.__plannerTask(), summary: document.getElementById('plan-opts-sum').textContent };
+    """)
+    task = answer["task"]
+    assert task["T"] == "W" and task["V"] == 2
+    assert [len(_decode_polyline(tp["z"])) for tp in task["t"]] == [3, 3, 3, 3]
+    assert answer["summary"].endswith(" · turnpoints by hand")
+
+
+def _metres(a, b):
+    """The planner's distance: the FAI sphere."""
+    import math
+    la1, la2 = math.radians(a[1]), math.radians(b[1])
+    h = math.sin((la2 - la1) / 2) ** 2 + math.cos(la1) * math.cos(la2) * math.sin(math.radians(b[0] - a[0]) / 2) ** 2
+    return 2 * 6371000 * math.asin(min(1, math.sqrt(h)))
 
 
 @needs_chrome
@@ -836,15 +872,39 @@ def test_a_task_comes_in_from_xctrack_in_every_form(form):
     answer = _run(_MAP + """
     return window.__plannerImport(%s).then(function (n) {
       return { n: n, closed: document.getElementById('plan-close').checked,
+               cylinder: document.getElementById('plan-cyl').value,
                first: route.points[0], exportShown: !document.getElementById('plan-xct-export').hidden };
     });""" % json.dumps(text))
     if form == "file-v1":
         assert answer["n"] == 3 and answer["closed"] is True
+        assert answer["cylinder"] == "400", "the turnpoints' cylinder, not the start's"
     else:
         assert answer["n"] == 3 and answer["closed"] is False
+        assert answer["cylinder"] == "0", "a waypoints task is switched by hand"
     assert answer["first"][0] == pytest.approx(13.7715, abs=1e-4)
     assert answer["first"][1] == pytest.approx(50.4075, abs=1e-4)
     assert answer["exportShown"] is True
+
+
+@needs_chrome
+def test_a_task_goes_out_and_comes_back_with_its_cylinder():
+    """A radius the menu does not offer becomes an option of its own, and the export
+    after the import carries it again."""
+    answer = _run(_HARNESS + """
+    var pick = document.getElementById('plan-cyl');
+    tap(0.35, 0.40); tap(0.60, 0.40); tap(0.48, 0.62);
+    var task = window.__plannerTask();
+    // 400 m is the last two characters of each turnpoint's `z`, 750 m the three put there.
+    task.t = task.t.map(function (tp) { return { n: tp.n, z: tp.z.slice(0, -2) + '{m@' }; });
+    pick.value = '0'; pick.dispatchEvent(new Event('change'));
+    return window.__plannerImport(JSON.stringify(task)).then(function () {
+      return { cylinder: pick.value, label: pick.selectedOptions[0].textContent,
+               again: window.__plannerTask() };
+    });
+    """)
+    assert answer["cylinder"] == "750" and answer["label"] == "750 m"
+    assert answer["again"]["taskType"] == "CLASSIC"
+    assert {_decode_polyline(tp["z"])[3] for tp in answer["again"]["t"]} == {750}
 
 
 @needs_chrome
