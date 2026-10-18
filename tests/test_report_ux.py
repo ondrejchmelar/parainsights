@@ -410,26 +410,27 @@ class TestAirspaceSection:
         return {"status": status, "zones": zones, "others": others, "profile": profile,
                 "start": 1_650_000_000, "offset": 7200, "colours": {"base": "#c2410c"}}
 
-    def test_zones_are_cards_a_chart_and_rows_clearance_needed_first(self):
+    def test_zones_are_cards_a_chart_and_rows_entered_in_time_order(self):
         at = {"t": 700, "alt": 1500, "lon": 14.05, "lat": 50.05}
         inside = {"seconds": 300, "from": 600, "to": 900, "depth": 120, "low": 1450, "high": 1520, "at": at}
         dom = self._render(self._along([
-            self._zone("AREA", "base", "Other E", "inside", inside=dict(inside, seconds=1500)),
             self._zone("CTR X", "base", "CTR D", "inside", inside=inside),
+            self._zone("AREA", "base", "Other E", "inside", inside=dict(inside, seconds=1500, **{"from": 300})),
             self._zone("TMA Y", "base", "TMA C", "under", under={"m": 140, "at": at}, at=at),
         ], others=4))
         assert "data-airspace-along hidden" not in dom
         rows = re.findall(r'<td class="zone">.*?</tr>', dom, re.S)
-        assert [re.search(r"</i>([^<]+)", r).group(1).strip() for r in rows] == ["CTR X", "AREA", "TMA Y"]
-        assert 'asp-chip asp-in">Inside 5 min · 120 m in' in rows[0], "a CTR needs a clearance"
-        assert 'asp-chip asp-near">Inside 25 min' in rows[1], "class E does not"
-        assert '<small class="asp-class">class E</small>' in rows[1]
+        # Entered first, in the order entered (AREA at 300 s, the CTR at 600 s), then the miss.
+        assert [re.search(r"</i>([^<]+)", r).group(1).strip() for r in rows] == ["AREA", "CTR X", "TMA Y"]
+        assert 'asp-chip asp-near">Inside 25 min' in rows[0], "class E needs no clearance"
+        assert '<small class="asp-class">class E</small>' in rows[0]
+        assert 'asp-chip asp-in">Inside 5 min · 120 m in' in rows[1], "a CTR does"
         assert "140 m under the floor" in rows[2]
-        assert "Entered: CTR X, for 5 minutes" in dom
+        assert "Entered: AREA, for 25 minutes" in dom
         assert "Closest under a floor: TMA Y" in dom
         assert "<b>5 zones</b>" in dom, "the near miss and the four further off"
         assert "+ 4 more on the map" in dom
-        assert 'data-shown="CTR X"' in dom, "the first row's button hands its zone to the map"
+        assert 'data-shown="AREA"' in dom, "the first row's button hands its zone to the map"
 
     def test_seconds_inside_are_seconds(self):
         at = {"t": 700, "alt": 1218, "lon": 14.05, "lat": 50.05}

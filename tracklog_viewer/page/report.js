@@ -338,11 +338,12 @@ function renderAirspaceAlong(section, along, show) {
       : 'No airspace in the vicinity.') + '</p>';
     return;
   }
-  // Zones that needed a clearance first, then the others entered, then the near misses —
-  // each group in the map's order (longest inside, then closest).
+  // The zones entered first, in the order they were entered, then the near misses in the
+  // map's order (closest first).
   var zones = along.zones.map(function (z, i) { return [z, i]; }).sort(function (a, b) {
-    function rank(z) { return z.inside ? (aspBarred(z) ? 0 : 1) : 2; }
-    return rank(a[0]) - rank(b[0]) || a[1] - b[1];
+    var ia = a[0].inside, ib = b[0].inside;
+    if (ia && ib) return ia.from - ib.from || a[1] - b[1];
+    return (ia ? 0 : 1) - (ib ? 0 : 1) || a[1] - b[1];
   }).map(function (pair) { return pair[0]; });
   var entered = zones.filter(function (z) { return z.inside; });
   var misses = zones.filter(function (z) { return !z.inside; });
