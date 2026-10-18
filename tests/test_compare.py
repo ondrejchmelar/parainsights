@@ -42,7 +42,7 @@ def _tap(browser, selector):
         "(() => { var r = document.querySelector(%s).getBoundingClientRect();"
         " return [r.left + r.width / 2, r.top + r.height / 2]; })()" % json.dumps(selector))
     browser.click(x, y)
-    browser.settle(0.4)
+    browser.frame()
     # A compare tap redraws the comparison after a frame is painted, with its button
     # busy until then; on a software renderer a frame can take seconds.
     browser.wait("!document.querySelector('.tab-compare.is-busy')")
@@ -86,8 +86,7 @@ def test_a_second_tap_while_busy_does_not_undo_the_first(page):
 def test_removing_a_compared_flight_leaves_the_comparison(page):
     _tap(page, '[data-flight-tab="f0"] .tab-open')
     _tap(page, '[data-flight-tab="f0"] .tab-close')
-    page.settle(0.4)
-    assert page.js("document.querySelectorAll('[data-flight-report=\"f0\"]').length") == 0
+    page.wait("document.querySelectorAll('[data-flight-report=\"f0\"]').length === 0", timeout=10)
     assert not page.js("document.documentElement.classList.contains('is-comparing')")
 
 
@@ -105,7 +104,7 @@ def test_the_side_view_tooltip_is_shown_in_full_screen(page):
                        " .side-view .hit').getBoundingClientRect();"
                        " return [r.left + r.width * 0.4, r.top + r.height / 2]; })()")
         page.click(x, y)
-        page.settle(0.4)
+        page.wait("document.getElementById('tip').classList.contains('on')", timeout=10)
         state = page.js("""(() => { var t = document.getElementById('tip');
           return { on: t.classList.contains('on'),
                    inside: document.fullscreenElement.contains(t) }; })()""")

@@ -12,8 +12,11 @@ The libraries come from a local cache (`tests/vendor.py`) served from localhost,
 no-network rule holds, and so does the terrain: the server makes terrarium tiles of a
 ridged landscape on request (`_ground`), so every turn, tilt and pan below grabs ground on
 a slope, hundreds of metres up — where a pivot taken from the wrong height shows. Imagery
-is not fetched. In software GL the terrain makes a frame about a second (October 2026),
-and every input event below waits for a frame, which is where these tests' minutes go. Input goes in through the DevTools
+is not fetched. In software GL the terrain makes a frame take 1-3 s (October 2026) — more
+the wider the map and the steeper the view, so the window is narrow and the tilts gentle —
+and every input event below waits for a frame, which is where these tests' minutes go. So
+nothing here sleeps and hopes: each wait is for the thing it waits for (`_still`, `_frame`,
+`Browser.wait`), checked in the page as it happens. Input goes in through the DevTools
 protocol — mouse with modifiers, keys, wheel, touch — because a synthetic DOM event is
 not what MapLibre's handlers see from a reader.
 """
@@ -22,12 +25,15 @@ from __future__ import annotations
 
 import base64
 import functools
-import struct
+import hashlib
 import http.server
+import inspect
 import json
 import math
+import os
 import shutil
 import socket
+import struct
 import subprocess
 import tempfile
 import threading
@@ -36,6 +42,7 @@ import urllib.request
 import zlib
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from parainsights_map import map3d, render_map, view3d
@@ -51,7 +58,9 @@ pytestmark = [
 ]
 
 _FLAGS = [
-    "--headless", "--no-sandbox", "--window-size=1200,900", "--enable-unsafe-swiftshader",
+    # Just over the 900 px breakpoint, so the desktop layout: the map is 21:9 of the width,
+    # and over terrain software GL takes 4.8 s a frame at 1200 px wide.
+    "--headless", "--no-sandbox", "--window-size=920,800", "--enable-unsafe-swiftshader",
     "--use-gl=angle", "--use-angle=swiftshader", "--remote-allow-origins=*",
     "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1",
     # A headless window counts as hidden, and Chrome then stops serving animation frames
@@ -83,31 +92,44 @@ def _scene_with_time() -> dict:
     return scene
 
 
-def _ground(lon: float, lat: float) -> float:
+def _ground(lon, lat):
     """The scene's ridges (`tests.browser._terrain`), carried on past its quarter degree:
-    200 m to 1 400 m, a crest every 9 km east to west."""
-    return 800 + 600 * math.sin(4 * math.pi * (lon - 14) / 0.25) * math.cos(3 * math.pi * (lat - 49) / 0.25)
+    200 m to 1 400 m, a crest every 9 km east to west. Numbers or numpy arrays."""
+    return 800 + 600 * np.sin(4 * np.pi * (lon - 14) / 0.25) * np.cos(3 * np.pi * (lat - 49) / 0.25)
 
 
-@functools.lru_cache(maxsize=None)
+# Made once and kept: a run asks for a few hundred tiles, every worker and every run the
+# same ones. Named by a hash of the code that draws them, so a change redraws them.
+_DEM_CACHE = vendor.FOLDER.parent / "dem" / hashlib.sha1(
+    (inspect.getsource(_ground) + "terrarium-256").encode()).hexdigest()[:12]
+
+
 def _dem_tile(z: int, x: int, y: int) -> bytes:
     """A terrarium PNG of `_ground` for tile z/x/y: height + 32 768 m in red·256 + green +
     blue/256, as the AWS tiles the map asks for are."""
+    path = _DEM_CACHE / f"{z}-{x}-{y}.png"
+    if path.is_file():
+        return path.read_bytes()
     size, n = 256, 2 ** z
-    rows = []
-    for py in range(size):
-        lat = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * (y + (py + 0.5) / size) / n))))
-        row = bytearray(b"\0")
-        for px in range(size):
-            v = _ground((x + (px + 0.5) / size) / n * 360 - 180, lat) + 32768
-            row += bytes((int(v) >> 8, int(v) & 255, int((v % 1) * 256)))
-        rows.append(bytes(row))
+    middle = (np.arange(size) + 0.5) / size
+    lon = (x + middle) / n * 360 - 180
+    lat = np.degrees(np.arctan(np.sinh(np.pi * (1 - 2 * (y + middle) / n))))
+    v = _ground(lon[None, :], lat[:, None]) + 32768
+    whole = v.astype(np.int64)
+    rgb = np.stack([whole >> 8, whole & 255, ((v - whole) * 256).astype(np.int64)], axis=-1)
+    rows = np.concatenate([np.zeros((size, 1), np.uint8),
+                           rgb.astype(np.uint8).reshape(size, size * 3)], axis=1)
 
     def chunk(kind, data):
         return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
 
-    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0))
-            + chunk(b"IDAT", zlib.compress(b"".join(rows))) + chunk(b"IEND", b""))
+    png = (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0))
+           + chunk(b"IDAT", zlib.compress(rows.tobytes())) + chunk(b"IEND", b""))
+    _DEM_CACHE.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(f".{os.getpid()}.part")    # workers share the folder
+    temporary.write_bytes(png)
+    temporary.replace(path)
+    return png
 
 
 def _page() -> str:
@@ -186,28 +208,21 @@ class Browser:
         return result["result"].get("value")
 
     def wait(self, expression, timeout=90.0):
-        """Until `expression` holds. Each poll asks MapLibre for a repaint: headless Chrome
+        """Until `expression` holds, checked in the page every 20 ms, so the answer comes on
+        the frame it starts to hold — polled from here it was a round trip and a quarter
+        second's sleep a look. Each look asks the maps for a repaint: headless Chrome
         serves animation frames only while something is being repainted, and a repaint
         runs every pending frame callback — the follow camera's included."""
-        end = time.time() + timeout
-        while time.time() < end:
-            if self.js(expression):
-                return
-            self.js(_REPAINT)
-            time.sleep(0.25)
-        raise TimeoutError(expression)
+        held = self.js(f"""new Promise(done => {{ var end = Date.now() + {timeout * 1000};
+          (function look() {{ var ok; try {{ ok = !!({expression}); }} catch (e) {{ ok = false; }}
+            if (ok || Date.now() > end) return done(ok);
+            {_REPAINT}; setTimeout(look, 20); }})(); }})""")
+        if not held:
+            raise TimeoutError(expression)
 
-    def settle(self, seconds):
-        """Let the page run for `seconds`. A bare sleep does not: headless Chrome serves
-        animation frames only while something is being repainted, so a camera easing
-        towards its target froze where it was, and what the test then measured depended
-        on how many frames happened to run before (October 2026: the follow camera, its
-        glider caught under the bar mid-move). Asking for a repaint every tenth of a
-        second keeps every frame callback running, as a visible page would."""
-        end = time.time() + seconds
-        while time.time() < end:
-            self.js(_REPAINT)
-            time.sleep(0.1)
+    def frame(self):
+        """Until the page has painted a frame — the maps on it asked to, so one comes."""
+        self.js(f"new Promise(done => {{ {_REPAINT}; requestAnimationFrame(() => requestAnimationFrame(done)); }})")
 
     def mouse(self, kind, x, y, *, modifiers=0, buttons=0, clicks=1, button="left"):
         self.call("Input.dispatchMouseEvent", type=kind, x=x, y=y, modifiers=modifiers,
@@ -280,9 +295,9 @@ def browser(tmp_path_factory):
         # loads, so that never holds. The ground's tiles, every tile asked for, and a still
         # camera do — and a first test that drove a map still settling read a NaN bearing.
         b.wait(f"(m => m.isSourceLoaded('dem') && m.areTilesLoaded() && !m.isMoving())({MAP})")
-        b.settle(1.5)
+        _still(b)
         b.js("document.querySelector('.ml-map').scrollIntoView({block: 'center'}); 1")
-        b.settle(0.5)
+        _frame(b)
         yield b
     finally:
         b.close()
@@ -293,14 +308,40 @@ def _box(browser):
                       " return [r.left, r.top, r.width, r.height]; })()")
 
 
-def _reset(browser, **camera):
-    view = {"center": [14.1, 49.1], "zoom": 10, "pitch": 60, "bearing": 0, **camera}
-    browser.js(f"({ENTRY}).setFollow && ({ENTRY}).setFollow(false); ({MAP}).jumpTo({json.dumps(view)}); 1")
-    # Until a frame is drawn from there, its tiles in: over terrain, `unproject` reads the
-    # ground from the last frame's depth, and a test that grabbed a point a moment after
-    # the jump took one from the view before — 800 m off, on a slope.
-    browser.wait(f"(m => m.areTilesLoaded() && !m.isMoving())({MAP})")
+def _frame(browser):
+    """Until the map has drawn a frame from where it is now."""
     browser.js(f"new Promise(r => {{ ({MAP}).once('render', () => r(1)); ({MAP}).triggerRepaint(); }})")
+
+
+def _still(browser, timeout=60.0):
+    """Until the camera has stopped — the same over two frames, no easing, nothing frozen
+    for a drag — and every tile it asks for is in. Where a test used to sleep for a
+    while and hope, this is what it was waiting for."""
+    held = browser.js(f"""new Promise(done => {{ var m = {MAP}, end = Date.now() + {timeout * 1000}, was = null;
+      function look() {{
+        var c = m.transform.getCameraPosition(), now = JSON.stringify([c.lngLat.lng.toFixed(7),
+          c.lngLat.lat.toFixed(7), c.altitude.toFixed(1), m.getBearing().toFixed(2), m.getPitch().toFixed(2)]);
+        if ((now === was && !m.isMoving() && !m._elevationFreeze && m.areTilesLoaded()) || Date.now() > end)
+          return done(now === was);
+        was = now; m.once('render', look); m.triggerRepaint(); }}
+      m.once('render', look); m.triggerRepaint(); }})""")
+    if not held:
+        raise TimeoutError("the camera did not come to rest")
+
+
+def _reset(browser, ground=False, **camera):
+    # 50°, not steeper: in software GL a frame over terrain takes 1.2 s looking straight
+    # down, 1.8 s at 60° and 3.3 s at 70°, and every input event waits for one.
+    view = {"center": [14.1, 49.1], "zoom": 10, "pitch": 50, "bearing": 0, **camera}
+    browser.js(f"({ENTRY}).setFollow && ({ENTRY}).setFollow(false); ({MAP}).jumpTo({json.dumps(view)}); 1")
+    if ground:
+        # A test that reads the ground off the screen waits for the tiles and a frame
+        # drawn from there: over terrain, `unproject` reads the ground from the last
+        # frame's depth, and a test that grabbed a point a moment after the jump took one
+        # from the view before — 800 m off, on a slope.
+        _still(browser)
+    else:
+        _frame(browser)
 
 
 def test_the_map_opens(browser):
@@ -311,8 +352,8 @@ def test_the_map_opens(browser):
 
 @pytest.mark.parametrize("grab, move", [
     ((0.5, 0.5), (80, 0)),              # a turn, on the crest in the middle
-    ((0.65, 0.6), (60, 40)),            # a turn and a tilt down, on its flank
-    ((0.4, 0.35), (-30, -40)),          # a tilt up and a turn back, further down
+    ((0.65, 0.6), (60, 40)),            # a turn and a tilt down to 30°, on its flank
+    ((0.4, 0.35), (-30, -20)),          # a tilt up to 60° and a turn back, further down
 ])
 def test_a_shift_drag_turns_and_tilts_about_the_ground_grabbed(browser, grab, move):
     """The ground under the pointer stays under it while the view turns and tilts — here
@@ -320,29 +361,30 @@ def test_a_shift_drag_turns_and_tilts_about_the_ground_grabbed(browser, grab, mo
     The pivot was clamped into the canvas *container*, which has no height, so it went to
     y = 0 — the horizon at a 60° tilt — and an 80 px turn moved the map from Krupka to
     Leipzig."""
-    _reset(browser)
+    _reset(browser, ground=True)
     left, top, width, height = _box(browser)
     x, y = width * grab[0], height * grab[1]
     ground = browser.js(f"({MAP}).unproject([{x}, {y}]).toArray()")
     drawn = browser.js(f"(m => m.terrain.getElevationForLngLatZoom(new maplibregl.LngLat(...{json.dumps(ground)}),"
                        f" m.transform.tileZoom))({MAP})")
     assert drawn == pytest.approx(_ground(*ground), abs=40), "grabbed on the ridge, at its height"
-    browser.drag((left + x, top + y), (left + x + move[0], top + y + move[1]), modifiers=8)
-    # Until the camera's height is handed back to MapLibre: the ground that hand-off
-    # settles on is where the tilted-up view jumped.
-    browser.wait(f"!({MAP})._elevationFreeze", timeout=30)
+    # Five moves: each waits for a frame, and the pivot is put back after every one.
+    browser.drag((left + x, top + y), (left + x + move[0], top + y + move[1]), modifiers=8, steps=5)
+    # Until the camera's height is handed back to MapLibre and it rests: the ground that
+    # hand-off settles on is where the tilted-up view jumped.
+    _still(browser)
     bearing, pitch = browser.js(f"[({MAP}).getBearing(), ({MAP}).getPitch()]")
     where = browser.js(f"(() => {{ var p = ({MAP}).project({json.dumps(ground)}); return [p.x, p.y]; }})()")
     assert bearing == pytest.approx(move[0] * 0.8, abs=1), "the drag turned the view"
-    assert pitch == pytest.approx(60 - move[1] * 0.5, abs=1), "and tilted it"
+    assert pitch == pytest.approx(50 - move[1] * 0.5, abs=1), "and tilted it"
     assert math.hypot(where[0] - x, where[1] - y) < 4, (ground, where, (x, y))
 
 
 def test_a_plain_drag_pans_and_does_not_turn(browser):
     _reset(browser)
     left, top, width, height = _box(browser)
-    browser.drag((left + width / 2, top + height / 2), (left + width / 2 + 120, top + height / 2))
-    browser.settle(0.6)
+    browser.drag((left + width / 2, top + height / 2), (left + width / 2 + 120, top + height / 2), steps=5)
+    _still(browser)
     assert abs(browser.js(f"({MAP}).getBearing()")) < 0.5
     centre = browser.js(f"({MAP}).getCenter().toArray()")
     assert centre[0] < 14.1 - 0.01, "dragging right moves the map right: the centre goes west"
@@ -353,7 +395,7 @@ def test_the_airspace_hides_nothing(browser):
     of the flight inside it, which over Krupka was nearly all of it."""
     _reset(browser)
     browser.js("document.querySelector('.merged-view [data-m3=airspace]').click(); 1")
-    browser.settle(0.5)
+    browser.wait(f"({ENTRY}).layers().some(d => d.id === 'airspace')")
     layers = {d["id"]: d["parameters"] for d in browser.js(f"({ENTRY}).layers()")}
     browser.js("document.querySelector('.merged-view [data-m3=airspace]').click(); 1")
     assert "airspace" in layers
@@ -451,14 +493,16 @@ def test_a_tilt_or_turn_is_not_a_click(browser):
     browser.js(f"window.__clicks = []; ({ENTRY}).onClick(function (at) {{ __clicks.push(at); }}); 1")
     x, y, w, h = _box(browser)
     cx, cy = x + w / 2, y + h / 2
-    browser.drag((cx, cy), (cx + 60, cy + 40), modifiers=8)    # shift: turn and tilt
-    browser.settle(0.4)
+    # A click comes with the mouseup it follows, inside the input call, so a frame after
+    # each is long enough for one to have landed.
+    browser.drag((cx, cy), (cx + 60, cy + 40), modifiers=8, steps=5)    # shift: turn and tilt
+    _frame(browser)
     browser.mouse("mousePressed", cx, cy, modifiers=8, buttons=1)   # shift-click in place
     browser.mouse("mouseReleased", cx, cy, modifiers=8)
-    browser.settle(0.4)
+    _frame(browser)
     after_tilt = browser.js("__clicks.length")
     browser.click(cx, cy)
-    browser.settle(0.6)
+    _frame(browser)
     after_click = browser.js("__clicks.length")
     _reset(browser)
     assert after_tilt == 0, "a tilt or a modified press dropped a point"
@@ -468,14 +512,13 @@ def test_a_tilt_or_turn_is_not_a_click(browser):
 def test_the_measure_tool_adds_up_the_legs_on_the_sphere(browser):
     """Clicks are points, the readout is the total and the last leg, and a click while
     measuring is not also a turnpoint or anything else."""
-    _reset(browser, pitch=0)
+    _reset(browser, ground=True, pitch=0)
     left, top, width, height = _box(browser)
     browser.js("document.querySelector('.merged-view [data-m3=measure]').click(); 1")
     spots = [(0.3, 0.5), (0.6, 0.5), (0.6, 0.3)]
     points = []
     for fx, fy in spots:
         browser.click(left + width * fx, top + height * fy)
-        browser.settle(0.4)
         points.append(browser.js(f"({MAP}).unproject([{width * fx}, {height * fy}]).toArray()"))
     text = browser.js("document.querySelector('.merged-view .m3-measure').textContent")
 
@@ -531,15 +574,16 @@ def test_follow_survives_zooming_and_turning_and_ends_on_a_drag(browser):
     browser.wait(f"({MAP}).getPitch() < {before - 9} && Math.abs({offset} + 15) < 1", timeout=20)
     assert browser.js(following), "the arrows turn and tilt the follow camera"
 
-    browser.drag((x, y), (x + 60, y + 20))
-    browser.settle(0.5)
+    browser.drag((x, y), (x + 60, y + 20), steps=5)
+    _frame(browser)
     assert not browser.js(following), "a drag hands the camera back"
 
 
 def test_two_fingers_tilt_and_turn_the_follow_camera(browser):
-    """A phone has no arrows: moving two fingers up tilts the follow camera, a twist turns
-    it off the direction of flight, and neither ends following. Taken as a pinch alone,
-    a two-finger drag did nothing at all."""
+    """A phone has no arrows: moving two fingers tilts the follow camera, a twist turns it
+    off the direction of flight, and neither ends following. Taken as a pinch alone, a
+    two-finger drag did nothing at all. Tilted down, not up: under the follow camera a
+    frame at 80° took 6-10 s an event, and at 40° a fraction of that."""
     _reset(browser)
     _follow(browser)
     left, top, width, height = _box(browser)
@@ -553,12 +597,12 @@ def test_two_fingers_tilt_and_turn_the_follow_camera(browser):
         before = browser.js(f"({ENTRY}).followCamera()")
         touch("touchStart", [(x - 60, y), (x + 60, y)])
         # Four moves a gesture: each waits for a frame, and a frame is about a second here.
-        for k in range(1, 5):                          # both fingers 40 px up
-            touch("touchMove", [(x - 60, y - 10 * k), (x + 60, y - 10 * k)])
+        for k in range(1, 5):                          # both fingers 40 px down
+            touch("touchMove", [(x - 60, y + 10 * k), (x + 60, y + 10 * k)])
             time.sleep(0.03)
         touch("touchEnd", [])
         after = browser.js(f"({ENTRY}).followCamera()")
-        assert after["pitch"] == pytest.approx(min(85, before["pitch"] + 20), abs=2)
+        assert after["pitch"] == pytest.approx(max(0, before["pitch"] - 20), abs=2)
         assert after["zoom"] == pytest.approx(before["zoom"], abs=0.05), "not a pinch"
 
         touch("touchStart", [(x - 60, y), (x + 60, y)])
@@ -578,12 +622,15 @@ def test_two_fingers_tilt_and_turn_the_follow_camera(browser):
 def test_handing_the_follow_camera_back_leaves_it_where_it_was(browser):
     _reset(browser)
     _follow(browser)
-    browser.settle(1)
+    # Not until it rests: the follow camera never quite does. Two frames into following.
+    _frame(browser)
+    _frame(browser)
     camera = ("(() => { var p = (%s).transform.getCameraPosition();"
               " return [p.lngLat.lng, p.lngLat.lat, p.altitude]; })()" % MAP)
     before = browser.js(camera)
     browser.js(f"({ENTRY}).setFollow(false); 1")
-    browser.settle(0.5)
+    _frame(browser)
+    _frame(browser)
     after = browser.js(camera)
     assert after[0] == pytest.approx(before[0], abs=2e-4)
     assert after[1] == pytest.approx(before[1], abs=2e-4)
@@ -604,7 +651,7 @@ def test_compared_flights_are_drawn_on_one_clock_and_far_ones_are_listed(browser
         {{ name: 'NEAR', colour: '#3aa8d0', track: near, start: start + 600 }},
         {{ name: 'FAR', colour: '#c9483c', track: far, start: start }}] }});
       return 1; }})()""")
-    browser.settle(0.5)
+    browser.wait(f"({ENTRY}).layers().some(d => d.id.startsWith('other-'))")
     ids = [d["id"] for d in browser.js(f"({ENTRY}).layers()")]
     legend = browser.js("document.querySelector('.merged-view .m3-others').textContent")
     assert "other-0" in ids and "other-1" not in ids, ids
@@ -621,7 +668,7 @@ def test_compared_flights_are_drawn_on_one_clock_and_far_ones_are_listed(browser
       if (v.querySelector('.m3-replay').hidden) v.querySelector('[data-m3=replay]').click();
       var play = v.querySelector('[data-m3=play]'); if (play.classList.contains('is-on')) play.click();
       (%s).setTime(1800); return 1; })()""" % ENTRY)
-    browser.settle(0.5)
+    browser.wait(f"({ENTRY}).layers().some(d => d.id === 'other-now-0')", timeout=10)
     ids = [d["id"] for d in browser.js(f"({ENTRY}).layers()")]
     assert "other-now-0" in ids, ids
     # The height at "now", top right: this flight's with its climb, then each compared one.
@@ -649,21 +696,27 @@ def test_follow_keeps_every_compared_glider_in_the_picture(browser):
       var play = v.querySelector('[data-m3=play]'); if (play.classList.contains('is-on')) play.click();
       (%s).setTime(1800); (%s).setFollow(true); return 1; })()""" % (ENTRY, ENTRY))
     browser.wait(f"({MAP}).getZoom() < 12.3 && ({ENTRY}).following()", timeout=30)
-    browser.settle(2)
-    left, top, width, height = _box(browser)
-    spots = browser.js(f"""(() => {{
+    # Where each glider is drawn — at its altitude, not on the ground under it — and how
+    # far down the map is clear: above the replay bar, the buttons and the legend over
+    # its bottom, which on a phone cover a third of the map.
+    seen = f"""(() => {{
       var m = {MAP}, tr = __handle.built.scene.track, i = tr.t.indexOf(1800);
-      // Where each glider is drawn: at its altitude, not on the ground under it.
       function at(lon, lat, alt) {{
         return m.transform.coordinatePoint(maplibregl.MercatorCoordinate.fromLngLat([lon, lat]), alt);
       }}
-      return [at(tr.lon[i], tr.lat[i], tr.alt[i]), at(__beside.lon[i], __beside.lat[i], __beside.alt[i])]
-        .map(p => [p.x, p.y]); }})()""")
-    # Not just on the canvas: above the replay bar, the buttons and the legend over its
-    # bottom, which on a phone cover a third of the map.
-    clear = browser.js(f"""(() => {{ var top = ({MAP}).getContainer().getBoundingClientRect().top;
-      return Math.min.apply(null, ['.m3-bottom'].map(s => document.querySelector('.merged-view ' + s))
-        .filter(el => el && !el.hidden).map(el => el.getBoundingClientRect().top - top)); }})()""")
+      var top = m.getContainer().getBoundingClientRect().top, bar = document.querySelector('.merged-view .m3-bottom');
+      return {{ spots: [at(tr.lon[i], tr.lat[i], tr.alt[i]), at(__beside.lon[i], __beside.lat[i], __beside.alt[i])]
+                  .map(p => [p.x, p.y]),
+               width: m.getCanvas().clientWidth,
+               clear: bar && !bar.hidden ? bar.getBoundingClientRect().top - top : m.getCanvas().clientHeight }}; }})()"""
+    # The camera eases to frame them and never quite rests, so: until both are in view.
+    try:
+        browser.wait(f"(s => s.spots.every(([x, y]) => 0 < x && x < s.width && 0 < y && y < s.clear))({seen})",
+                     timeout=30)
+    except TimeoutError:
+        pass                                    # the assert below says where they were
+    view = browser.js(seen)
+    spots, width, clear = view["spots"], view["width"], view["clear"]
     for x, y in spots:
         assert 0 < x < width and 0 < y < clear, (spots, width, clear)
     browser.js(f"({ENTRY}).setFollow(false); ({ENTRY}).setOthers(null); 1")

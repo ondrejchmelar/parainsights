@@ -949,7 +949,12 @@ The numbers are checkable, so check them:
   checks the shift-drag pivot, a plain pan, measuring, the glass airspace, follow and its
   hand-back. `PARAINSIGHTS_REQUIRE=…,maplibre` makes a missing cache an error, not a skip.
   Its server makes terrarium tiles of a ridged landscape on request (`_ground`,
-  200–1 400 m), so the turns, tilts and pans grab ground on slopes, as a reader's do.
+  200–1 400 m; numpy, cached on disk by a hash of the code), so the turns, tilts and pans
+  grab ground on slopes, as a reader's do. Over terrain a software-GL frame takes 1-5 s,
+  growing with the map's width and tilt, and every input event waits for one — so the
+  window is 920 px (just desktop), the tilts stay at or under 60°, and nothing sleeps:
+  each wait is a condition checked in the page (`Browser.wait`, `_still`, `_frame`). The
+  follow camera never comes quite to rest, so under it a test waits for what it asserts.
   Two headless facts it needs: Chrome counts the window as hidden unless told otherwise
   (`--disable-renderer-backgrounding`, `--disable-backgrounding-occluded-windows`), and
   even then serves animation frames only while something repaints, so its waits nudge
