@@ -127,6 +127,10 @@ check public/flights/index.html "tracklog_viewer parainsights_common parainsight
     "the command is in the \"Known gaps\" section of CLAUDE.md"
 check public/meteo/index.html "meteo parainsights_common" \
     "uv run python -m meteo.cli --html public/meteo/index.html"
+# The Planner page: not the monthly openAIP refresh, which the page's build never imports
+# — it reads the committed layer files (`openaip.read`) — and whose changes (what is
+# fetched, what is drawn) reach the files, not the page.
+PLANNER_IGNORE=":(exclude)airspaces/openaip_refresh.py"
 check public/planner/index.html "airspaces planner parainsights_common parainsights_map tracklog_viewer/js/xc.js tracklog_viewer/js/np.js tracklog_viewer/js/sun.js" \
-    "uv run python -m airspaces.cli --html public/planner/index.html (it fetches its sources)"
+    "uv run python -m airspaces.cli --html public/planner/index.html (it fetches its sources)" "$PLANNER_IGNORE"
 exit $failed

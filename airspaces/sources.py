@@ -2,7 +2,7 @@
 
 Three sources for this repository's own layer (the aerodrome zones and circuits), all
 public and all free to use. The base airspace is openAIP's, fetched monthly by
-`openaip.py` and read from the committed layer files; it replaced Aeroklub ČR's `CZ_low`
+`openaip_refresh.py` and read from the committed layer files; it replaced Aeroklub ČR's `CZ_low`
 OpenAir file in October 2026, when the maps went from Czechia to Europe.
 
 `RLP_ATZ`

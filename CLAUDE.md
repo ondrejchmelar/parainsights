@@ -202,7 +202,7 @@ ceiling in the label, because drawn true they hide everything a paraglider meets
 **The maps' airspace is openAIP's, across Europe** (October 2026). openAIP (openaip.net)
 is the community airspace database, CC BY-NC 4.0 — fine for this non-commercial site,
 credited wherever it is drawn. Its API needs a key and a key in a page is anyone's, so
-the pages never call it: `airspaces/openaip.py` fetches 45 European countries (the Alps,
+the pages never call it: `airspaces/openaip_refresh.py` fetches 45 European countries (the Alps,
 Turkey) and writes one file each into `public/planner/layers/` with an `index.json` of
 their boxes — 6.5 MB, 1.2 MB gzipped, France and Italy the largest at ~840 KB.
 `.github/workflows/airspace.yml` refetches on the 3rd of every month with the repository
@@ -213,7 +213,11 @@ a push with the workflow's token starts no workflow. Locally the key is
 Each ring carries the published name, class and limits too (`nm ac lo hi`), so
 `openaip.read` gives the objects back and the Planner page builds from the committed
 Czech file with no key. Service boundaries (FIR, airways, sectors) and anything floored at
-FL195 or above are not drawn (`openaip.TYPES`).
+FL195 or above are not drawn (`openaip_refresh.TYPES`), nor Germany's general class E
+(`openaip_refresh.BLANKET`). The refresh is its own module so that the Planner page's
+build imports only `openaip` (the file format, `read`); `ci/stale.sh` leaves the
+refresh out of the page's sources, and a change to what is fetched or drawn does not
+call for a page rebuild that would come out the same.
 **Czechia is openAIP too, ATZs included; ours adds only the traffic circuits**
 (`cz-circuits.json`, written by both command lines) — the pilot's call, to keep it
 simple. Our corrected aerodrome zones stay in the OpenAir download for XCTrack, which

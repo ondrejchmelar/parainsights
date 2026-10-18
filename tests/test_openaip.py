@@ -1,11 +1,12 @@
-"""openAIP airspace as layer files (`airspaces/openaip.py`). No network: items are built
+"""openAIP airspace as layer files (`airspaces/openaip.py`, and the monthly fetch,
+`openaip_refresh.py`). No network: items are built
 here in the shape the API returns them."""
 
 import json
 
 import pytest
 
-from airspaces import openaip, render_html
+from airspaces import openaip, openaip_refresh, render_html
 
 
 def item(name="TEST", type_=4, icao=3, lower=(0, 1, 0), upper=(4500, 1, 1), country="IT",
@@ -27,36 +28,36 @@ def item(name="TEST", type_=4, icao=3, lower=(0, 1, 0), upper=(4500, 1, 1), coun
 ])
 def test_limits_read_back_as_the_heights_they_are(limit, text):
     """The text is what the rest of `airspaces` parses, so it must parse to the height."""
-    assert openaip._limit(limit) == text
+    assert openaip_refresh._limit(limit) == text
 
 
 def test_feet_and_metres_survive_the_round_trip_through_the_parser():
-    metres, ground = render_html.limit_metres(openaip._limit({"value": 3500, "unit": 1, "referenceDatum": 1}))
+    metres, ground = render_html.limit_metres(openaip_refresh._limit({"value": 3500, "unit": 1, "referenceDatum": 1}))
     assert metres == pytest.approx(1066.8) and not ground
-    metres, ground = render_html.limit_metres(openaip._limit({"value": 300, "unit": 0, "referenceDatum": 0}))
+    metres, ground = render_html.limit_metres(openaip_refresh._limit({"value": 300, "unit": 0, "referenceDatum": 0}))
     assert metres == pytest.approx(300) and ground
 
 
 def test_service_boundaries_and_upper_airspace_are_not_drawn():
     """A FIR, an airway or a sector bounds a service, not where a paraglider may fly;
     and nothing starting at FL195 or above is a paraglider's."""
-    assert openaip.to_airspace(item(type_=10)) is None          # FIR
-    assert openaip.to_airspace(item(type_=15)) is None          # airway
-    assert openaip.to_airspace(item(lower=(195, 6, 2), upper=(660, 6, 2))) is None
-    assert openaip.to_airspace(item(lower=(125, 6, 2), upper=(195, 6, 2))) is not None
+    assert openaip_refresh.to_airspace(item(type_=10)) is None          # FIR
+    assert openaip_refresh.to_airspace(item(type_=15)) is None          # airway
+    assert openaip_refresh.to_airspace(item(lower=(195, 6, 2), upper=(660, 6, 2))) is None
+    assert openaip_refresh.to_airspace(item(lower=(125, 6, 2), upper=(195, 6, 2))) is not None
 
 
 def test_types_land_in_the_map_filter_groups():
     """The legend's groups, so the filters and colours work as for the Czech data."""
-    groups = {t: render_html.classify(openaip.to_airspace(item(type_=t))) for t in (1, 2, 4, 13, 21)}
+    groups = {t: render_html.classify(openaip_refresh.to_airspace(item(type_=t))) for t in (1, 2, 4, 13, 21)}
     assert groups == {1: "restricted", 2: "restricted", 4: "base", 13: "atz", 21: "gliding"}
-    assert openaip.to_airspace(item(type_=4, icao=3)).airspace_class == "CTR D"
+    assert openaip_refresh.to_airspace(item(type_=4, icao=3)).airspace_class == "CTR D"
 
 
 def test_a_layer_file_gives_the_airspace_back(tmp_path):
     """The Planner page is built from the committed file with no key: the name, class and
     limits must come back as published, and the ring as the map draws it."""
-    spaces = openaip.drawn("IT", [item("FIEMME RMZ", type_=6, icao=6, lower=(3500, 1, 1),
+    spaces = openaip_refresh.drawn("IT", [item("FIEMME RMZ", type_=6, icao=6, lower=(3500, 1, 1),
                                        upper=(115, 6, 2))])
     data = openaip.layer_file(spaces, version="2026-10-05", credit=openaip.CREDIT)
     assert data["bbox"] == [11.0, 11.2, 46.0, 46.2]
@@ -72,7 +73,7 @@ def test_a_layer_file_gives_the_airspace_back(tmp_path):
 
 
 def test_the_index_lists_each_file_with_its_box_and_credit(tmp_path):
-    data = openaip.layer_file(openaip.drawn("IT", [item()]), version="v", credit=openaip.CREDIT)
+    data = openaip.layer_file(openaip_refresh.drawn("IT", [item()]), version="v", credit=openaip.CREDIT)
     (tmp_path / "IT.json").write_text(json.dumps(data))
     (tmp_path / "XX.json").write_text(json.dumps({"bbox": None, "airspaces": []}))
     index = openaip.write_index(tmp_path)
@@ -84,10 +85,10 @@ def test_the_index_lists_each_file_with_its_box_and_credit(tmp_path):
 
 def test_the_key_never_comes_from_the_repository(monkeypatch, tmp_path):
     monkeypatch.setenv("OPENAIP_API_KEY", "from-env")
-    assert openaip.api_key() == "from-env"
+    assert openaip_refresh.api_key() == "from-env"
     monkeypatch.delenv("OPENAIP_API_KEY")
-    monkeypatch.setattr(openaip, "KEY_FILE", tmp_path / "missing")
-    assert openaip.api_key() is None
+    monkeypatch.setattr(openaip_refresh, "KEY_FILE", tmp_path / "missing")
+    assert openaip_refresh.api_key() is None
 
 
 def test_germanys_general_class_e_is_not_drawn():
@@ -96,5 +97,22 @@ def test_germanys_general_class_e_is_not_drawn():
     filed as something (a TMA) stays, and so does another country's class E structure."""
     blanket = item("AREA", type_=0, icao=4, lower=(2500, 1, 0), upper=(100, 6, 2), country="DE")
     tma = item("TMA X", type_=7, icao=4, country="DE")
-    assert [a.name for a in openaip.drawn("DE", [blanket, tma])] == ["TMA X"]
-    assert [a.name for a in openaip.drawn("GR", [dict(blanket, name="MTMA Y")])] == ["MTMA Y"]
+    assert [a.name for a in openaip_refresh.drawn("DE", [blanket, tma])] == ["TMA X"]
+    assert [a.name for a in openaip_refresh.drawn("GR", [dict(blanket, name="MTMA Y")])] == ["MTMA Y"]
+
+
+def test_no_page_build_imports_the_refresh():
+    """`ci/stale.sh` leaves `openaip_refresh.py` out of the Planner page's sources because
+    no page is built from it — the page reads the committed files. An import of it from
+    anything but itself would make that exclusion a hole: a change to the refresh could
+    then change the page, and the check would not ask for a rebuild."""
+    import pathlib
+    import re
+
+    root = pathlib.Path(__file__).resolve().parents[1]
+    users = [str(path.relative_to(root)) for path in root.glob("*/**/*.py")
+             if not path.is_relative_to(root / "tests") and ".venv" not in path.parts
+             and path.name != "openaip_refresh.py"
+             and re.search(r"^\s*(from|import)\s[^#\n]*openaip_refresh", path.read_text(encoding="utf-8"), re.M)]
+    assert users == []
+    assert "airspaces/openaip_refresh.py" in (root / "ci" / "stale.sh").read_text()

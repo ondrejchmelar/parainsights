@@ -1,4 +1,4 @@
-# The airspace every 3D map draws, refreshed from openAIP once a month (`airspaces/openaip.py`).
+# The airspace every 3D map draws, refreshed from openAIP once a month (`airspaces/openaip_refresh.py`).
 #
 # The pages never ask openAIP for anything: its API needs a key, and a key in a published
 # page is a key anyone can copy. So the key lives here, as the repository secret
@@ -47,7 +47,7 @@ jobs:
       - run: test -n "$OPENAIP_API_KEY" || (echo "::error::no OPENAIP_API_KEY secret — Settings → Secrets and variables → Actions" && exit 1)
         env:
           OPENAIP_API_KEY: ${{ secrets.OPENAIP_API_KEY }}
-      - run: uv run python -m airspaces.openaip --out public/planner/layers
+      - run: uv run python -m airspaces.openaip_refresh --out public/planner/layers
         env:
           OPENAIP_API_KEY: ${{ secrets.OPENAIP_API_KEY }}
       - run: uv run python -m airspaces.cli --html public/planner/index.html || echo "::warning::the planner page could not be rebuilt, keeping the committed copy - check airspaces/sources.py"
