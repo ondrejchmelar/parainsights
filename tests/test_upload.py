@@ -28,7 +28,13 @@ _PROBE = """
 <script>
 window.addEventListener('load', function () {
   setTimeout(function () {
-    var file = new File([document.getElementById('igc-source').textContent], 'mine.igc');
+    var text = document.getElementById('igc-source').textContent;
+    var file = new File([text], 'mine.igc');
+    // Its bytes from memory. A Blob's own read is I/O that virtual time does not wait
+    // for: under a loaded run the 55 s of virtual clock ran out with the page still on
+    // "Reading mine.igc…" (October 2026, twice in CI). What is tested is the article
+    // made from the bytes, not Chrome reading a Blob.
+    file.arrayBuffer = function () { return Promise.resolve(new TextEncoder().encode(text).buffer); };
     var input = document.getElementById('ql-file');
     var dt = new DataTransfer(); dt.items.add(file); input.files = dt.files;
     input.dispatchEvent(new Event('change'));
@@ -110,7 +116,13 @@ window.loadTerrain = function (grid) {
 };
 window.addEventListener('load', function () {
   setTimeout(function () {
-    var file = new File([document.getElementById('igc-source').textContent], 'mine.igc');
+    var text = document.getElementById('igc-source').textContent;
+    var file = new File([text], 'mine.igc');
+    // Its bytes from memory. A Blob's own read is I/O that virtual time does not wait
+    // for: under a loaded run the 55 s of virtual clock ran out with the page still on
+    // "Reading mine.igc…" (October 2026, twice in CI). What is tested is the article
+    // made from the bytes, not Chrome reading a Blob.
+    file.arrayBuffer = function () { return Promise.resolve(new TextEncoder().encode(text).buffer); };
     var input = document.getElementById('ql-file');
     var dt = new DataTransfer(); dt.items.add(file); input.files = dt.files;
     input.dispatchEvent(new Event('change'));
