@@ -831,7 +831,14 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   depth, the boxes hid every part of a flight inside them — over Krupka nearly all of it.
   **The shift-drag pivot is clamped into the canvas's box**, not the canvas container's,
   which has no height: every grab went to y = 0, the horizon, and an 80 px turn moved
-  the map from Krupka to Leipzig. Climbs are dots, not
+  the map from Krupka to Leipzig. **Over relief the drag holds the camera's height**
+  (`_elevationFreeze`, as MapLibre's own drag does): re-read under each new centre, it
+  slid the grabbed ground off the pointer. A pan moves ground above or below the centre's
+  height by more or fewer pixels than asked, so `holdPivot` scales its second pass by what
+  the first moved. The height is handed back (`releaseHeight`, `recalculateZoom`) only
+  once the ground under the centre stops changing — tilted far up, the first tile there
+  is a coarse parent hundreds of metres off, and the view jumped when the real one came.
+  Climbs are dots, not
   numbers, and the track is the canvas's width (2.6 px over the device ratio, capped at
   2). **Ground and exaggeration are one cycling button each**, against the canvas's
   segmented groups, because the merged bar has to fit one row on a phone.
@@ -938,7 +945,8 @@ The numbers are checkable, so check them:
   test drives Chrome over the DevTools protocol — mouse with modifiers, keys, wheel — and
   checks the shift-drag pivot, a plain pan, measuring, the glass airspace, follow and its
   hand-back. `PARAINSIGHTS_REQUIRE=…,maplibre` makes a missing cache an error, not a skip.
-  It runs flat, without terrain (no network), so occlusion by ridges is not in it.
+  Its server makes terrarium tiles of a ridged landscape on request (`_ground`,
+  200–1 400 m), so the turns, tilts and pans grab ground on slopes, as a reader's do.
   Two headless facts it needs: Chrome counts the window as hidden unless told otherwise
   (`--disable-renderer-backgrounding`, `--disable-backgrounding-occluded-windows`), and
   even then serves animation frames only while something repaints, so its waits nudge

@@ -852,15 +852,51 @@
         }
         function holdPivot() {
           if (!pivot) return;
-          // A few passes: over terrain the centre's own height moves with the pan, so one
-          // correction lands near the point rather than on it.
-          for (var pass = 0; pass < 4; pass++) {
+          // A pan moves the plane at the centre's height by as many pixels as asked, and
+          // ground above or below it by more or fewer — on a ridge at a steep tilt, half
+          // as many, and four plain passes left the grabbed point 7 px off the pointer.
+          // But it is one ratio (the two points share a screen spot and differ only in
+          // depth), so the second pass is scaled by what the first one moved.
+          var gain = 1;
+          for (var pass = 0; pass < 6; pass++) {
             var now = map.project(pivot.ground);
             if (!isFinite(now.x) || !isFinite(now.y)) return;
             var dx = now.x - pivot.point[0], dy = now.y - pivot.point[1];
             if (Math.abs(dx) < 0.25 && Math.abs(dy) < 0.25) return;
-            map.panBy([dx, dy], { animate: false });
+            var px = dx * gain, py = dy * gain;
+            map.panBy([px, py], { animate: false });
+            var moved = map.project(pivot.ground);
+            var k = ((now.x - moved.x) * px + (now.y - moved.y) * py) / (px * px + py * py);
+            if (isFinite(k) && k > 0.1) gain = 1 / k;
           }
+        }
+        // The height the camera orbits at, handed back once the drag is over: the centre
+        // moved onto the ground under it and the zoom changed to match, the picture the
+        // same, as MapLibre's own drag ends. But only once that ground stays put. Tilted
+        // far up, the new centre was in a tile not loaded yet, or only in a coarse parent
+        // of it hundreds of metres off, whose finer tile the view asks for only once it
+        // has moved there — and when that came, MapLibre lowered the camera onto it and
+        // the ground jumped from under the pointer. So: recentre, let the tiles that asks
+        // for come in, and again, until the height under the middle holds.
+        var releaseBy = 0;
+        function releaseHeight() {
+          if (last || !map._elevationFreeze) return;
+          var t = map.transform;
+          // Not with the terrain switched off, nor under the follow camera, which sets
+          // the view itself every frame.
+          if (map.terrain && !following && Date.now() < releaseBy) {
+            var settled = map.areTilesLoaded() && Math.abs(map.terrain.getElevationForLngLatZoom(
+              t.pointLocation(t.centerPoint, map.terrain), t.tileZoom) - t.elevation) < 1;
+            if (!settled) {
+              if (map.areTilesLoaded()) t.recalculateZoom(map.terrain);
+              map.once('render', releaseHeight);
+              map.triggerRepaint();
+              return;
+            }
+          }
+          map._elevationFreeze = false;
+          if (map.terrain) t.recalculateZoom(map.terrain);
+          map.triggerRepaint();
         }
         api.pivot = function () { return pivot; };
         function modified(event) {
@@ -873,6 +909,11 @@
           event.stopImmediatePropagation();
           last = { x: event.clientX, y: event.clientY };
           pivot = pickPivot(event);
+          // The height the camera orbits at held for the drag, as MapLibre's own drag
+          // holds it. Left alone, each frame re-read it under the new centre — on the far
+          // side of a ridge, hundreds of metres off — after the pivot had been put back,
+          // and the grabbed ground slid away from the pointer.
+          if (map.terrain) map._elevationFreeze = true;
           try { surface.setPointerCapture(event.pointerId); } catch (e) { /* synthetic */ }
         }, true);
         surface.addEventListener('pointermove', function (event) {
@@ -888,6 +929,8 @@
           if (!last) return;
           last = null;
           pivot = null;
+          releaseBy = Date.now() + 10000;
+          releaseHeight();
           event.stopImmediatePropagation();
         }
         surface.addEventListener('pointerup', end, true);

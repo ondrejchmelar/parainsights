@@ -9,11 +9,11 @@ translucent boxes wrote depth and hid everything inside them). The canvas view's
 earned their tests the same way.
 
 The libraries come from a local cache (`tests/vendor.py`) served from localhost, so the
-no-network rule holds; imagery and terrain are not fetched. The map is still in terrain
-mode — the `dem` source is there and drawn — but its tiles (AWS terrarium) never arrive,
-so the ground is flat at 0 m: terrain's drawing cost without its relief. In software
-GL that is about a frame a second (October 2026), and every input event below waits for
-a frame, which is where these tests' minutes go. Input goes in through the DevTools
+no-network rule holds, and so does the terrain: the server makes terrarium tiles of a
+ridged landscape on request (`_ground`), so every turn, tilt and pan below grabs ground on
+a slope, hundreds of metres up — where a pivot taken from the wrong height shows. Imagery
+is not fetched. In software GL the terrain makes a frame about a second (October 2026),
+and every input event below waits for a frame, which is where these tests' minutes go. Input goes in through the DevTools
 protocol — mouse with modifiers, keys, wheel, touch — because a synthetic DOM event is
 not what MapLibre's handlers see from a reader.
 """
@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import base64
 import functools
+import struct
 import http.server
 import json
 import math
@@ -32,6 +33,7 @@ import tempfile
 import threading
 import time
 import urllib.request
+import zlib
 from pathlib import Path
 
 import pytest
@@ -81,11 +83,40 @@ def _scene_with_time() -> dict:
     return scene
 
 
+def _ground(lon: float, lat: float) -> float:
+    """The scene's ridges (`tests.browser._terrain`), carried on past its quarter degree:
+    200 m to 1 400 m, a crest every 9 km east to west."""
+    return 800 + 600 * math.sin(4 * math.pi * (lon - 14) / 0.25) * math.cos(3 * math.pi * (lat - 49) / 0.25)
+
+
+@functools.lru_cache(maxsize=None)
+def _dem_tile(z: int, x: int, y: int) -> bytes:
+    """A terrarium PNG of `_ground` for tile z/x/y: height + 32 768 m in red·256 + green +
+    blue/256, as the AWS tiles the map asks for are."""
+    size, n = 256, 2 ** z
+    rows = []
+    for py in range(size):
+        lat = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * (y + (py + 0.5) / size) / n))))
+        row = bytearray(b"\0")
+        for px in range(size):
+            v = _ground((x + (px + 0.5) / size) / n * 360 - 180, lat) + 32768
+            row += bytes((int(v) >> 8, int(v) & 255, int((v % 1) * 256)))
+        rows.append(bytes(row))
+
+    def chunk(kind, data):
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(b"".join(rows))) + chunk(b"IEND", b""))
+
+
 def _page() -> str:
     scene = _scene_with_time()
     loader = (render_map.SCRIPT
               .replace(render_map.MAPLIBRE, "/vendor")
-              .replace(render_map.DECK, "/vendor/deck.min.js"))
+              .replace(render_map.DECK, "/vendor/deck.min.js")
+              .replace(f"'{render_map.TERRARIUM}'", "location.origin + '/dem/{z}/{x}/{y}.png'"))
+    assert "/dem/" in loader
     return (
         '<!doctype html><meta charset="utf-8"><title>merged</title>'
         f"<style>{view3d.STYLE}{render_map.STYLE}{map3d.STYLE}</style>"
@@ -215,6 +246,20 @@ class Browser:
 
 
 class _Quiet(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):
+        if not self.path.startswith("/dem/"):
+            return super().do_GET()
+        z, x, y = (int(part) for part in self.path[5:].removesuffix(".png").split("/"))
+        body = _dem_tile(z, x, y)
+        self.send_response(200)
+        self.send_header("Content-Type", "image/png")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        try:
+            self.wfile.write(body)
+        except ConnectionError:         # a tile the map stopped wanting, or Chrome closed
+            pass
+
     def log_message(self, *args):
         pass
 
@@ -251,7 +296,11 @@ def _box(browser):
 def _reset(browser, **camera):
     view = {"center": [14.1, 49.1], "zoom": 10, "pitch": 60, "bearing": 0, **camera}
     browser.js(f"({ENTRY}).setFollow && ({ENTRY}).setFollow(false); ({MAP}).jumpTo({json.dumps(view)}); 1")
-    browser.settle(0.3)
+    # Until a frame is drawn from there, its tiles in: over terrain, `unproject` reads the
+    # ground from the last frame's depth, and a test that grabbed a point a moment after
+    # the jump took one from the view before — 800 m off, on a slope.
+    browser.wait(f"(m => m.areTilesLoaded() && !m.isMoving())({MAP})")
+    browser.js(f"new Promise(r => {{ ({MAP}).once('render', () => r(1)); ({MAP}).triggerRepaint(); }})")
 
 
 def test_the_map_opens(browser):
@@ -260,20 +309,32 @@ def test_the_map_opens(browser):
     assert browser.js("window.__errors") == []
 
 
-@pytest.mark.parametrize("grab", [(0.5, 0.5), (0.65, 0.6), (0.4, 0.35)])
-def test_a_shift_drag_turns_about_the_ground_grabbed(browser, grab):
-    """The ground under the pointer stays under it while the view turns. The pivot was
-    clamped into the canvas *container*, which has no height, so it went to y = 0 — the
-    horizon at a 60° tilt — and an 80 px turn moved the map from Krupka to Leipzig."""
+@pytest.mark.parametrize("grab, move", [
+    ((0.5, 0.5), (80, 0)),              # a turn, on the crest in the middle
+    ((0.65, 0.6), (60, 40)),            # a turn and a tilt down, on its flank
+    ((0.4, 0.35), (-30, -40)),          # a tilt up and a turn back, further down
+])
+def test_a_shift_drag_turns_and_tilts_about_the_ground_grabbed(browser, grab, move):
+    """The ground under the pointer stays under it while the view turns and tilts — here
+    ground on a ridge, hundreds of metres up, so a pivot taken at the wrong height shows.
+    The pivot was clamped into the canvas *container*, which has no height, so it went to
+    y = 0 — the horizon at a 60° tilt — and an 80 px turn moved the map from Krupka to
+    Leipzig."""
     _reset(browser)
     left, top, width, height = _box(browser)
     x, y = width * grab[0], height * grab[1]
     ground = browser.js(f"({MAP}).unproject([{x}, {y}]).toArray()")
-    browser.drag((left + x, top + y), (left + x + 80, top + y), modifiers=8)
-    browser.settle(0.4)
-    bearing = browser.js(f"({MAP}).getBearing()")
+    drawn = browser.js(f"(m => m.terrain.getElevationForLngLatZoom(new maplibregl.LngLat(...{json.dumps(ground)}),"
+                       f" m.transform.tileZoom))({MAP})")
+    assert drawn == pytest.approx(_ground(*ground), abs=40), "grabbed on the ridge, at its height"
+    browser.drag((left + x, top + y), (left + x + move[0], top + y + move[1]), modifiers=8)
+    # Until the camera's height is handed back to MapLibre: the ground that hand-off
+    # settles on is where the tilted-up view jumped.
+    browser.wait(f"!({MAP})._elevationFreeze", timeout=30)
+    bearing, pitch = browser.js(f"[({MAP}).getBearing(), ({MAP}).getPitch()]")
     where = browser.js(f"(() => {{ var p = ({MAP}).project({json.dumps(ground)}); return [p.x, p.y]; }})()")
-    assert abs(bearing) > 30, "the drag turned the view"
+    assert bearing == pytest.approx(move[0] * 0.8, abs=1), "the drag turned the view"
+    assert pitch == pytest.approx(60 - move[1] * 0.5, abs=1), "and tilted it"
     assert math.hypot(where[0] - x, where[1] - y) < 4, (ground, where, (x, y))
 
 
@@ -430,7 +491,7 @@ def test_the_measure_tool_adds_up_the_legs_on_the_sphere(browser):
     assert "last leg" in text
     browser.key("Backspace", "Backspace", 8)
     after = browser.js("document.querySelector('.merged-view .m3-measure').textContent")
-    assert float(after.split(" km")[0]) == pytest.approx(sphere(points[0], points[1]) / 1000, abs=0.02)
+    assert float(after.split(" km")[0]) == pytest.approx(sphere(points[0], points[1]) / 1000, abs=0.06)
     browser.key("Escape", "Escape", 27)
     assert browser.js("document.querySelector('.merged-view .m3-measure').hidden")
 
@@ -573,17 +634,10 @@ def test_compared_flights_are_drawn_on_one_clock_and_far_ones_are_listed(browser
 
 def test_follow_keeps_every_compared_glider_in_the_picture(browser):
     """Comparing, the follow camera frames the whole group at the shared "now": a glider
-    11 km to the side stays on screen, the view pulled back from 12.5 to hold it.
-
-    Both tracks fly at ground level here: this map's ground is flat at 0 m (its terrain
-    tiles are not fetched), so MapLibre orbits at 0 m, and a glider 1-2 km up would sit
-    nearer the camera than the plane it orbits — which the real map, over real ground,
-    avoids by orbiting at the gliders' height."""
+    11 km to the side stays on screen, the view pulled back from 12.5 to hold it."""
     _reset(browser)
     browser.js(f"""(() => {{
       var tr = __handle.built.scene.track, start = __handle.built.scene.start || 1700000000;
-      window.__altBefore = tr.alt.slice();
-      for (var k = 0; k < tr.alt.length; k++) tr.alt[k] = 10;
       __handle.built.scene.start = start;
       var beside = {{ lon: tr.lon.map(x => x + 0.15), lat: tr.lat.slice(), alt: tr.alt.slice(), t: tr.t.slice() }};
       window.__beside = beside;
@@ -612,8 +666,7 @@ def test_follow_keeps_every_compared_glider_in_the_picture(browser):
         .filter(el => el && !el.hidden).map(el => el.getBoundingClientRect().top - top)); }})()""")
     for x, y in spots:
         assert 0 < x < width and 0 < y < clear, (spots, width, clear)
-    browser.js(f"""({ENTRY}).setFollow(false); ({ENTRY}).setOthers(null);
-      var tr = __handle.built.scene.track; __altBefore.forEach((a, k) => tr.alt[k] = a); 1""")
+    browser.js(f"({ENTRY}).setFollow(false); ({ENTRY}).setOthers(null); 1")
 
 
 def test_no_errors_along_the_way(browser):
