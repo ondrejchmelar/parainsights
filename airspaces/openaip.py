@@ -173,9 +173,20 @@ def to_airspace(item: dict) -> Airspace | None:
                     meta={"group": group, "type": item.get("type"), "notam": notam})
 
 
+# Germany files its general class E as zones of no other type: the blanket from 2 500 ft
+# above the ground to FL 100 ("AREA"), the Alpine one to FL 130, and the class E let down
+# to 1 000 or 1 700 ft around each airport. Class E needs no clearance and no radio of a
+# paraglider, and nearly every German flight is in it — so "entered AREA" said nothing,
+# and its boxes covered every German map (October 2026). Elsewhere a class E zone of no
+# other type is a structure with a name (Greece's military TMAs, Barcelona's sectors),
+# and stays.
+BLANKET = {("DE", "Other E")}
+
+
 def drawn(code: str, items: list[dict]) -> list[Airspace]:
     """A country's items as the airspace its file holds."""
-    return [a for a in (to_airspace(item) for item in items) if a is not None]
+    spaces = [a for a in (to_airspace(item) for item in items) if a is not None]
+    return [a for a in spaces if (code, a.airspace_class) not in BLANKET]
 
 
 def layer_file(airspaces: list[Airspace], *, version: str, credit: str,

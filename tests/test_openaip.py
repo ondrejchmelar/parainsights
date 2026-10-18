@@ -88,3 +88,13 @@ def test_the_key_never_comes_from_the_repository(monkeypatch, tmp_path):
     monkeypatch.delenv("OPENAIP_API_KEY")
     monkeypatch.setattr(openaip, "KEY_FILE", tmp_path / "missing")
     assert openaip.api_key() is None
+
+
+def test_germanys_general_class_e_is_not_drawn():
+    """Germany's blanket class E — above 2 500 ft, and let down around its airports —
+    binds a paraglider to nothing and covers nearly every German flight. A class E zone
+    filed as something (a TMA) stays, and so does another country's class E structure."""
+    blanket = item("AREA", type_=0, icao=4, lower=(2500, 1, 0), upper=(100, 6, 2), country="DE")
+    tma = item("TMA X", type_=7, icao=4, country="DE")
+    assert [a.name for a in openaip.drawn("DE", [blanket, tma])] == ["TMA X"]
+    assert [a.name for a in openaip.drawn("GR", [dict(blanket, name="MTMA Y")])] == ["MTMA Y"]
