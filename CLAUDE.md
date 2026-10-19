@@ -149,13 +149,13 @@ crossings — in the order the task reaches them — are under that (`planner.re
 be kept in the browser (localStorage `parainsights.planner.tasks`: turnpoints, closed,
 rules, cylinder) from the export menu's *Save in this browser*, and comes back from the Import
 menu's *Saved in this browser* list, each with its ×.
-**The export gives every turnpoint a cylinder** (October 2026; Task menu, *Next
-turnpoint*, 400 m by default): XCTrack's waypoints task ignores any circle and points at a
+**The export gives every turnpoint a cylinder** (October 2026; Task menu, *Turnpoint
+cylinder*, 400 m by default): XCTrack's waypoints task ignores any circle and points at a
 turnpoint until the pilot switches it by hand, so the default is a competition task
 (`CLASSIC`, version 2) with no start and no goal set — no gates, no clock — which moves
 on inside each cylinder; flyXC exports the same (400 m, no start, no goal). A closed
 course's last cylinder is the closing circle of the scored triangle, less six radii for
-the corners a cylinder cuts (`goalRadius`). *By hand* is the waypoints task as before. An
+the corners a cylinder cuts (`goalRadius`). *Exact* is the waypoints task as before. An
 import sets the menu from the turnpoints' commonest radius between the first and the last.
 The
 strip carries no ⓘ: what a control does is its title (the scoring rules on the rules

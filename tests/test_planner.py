@@ -745,8 +745,8 @@ def test_the_task_goes_to_xctrack_with_a_cylinder_round_every_turnpoint():
 
 
 @needs_chrome
-def test_by_hand_the_task_goes_as_waypoints():
-    """Next turnpoint "by hand": XCTrack's waypoints task, `T` "W", `V` 2, no radius."""
+def test_exact_turnpoints_go_as_waypoints():
+    """Turnpoint cylinder "exact": XCTrack's waypoints task, `T` "W", `V` 2, no radius."""
     answer = _run(_HARNESS + """
     var pick = document.getElementById('plan-cyl');
     pick.value = '0'; pick.dispatchEvent(new Event('change'));
@@ -756,7 +756,7 @@ def test_by_hand_the_task_goes_as_waypoints():
     task = answer["task"]
     assert task["T"] == "W" and task["V"] == 2
     assert [len(_decode_polyline(tp["z"])) for tp in task["t"]] == [3, 3, 3, 3]
-    assert answer["summary"].endswith(" · turnpoints by hand")
+    assert answer["summary"].endswith(" · exact turnpoints")
 
 
 def _metres(a, b):
@@ -880,7 +880,7 @@ def test_a_task_comes_in_from_xctrack_in_every_form(form):
         assert answer["cylinder"] == "400", "the turnpoints' cylinder, not the start's"
     else:
         assert answer["n"] == 3 and answer["closed"] is False
-        assert answer["cylinder"] == "0", "a waypoints task is switched by hand"
+        assert answer["cylinder"] == "0", "a waypoints task comes in exact"
     assert answer["first"][0] == pytest.approx(13.7715, abs=1e-4)
     assert answer["first"][1] == pytest.approx(50.4075, abs=1e-4)
     assert answer["exportShown"] is True

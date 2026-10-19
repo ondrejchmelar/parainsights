@@ -1052,13 +1052,13 @@
   //
   // The route as an XCTrack task (xctrack.org/Competition_Interfaces.html), in the QR
   // code's compact form (version 2), which XCTrack also opens as a file. Two kinds, by the
-  // Task menu's "Next turnpoint" (`cylinder`):
+  // Task menu's "Turnpoint cylinder" (`cylinder`):
   //  - a cylinder round every turnpoint, the default: a competition task ("CLASSIC") with
   //    no start and no goal set, so no gates and no clock — XCTrack moves on to the next
   //    turnpoint on entering one, as flyXC's export does (400 m, no start, no goal). A
   //    closed course's last cylinder is its closing circle (`goalRadius`), so XCTrack
   //    says "goal" where the triangle has closed;
-  //  - by hand: the waypoints task ("XC / Waypoints task"), which ignores any circle and
+  //  - exact: the waypoints task ("XC / Waypoints task"), which ignores any circle and
   //    keeps pointing at a turnpoint until the pilot switches it.
   // Three ways in, because a phone and a desktop want different ones:
   //  - a .xctsk file, which on the phone XCTrack runs on opens straight into it;
@@ -1077,7 +1077,7 @@
       return out + String.fromCharCode(v + 63);
     }).join('');
   }
-  // The cylinder's radius in metres, 0 for by hand.
+  // The cylinder's radius in metres, 0 for exact.
   function cylinder() {
     var pick = document.getElementById('plan-cyl');
     return pick ? Math.max(0, Number(pick.value) || 0) : 0;
@@ -1111,7 +1111,7 @@
   }
   function cylinderText() {
     var radius = cylinder();
-    if (!radius) return 'turnpoints by hand';
+    if (!radius) return 'exact turnpoints';
     return (radius < 1000 ? radius + ' m' : radius / 1000 + ' km') + ' cylinders';
   }
   function xctrackTask() {
@@ -1403,7 +1403,7 @@
   }
   // The turnpoints' cylinder, as one radius: the commonest over the turnpoints between the
   // first and the last, which a competition task makes a start and a goal of their own
-  // size. A waypoints task has none, and comes in to be switched by hand.
+  // size. A waypoints task has none, and comes in exact.
   function cylinderOf(task) {
     var list = task && (task.t || task.turnpoints);
     if (task.T === 'W' || !Array.isArray(list)) return 0;
