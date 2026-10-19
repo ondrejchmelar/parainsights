@@ -120,6 +120,8 @@ STYLE = """
 .plan-switch input:checked { background:var(--ink); }
 .plan-switch input:checked::after { left:21px; }
 .plan-switch input:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+/* A finger's tap names no zone while the panel names them all (`touchQuiet`). */
+.merged-view.is-column-touch .view3d-asp { display:none; }
 /* What is above a clicked point (planner.js, `openColumn`): a panel where the menus open,
    under them, and a pin on the map where it was clicked. */
 .plan-column { position:absolute; top:calc(var(--mh) + 8px); left:0; z-index:4; box-sizing:border-box;

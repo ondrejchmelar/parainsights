@@ -646,6 +646,40 @@ def test_a_click_off_drawing_lists_every_zone_above_the_point_top_down():
     assert answer["closed"] is None, "Escape left the column up"
 
 
+@needs_chrome
+def test_a_tap_s_zone_name_does_not_sit_over_the_panel():
+    """deck.gl picks again after a tap, so the map's zone name came back over the
+    "Above this point" panel that had just named it. A finger gets no name while the
+    panel is open; a mouse keeps it, as on any map."""
+    low = _band("LOW", 14.3, 14.7, 49.3, 49.7, floor="GND", ceiling="4000ft MSL", klass="D")
+    answer = _run(_DROP + _VIEW + """
+    document.getElementById('plan-draw').click();          // Draw off
+    // No WebGL here, so no map: a stand-in with its classes, under the page's own CSS.
+    var view = document.querySelector('.merged-view');
+    if (!view) {
+      view = document.createElement('div');
+      view.className = 'merged-view';
+      view.innerHTML = '<div class="m3-corner"><div class="m3-corner-row"></div></div>'
+        + '<div class="view3d-asp" hidden></div>';
+      document.body.appendChild(view);
+    }
+    var name = view.querySelector('.view3d-asp');
+    function seen() { name.hidden = false; return getComputedStyle(name).display !== 'none'; }
+    view.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch', bubbles: true }));
+    at(14.5, 49.5);
+    var touch = seen();
+    view.dispatchEvent(new PointerEvent('pointermove', { pointerType: 'mouse', bubbles: true }));
+    var mouse = seen();
+    view.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch', bubbles: true }));
+    window.__plannerColumn(null);
+    var closed = seen();
+    return { touch: touch, mouse: mouse, closed: closed };
+    """, spaces=[low])
+    assert not answer["touch"], "a tap's zone name showed over the panel"
+    assert answer["mouse"], "a mouse lost the zone name under the pointer"
+    assert answer["closed"], "the name stayed away after the panel closed"
+
+
 # ------------------------------------------- outside the airspace's country
 #
 # The planner's ground reaches the Alps and its airspace is Czech only. A route there

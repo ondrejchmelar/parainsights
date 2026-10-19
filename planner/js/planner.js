@@ -509,10 +509,25 @@
       ? 'Bar: ground to ' + COLUMN_TOP + ' m. Only what this map has: check the AIS before flying.'
       : 'No zone in this map’s data above this point. That is not a clearance: check the AIS before flying.';
   }
+  // A tap is a hover too, and the map named the zone under the finger — again after the
+  // panel opened, as deck.gl picks once more after the tap — so while the panel is open
+  // a finger gets no name: the panel says it and the rest, and one tap gives one answer.
+  // A mouse keeps the name: it follows the pointer and moves off with it.
+  var touched = false;
+  function touchQuiet() {
+    var view = document.querySelector('.merged-view');
+    if (view) view.classList.toggle('is-column-touch', !!column && touched);
+  }
+  document.addEventListener('pointerdown', function (event) {
+    touched = event.pointerType !== 'mouse';
+    touchQuiet();
+  }, true);
+  document.addEventListener('pointermove', function (event) {
+    if (event.pointerType === 'mouse' && touched) { touched = false; touchQuiet(); }
+  }, true);
   function openColumn(at) {
     column = { at: at, rings: over(at) };
-    // A tap is a hover too, and the map named the zone under the finger: the panel says
-    // it and the rest, so one tap gives one answer. A mouse brings the name back by moving.
+    touchQuiet();
     var name = document.querySelector('.merged-view .view3d-asp');
     if (name) name.hidden = true;
     var merged = mergedEntry(), map = merged && merged.map;
@@ -530,6 +545,7 @@
   function closeColumn() {
     if (!column) return;
     column = null;
+    touchQuiet();
     if (pin) pin.remove();
     if (columnPanel && columnPanel.parentNode) columnPanel.parentNode.removeChild(columnPanel);
     refreshAirspace();
