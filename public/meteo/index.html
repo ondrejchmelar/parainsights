@@ -327,6 +327,12 @@ details.fold tr:last-child, details.fold tr:last-child > * { border-bottom: 0; }
 /* flymet's meteogram for the airfield nearest this takeoff, under its own charts. */
 .met-col-fly { margin: 0; }
 .met-col-fly img { display:block; width:100%; border-radius:14px; background:#fff; }
+/* The hour the page is at, across the picture (`flymetBar`). */
+.met-fly-frame { position:relative; }
+.met-fly-frame svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+.met-fly-frame line { vector-effect:non-scaling-stroke; }
+.met-fly-halo { stroke:#fff; stroke-width:4px; }
+.met-fly-bar { stroke:#111; stroke-width:2px; }
 .met-col-fly figcaption { display:flex; justify-content:space-between; align-items:center; gap:10px;
   font-size:15px; color:var(--ink-2); margin:6px 0 0; }
 .met-col-fly figcaption a { color:var(--ink-2); }
@@ -2198,6 +2204,65 @@ details.fold tr:last-child, details.fold tr:last-child > * { border-bottom: 0; }
   // under its charts: side by side, three of them were 2 500 px of scrolling when they
   // were stacked full width under the columns. A thumbnail at the column's width; the
   // full picture is a tap away.
+  // The hour the rest of the page is at, as a bar across flymet's picture, as the
+  // airgram carries it. flymet draws every meteogram on the same 1024×768 frame, so the
+  // bar is placed in the picture's own pixels and scales with it: the hour axis runs
+  // 00:00 at x 65.5 to 24:00 at x 962.5 — its 03:00…21:00 gridlines fall at 178, 290 …
+  // 851, 112 px apart — and the four panels are framed at these rows. The bar is drawn
+  // panel by panel so it never crosses the hour labels between them.
+  //
+  // flymet's axis is UTC, not the Prague hour the slider is in. Its manual says "all
+  // times in SEČ/SELČ", but that is about when the model runs: on the pictures the day's
+  // thermals start some 2½ hours after sunrise in UTC and peak with Open-Meteo's
+  // boundary layer in UTC, and in Prague time they would start before the sun was up.
+  var FLY_W = 1024, FLY_H = 768, FLY_X0 = 65.5, FLY_X24 = 962.5;
+  var FLY_PANELS = [[53, 175], [192, 245], [262, 542], [559, 734]];
+
+  // The UTC hour at `hour` o'clock in Prague, `day` days from today — the offset looked
+  // up for that date, since the clocks change inside the four days the page covers.
+  function pragueToUtc(day, hour) {
+    var now = new Date();
+    var guess = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() + day, hour);
+    var parts = {};
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Europe/Prague', hourCycle: 'h23',
+      year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric'
+    }).formatToParts(new Date(guess)).forEach(function (p) { parts[p.type] = Number(p.value); });
+    var wall = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour);
+    return hour - (wall - guess) / 3600000;
+  }
+
+  function flymetBar(frame) {
+    var svg = frame.querySelector('svg');
+    if (!svg) {
+      svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 ' + FLY_W + ' ' + FLY_H);
+      svg.setAttribute('preserveAspectRatio', 'none');
+      svg.setAttribute('aria-hidden', 'true');
+      // A white line under a dark one: flymet's panels run from grey through green to
+      // deep red and blue, and no one colour reads on all of them.
+      ['met-fly-halo', 'met-fly-bar'].forEach(function (name) {
+        FLY_PANELS.forEach(function (rows) {
+          var line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          line.setAttribute('class', name);
+          line.setAttribute('y1', rows[0]);
+          line.setAttribute('y2', rows[1]);
+          svg.appendChild(line);
+        });
+      });
+      frame.appendChild(svg);
+    }
+    var utc = pragueToUtc(state.day, state.hour);
+    var x = FLY_X0 + (FLY_X24 - FLY_X0) * utc / 24;
+    svg.dataset.utc = utc;
+    // The slider's 06–20 never leaves flymet's day, but the axis is the guard, not the slider.
+    svg.setAttribute('visibility', utc < 0 || utc > 24 ? 'hidden' : 'visible');
+    svg.querySelectorAll('line').forEach(function (line) {
+      line.setAttribute('x1', x);
+      line.setAttribute('x2', x);
+    });
+  }
+
   function drawFlymet() {
     var template = state.day === 0 ? conf.flymet.today
       : (state.day === 1 ? conf.flymet.tomorrow : null);
@@ -2217,17 +2282,26 @@ details.fold tr:last-child, details.fold tr:last-child > * { border-bottom: 0; }
       // Rebuilt only when what it shows changes — the hour slider redraws this panel on
       // every step, and reassigning `src` makes the picture blink. The day is in the key:
       // without it, tomorrow kept today's picture under a tomorrow heading.
+      // The bar is moved on every step, though; only the picture under it stays.
       var key = near.slug + '|' + state.day + '|' + hour;
-      if (figure.dataset.key === key) return;
+      if (figure.dataset.key === key) {
+        var shown = figure.querySelector('.met-fly-frame');
+        if (shown) flymetBar(shown);
+        return;
+      }
       figure.dataset.key = key;
       figure.hidden = false;
       figure.textContent = '';
       var url = template.replace('{slug}', encodeURIComponent(near.slug)) + '?h=' + hour;
+      var frame = document.createElement('div');
+      frame.className = 'met-fly-frame';
       var image = document.createElement('img');
       image.loading = 'lazy';
       image.alt = 'flymet meteogram for ' + near.name + ', ' + (state.day === 0 ? 'today' : 'tomorrow');
       image.src = url;
-      figure.appendChild(image);
+      frame.appendChild(image);
+      flymetBar(frame);
+      figure.appendChild(frame);
       var caption = document.createElement('figcaption');
       var credit = document.createElement('span');
       var link = document.createElement('a');
@@ -2246,7 +2320,7 @@ details.fold tr:last-child, details.fold tr:last-child > * { border-bottom: 0; }
       caption.appendChild(open);
       figure.appendChild(caption);
       image.onerror = function () {
-        image.hidden = true;
+        frame.hidden = true;
         open.hidden = true;
         credit.textContent = 'flymet has no meteogram for ' + near.name + ' just now.';
       };

@@ -232,6 +232,12 @@ STYLE = """
 /* flymet's meteogram for the airfield nearest this takeoff, under its own charts. */
 .met-col-fly { margin: 0; }
 .met-col-fly img { display:block; width:100%; border-radius:14px; background:#fff; }
+/* The hour the page is at, across the picture (`flymetBar`). */
+.met-fly-frame { position:relative; }
+.met-fly-frame svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+.met-fly-frame line { vector-effect:non-scaling-stroke; }
+.met-fly-halo { stroke:#fff; stroke-width:4px; }
+.met-fly-bar { stroke:#111; stroke-width:2px; }
 .met-col-fly figcaption { display:flex; justify-content:space-between; align-items:center; gap:10px;
   font-size:15px; color:var(--ink-2); margin:6px 0 0; }
 .met-col-fly figcaption a { color:var(--ink-2); }

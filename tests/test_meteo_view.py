@@ -581,6 +581,42 @@ def test_flymet_is_shown_for_today_and_tomorrow_and_not_beyond():
     assert " km" in today["caption"] and "flymet" in today["caption"]
 
 
+
+@needs_chrome
+def test_flymet_carries_the_hour_on_its_own_utc_axis():
+    """The bar across flymet's picture stands where the slider's Prague hour falls on
+    flymet's UTC axis: 00:00 at x 65.5, 24:00 at x 962.5 of its 1024-wide frame — and
+    moves with the slider without the picture being fetched again."""
+    import datetime
+    import zoneinfo
+
+    answer = _probe_page("""
+    var m = window.__meteo;
+    m.state.day = 0;
+    var seen = [];
+    [9, 14].forEach(function (hour) {
+      m.state.hour = hour;
+      m.draw();
+      var figure = document.querySelector('.met-col-fly');
+      var svg = figure.querySelector('.met-fly-frame svg');
+      seen.push({ hour: hour, utc: Number(svg.dataset.utc),
+                  bars: svg.querySelectorAll('.met-fly-bar').length,
+                  x: svg.querySelectorAll('.met-fly-bar')[0].getAttribute('x1'),
+                  image: figure.querySelector('img') });
+    });
+    return { seen: seen.map(function (s) { return { hour: s.hour, utc: s.utc, bars: s.bars, x: Number(s.x) }; }),
+             same: seen[0].image === seen[1].image };
+    """)
+    today = datetime.date.today()
+    for s in answer["seen"]:
+        local = datetime.datetime(today.year, today.month, today.day, s["hour"],
+                                  tzinfo=zoneinfo.ZoneInfo("Europe/Prague"))
+        utc = local.astimezone(datetime.timezone.utc).hour
+        assert s["utc"] == utc
+        assert s["x"] == pytest.approx(65.5 + 897 * utc / 24, abs=0.01)
+        assert s["bars"] == 4, "one segment per panel, clear of the hour labels"
+    assert answer["same"], "the slider moved the bar, not the picture"
+
 # ------------------------------------------- choosing takeoffs, in a browser
 #
 # The picker used to be a 159-row list holding the top-left corner of the page: it was

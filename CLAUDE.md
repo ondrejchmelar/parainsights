@@ -48,8 +48,6 @@ empty.
   the side view moves the cursor and the page does not scroll.
 - **One format for the debrief.** Its parts — the figures that open it, the finding cards,
   the context cards, the note — each have their own shape; make them read as one.
-- **Time slider: a position gauge, as flymet has.** (The user's note, verbatim: "flymet-
-  timeslider position gauge"; details to settle before starting.)
 
 **Where the "no shared code" rule applies, and where it does not.** `airspaces/geo.py`
 exists alongside `tracklog_viewer/js/geo.js` rather than sharing it, because they are not
@@ -318,6 +316,14 @@ for the airfield nearest the chosen takeoff. It is linked and not copied — the
 browser fetches it from flymet, flymet is named in the caption and the caption links back
 — so nothing here republishes it. Over `https`, because the site is https and a browser
 drops a mixed-content image without drawing anything or saying why.
+**The hour slider draws a bar across flymet's picture** (October 2026), as the airgram
+carries it — calibrated on flymet's fixed 1024×768 frame (00:00 at x 65.5, 24:00 at 962.5,
+one segment per panel) in an SVG over the image, so it scales with it. flymet's axis is
+**UTC**, not Prague time: its manual's "all times SEČ/SELČ" is about the model's run
+times, and on the pictures thermals start ~2½ h after a UTC sunrise and peak with
+Open-Meteo's boundary layer in UTC. `pragueToUtc` looks the offset up per date, since
+the clocks change inside the page's four days. If flymet ever changes its frame, the
+bar lands wrong silently — re-measure from a downloaded PNG.
 
 Publishing is a build and a commit — the site is `public/`, handed to GitHub Pages by
 `.github/workflows/pages.yml`. The repository moved from GitLab in October 2026; the
