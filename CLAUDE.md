@@ -46,6 +46,13 @@ empty.
   should scroll the page like anywhere else; a tap reads a point, and a press held then
   dragged scrubs (`bindReader` in `meteo/js/meteo.js` is the pattern). Today a drag over
   the side view moves the cursor and the page does not scroll.
+- **ECMWF sounding as a second model, once Open-Meteo serves its 9 km pressure levels.**
+  ECMWF opened its 9 km IFS on 20 Oct 2026 (data.ecmwf.int `ifs/0p1/`: GRIB2, 2 h late,
+  3-hourly, 1000/925/850/700/600 hPa under 4 km, no boundary layer height). The page
+  already reads `ecmwf_ifs` from Open-Meteo for the boundary layer, but on 21 Oct
+  `temperature_850hPa` with `models=ecmwf_ifs` came back null. When it does not, draw
+  ECMWF's profile beside ICON's (or a switch), so where the two disagree on the thermal
+  top the reader sees it. Not worth a GRIB pipeline in CI for 3-hourly, coarse levels.
 - **One format for the debrief.** Its parts — the figures that open it, the finding cards,
   the context cards, the note — each have their own shape; make them read as one.
 
