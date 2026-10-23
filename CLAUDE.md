@@ -46,9 +46,6 @@ empty.
   should scroll the page like anywhere else; a tap reads a point, and a press held then
   dragged scrubs (`bindReader` in `meteo/js/meteo.js` is the pattern). Today a drag over
   the side view moves the cursor and the page does not scroll.
-- **Okruh: none where the chart draws no circuit.** These charts show only TKOF/LDG
-  labels, and the map still draws a guessed standard box: LKBYNO, LKCDUB, LKLIBA,
-  LKLOUC, LKNUCI, LKNVCE, LKPOCA, LKPOLE, LKPRIM, LKTRBH (`voc_shapes.txt` → `none`).
 - **Okruh: review the charts whose scale could not be read** (no village marks, so
   `voc_measure scale` finds none): LKBRUS, LKHC, LKHN, LKHV, LKKOST, LKPISK, LKPO,
   LKSTRZ, LKTC, LKZAHO. LKTC draws a large box that needs a scale to size.
@@ -158,8 +155,8 @@ charts are north-up and centred on the field but come at **three scales** (16.85
 automatically and every fit looked at; anything else — slanted legs, teardrops,
 crossing boxes, one-way hooks — is traced by hand, point by point. The standard box
 (the measured median, 1.3 km abeam at an SLZ strip, 1.5 km at an aerodrome) is left
-only where the chart draws no circuit, has no readable scale, or disagrees with the
-runway by kilometres (LKMI, LKPC).
+only where the chart has no readable scale or disagrees with the runway by kilometres
+(LKMI, LKPC). A chart that draws no circuit gets **no band** (the pilot's call).
 
 The map draws each airspace as the **box** it is, floor to ceiling, which is the whole
 reason it is a 3D view: three zones with the same outline and

@@ -244,8 +244,10 @@ so its filename is read from the directory listing instead of computed.
   **Then everything that is not a rectangle was traced by hand** (`voc_shapes.txt`):
   LKKRAM's slanted leg, LKMB's and LKLB's teardrops, LKCH's and LKPN's crossing boxes,
   the hooks one-way strips publish (LKCHOR, LKHATH, LKKEJZ). What keeps a standard box
-  is a chart that draws no circuit, has no readable scale, or puts it kilometres from
-  the runway (LKMI, LKPC).
+  is a chart with no readable scale, or one that puts it kilometres from
+  the runway (LKMI, LKPC). A chart that draws no circuit at all (only TKOF/LDG
+  labels: LKBYNO, LKCDUB, LKLIBA, LKLOUC, LKNUCI, LKNVCE, LKPOCA, LKPOLE, LKPRIM, LKTRBH)
+  gets no band — the pilot's call.
   Those 51 get a standard box, the measured median.
 
   | | abeam, median (quartiles) | past the threshold |

@@ -38,9 +38,9 @@ parallel or duplicate runway whose sibling carries it) or `default` (no rectangl
 chart's blue lines thinned to their centrelines on a 100 m grid, and the outline read
 off corner by corner — a slanted leg (LKKRAM), a teardrop (LKMB, LKLB), crossing boxes
 (LKCH, LKPN), a hook a one-way strip publishes instead of a loop (LKCHOR, LKHATH). A
-traced runway overrides its rectangle fit. What is still on the standard box: charts
-that draw no circuit at all (LKBYNO, LKCDUB, LKLIBA, LKLOUC, LKNUCI, LKNVCE, LKPOCA,
-LKPOLE, LKPRIM, LKTRBH), the ten with no scale to read (village marks), and LKMI and
+traced runway overrides its rectangle fit. A chart that draws no circuit at all gets no
+band (LKBYNO, LKCDUB, LKLIBA, LKLOUC, LKNUCI, LKNVCE, LKPOCA, LKPOLE, LKPRIM, LKTRBH:
+`none`, October 2026, the pilot's call). What is still on the standard box: the ten with no scale to read (village marks), and LKMI and
 LKPC, whose drawn circuit is kilometres from the runway.
 """
 
@@ -408,7 +408,8 @@ point — the chart's centre. **An empty list means the runway has no circuit of
 own**: a parallel or duplicate runway, whose sibling's circuit is the one flown.
 
 A runway that is not here keeps the standard box (`circuits.BESIDE_M`/`BEYOND_M`): its
-chart draws no circuit, or one that disagrees with the runway data.
+chart has no readable scale, or one that disagrees with the runway data. A chart that
+draws no circuit at all is here with an empty list.
 """
 
 CHARTS = {body}

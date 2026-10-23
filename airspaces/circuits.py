@@ -54,7 +54,7 @@ import re
 from . import geo, openair, voc
 from .aerodromes import FEET, Aerodrome, Runway
 
-# The standard box, for a runway whose chart draws no circuit: downwind leg
+# The standard box, for a runway whose chart has no readable scale: downwind leg
 # abeam, turns beyond the threshold. **The medians of the measured circuits** (`voc`):
 # at an SLZ strip 1 260 m abeam and 1 240 m past the threshold (quartiles 1 100-1 530),
 # at an ICAO aerodrome 1 490 and 1 550 (quartiles within ±60 m). **Circuit size barely
