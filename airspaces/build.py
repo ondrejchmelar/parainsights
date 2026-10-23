@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from . import aerodromes, atz, circuits, openair, sources
 
@@ -101,7 +101,10 @@ class Overlay:
     def circuit_airspaces(self) -> list:
         """What the maps draw of this layer: the circuits. Aerodrome zones on the maps are
         openAIP's (`openaip.py`); ours stay in the OpenAir download for XCTrack."""
-        return [a for a in self.airspaces if a.meta.get("kind") == "circuit"]
+        # With the maps' narrow slit (`circuits.MAP_GAP_M`) rather than the OpenAir one.
+        return [replace(a, points=a.meta["map_points"],
+                                    meta={k: v for k, v in a.meta.items() if k != "map_points"})
+                for a in self.airspaces if a.meta.get("kind") == "circuit"]
 
     @property
     def circuit_count(self) -> int:

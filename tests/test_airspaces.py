@@ -607,6 +607,28 @@ def test_an_unmeasured_runway_takes_the_side_the_text_states(note, sides):
     assert {s.meta["side"] for s in spaces} == sides
 
 
+def test_the_maps_get_a_band_without_the_openair_gap():
+    """The 60 m slit is for XCTrack. Drawn on the map it stood as a wall across every
+    band and read as a hole in the circuit; the maps' copy closes it to 2 m, and stays
+    a simple ring."""
+    field_ = Aerodrome(icao="LKCHOT", lat=50.0, lon=15.0, elevation_ft=1000.0)
+    field_.runways = [runway()]
+    space = circuits.to_airspaces(field_)[0]
+    overlay = build.Overlay(airspaces=[space], zones=[], fields={}, offset=(0, 0, 0))
+    drawn = overlay.circuit_airspaces[0]
+    ring = frame_xy(drawn.points)
+    assert math.dist(ring[0], ring[5]) == pytest.approx(circuits.MAP_GAP_M, abs=0.5)
+    assert math.dist(*[frame_xy(space.points)[i] for i in (0, 5)]) == pytest.approx(
+        circuits.GAP_M, abs=1)
+    assert "map_points" not in drawn.meta
+    n = len(ring)
+    for i in range(n):
+        for j in range(i + 2, n):
+            if (j + 1) % n == i:
+                continue
+            assert not segments_cross(ring[i], ring[(i + 1) % n], ring[j], ring[(j + 1) % n])
+
+
 def test_gliders_named_after_the_hand_still_count():
     """LKCB: `left - aeroplanes and ultralight aircraft, right - gliders`."""
     text = ("The traffic circuits: RWY 05, RWY 06: left - aeroplanes and ultralight "

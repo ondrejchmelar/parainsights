@@ -69,6 +69,11 @@ AERODROME_BEYOND_M = 1550.0
 # How wide the band around that path is, and the gap that keeps the ring simple.
 RIBBON_M = 300.0
 GAP_M = 60.0
+# The maps' copy needs no 60 m: their coordinates are floats, not OpenAir's rounded
+# seconds, and a slit that wide drawn as a wall across the band read as a hole in the
+# circuit — on every band, now that each ends where its chart has it. 2 m keeps the
+# ring simple and is under a pixel at any zoom the map opens at.
+MAP_GAP_M = 2.0
 
 # When the AIP publishes no circuit altitude, fall back to this above the aerodrome.
 # 1000 ft is the standard light-aircraft circuit height.
@@ -308,7 +313,8 @@ def to_airspaces(field: Aerodrome) -> list[openair.Airspace]:
                     points=band(frame, a0, a1, c0, c1),
                     meta={"icao": field.icao, "kind": "circuit",
                           "runway": runway.name, "side": where,
-                          "hours": field.hours.payload()},
+                          "hours": field.hours.payload(),
+                          "map_points": band(frame, a0, a1, c0, c1, gap=MAP_GAP_M)},
                 )
             )
     return out
