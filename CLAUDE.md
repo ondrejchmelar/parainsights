@@ -46,6 +46,16 @@ empty.
   should scroll the page like anywhere else; a tap reads a point, and a press held then
   dragged scrubs (`bindReader` in `meteo/js/meteo.js` is the pattern). Today a drag over
   the side view moves the cursor and the page does not scroll.
+- **Okruh: none where the chart draws no circuit.** These charts show only TKOF/LDG
+  labels, and the map still draws a guessed standard box: LKBYNO, LKCDUB, LKLIBA,
+  LKLOUC, LKNUCI, LKNVCE, LKPOCA, LKPOLE, LKPRIM, LKTRBH (`voc_shapes.txt` → `none`).
+- **Okruh: review the charts whose scale could not be read** (no village marks, so
+  `voc_measure scale` finds none): LKBRUS, LKHC, LKHN, LKHV, LKKOST, LKPISK, LKPO,
+  LKSTRZ, LKTC, LKZAHO. LKTC draws a large box that needs a scale to size.
+- **Okruh: circuit drawn far from the runway.** LKMI (~3 km), LKPC (~0.5 km); LKSZ is
+  drawn where its chart puts it, ~1.5 km from our runway. Chart error or runway data?
+- **XCTrack: ATZ and okruhy importable separately** — two files, or one file that lets
+  a pilot take either.
 - **ECMWF sounding as a second model, once Open-Meteo serves its 9 km pressure levels.**
   ECMWF opened its 9 km IFS on 20 Oct 2026 (data.ecmwf.int `ifs/0p1/`: GRIB2, 2 h late,
   3-hourly, 1000/925/850/700/600 hPa under 4 km, no boundary layer height). The page
