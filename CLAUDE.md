@@ -154,8 +154,11 @@ automatically and every fit looked at; anything else — slanted legs, teardrops
 crossing boxes, one-way hooks — is traced by hand, point by point. The standard box
 (the measured median, 1.3 km abeam at an SLZ strip, 1.5 km at an aerodrome) is left
 only where the chart has no readable scale or disagrees with the runway by kilometres
-(LKMI, LKPC — checked on imagery, the box is fine there). LKSZ's chart draws its strip
-1.4 km west of the real one, so its traced circuit is moved onto the surveyed runway.
+(LKMI, LKPC — checked on imagery, the box is fine there). Three charts draw their strip
+away from the real one — LKSZ 1.4 km W, LKBR 0.85 km N, LKKL 0.76 km N, found by laying
+every chart over imagery with our runway on it — so their circuits are moved onto the
+surveyed runway (`shift` in `voc_shapes.txt`); reported in `docs/atz-datum-hlaseni.md`.
+LKPA's chart is right and OurAirports's runway heading is not.
 A chart that draws no circuit gets **no band** (the pilot's call).
 
 The map draws each airspace as the **box** it is, floor to ceiling, which is the whole

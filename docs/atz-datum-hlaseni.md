@@ -12,7 +12,7 @@ v `airspaces/atz.py`; přepočítat před odesláním příkazem:
 
 ---
 
-**Předmět:** LKR315A – systematický posun geometrie ATZ o ~117 m k JZ
+**Předmět:** LKR315A – systematický posun geometrie ATZ o ~117 m k JZ; tři mapy VOC s posunutou dráhou
 
 Dobrý den,
 
@@ -93,6 +93,24 @@ Pro pilota je 117 m na poloměru 5 500 m zanedbatelné. Pro provozovatele
 bezpilotních systémů, kteří se podle těchto dat řídí přímo, to ale znamená, že
 hranice zóny je posunutá o více než sto metrů — na jedné straně letiště zóna
 končí dříve, než by měla.
+
+**Další zjištění: tři mapy VOC kreslí dráhu jinde, než skutečně je**
+
+Při překreslování okruhů z map VOC (`aim.rlp.cz/vfrmanual/actual/ad/{ident}_voc.jpg`)
+jsem u každého letiště porovnal dráhu nakreslenou v mapě s polohou dráhy podle
+vztažného bodu z VFR příručky, prahů dráhy v databázi OurAirports a satelitního
+snímku. U tří letišť je dráha v mapě nakreslená výrazně mimo skutečnou plochu,
+a okruh, který je k ní vztažený, tedy také:
+
+| letiště | dráha v mapě VOC vůči skutečné dráze |
+|---|---|
+| LKSZ Sazená | ~1 410 m **západně** |
+| LKBR Broumov | ~850 m severně, ~150 m západně |
+| LKKL Kladno | ~760 m severně, ~90 m východně |
+
+U všech tří se vztažný bod z VFR příručky, prahy v OurAirports a satelitní snímek
+shodují mezi sebou (do ~100 m); liší se jen kresba v mapě. U ostatních 140 letišť
+jsem takový rozpor nenašel.
 
 Souřadnice si samozřejmě rád upřesním nebo pošlu celý výpočet, pokud to pomůže.
 

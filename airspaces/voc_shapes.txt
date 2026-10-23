@@ -64,3 +64,9 @@ lkpole 01/19 none
 lkpole 05/23 none
 lkprim 09/27 none
 lktrbh 03/21 none
+# `shift ident e,n`: the chart draws the strip that far from the real one (checked on
+# imagery, October 2026: our runway sits on the strip, the chart's does not); every
+# outline of the field is moved by it. LKSZ was moved in its trace above. LKPA's chart is
+# right and OurAirports's runway heading is not, so it is not shifted.
+shift lkbr 150,-850
+shift lkkl -90,-760

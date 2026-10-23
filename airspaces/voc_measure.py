@@ -348,10 +348,16 @@ def write(known):
             runway.append(shape)
 
     traced: dict[tuple[str, str], list] = {}
+    shifts: dict[str, tuple[float, float]] = {}
     for line in SHAPES.read_text().splitlines():
         if not line.strip() or line.startswith("#"):
             continue
         ident, name, kind, *rest = line.split()
+        if ident == "shift":
+            # `shift lkbr 150,-850`: the chart draws the strip that far from the real
+            # one; every outline of the field is moved by it.
+            shifts[name] = tuple(float(v) for v in kind.split(","))
+            continue
         if kind == "none":
             traced.setdefault((ident, name), [])
             continue
@@ -396,6 +402,10 @@ def write(known):
         for shape in shapes:
             put(ident, name, shape)
 
+    for ident, (de, dn) in shifts.items():
+        for shapes in data.get(ident.upper(), {}).get("runways", {}).values():
+            for shape in shapes:
+                shape["points"] = [(round(e + de), round(n + dn)) for e, n in shape["points"]]
     body = pprint.pformat(data, width=96, sort_dicts=True)
     OUTPUT.write_text(f'''"""Traffic circuits off the AIP's VOC charts — generated, do not edit.
 
