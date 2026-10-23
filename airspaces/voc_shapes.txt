@@ -70,3 +70,28 @@ lktrbh 03/21 none
 # right and OurAirports's runway heading is not, so it is not shifted.
 shift lkbr 150,-850
 shift lkkl -90,-760
+# The ten charts whose scale the village marks did not give (October 2026): read from
+# their own zone ring, or from neighbouring airfields' symbols at known places. All are
+# centred on the field except LKHC, drawn 3.5 km E / 1.9 km S of the image centre, whose
+# outline is read from the field's symbol and then laid onto the runway with `shift`.
+lkhc 12/30 closed en -2050,1000 1000,-950 450,-2100 -2350,-1000 -2600,-450
+shift lkhc 300,300
+lkhn 05/23 closed en -1800,900 0,2050 500,2000 1400,1000 -1100,-950 -1500,-900 -2050,-200 -2050,300
+lkhv 06/24 closed en -3800,300 -3500,1100 -2000,1900 0,2950 800,3200 1050,3150 1950,1350 1950,950 -1100,-450 -2650,-1400 -3000,-1300 -3900,-200
+lktc 09/27 closed en -1600,0 3200,0 3200,-2950 -1750,-2800
+lkpo 06/24 closed en -2250,-150 -2100,350 -1100,850 0,1600 650,1650 1100,1000 1400,700 1050,550 -1150,-500 -1900,-850 -2200,-700
+lkpo 06/24 closed en -3400,0 -3400,500 -3100,1100 -1500,1800 0,2450 1100,2150 1900,1600 2500,700 2500,-100 2200,-800 1300,-1700 0,-2650 -1100,-3000 -2000,-2400 -2200,-1700 -3000,-800
+lkbrus 10/28 path en -2700,2600 -2900,600 -3450,-1600
+lkbrus 10/28 path en -2900,600 -450,50
+lkkost 09/27 closed en -1900,0 1800,0 1800,1300 -1900,1300
+lkkost 09/27 closed en -1000,0 950,0 950,-1200 -1000,-1200
+lkpisk 16/34 closed en -50,500 -400,1250 -400,1600 300,2100 650,2100 1000,1650 1450,550 1650,-300 1450,-650 300,-950 100,-850 0,-400
+# LKSTRZ draws two crossing strips and a box either side of each; the build knows one
+# runway, so all four hang off it — the crossing pair as traced in its frame.
+lkstrz 15/33 closed rw:0 -1880,930 1720,1230 1720,185 -1880,-165
+lkstrz 15/33 closed rw:0 -1810,-160 1880,200 1880,-860 -1810,-1200
+lkstrz 15/33 closed rw:0 -1750,1288 -1133,1545 -644,1571 670,-1519 0,-2009 -489,-1442
+lkstrz 15/33 closed rw:0 -644,1571 -52,2034 464,1803 592,1133 1622,-1030 1133,-1494 695,-1519
+# LKZAHO: two boxes, either side of 05/23 (the crossing line on the chart is a TMA edge).
+lkzaho 05/23 closed rw:0 -1710,0 1185,0 1185,1365 -1710,1365
+lkzaho 05/23 closed rw:0 -1710,0 1185,0 1185,-1365 -1710,-1365

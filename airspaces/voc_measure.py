@@ -40,8 +40,11 @@ off corner by corner — a slanted leg (LKKRAM), a teardrop (LKMB, LKLB), crossi
 (LKCH, LKPN), a hook a one-way strip publishes instead of a loop (LKCHOR, LKHATH). A
 traced runway overrides its rectangle fit. A chart that draws no circuit at all gets no
 band (LKBYNO, LKCDUB, LKLIBA, LKLOUC, LKNUCI, LKNVCE, LKPOCA, LKPOLE, LKPRIM, LKTRBH:
-`none`, October 2026, the pilot's call). What is still on the standard box: the ten with no scale to read (village marks), and LKMI and
-LKPC, whose drawn circuit is kilometres from the runway.
+`none`, October 2026, the pilot's call). The ten charts with no village marks (LKBRUS, LKHC, LKHN, LKHV, LKKOST, LKPISK, LKPO,
+LKSTRZ, LKTC, LKZAHO) were scaled by hand — from their own zone ring, or from other
+airfields' symbols at known places — and traced. LKHC's is the one chart not centred
+on its field. What is still on the standard box: LKMI and LKPC, whose drawn circuit is
+kilometres from the runway.
 """
 
 from __future__ import annotations
@@ -63,6 +66,11 @@ CHART = "https://aim.rlp.cz/vfrmanual/actual/ad/{ident}_voc.jpg"
 # Village-mark size in pixels → metres a pixel. Measured against charts whose scale
 # is known from a fitted ATZ ring or two neighbouring airfields.
 LEVELS = {20.0: 16.85, 16.0: 21.17, 12.5: 26.8}
+# The charts with no village marks to read, scaled by hand: from their own zone ring
+# (5 500 m) or from other airfields' symbols at known bearings (October 2026).
+BY_HAND = {"lkbrus": 16.85, "lkkost": 16.85, "lkpisk": 16.85, "lkstrz": 16.85,
+           "lkzaho": 16.85, "lkhn": 21.16, "lkhv": 21.41, "lktc": 21.69, "lkpo": 21.66,
+           "lkhc": 21.17}
 OUT_M = 10.0                      # the runway-frame panel's metres a pixel
 HALF_ALONG, HALF_ACROSS = 4500, 3500
 
@@ -173,6 +181,7 @@ def scale(known):
         else:
             out[ident] = by_marks
         print(ident, mark, by_marks, by_symbols)
+    out.update(BY_HAND)
     (WORK / "scale.json").write_text(json.dumps(out, indent=1))
 
 

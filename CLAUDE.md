@@ -46,9 +46,6 @@ empty.
   should scroll the page like anywhere else; a tap reads a point, and a press held then
   dragged scrubs (`bindReader` in `meteo/js/meteo.js` is the pattern). Today a drag over
   the side view moves the cursor and the page does not scroll.
-- **Okruh: review the charts whose scale could not be read** (no village marks, so
-  `voc_measure scale` finds none): LKBRUS, LKHC, LKHN, LKHV, LKKOST, LKPISK, LKPO,
-  LKSTRZ, LKTC, LKZAHO. LKTC draws a large box that needs a scale to size.
 - **XCTrack: ATZ and okruhy importable separately** — two files, or one file that lets
   a pilot take either.
 - **ECMWF sounding as a second model, once Open-Meteo serves its 9 km pressure levels.**
@@ -153,8 +150,9 @@ charts are north-up and centred on the field but come at **three scales** (16.85
 automatically and every fit looked at; anything else — slanted legs, teardrops,
 crossing boxes, one-way hooks — is traced by hand, point by point. The standard box
 (the measured median, 1.3 km abeam at an SLZ strip, 1.5 km at an aerodrome) is left
-only where the chart has no readable scale or disagrees with the runway by kilometres
-(LKMI, LKPC — checked on imagery, the box is fine there). Three charts draw their strip
+only where the chart disagrees with the runway by kilometres (LKMI, LKPC — checked on
+imagery, the box is fine there). The ten charts without village marks were scaled from
+their own zone ring or neighbouring airfields' symbols, and traced (October 2026). Three charts draw their strip
 away from the real one — LKSZ 1.4 km W, LKBR 0.85 km N, LKKL 0.76 km N, found by laying
 every chart over imagery with our runway on it — so their circuits are moved onto the
 surveyed runway (`shift` in `voc_shapes.txt`); reported in `docs/atz-datum-hlaseni.md`.
