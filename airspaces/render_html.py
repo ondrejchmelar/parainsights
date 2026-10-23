@@ -477,7 +477,9 @@ def sources_table(overlay, base_version: str, shift: float) -> str:
          f"{_escape(base_version)}; {_escape(overlay.atz_date)}"),
         (["circuit"],
          "Traffic circuits (okruhy) — <strong>drawn by this tool, not a published "
-         "boundary.</strong> Shape scaled off the AIP's VOC charts (±10%); altitude "
+         "boundary.</strong> Shape and side measured off each field's VOC chart (112 "
+         "runways, to about 50 m; the rest a standard box on the side the text states), "
+         "the mirror only where the AIP says gliders fly it; altitude "
          "published where stated, otherwise 1 000 ft above the field (measured mean "
          "993 ft over five, spread 820–1 150). At an SLZ strip the runway itself is "
          "reconstructed from the reference point and a heading rounded to 10°, so those "

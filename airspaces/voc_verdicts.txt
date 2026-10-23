@@ -1,0 +1,203 @@
+# Hand review of every runway's VOC-chart fit (airspaces/voc_measure.py), October 2026.
+# ok | manual a0 a1 c0 c1 (metres, runway frame, + across = LEFT, as read off the sheet; one line per rectangle) | none | default
+lkba:0 ok
+lkbe:0 ok
+lkbe:1 none
+lkbe:2 none
+lkbo:0 default
+lkbole:0 default
+lkbore:0 ok
+lkbr:0 ok
+lkbrez:0 ok
+lkbrto:0 ok
+lkbu:0 manual -2300 2500 -1700 0
+lkbu:1 none
+lkbudk:0 ok
+lkbyno:0 default
+lkbyno:1 default
+lkbyst:0 ok
+lkcast:0 ok
+lkcb:0 manual -1050 1900 0 850
+lkcb:1 none
+lkcdub:0 default
+lkce:0 ok
+lkcebi:0 ok
+lkch:0 default
+lkch:1 default
+lkchar:0 manual -1500 1400 0 1250
+lkchar:1 none
+lkchoc:0 ok
+lkchor:0 default
+lkchot:0 ok
+lkchov:0 default
+lkchra:0 ok
+lkchri:0 ok
+lkchvo:0 default
+lkcm:0 ok
+lkcr:0 ok
+lkcs:0 ok
+lkct:0 ok
+lkdetr:0 manual -1250 1750 -1300 0
+lkdk:0 ok
+lkdoud:0 ok
+lkdruz:0 ok
+lkdusn:0 manual -1000 1250 -1450 0
+lker:0 ok
+lkexca:0 ok
+lkfr:0 manual -1950 2050 0 1470
+lkfr:0 manual -1950 2050 -1500 0
+lkhath:0 default
+lkhb:0 ok
+lkhd:0 manual -2000 1950 0 1470
+lkhd:0 manual -2000 1950 -1470 0
+lkhk:0 ok
+lkhk:1 none
+lkhlas:0 default
+lkhrad:0 ok
+lkhrad:1 none
+lkhrad:2 none
+lkhrad:3 none
+lkhs:0 ok
+lkhs:1 none
+lkja:0 ok
+lkja:1 none
+lkjc:0 manual -2000 2500 -2400 0
+lkjh:0 ok
+lkjh:1 none
+lkji:0 ok
+lkjiri:0 ok
+lkka:0 manual -2160 2000 -2450 0
+lkkapl:0 ok
+lkkejz:0 default
+lkkl:0 ok
+lkkm:0 ok
+lkko:0 manual -1960 1220 0 1470
+lkko:0 manual -1960 1220 -1500 0
+lkko:1 none
+lkkotv:0 ok
+lkkozy:0 ok
+lkkr:0 ok
+lkkram:0 default
+lkkriz:0 ok
+lkkrpy:0 ok
+lkkrpy:1 none
+lkkt:0 ok
+lkkt:1 none
+lkkune:0 ok
+lkky:0 ok
+lklb:0 default
+lkleto:0 ok
+lkliba:0 default
+lkln:0 default
+lklomn:0 ok
+lklouc:0 default
+lklu:0 manual -2430 1100 0 1540
+lklukl:0 manual -1930 300 -420 550
+lklukl:0 manual -1930 300 550 1540
+lkmb:0 default
+lkmb:1 default
+lkmh:0 ok
+lkmh:1 none
+lkmi:0 default
+lkmilo:0 ok
+lkmira:0 default
+lkmiro:0 manual -1690 2000 -1700 0
+lkmist:0 ok
+lkmk:0 ok
+lkmk:1 none
+lkmlad:0 default
+lkmo:0 ok
+lkmo:1 none
+lknabo:0 manual -1460 1920 120 1880
+lknabo:0 manual -1460 1920 1880 3430
+lknabo:1 none
+lknabo:2 none
+lknabo:3 none
+lknach:0 default
+lknach:1 default
+lknapa:0 ok
+lknepl:0 default
+lknm:0 default
+lknm:1 default
+lknuci:0 default
+lknvce:0 default
+lknymb:0 manual -1570 1580 -1100 0
+lkol:0 ok
+lkol:1 none
+lkol:2 none
+lkopav:0 ok
+lkosic:0 ok
+lkostr:0 manual -1320 2050 -1160 0
+lkpa:0 default
+lkpano:0 default
+lkpavl:0 ok
+lkpc:0 default
+lkpi:0 ok
+lkpj:0 ok
+lkpl:0 ok
+lkpm:0 ok
+lkpm:1 none
+lkpn:0 default
+lkpn:1 default
+lkpoca:0 default
+lkpole:0 default
+lkpole:1 default
+lkprim:0 default
+lkps:0 ok
+lkra:0 default
+lkra:1 default
+lkrams:0 ok
+lkrk:0 default
+lkrk:1 default
+lkro:0 ok
+lkro:1 none
+lkry:0 ok
+lksa:0 ok
+lksb:0 ok
+lksk:0 ok
+lksk:1 ok
+lkslus:0 ok
+lksn:0 ok
+lksn:1 none
+lkso:0 manual -2430 2030 -1500 0
+lkso:1 manual -2070 1850 -2240 0
+lkspak:0 ok
+lksr:0 ok
+lkst:0 manual -1800 2120 320 1740
+lkst:1 manual -2260 1700 -1430 0
+lkstet:0 ok
+lkstip:0 ok
+lksu:0 default
+lksu:1 default
+lksz:0 default
+lksz:1 default
+lkta:0 ok
+lkta:1 ok
+lktd:0 ok
+lktepl:0 default
+lktepl:1 default
+lktere:0 ok
+lkto:0 ok
+lktrbh:0 default
+lktrut:0 default
+lkul:0 ok
+lkuo:0 ok
+lkvl:0 ok
+lkvm:0 none
+lkvm:1 none
+lkvm:2 ok
+lkvp:0 manual -2000 1470 -1520 0
+lkvp:1 none
+lkvr:0 ok
+lkvr:1 none
+lkvrat:0 manual -1350 2440 -1220 0
+lkvy:0 ok
+lkza:0 ok
+lkzb:0 ok
+lkzd:0 ok
+lkzl:0 ok
+lkzl:1 none
+lkzl:2 none
+lkzl:3 none
+lkzm:0 ok
+lkzn:0 ok

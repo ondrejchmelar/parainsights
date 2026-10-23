@@ -224,25 +224,49 @@ so its filename is read from the directory listing instead of computed.
   So the estimate is good to about ±150 ft. Reading the exact figure would mean OCR on a
   JPEG, which is why it is still an estimate and still marked `est`.
 
-- **The band's dimensions were measured off the AIP's own charts, and do *not* scale
-  with the runway.** The VOC chart at `.../ad/{ident}_voc.jpg` draws the published
-  circuit, and the ATZ ring on it is a known 5 500 m radius, which gives the scale to a
-  few metres. Measured:
+- **Every circuit is measured off its own VOC chart (October 2026), and none scales
+  with the runway.** `.../ad/{ident}_voc.jpg` draws the published circuit. The charts
+  are north-up and centred on the reference point, but **not at one scale**: 16.85,
+  21.17 or 26.8 m a pixel, the same base map enlarged in steps of 1.26. The first
+  measurement here took LKCAST's scale from an ATZ ring — LKCAST has none, being an
+  SLZ strip — and was a quarter out; `voc_measure.py` reads the scale from the village
+  marks, whose size steps with it, and checks it against other airfields' symbols at
+  their known bearing and distance (agreeing to 3% everywhere both exist).
 
-  | field | runway | published circuit |
+  Each runway's chart is resampled into the runway's frame and the circuit's blue legs
+  found as row and column peaks; a rectangle counts only if its four edges are drawn.
+  Every fit was looked at on a gridded sheet and the verdict recorded in
+  `voc_verdicts.txt`: of 196 runways, 90 fits stand, 22 were read by hand, 33 have no
+  circuit of their own (parallel and duplicate runways), and 51 have no rectangle to
+  measure — not drawn, a trapezoid or a teardrop, crossing circuits too tangled to
+  split, or a chart that disagrees with the runway data by more than its own error
+  (LKPC and LKSZ, 1.5 km from their surveyed runway: left alone rather than guessed).
+  Those 51 get a standard box, the measured median.
+
+  | | abeam, median (quartiles) | past the threshold |
   |---|---|---|
-  | LKCAST | 500 m | 3 316 × 2 832 m |
-  | LKTA | 1 100 + 850 m | 4 672 × 4 161 m (both circuits together) |
+  | SLZ strip | 1 260 m (1 100–1 530) | 1 240 m (1 070–1 520) |
+  | ICAO aerodrome | 1 490 m (1 470–1 520) | 1 550 m (1 420–1 640) |
 
-  A 500 m SLZ strip therefore flies a circuit nearly the size of a 1 100 m aerodrome's:
-  the size is set by how an aeroplane turns, not by how long the tarmac is. 1 300 m
-  abeam and 1 400 m beyond puts the band within +9%/+2% of LKCAST's published figure.
+  A 500 m strip flies a circuit nearly the size of a 1 100 m aerodrome's: the size is
+  set by how an aeroplane turns, not by how long the tarmac is. An earlier version
+  scaled the band with runway length, on the reasoning that a 2.4 km band around a
+  976 m ATZ "looked disproportionate"; it was the reasoning that was wrong — **at an SLZ
+  field the published circuit really is about 1.5× the ATZ diameter**.
 
-  An earlier version scaled these with runway length, on the reasoning that a 2.4 km
-  band around a 976 m ATZ "looked disproportionate". It was the reasoning that was
-  wrong, not the band: **at an SLZ field the published circuit really is about 1.5× the
-  ATZ diameter** and legitimately extends outside it. Scaling made those bands less than
-  half the published size, which is the dangerous direction to be wrong in.
+  The charts also show where a reconstructed runway really is. At an SLZ strip the
+  runway is the reference point plus a heading rounded to 10°, and the frame may turn
+  up to 12° to fit the drawn circuit; LKKUNE's circuit sits 1.4 km east of the
+  reconstructed runway, LKNABO's 1.9 km north. The band is drawn where the chart has it.
+
+- **The published side only; the mirror where the AIP says gliders fly it.** Most
+  charts draw the circuit on one side. Until October 2026 every runway had a band on
+  both, because the glider circuit is *often* the mirror of the powered one — not a
+  reason to mark a side nobody publishes (the pilot's call). The mirror is added where
+  the text says so: LKBE, LKCB, LKHK, LKLB, LKTD, LKVL, LKZB (`circuit_note`'s *gliders
+  mirrored*, which also has to catch LKCB's `right - gliders`). An unmeasured runway
+  takes the side its text states (`RWY 12 left`, `to the north`) and both where it
+  states none, since there is then no published side to prefer.
 
 - **Names come from the VFR heading, position is the fallback.** `LK[A-Z]{2}` matched
   `LKCA` and then failed on the `S`, so all 74 B fields were unnamed; the ident is two

@@ -547,6 +547,73 @@ def test_the_band_is_still_hollow_and_bounded():
     assert not covered((2000, 0))                           # past the turn
 
 
+# The circuits measured off the VOC charts (`voc`), and the side rule: the published
+# side, the mirror only where the AIP says the gliders fly it.
+
+
+def _measured(icao, note="", *runways):
+    field_ = Aerodrome(icao=icao, name="", lat=50.0, lon=15.0, elevation_ft=1000.0,
+                       circuit_note=note)
+    field_.runways = list(runways)
+    return circuits.to_airspaces(field_)
+
+
+def _across(space, rw=None):
+    return [a for _, a in frame_xy(space.points, rw)]
+
+
+def test_a_chart_with_one_side_gets_one_band_on_that_side():
+    """LKCHOT's chart draws its circuit south of 09/27 only, 1.5 km out — a band on the
+    north side would mark a circuit nobody publishes."""
+    rw = runway()
+    spaces = _measured("LKCHOT", "", rw)
+    assert len(spaces) == 1
+    across = _across(spaces[0])
+    # Its runway-side leg straddles the runway, as the standard box's does; no further.
+    assert min(across) > -circuits.RIBBON_M / 2 - 50, "the band crossed to the other side"
+    assert max(across) == pytest.approx(1480 + circuits.RIBBON_M / 2, abs=60)
+    assert spaces[0].meta["side"] == "S"
+
+
+def test_the_mirror_is_added_only_where_the_aip_says_gliders_fly_it():
+    """LKBE publishes `gliders RWY 06, 09L/R - right` against left-hand aeroplanes, so
+    its one drawn side gets a mirror; without the remark it would not."""
+    rw = Runway("06", "24", *[getattr(runway(), k) for k in
+                              ("low_lat", "low_lon", "high_lat", "high_lon")])
+    plain = _measured("LKBE", "RWY 06 left", rw)
+    gliders = _measured("LKBE", "RWY 06 left, gliders mirrored", rw)
+    assert len(plain) == 1
+    assert len(gliders) == 2
+    assert {s.meta["side"] for s in gliders} == {"N", "S"}
+
+
+def test_a_parallel_runway_without_its_own_circuit_gets_none():
+    """LKBE's 09L/27R and 09R/27L fly the 06/24 circuit; the chart draws no other."""
+    rw = Runway("09L", "27R", *[getattr(runway(), k) for k in
+                                ("low_lat", "low_lon", "high_lat", "high_lon")])
+    assert _measured("LKBE", "", rw) == []
+
+
+@pytest.mark.parametrize("note, sides", [
+    ("RWY 09 left", {"N"}),             # left of 09 (east-bound) is north
+    ("RWY 27 left", {"S"}),             # left of 27 (west-bound) is south
+    ("RWY 09 left, RWY 27 right", {"N"}),
+    ("to the south", {"S"}),
+    ("all RWY left", {"N", "S"}),
+    ("", {"N", "S"}),                   # nothing published: no side to prefer
+])
+def test_an_unmeasured_runway_takes_the_side_the_text_states(note, sides):
+    spaces = _measured("LKNOWHERE", note, runway())
+    assert {s.meta["side"] for s in spaces} == sides
+
+
+def test_gliders_named_after_the_hand_still_count():
+    """LKCB: `left - aeroplanes and ultralight aircraft, right - gliders`."""
+    text = ("The traffic circuits: RWY 05, RWY 06: left - aeroplanes and ultralight "
+            "aircraft, right - gliders. RWY 23, RWY 24: right - aeroplanes")
+    assert "gliders mirrored" in aerodromes.circuit_note(text)
+
+
 def test_the_band_overlaps_its_atz():
     """At an SLZ field the ATZ is only ~976 m in radius. A ring at +/-1300 m never
     touched it, so the green circle carried no okruh marking at all."""
@@ -607,8 +674,9 @@ def test_an_slz_field_gets_an_okruh_marked_estimated():
                        elevation_ft=1925.0)
     field_.runways = aerodromes.runways_from_table(LKCAST_TABLE, 49.409, 15.144)
     spaces = circuits.to_airspaces(field_)
-    assert len(spaces) == 2                      # one per side of the runway
-    assert {a.meta["side"] for a in spaces} == {"NNE", "SSW"}
+    assert len(spaces) == 2                      # its chart draws one each side
+    # Turned to the chart's 097°, not the runway's rounded 105.5° (`voc`).
+    assert {a.meta["side"] for a in spaces} == {"N", "S"}
     for space in spaces:
         assert space.name.startswith("OKRUH LKCAST Částkovice RWY 10/28")
         assert "est" in space.name

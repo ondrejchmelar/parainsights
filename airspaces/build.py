@@ -18,16 +18,14 @@ carry only their traffic circuit. The circles the UAS zone file publishes for th
 are a drone rule, not airspace, and are left out.
 
 OKRUH (class Q, orange): the traffic circuit, ground to the published circuit
-altitude. NOT an official boundary -- a {width} m wide band tracing the circuit,
-which runs from the runway out to {beside} m abeam and turns {beyond} m beyond each
-threshold. TWO per runway, one each side, abutting along the runway -- which is how
-the AIP draws them, and it means the shared leg runs down the runway itself. Both
-sides because the glider circuit is often the mirror of the powered one. The
-published circuit direction, where the AIP states one, is in the airspace name.
-
-The dimensions were measured off the AIP's own VOC charts, where the ATZ ring gives
-the scale, to about +/-10%. At LKCAST each published rectangle is about 2950 x 1300 m;
-these are 3100 x 1300.
+altitude. NOT an official boundary -- a {width} m wide band tracing the circuit
+where the AIP's VOC chart draws it, at the size it draws it: measured off each
+field's chart for 112 runways. Only the published side, plus the mirror where the
+AIP says gliders fly the other side. A runway whose chart has no rectangle to
+measure gets a standard box, the measured median -- about {beside} m abeam and past
+each threshold at an SLZ strip, 1500 m at an aerodrome -- on the side the AIP text
+states, or on both sides where it states none. The published circuit direction,
+where the AIP states one, is in the name.
 
 The band has a {gap} m break in one short end. OpenAir cannot express a polygon with
 a hole, and closing the ring through a zero-width slit makes a shape that some

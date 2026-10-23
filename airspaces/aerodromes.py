@@ -20,11 +20,11 @@ Handedness is the part that does not parse cleanly. The AIP says it five differe
 ways — `RWY 27 - left`, `Traffic circuits on both RWYs are performed to the left`,
 `Carry out the traffic circuits to the north`, `The traffic circuits - right hand and
 left hand`, and at two aerodromes nothing at all. `circuit_note` recognises all of
-them and reports what it found as text, but **no geometry depends on it**: the circuit
-box is drawn on both sides of the runway regardless. That is deliberate. At a Czech
-aeroclub field the glider circuit is routinely the mirror of the powered one — LKBE
-publishes `RWY 06, 09L/R - left hand` and then `gliders RWY 06, 09L/R - right` — so a
-box on the published side alone would be quietly wrong exactly where it matters.
+them and reports what it found as text. **Geometry uses it only where the VOC chart
+could not be measured** (`circuits.published_sides`): there the standard box goes on
+the side the text states. Where the chart was measured, the chart's side wins; the
+text's glider remark — LKBE publishes `RWY 06, 09L/R - left hand` and then
+`gliders RWY 06, 09L/R - right` — adds the mirror.
 """
 
 from __future__ import annotations
@@ -171,7 +171,10 @@ def circuit_note(text: str) -> str:
     note = ", ".join(unique[:2])
     if len(unique) > 2:
         note += ", …"
-    if re.search(r"gliders?[^.]{0,40}\b(left|right)\b", text, re.I):
+    # `gliders RWY 06, 09L/R - right` (LKBE), and the other way round, `right - gliders`
+    # (LKCB).
+    if re.search(r"gliders?[^.]{0,40}\b(left|right)\b|\b(left|right)\s*[-–]\s*gliders?",
+                 text, re.I):
         note += ", gliders mirrored" if note else "gliders mirrored"
     return note
 
