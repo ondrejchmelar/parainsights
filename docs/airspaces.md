@@ -241,6 +241,11 @@ so its filename is read from the directory listing instead of computed.
   measure — not drawn, a trapezoid or a teardrop, crossing circuits too tangled to
   split, or a chart that disagrees with the runway data by more than its own error
   (LKPC and LKSZ, 1.5 km from their surveyed runway: left alone rather than guessed).
+  **Then everything that is not a rectangle was traced by hand** (`voc_shapes.txt`):
+  LKKRAM's slanted leg, LKMB's and LKLB's teardrops, LKCH's and LKPN's crossing boxes,
+  the hooks one-way strips publish (LKCHOR, LKHATH, LKKEJZ). What keeps a standard box
+  is a chart that draws no circuit, has no readable scale, or puts it kilometres from
+  the runway (LKMI, LKPC).
   Those 51 get a standard box, the measured median.
 
   | | abeam, median (quartiles) | past the threshold |
@@ -305,12 +310,12 @@ so its filename is read from the directory listing instead of computed.
   the ground where an aeroplane is lowest and least able to avoid anybody. With two
   rectangles the shared leg runs down the runway and crosses the ATZ, as it should.
 
-- **The band has a 60 m gap in one short end.** OpenAir has no hole primitive. Closing
-  the ring through a zero-width slit produces a polygon that touches itself, and the two
-  common fill rules then disagree: even-odd gives the hollow centre, nonzero winding
-  fills it in — so whether the middle of the airfield alerts would depend on the reader.
-  A real gap makes the ring a *simple* polygon, where both rules agree by definition.
-  There is a test that walks every pair of edges to keep it that way.
+- **A band is two halves, not a ring with a gap.** OpenAir has no hole primitive.
+  Closing the ring through a zero-width slit produces a polygon that touches itself,
+  which even-odd fill reads hollow and nonzero winding reads solid. Until October 2026
+  the band carried a real 60 m gap so it stayed simple; on the map it read as a hole in
+  the circuit. `circuits.band` now cuts each loop at the runway and half-way round into
+  two simple polygons that meet exactly.
 
 - **Both sides of the runway, always.** The published handedness would allow a band half
   the size, but at a Czech aeroclub field the glider circuit is the mirror of the

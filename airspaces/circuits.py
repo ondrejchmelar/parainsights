@@ -2,8 +2,9 @@
 
 A paraglider may fly in a Czech ATZ, but not through the traffic circuit. This draws
 each circuit as a **band following the circuit path** — 300 m wide, hollow inside —
-**where the AIP's own VOC chart draws it, at the size it draws it** (`voc.py`, October
-2026). The rectangles run from the runway outward, not around the field: an earlier
+**exactly as the AIP's own VOC chart draws it** (`voc.py`, October 2026): its outline
+traced point by point, slanted legs, teardrops and one-way hooks included. The circuits
+run from the runway outward, not around the field: an earlier
 version drew a single ring at ±1 300 m with a hole in the middle, and at an SLZ field,
 whose ATZ is only ~976 m in radius, the entire ATZ fell inside that hole. Nothing was
 marked over the field, the approach or the climb-out — the ground where an aeroplane
@@ -32,13 +33,11 @@ on the side the text states (`RWY 12 left`, `to the north`) and on both sides wh
 states none — there is then no published side to prefer, and one side picked at random
 would be wrong half the time.
 
-**The band is cut by a small gap rather than closed around a hole.** OpenAir has no
-hole primitive, and the alternative — tracing the outer ring into the inner one through
-a zero-width slit — makes a polygon that touches itself, which different point-in-
-polygon implementations resolve differently: even-odd gives the hollow centre, nonzero
-winding fills it in. A real 60 m gap makes the ring a *simple* polygon that every
-implementation reads identically. The cost is a 60 m break in one short end of the
-band, which is nothing against a 300 m width.
+**A band is two halves, not a ring with a gap.** OpenAir has no hole primitive, and a
+ring traced into itself through a zero-width slit touches itself, which readers fill
+differently. Until October 2026 the band carried a 60 m break for it, which showed on
+the map as a hole in the circuit; now `band` cuts each loop in two simple polygons that
+meet exactly.
 
 The shapes come off the AIP's own charts, but the band is still this tool's drawing
 and not a published boundary. `AN` says so.
@@ -49,12 +48,13 @@ AMSL, which is what OpenAir wants and what a paraglider's instrument shows.
 
 from __future__ import annotations
 
+import math
 import re
 
 from . import geo, openair, voc
 from .aerodromes import FEET, Aerodrome, Runway
 
-# The standard box, for a runway whose chart has no rectangle to measure: downwind leg
+# The standard box, for a runway whose chart draws no circuit: downwind leg
 # abeam, turns beyond the threshold. **The medians of the measured circuits** (`voc`):
 # at an SLZ strip 1 260 m abeam and 1 240 m past the threshold (quartiles 1 100-1 530),
 # at an ICAO aerodrome 1 490 and 1 550 (quartiles within ±60 m). **Circuit size barely
@@ -66,14 +66,8 @@ BEYOND_M = 1300.0   # threshold to the turn, SLZ strip
 AERODROME_BESIDE_M = 1500.0
 AERODROME_BEYOND_M = 1550.0
 
-# How wide the band around that path is, and the gap that keeps the ring simple.
+# How wide the band around the circuit's path is.
 RIBBON_M = 300.0
-GAP_M = 60.0
-# The maps' copy needs no 60 m: their coordinates are floats, not OpenAir's rounded
-# seconds, and a slit that wide drawn as a wall across the band read as a hole in the
-# circuit — on every band, now that each ends where its chart has it. 2 m keeps the
-# ring simple and is under a pixel at any zoom the map opens at.
-MAP_GAP_M = 2.0
 
 # When the AIP publishes no circuit altitude, fall back to this above the aerodrome.
 # 1000 ft is the standard light-aircraft circuit height.
@@ -99,82 +93,118 @@ class _Frame:
         return geo.destination(*moved, (self.heading + 90) % 360, across)
 
 
-def _rectangle(frame: _Frame, along: float, across: float):
-    """Corners of a rectangle about the runway midpoint, anticlockwise."""
-    return [
-        frame.point(-along, across),
-        frame.point(along, across),
-        frame.point(along, -across),
-        frame.point(-along, -across),
-    ]
+def _offset(points, d, closed):
+    """`points` moved `d` metres to their left (mitred), as a closed ring or an open path."""
+    n = len(points)
+    out = []
+    for i in range(n):
+        normals = []
+        for j, k in ((i - 1, i), (i, i + 1)):
+            if not closed and (j < 0 or k >= n):
+                continue
+            (x0, y0), (x1, y1) = points[j % n], points[k % n]
+            length = math.hypot(x1 - x0, y1 - y0) or 1.0
+            normals.append((-(y1 - y0) / length, (x1 - x0) / length))
+        if len(normals) == 1:
+            nx, ny = normals[0]
+            scale = 1.0
+        else:
+            (ax, ay), (bx, by) = normals
+            nx, ny = ax + bx, ay + by
+            # A mitre, capped where a corner is so sharp it would shoot off.
+            scale = 1.0 / max(0.25, (1.0 + ax * bx + ay * by))
+        out.append((points[i][0] + d * nx * scale, points[i][1] + d * ny * scale))
+    return out
 
 
-def dimensions(runway: Runway) -> tuple[float, float]:
-    """How far abeam the downwind leg sits, and how far past each threshold it turns.
-
-    The runway is deliberately ignored — see the measurements above. It stays an
-    argument because that is the thing you would reach for if this ever does need to
-    vary, and because every caller already has one.
-    """
-    return BESIDE_M, BEYOND_M
+def _area(points):
+    return sum(x0 * y1 - x1 * y0 for (x0, y0), (x1, y1)
+               in zip(points, points[1:] + points[:1])) / 2
 
 
-def box(runway: Runway, beside: float | None = None, beyond: float | None = None):
-    """The filled rectangle the band is built around. Kept for measuring against."""
-    fitted = dimensions(runway)
-    beside = fitted[0] if beside is None else beside
-    beyond = fitted[1] if beyond is None else beyond
-    frame = _Frame(runway)
-    return _rectangle(frame, frame.half + beyond, beside)
+def _split_at(ring, at):
+    """Index of the edge of `ring` nearest the point `at`, and the parameter along it."""
+    best = None
+    for i in range(len(ring)):
+        (x0, y0), (x1, y1) = ring[i], ring[(i + 1) % len(ring)]
+        dx, dy = x1 - x0, y1 - y0
+        t = max(0.0, min(1.0, ((at[0] - x0) * dx + (at[1] - y0) * dy) / (dx * dx + dy * dy or 1)))
+        d = math.hypot(x0 + t * dx - at[0], y0 + t * dy - at[1])
+        if best is None or d < best[0]:
+            best = (d, i, t)
+    return best[1], best[2]
 
 
-def band(frame: _Frame, a0: float, a1: float, c0: float, c1: float,
-         width: float = RIBBON_M, gap: float = GAP_M):
-    """A circuit rectangle — along `a0`..`a1`, across `c0`..`c1` in `frame` — as a band
-    tracing its edge: a simple closed ring.
+def band(points, closed=True, at=(0.0, 0.0), width: float = RIBBON_M):
+    """A circuit outline (metres, a local plane) as the band a paraglider keeps out of.
 
-    Traced outer edge round, then back along the inner edge, with a `gap` slit mid-way up
-    the `a1` end so the ring never touches itself.
+    **No gap.** OpenAir cannot express a ring with a hole, and closing one through a
+    zero-width slit makes a polygon that touches itself, which readers fill differently
+    (even-odd hollow, nonzero solid). Until October 2026 the band carried a 60 m break
+    for it; now a closed band is cut into two halves at two points — the one nearest
+    `at` (the runway's midpoint) and the one half-way round — and each half is a simple
+    polygon. The halves meet exactly, so nothing reads as open. An open path (a hook or
+    a U the chart draws for a one-way strip) is a single simple polygon.
     """
     h = width / 2
-    edge = gap / 2
-    mid = (c0 + c1) / 2
-    return [frame.point(along, across) for along, across in (
-        # Outer edge, from one lip of the slit all the way round to the other.
-        (a1 + h, mid + edge),
-        (a1 + h, c1 + h),
-        (a0 - h, c1 + h),
-        (a0 - h, c0 - h),
-        (a1 + h, c0 - h),
-        (a1 + h, mid - edge),
-        # Across the band at the slit, then the inner edge back.
-        (a1 - h, mid - edge),
-        (a1 - h, c0 + h),
-        (a0 + h, c0 + h),
-        (a0 + h, c1 - h),
-        (a1 - h, c1 - h),
-        (a1 - h, mid + edge),
-    )]
+    points = list(points)
+    if not closed:
+        left, right = _offset(points, h, False), _offset(points, -h, False)
+        return [left + right[::-1]]
+    if _area(points) < 0:
+        points = points[::-1]                      # anticlockwise: left is inside
+    inner, outer = _offset(points, h, True), _offset(points, -h, True)
+    n = len(points)
+    i, t = _split_at(points, at)
+    # The second cut half-way round the perimeter.
+    lengths = [math.dist(points[k], points[(k + 1) % n]) for k in range(n)]
+    total = sum(lengths)
+    goal = (sum(lengths[:i]) + t * lengths[i] + total / 2) % total
+    j, run = 0, 0.0
+    while run + lengths[j] < goal:
+        run += lengths[j]
+        j += 1
+    u = (goal - run) / (lengths[j] or 1)
+
+    def along(ring, k, f):
+        (x0, y0), (x1, y1) = ring[k], ring[(k + 1) % n]
+        return (x0 + f * (x1 - x0), y0 + f * (y1 - y0))
+
+    def half(k0, f0, k1, f1):
+        """Outer from cut (k0, f0) round to cut (k1, f1), then the inner back."""
+        steps = [(k0 + m) % n for m in range(1, (k1 - k0) % n + 1)]
+        if k0 == k1 and f1 <= f0:
+            steps = [(k0 + m) % n for m in range(1, n + 1)]
+        out = [along(outer, k0, f0)] + [outer[k] for k in steps] + [along(outer, k1, f1)]
+        back = [along(inner, k1, f1)] + [inner[k] for k in reversed(steps)] + [along(inner, k0, f0)]
+        return out + back
+
+    return [half(i, t, j, u), half(j, u, i, t)]
 
 
-def ribbon(runway: Runway, side: int = 1, beside: float | None = None,
-           beyond: float | None = None, width: float = RIBBON_M, gap: float = GAP_M):
-    """The standard box on one side, as a band: from the runway out to `beside`.
+def standard_box(runway: Runway, side: int, beside: float = BESIDE_M,
+                 beyond: float = BEYOND_M):
+    """The standard box on one side, as (lat, lon) corners: from the runway out to
+    `beside`. `side` is +1 (right of the low→high direction) or −1 (left).
 
     **The rectangle runs from the runway outward, not around the field.** An earlier
     version drew a single ring at ±`beside` with a hole in the middle, which put the
     whole ATZ inside the hole: no marking at all over the field, the approach or the
     climb-out, which is precisely where the aeroplanes are lowest.
-
-    `side` is +1 (right of the low→high direction) or −1 (left).
     """
-    fitted = dimensions(runway)
-    beside = fitted[0] if beside is None else beside
-    beyond = fitted[1] if beyond is None else beyond
     frame = _Frame(runway)
     a = frame.half + beyond
-    c0, c1 = (0.0, beside) if side >= 0 else (-beside, 0.0)
-    return band(frame, -a, a, c0, c1, width, gap)
+    c = beside if side >= 0 else -beside
+    return [frame.point(-a, 0.0), frame.point(a, 0.0), frame.point(a, c), frame.point(-a, c)]
+
+
+def ribbon(runway: Runway, side: int = 1, beside: float = BESIDE_M,
+           beyond: float = BEYOND_M, width: float = RIBBON_M):
+    """The standard box on one side as its band: two (lat, lon) halves."""
+    mid = ((runway.low_lat + runway.high_lat) / 2, (runway.low_lon + runway.high_lon) / 2)
+    plane = geo.Plane(*mid)
+    corners = [plane.to_xy(*p) for p in standard_box(runway, side, beside, beyond)]
+    return [[plane.to_ll(*q) for q in part] for part in band(corners, True, (0.0, 0.0), width)]
 
 
 def _ends(designators: str) -> set[str]:
@@ -219,31 +249,50 @@ def published_sides(field: Aerodrome, runway: Runway) -> tuple[int, ...]:
     return tuple(sorted(sides, reverse=True)) or (1, -1)
 
 
-def circuit_rects(field: Aerodrome, runway: Runway) -> tuple[_Frame, list[tuple]]:
-    """The frame and the rectangles to draw for one runway: measured off its chart where
-    `voc` has it, the standard box on the published sides otherwise."""
-    measured = voc.CHARTS.get(field.icao, {}).get("runways", {}).get(runway.name)
-    if measured is None:
-        frame = _Frame(runway)
+def _mirror(points, a, b):
+    """`points` reflected across the line through `a` and `b`."""
+    (ax, ay), (bx, by) = a, b
+    dx, dy = bx - ax, by - ay
+    k = dx * dx + dy * dy or 1.0
+    out = []
+    for x, y in points:
+        t = ((x - ax) * dx + (y - ay) * dy) / k
+        px, py = ax + t * dx, ay + t * dy
+        out.append((2 * px - x, 2 * py - y))
+    return out
+
+
+def _side(points, a, b):
+    """+1 if the outline lies right of a→b, −1 if left."""
+    (ax, ay), (bx, by) = a, b
+    cx = sum(x for x, _ in points) / len(points)
+    cy = sum(y for _, y in points) / len(points)
+    return 1 if (bx - ax) * (cy - ay) - (by - ay) * (cx - ax) < 0 else -1
+
+
+def circuit_shapes(field: Aerodrome, runway: Runway, plane: geo.Plane):
+    """The outlines to draw for one runway, in `plane`'s metres: `(closed, points)`.
+
+    Traced off its VOC chart where `voc` has it — metres from the reference point, which
+    is the chart's centre — and the standard box on the published sides otherwise.
+    """
+    a = plane.to_xy(runway.low_lat, runway.low_lon)
+    b = plane.to_xy(runway.high_lat, runway.high_lon)
+    traced = voc.CHARTS.get(field.icao, {}).get("runways", {}).get(runway.name)
+    if traced is None:
         # An ICAO aerodrome's ident is four letters; an SLZ strip's, six.
         aerodrome = len(field.icao) == 4
         beside = AERODROME_BESIDE_M if aerodrome else BESIDE_M
-        a = frame.half + (AERODROME_BEYOND_M if aerodrome else BEYOND_M)
-        return frame, [(-a, a, 0.0, beside) if side > 0 else (-a, a, -beside, 0.0)
-                       for side in published_sides(field, runway)]
-    frame = _Frame(runway, measured["turn"])
-    rects = []
-    for a0, a1, c0, c1 in measured["rects"]:
-        # Two rectangles abutting on the runway, read as one: split them there.
-        if c0 < -300 < 300 < c1:
-            rects += [(a0, a1, c0, 0.0), (a0, a1, 0.0, c1)]
-        else:
-            rects.append((a0, a1, c0, c1))
-    if "gliders mirrored" in (field.circuit_note or ""):
-        drawn = {1 if c0 + c1 > 0 else -1 for _, _, c0, c1 in rects}
-        rects += [(a0, a1, -c1, -c0) for a0, a1, c0, c1 in rects
-                  if (-1 if c0 + c1 > 0 else 1) not in drawn]
-    return frame, rects
+        beyond = AERODROME_BEYOND_M if aerodrome else BEYOND_M
+        return [(True, [plane.to_xy(*p) for p in standard_box(runway, side, beside, beyond)])
+                for side in published_sides(field, runway)]
+    centre = geo.Plane(field.lat, field.lon)
+    shapes = [(s["closed"], [plane.to_xy(*centre.to_ll(e, n)) for e, n in s["points"]])
+              for s in traced]
+    if "gliders mirrored" in (field.circuit_note or "") and shapes:
+        drawn = {_side(p, a, b) for _, p in shapes}
+        shapes += [(c, _mirror(p, a, b)) for c, p in shapes if -_side(p, a, b) not in drawn]
+    return shapes
 
 
 def ceiling_ft(field: Aerodrome) -> float | None:
@@ -288,7 +337,7 @@ def _name(field: Aerodrome, runway: Runway, ceiling: float | None, published: bo
 
 
 def to_airspaces(field: Aerodrome) -> list[openair.Airspace]:
-    """Every runway's circuit at this aerodrome, one band per rectangle.
+    """Every runway's circuit at this aerodrome: each band as its two halves.
 
     Class `Q`: orange and silent in XCTrack. The box sits inside an ATZ that already
     alerts on its boundary, so a second alert a kilometre later would only train the
@@ -299,22 +348,28 @@ def to_airspaces(field: Aerodrome) -> list[openair.Airspace]:
         return []
     published = field.circuit_ft is not None
     out = []
+    plane = geo.Plane(field.lat, field.lon) if field.lat is not None else None
     for runway in field.runways:
-        frame, rects = circuit_rects(field, runway)
-        for a0, a1, c0, c1 in rects:
-            where = geo.cardinal((frame.heading + (90 if c0 + c1 > 0 else -90)) % 360)
-            out.append(
-                openair.Airspace(
-                    name=_name(field, runway, ceiling, published, where),
-                    airspace_class="Q",
-                    floor="GND",
-                    ceiling=f"{round(ceiling)}ft AMSL",
-                    frequency=field.frequency,
-                    points=band(frame, a0, a1, c0, c1),
-                    meta={"icao": field.icao, "kind": "circuit",
-                          "runway": runway.name, "side": where,
-                          "hours": field.hours.payload(),
-                          "map_points": band(frame, a0, a1, c0, c1, gap=MAP_GAP_M)},
+        if plane is None:
+            plane = geo.Plane(runway.low_lat, runway.low_lon)
+        a = plane.to_xy(runway.low_lat, runway.low_lon)
+        b = plane.to_xy(runway.high_lat, runway.high_lon)
+        mid = ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
+        heading = geo.bearing(runway.low_lat, runway.low_lon, runway.high_lat, runway.high_lon)
+        for closed, points in circuit_shapes(field, runway, plane):
+            where = geo.cardinal((heading + 90 * _side(points, a, b)) % 360)
+            for k, part in enumerate(band(points, closed, mid)):
+                out.append(
+                    openair.Airspace(
+                        name=_name(field, runway, ceiling, published, where),
+                        airspace_class="Q",
+                        floor="GND",
+                        ceiling=f"{round(ceiling)}ft AMSL",
+                        frequency=field.frequency,
+                        points=[plane.to_ll(*q) for q in part],
+                        meta={"icao": field.icao, "kind": "circuit",
+                              "runway": runway.name, "side": where, "part": k,
+                              "hours": field.hours.payload()},
+                    )
                 )
-            )
     return out

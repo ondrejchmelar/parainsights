@@ -482,8 +482,9 @@ def contains(ring, point) -> bool:
 
 
 def both_sides(rw=None):
+    """Every half of the standard box's band, both sides, in the runway's frame."""
     rw = rw or runway()
-    return [frame_xy(circuits.ribbon(rw, s), rw) for s in (1, -1)]
+    return [frame_xy(half, rw) for s in (1, -1) for half in circuits.ribbon(rw, s)]
 
 
 def covered(point, rw=None) -> bool:
@@ -502,27 +503,43 @@ def segments_cross(a, b, c, d) -> bool:
 @pytest.mark.parametrize("side", [1, -1])
 def test_the_ribbon_is_a_simple_polygon(side):
     """A ring that touches or crosses itself is read one way under even-odd fill and
-    another under nonzero winding. The slit exists so this assertion can hold."""
-    ring = frame_xy(circuits.ribbon(runway(), side))
-    n = len(ring)
-    for i in range(n):
-        for j in range(i + 1, n):
-            if j == i or (j + 1) % n == i or (i + 1) % n == j:
-                continue
-            assert not segments_cross(ring[i], ring[(i + 1) % n],
-                                      ring[j], ring[(j + 1) % n]), f"edges {i},{j}"
+    another under nonzero winding. Cutting the band in two halves is what lets this hold
+    with no gap."""
+    halves = circuits.ribbon(runway(), side)
+    assert len(halves) == 2
+    for half in halves:
+        ring = frame_xy(half)
+        n = len(ring)
+        for i in range(n):
+            for j in range(i + 1, n):
+                if j == i or (j + 1) % n == i or (i + 1) % n == j:
+                    continue
+                assert not segments_cross(ring[i], ring[(i + 1) % n],
+                                          ring[j], ring[(j + 1) % n]), f"edges {i},{j}"
+
+
+def test_the_two_halves_leave_no_gap():
+    """Until October 2026 the band carried a 60 m break, because OpenAir has no hole;
+    it showed on the map as a hole in the circuit. Every point of the band's path is
+    now inside one half or the other."""
+    a = runway().length_m / 2 + circuits.BEYOND_M
+    for along in range(-int(a), int(a) + 1, 50):
+        for across in (0.0, circuits.BESIDE_M):
+            assert covered((along, across)), (along, across)
+    for across in range(0, int(circuits.BESIDE_M) + 1, 25):
+        for along in (-a, a):
+            assert covered((along, across)), (along, across)
 
 
 def test_each_side_runs_from_the_runway_outward():
     """The AIP draws two rectangles abutting *on* the runway, not one ring around the
     field. Drawing the ring left the whole ATZ inside the hole — nothing marked over the
     field, the approach or the climb-out, which is where the aeroplanes are lowest."""
-    ring = frame_xy(circuits.ribbon(runway(), 1))
-    across = [a for _, a in ring]
+    across = [a for half in circuits.ribbon(runway(), 1) for _, a in frame_xy(half)]
     assert min(across) == pytest.approx(-circuits.RIBBON_M / 2, abs=1)   # on the runway
     assert max(across) == pytest.approx(circuits.BESIDE_M + circuits.RIBBON_M / 2, abs=1)
     # And the other side is its mirror.
-    other = [a for _, a in frame_xy(circuits.ribbon(runway(), -1))]
+    other = [a for half in circuits.ribbon(runway(), -1) for _, a in frame_xy(half)]
     assert max(other) == pytest.approx(circuits.RIBBON_M / 2, abs=1)
 
 
@@ -551,6 +568,18 @@ def test_the_band_is_still_hollow_and_bounded():
 # side, the mirror only where the AIP says the gliders fly it.
 
 
+# A chart for the test runway — 1 km due east from the reference point at 50 N 15 E —
+# whose circuit lies south of it only, 1.5 km out, as LKCHOT's does.
+_SOUTH = {"closed": True, "points": [(-1000, 0), (2000, 0), (2000, -1500), (-1000, -1500)]}
+
+
+@pytest.fixture
+def charts(monkeypatch):
+    monkeypatch.setattr(circuits.voc, "CHARTS", {
+        "LKTEST": {"runways": {"09/27": [_SOUTH], "09L/27R": []}},
+    })
+
+
 def _measured(icao, note="", *runways):
     field_ = Aerodrome(icao=icao, name="", lat=50.0, lon=15.0, elevation_ft=1000.0,
                        circuit_note=note)
@@ -558,40 +587,61 @@ def _measured(icao, note="", *runways):
     return circuits.to_airspaces(field_)
 
 
-def _across(space, rw=None):
-    return [a for _, a in frame_xy(space.points, rw)]
+def _across(spaces, rw=None):
+    return [a for space in spaces for _, a in frame_xy(space.points, rw)]
 
 
-def test_a_chart_with_one_side_gets_one_band_on_that_side():
-    """LKCHOT's chart draws its circuit south of 09/27 only, 1.5 km out — a band on the
-    north side would mark a circuit nobody publishes."""
-    rw = runway()
-    spaces = _measured("LKCHOT", "", rw)
+def test_a_chart_with_one_side_gets_one_band_on_that_side(charts):
+    """LKCHOT's chart draws its circuit south of 09/27 only — a band on the north side
+    would mark a circuit nobody publishes."""
+    spaces = _measured("LKTEST", "", runway())
+    assert len(spaces) == 2                     # one band, as its two halves
+    across = _across(spaces)
+    # Its runway-side leg straddles the runway; no further.
+    assert min(across) == pytest.approx(-circuits.RIBBON_M / 2, abs=5)
+    assert max(across) == pytest.approx(1500 + circuits.RIBBON_M / 2, abs=5)
+    assert {s.meta["side"] for s in spaces} == {"S"}
+
+
+def test_a_traced_outline_is_drawn_as_traced(monkeypatch):
+    """LKKRAM's circuit has a slanted leg; a rectangle round it would not be what the
+    chart draws. The band follows the outline point for point."""
+    kram = [(-2624, 976), (-560, 64), (1440, -64), (1440, -920), (-2656, -816)]
+    monkeypatch.setattr(circuits.voc, "CHARTS", {
+        "LKTEST": {"runways": {"09/27": [{"closed": True, "points": kram}]}}})
+    spaces = _measured("LKTEST", "", runway())
+    plane = geo.Plane(50.0, 15.0)
+    drawn = [plane.to_xy(*p) for s in spaces for p in s.points]
+    for e, n in kram:
+        nearest = min(math.dist((e, n), q) for q in drawn)
+        assert nearest < circuits.RIBBON_M, (e, n)
+
+
+def test_an_open_path_is_one_band(monkeypatch):
+    """A one-way strip's chart can draw a hook rather than a loop (LKCHOR, LKHATH)."""
+    monkeypatch.setattr(circuits.voc, "CHARTS", {"LKTEST": {"runways": {"09/27": [
+        {"closed": False, "points": [(0, 0), (0, -1000), (1500, -1000)]}]}}})
+    spaces = _measured("LKTEST", "", runway())
     assert len(spaces) == 1
-    across = _across(spaces[0])
-    # Its runway-side leg straddles the runway, as the standard box's does; no further.
-    assert min(across) > -circuits.RIBBON_M / 2 - 50, "the band crossed to the other side"
-    assert max(across) == pytest.approx(1480 + circuits.RIBBON_M / 2, abs=60)
-    assert spaces[0].meta["side"] == "S"
 
 
-def test_the_mirror_is_added_only_where_the_aip_says_gliders_fly_it():
+def test_the_mirror_is_added_only_where_the_aip_says_gliders_fly_it(charts):
     """LKBE publishes `gliders RWY 06, 09L/R - right` against left-hand aeroplanes, so
     its one drawn side gets a mirror; without the remark it would not."""
-    rw = Runway("06", "24", *[getattr(runway(), k) for k in
-                              ("low_lat", "low_lon", "high_lat", "high_lon")])
-    plain = _measured("LKBE", "RWY 06 left", rw)
-    gliders = _measured("LKBE", "RWY 06 left, gliders mirrored", rw)
-    assert len(plain) == 1
-    assert len(gliders) == 2
+    plain = _measured("LKTEST", "RWY 09 left", runway())
+    gliders = _measured("LKTEST", "RWY 09 left, gliders mirrored", runway())
+    assert {s.meta["side"] for s in plain} == {"S"}
     assert {s.meta["side"] for s in gliders} == {"N", "S"}
+    across = _across([s for s in gliders if s.meta["side"] == "N"])
+    assert max(across) == pytest.approx(circuits.RIBBON_M / 2, abs=5)
+    assert min(across) == pytest.approx(-1500 - circuits.RIBBON_M / 2, abs=5)
 
 
-def test_a_parallel_runway_without_its_own_circuit_gets_none():
+def test_a_parallel_runway_without_its_own_circuit_gets_none(charts):
     """LKBE's 09L/27R and 09R/27L fly the 06/24 circuit; the chart draws no other."""
     rw = Runway("09L", "27R", *[getattr(runway(), k) for k in
                                 ("low_lat", "low_lon", "high_lat", "high_lon")])
-    assert _measured("LKBE", "", rw) == []
+    assert _measured("LKTEST", "", rw) == []
 
 
 @pytest.mark.parametrize("note, sides", [
@@ -605,28 +655,6 @@ def test_a_parallel_runway_without_its_own_circuit_gets_none():
 def test_an_unmeasured_runway_takes_the_side_the_text_states(note, sides):
     spaces = _measured("LKNOWHERE", note, runway())
     assert {s.meta["side"] for s in spaces} == sides
-
-
-def test_the_maps_get_a_band_without_the_openair_gap():
-    """The 60 m slit is for XCTrack. Drawn on the map it stood as a wall across every
-    band and read as a hole in the circuit; the maps' copy closes it to 2 m, and stays
-    a simple ring."""
-    field_ = Aerodrome(icao="LKCHOT", lat=50.0, lon=15.0, elevation_ft=1000.0)
-    field_.runways = [runway()]
-    space = circuits.to_airspaces(field_)[0]
-    overlay = build.Overlay(airspaces=[space], zones=[], fields={}, offset=(0, 0, 0))
-    drawn = overlay.circuit_airspaces[0]
-    ring = frame_xy(drawn.points)
-    assert math.dist(ring[0], ring[5]) == pytest.approx(circuits.MAP_GAP_M, abs=0.5)
-    assert math.dist(*[frame_xy(space.points)[i] for i in (0, 5)]) == pytest.approx(
-        circuits.GAP_M, abs=1)
-    assert "map_points" not in drawn.meta
-    n = len(ring)
-    for i in range(n):
-        for j in range(i + 2, n):
-            if (j + 1) % n == i:
-                continue
-            assert not segments_cross(ring[i], ring[(i + 1) % n], ring[j], ring[(j + 1) % n])
 
 
 def test_gliders_named_after_the_hand_still_count():
@@ -658,7 +686,7 @@ def test_the_ribbon_is_much_smaller_than_the_filled_box():
     # The exact fraction depends on the runway, since the band keeps a fixed width while
     # the box scales — so assert the point of the band, not one geometry's number.
     band = sum(area(r) for r in both_sides())
-    box = area(frame_xy(circuits.box(runway())))
+    box = sum(area(frame_xy(circuits.standard_box(runway(), s))) for s in (1, -1))
     assert 0.25 < band / box < 0.75
 
 
@@ -696,9 +724,9 @@ def test_an_slz_field_gets_an_okruh_marked_estimated():
                        elevation_ft=1925.0)
     field_.runways = aerodromes.runways_from_table(LKCAST_TABLE, 49.409, 15.144)
     spaces = circuits.to_airspaces(field_)
-    assert len(spaces) == 2                      # its chart draws one each side
-    # Turned to the chart's 097°, not the runway's rounded 105.5° (`voc`).
-    assert {a.meta["side"] for a in spaces} == {"N", "S"}
+    assert len(spaces) == 4                      # its chart draws one each side, in halves
+    # Named by the side of the runway each band is on.
+    assert {a.meta["side"] for a in spaces} == {"NNE", "SSW"}
     for space in spaces:
         assert space.name.startswith("OKRUH LKCAST Částkovice RWY 10/28")
         assert "est" in space.name

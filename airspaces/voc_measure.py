@@ -32,10 +32,16 @@ direction better than its rounded designator does.
 **Every fit was looked at.** `sheets` draws each runway's chart with the fit on it;
 `voc_verdicts.txt` records, runway by runway, `ok` (the fit is the circuit), `manual`
 (read off the gridded sheet by eye, to about 50 m), `none` (no circuit of its own: a
-parallel or duplicate runway whose sibling carries it) or `default` (no rectangle to
-measure — not drawn, not rectangular, or the chart does not match the runway — so the
-standard box stays). Of 196 runways in October 2026: 90 ok, 22 manual, 33 none, 51
-default.
+parallel or duplicate runway whose sibling carries it) or `default` (no rectangle).
+
+**Anything not a rectangle is traced by hand** (`voc_shapes.txt`, October 2026): the
+chart's blue lines thinned to their centrelines on a 100 m grid, and the outline read
+off corner by corner — a slanted leg (LKKRAM), a teardrop (LKMB, LKLB), crossing boxes
+(LKCH, LKPN), a hook a one-way strip publishes instead of a loop (LKCHOR, LKHATH). A
+traced runway overrides its rectangle fit. What is still on the standard box: charts
+that draw no circuit at all (LKBYNO, LKCDUB, LKLIBA, LKLOUC, LKNUCI, LKNVCE, LKPOCA,
+LKPOLE, LKPRIM, LKTRBH), the ten with no scale to read (village marks), and LKMI and
+LKPC, whose drawn circuit is kilometres from the runway.
 """
 
 from __future__ import annotations
@@ -50,6 +56,7 @@ from pathlib import Path
 
 WORK = Path.home() / ".cache" / "parainsights" / "voc"
 VERDICTS = Path(__file__).with_name("voc_verdicts.txt")
+SHAPES = Path(__file__).with_name("voc_shapes.txt")
 OUTPUT = Path(__file__).with_name("voc.py")
 CHART = "https://aim.rlp.cz/vfrmanual/actual/ad/{ident}_voc.jpg"
 
@@ -64,7 +71,7 @@ def fields() -> dict:
     """Every aerodrome the build knows, with its runways, keyed by lowercase ident."""
     from . import build
 
-    overlay = build.build()
+    overlay = build.build(with_circuits=False)
     out = {}
     for icao, f in overlay.fields.items():
         if f.lat is None:
@@ -315,51 +322,93 @@ def sheets(known, per=9):
         sheet.save(WORK / f"sheet-{n // per:02d}.png")
 
 
+def _frame(known, ident, name, turn):
+    """The runway's midpoint and its along / right unit vectors, in the chart's metres
+    (east, north from the reference point, which is the chart's centre)."""
+    f = known[ident]
+    r = next(r for r in f["runways"] if r["name"] == name)
+    le, ln = _en(*r["low"], f["lat"], f["lon"])
+    he, hn = _en(*r["high"], f["lat"], f["lon"])
+    t = math.atan2(he - le, hn - ln) + math.radians(turn)
+    return ((le + he) / 2, (ln + hn) / 2), (math.sin(t), math.cos(t)), (math.cos(t), -math.sin(t))
+
+
 def write(known):
-    """`voc.py` from the fits and the verdicts. Across is turned to the build's sign
-    here — + is *right* of the runway's low→high direction in `circuits`."""
+    """`voc.py` from the fits, the verdicts and the traced shapes: every circuit as an
+    outline in metres from the reference point."""
     fits = json.loads((WORK / "fits.json").read_text())
     scales = json.loads((WORK / "scale.json").read_text())
+    data: dict[str, dict] = {}
+
+    def put(ident, name, shape):
+        entry = data.setdefault(ident.upper(), {"scale": round(scales.get(ident) or 0, 2),
+                                                "runways": {}})
+        runway = entry["runways"].setdefault(name, [])
+        if shape is not None:
+            runway.append(shape)
+
+    traced: dict[tuple[str, str], list] = {}
+    for line in SHAPES.read_text().splitlines():
+        if not line.strip() or line.startswith("#"):
+            continue
+        ident, name, kind, *rest = line.split()
+        if kind == "none":
+            traced.setdefault((ident, name), [])
+            continue
+        where, *coords = rest
+        points = [tuple(float(v) for v in c.split(",")) for c in coords]
+        if where.startswith("rw"):
+            turn = float(where.split(":")[1]) if ":" in where else 0.0
+            (mx, my), (ux, uy), (rx, ry) = _frame(known, ident, name, turn)
+            # Traced with + across to the left.
+            points = [(mx + a * ux - c * rx, my + a * uy - c * ry) for a, c in points]
+        traced.setdefault((ident, name), []).append(
+            {"closed": kind == "closed", "points": [(round(e), round(n)) for e, n in points]})
+
     by_runway: dict[str, list[list[str]]] = {}
     for line in VERDICTS.read_text().splitlines():
         if line.strip() and not line.startswith("#"):
             key, *rest = line.split()
             by_runway.setdefault(key, []).append(rest)
-    data: dict[str, dict] = {}
     for key, verdicts in sorted(by_runway.items()):
         ident, k = key.split(":")
+        name = known[ident]["runways"][int(k)]["name"]
+        if (ident, name) in traced:
+            continue
         kind = verdicts[0][0]
         if kind == "default":
             continue
-        name = known[ident]["runways"][int(k)]["name"]
-        q = fits[key]
         if kind == "none":
-            rects = []
-        elif kind == "ok":
+            put(ident, name, None)
+            continue
+        q = fits[key]
+        if kind == "ok":
             rects = [(x["a0"], x["a1"], -x["c1"], -x["c0"]) for x in q["rects"]]
         else:
             rects = [(int(a0), int(a1), -int(c1), -int(c0)) for _, a0, a1, c0, c1 in verdicts]
-        data.setdefault(ident.upper(), {"scale": round(scales[ident], 2), "runways": {}})
-        data[ident.upper()]["runways"][name] = {"turn": q["turn"], "rects": rects}
+        (mx, my), (ux, uy), (rx, ry) = _frame(known, ident, name, q["turn"])
+        for a0, a1, c0, c1 in rects:
+            corners = [(a0, c0), (a1, c0), (a1, c1), (a0, c1)]
+            put(ident, name, {"closed": True, "points": [
+                (round(mx + a * ux + c * rx), round(my + a * uy + c * ry)) for a, c in corners]})
+    for (ident, name), shapes in traced.items():
+        put(ident, name, None)
+        for shape in shapes:
+            put(ident, name, shape)
+
     body = pprint.pformat(data, width=96, sort_dicts=True)
-    OUTPUT.write_text(f'''"""Traffic circuits measured off the AIP's VOC charts — generated, do not edit.
+    OUTPUT.write_text(f'''"""Traffic circuits off the AIP's VOC charts — generated, do not edit.
 
-Written by `airspaces.voc_measure write` from the chart fits and the hand review in
-`voc_verdicts.txt`; that module says how a chart is read. Per aerodrome: `scale`, the
-chart's metres a pixel, and per runway (keyed by `Runway.name`):
-
-`turn`
-    degrees the circuit's axis is turned from the runway's, clockwise. Non-zero mostly
-    at SLZ strips, whose runway heading is a designator rounded to 10°.
-`rects`
-    the published circuit as rectangles in that turned frame, metres from the runway
-    midpoint: along (a0, a1) toward the high end, across (c0, c1), + to the right of
-    the low→high direction. **An empty list means the runway has no circuit of its
-    own** — a parallel or duplicate runway, whose sibling's circuit is the one flown.
+Written by `airspaces.voc_measure write` from the chart fits, the hand review in
+`voc_verdicts.txt` and the outlines traced by hand in `voc_shapes.txt`; that module says
+how a chart is read. Per aerodrome: `scale`, the chart's metres a pixel, and per runway
+(keyed by `Runway.name`) a list of outlines, each `closed` (a loop) or not (a hook or a
+U a one-way strip publishes), as points in metres east and north of the reference
+point — the chart's centre. **An empty list means the runway has no circuit of its
+own**: a parallel or duplicate runway, whose sibling's circuit is the one flown.
 
 A runway that is not here keeps the standard box (`circuits.BESIDE_M`/`BEYOND_M`): its
-chart draws no rectangle that could be measured. The frame is built from the runway as
-`aerodromes` reads it, so a change to a runway's thresholds moves its circuit with it.
+chart draws no circuit, or one that disagrees with the runway data.
 """
 
 CHARTS = {body}

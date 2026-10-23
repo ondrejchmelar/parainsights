@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 
 from . import aerodromes, atz, circuits, openair, sources
 
@@ -27,9 +27,8 @@ each threshold at an SLZ strip, 1500 m at an aerodrome -- on the side the AIP te
 states, or on both sides where it states none. The published circuit direction,
 where the AIP states one, is in the name.
 
-The band has a {gap} m break in one short end. OpenAir cannot express a polygon with
-a hole, and closing the ring through a zero-width slit makes a shape that some
-readers fill in and others do not; a real gap keeps it unambiguous everywhere.
+Each band is two halves that meet exactly: OpenAir cannot express a polygon with a
+hole, so a ring is cut in two rather than left with a gap.
 
 WHEN THE FIELD IS OPEN is at the end of the name, where the AIP publishes hours:
 "15APR-15OCT SAT-SUN,HOL 0700-1400Z". Times are UTC -- add 2 hours for Czech summer
@@ -101,14 +100,13 @@ class Overlay:
     def circuit_airspaces(self) -> list:
         """What the maps draw of this layer: the circuits. Aerodrome zones on the maps are
         openAIP's (`openaip.py`); ours stay in the OpenAir download for XCTrack."""
-        # With the maps' narrow slit (`circuits.MAP_GAP_M`) rather than the OpenAir one.
-        return [replace(a, points=a.meta["map_points"],
-                                    meta={k: v for k, v in a.meta.items() if k != "map_points"})
-                for a in self.airspaces if a.meta.get("kind") == "circuit"]
+        return [a for a in self.airspaces if a.meta.get("kind") == "circuit"]
 
     @property
     def circuit_count(self) -> int:
-        return sum(1 for a in self.airspaces if a.meta.get("kind") == "circuit")
+        # One circuit is drawn as two halves (`circuits.band`); count the first.
+        return sum(1 for a in self.airspaces
+                   if a.meta.get("kind") == "circuit" and not a.meta.get("part"))
 
     @property
     def filename(self) -> str:
@@ -334,7 +332,6 @@ def to_openair(overlay: Overlay, *, corrected: bool = True, base_version: str = 
             beside=round(circuits.BESIDE_M),
             beyond=round(circuits.BEYOND_M),
             width=round(circuits.RIBBON_M),
-            gap=round(circuits.GAP_M),
             atz_source="aim.rlp.cz",
             publications=overlay.publication_label,
             atz_date=overlay.atz_date,
