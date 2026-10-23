@@ -46,8 +46,6 @@ empty.
   should scroll the page like anywhere else; a tap reads a point, and a press held then
   dragged scrubs (`bindReader` in `meteo/js/meteo.js` is the pattern). Today a drag over
   the side view moves the cursor and the page does not scroll.
-- **XCTrack: ATZ and okruhy importable separately** — two files, or one file that lets
-  a pilot take either.
 - **ECMWF sounding as a second model, once Open-Meteo serves its 9 km pressure levels.**
   ECMWF opened its 9 km IFS on 20 Oct 2026 (data.ecmwf.int `ifs/0p1/`: GRIB2, 2 h late,
   3-hourly, 1000/925/850/700/600 hPa under 4 km, no boundary layer height). The page
@@ -194,7 +192,7 @@ the planner listens to the time control only to re-mark its list. Its drawing to
 Draw (the accent, on or off), undo, redo and clear as icons — sit at the middle of the
 map's foot: the page hands `.m3-bottom-extra` to the map, which moves it into `.m3-mid`
 and gives it back on `dispose`. Undo and redo walk a history of the turnpoints (a point,
-a drag, an import, a clear). The ATZ layer's download (the page says *ATZ layer*, October 2026) is under the map. What of the airspace to draw is
+a drag, an import, a clear). The ATZ layer's downloads (the page says *ATZ layer*, October 2026) are under the map: **two OpenAir files**, `CZ_ATZ_<date>.txt` and `CZ_okruhy_<date>.txt` (`build.downloads`), because XCTrack imports a file whole and a pilot may want either alone; each header names its companion. The old combined `CZ_airfield_zones_*` files stay published for old links. What of the airspace to draw is
 the map's own menu, the ▾ beside *Airspaces* (`aspMenu` in `map3d.js`, on a flight's map
 too, where it counts and filters only the zones near the track): the kinds, the floor,
 and on this page the hours row moved in from `.m3-airspace-extra` (October 2026; it was a

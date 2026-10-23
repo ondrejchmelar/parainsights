@@ -87,6 +87,14 @@ check() {
         # rebuild, then commit" does. Asking whether the page's commit *contains* the
         # source's change has no resolution to run out of.
         if ! git merge-base --is-ancestor "$source_commit" "$page_commit" 2>/dev/null; then
+            # A rebuild that comes out byte-identical has nothing to commit, so the page's
+            # history cannot show it. The source change's own commit says so instead,
+            # with a trailer — `Rebuilt-identical: public/flights/index.html` — which is a
+            # claim the rebuild was run, as checkable as any other line in a commit.
+            if git log -1 --format=%B "$source_commit" 2>/dev/null \
+                    | grep -qx "Rebuilt-identical: $PAGE"; then
+                continue
+            fi
             stale="$stale $source"
         fi
     done

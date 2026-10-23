@@ -110,7 +110,7 @@ def main(argv=None) -> int:
     layers = (args.html.parent if args.html else Path("public/planner")) / "layers"
     base, base_version = openaip.base(layers)
     text = build.to_openair(overlay, corrected=not args.raw, base_version=base_version)
-    name = overlay.filename
+    files = build.downloads(overlay, corrected=not args.raw, base_version=base_version)
 
     if args.openair:
         args.openair.write_text(text, encoding="utf-8", newline="")
@@ -127,19 +127,17 @@ def main(argv=None) -> int:
 
             payload = airspace_scene.remote(list(base) + overlay.circuit_airspaces)
 
-        # The page links to the OpenAir file rather than carrying it, so the file has
-        # to be written beside the page — publishing the HTML alone gives a dead button.
+        # The page links to the OpenAir files rather than carrying them, so they have
+        # to be written beside the page — publishing the HTML alone gives dead buttons.
         args.html.parent.mkdir(parents=True, exist_ok=True)
-        beside = args.html.parent / name
-        beside.write_text(text, encoding="utf-8", newline="")
-        article = render_html.body(
-            overlay, base, base_version, openair_name=name, openair_size=len(text),
-            scene=payload,
-        )
+        for f in files:
+            (args.html.parent / f["name"]).write_text(f["text"], encoding="utf-8", newline="")
+        article = render_html.body(overlay, base, base_version, downloads=files, scene=payload)
         args.html.write_text(_page(article, "Planner",
                                    three_d=payload is not None), encoding="utf-8")
         print(f"{args.html}: {len(base)} openAIP airspaces + {overlay.circuit_count} circuits")
-        print(f"{beside}: linked from the page ({len(text) / 1024:.0f} KB)")
+        for f in files:
+            print(f"{args.html.parent / f['name']}: linked from the page ({f['size'] / 1024:.0f} KB)")
 
     if args.report:
         east, north, samples = overlay.offset

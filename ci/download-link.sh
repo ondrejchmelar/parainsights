@@ -1,7 +1,8 @@
 #!/bin/sh
-# The airspace page offers one download, and it names the file rather than carrying it.
+# The airspace page offers two downloads (the aerodrome zones and the circuits), and
+# names the files rather than carrying them.
 #
-# The name carries the AIRAC date — `CZ_airfield_zones_20260806.txt` — so it changes
+# The name carries the AIRAC date — `CZ_ATZ_20260806.txt`, `CZ_okruhy_20260806.txt` — so it changes
 # every time the cycle does, and a rebuild that writes the page but not the file (or
 # writes the file under a new name while an older page survives) leaves a button that
 # 404s. `Refuse to publish a site with a dead link in its own nav` is already a commit in
@@ -11,9 +12,9 @@ set -eu
 PAGE=public/planner/index.html
 test -f "$PAGE" || { echo "download-link.sh: no $PAGE" >&2; exit 1; }
 
-linked=$(grep -o 'href="CZ_airfield_zones_[0-9]*\.txt"' "$PAGE" | cut -d'"' -f2 | sort -u)
-if [ -z "$linked" ]; then
-    echo "download-link.sh: the airspace page offers no OpenAir download at all" >&2
+linked=$(grep -o 'href="CZ_\(ATZ\|okruhy\)_[0-9]*\.txt"' "$PAGE" | cut -d'"' -f2 | sort -u)
+if [ "$(echo "$linked" | grep -c .)" -ne 2 ]; then
+    echo "download-link.sh: the airspace page should offer two OpenAir files, offers: $linked" >&2
     exit 1
 fi
 

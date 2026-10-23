@@ -236,14 +236,14 @@ def _planner_view(args, reports) -> "render_html.Extra":
     layers = args.html.parent / args.airspace / "layers"
     base, base_version = openaip.base(layers)
     openaip.write_circuits(layers, overlay)
-    name = overlay.filename
-    text = airspace_build.to_openair(overlay, base_version=base_version)
-    # The download has to exist where the page points, which is `--airspace`'s argument
-    # resolved against the page's own directory.
-    target = args.html.parent / args.airspace / name
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(text, encoding="utf-8", newline="")
-    print(f"wrote {target}")
+    files = airspace_build.downloads(overlay, base_version=base_version)
+    # The downloads have to exist where the page points, which is `--airspace`'s
+    # argument resolved against the page's own directory.
+    for f in files:
+        target = args.html.parent / args.airspace / f["name"]
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(f["text"], encoding="utf-8", newline="")
+        print(f"wrote {target}")
     spaces = list(base) + overlay.circuit_airspaces
     # The view's ground is fetched in the page; without --terrain, the flat SVG map.
     payload = airspace_scene.remote(spaces) if args.terrain else None
@@ -251,9 +251,8 @@ def _planner_view(args, reports) -> "render_html.Extra":
         uid="airspace",
         label="Planner",
         meta=f"{overlay.atz_count} zones &middot; {overlay.circuits} okruhy",
-        body=airspace_html.body(overlay, base, base_version, openair_name=name,
-                                openair_size=len(text), openair_href=f"{args.airspace}{name}",
-                                scene=payload),
+        body=airspace_html.body(overlay, base, base_version, downloads=files,
+                                href_prefix=args.airspace, scene=payload),
         style=airspace_html.STYLE + (planner_html.STYLE if payload else ""),
         script=(airspace_html.SCRIPT
                 + (airspace_html.SCRIPT3D + planner_html.SCRIPT if payload else "")),

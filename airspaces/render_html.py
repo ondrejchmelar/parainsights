@@ -540,7 +540,7 @@ SCRIPT3D = (Path(__file__).parent / "js/map.js").read_text(encoding="utf-8")
 
 
 def body(overlay, base, base_version: str, uid: str = "airspace",
-         openair_name: str = "", openair_size: int = 0, openair_href: str = "",
+         downloads: list[dict] = (), href_prefix: str = "",
          scene: dict | None = None) -> str:
     """The airspace article, ready to drop into the report.
 
@@ -549,8 +549,9 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
     it under the flight tab strip's controller too, and the two then fought over
     `hidden` — the flight controller hides everything that is not the open flight.
 
-    `openair_href` is where the download lives *relative to the page*, which is not the
-    same as its filename once this article is embedded in a report one directory up.
+    `downloads` are `build.downloads`: the aerodrome zones and the circuits, two files.
+    `href_prefix` is where they live *relative to the page*, which is not where the page
+    is once this article is embedded in a report one directory up.
     """
     airspaces = list(base) + overlay.circuit_airspaces
     rings = [a.points for a in airspaces if a.points] + [basemap.BORDER]
@@ -570,24 +571,20 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
         boxes = f" Zones above {DRAWN_TOP / 1000:.0f} km end at a dashed lid." if capped else ""
 
     download = ""
-    if openair_name:
+    if downloads:
         download = (
             '<div class="asp-get">'
-            + download_link(
-                openair_href or openair_name,
-                "Download the ATZ layer",
-                f"OpenAir · {overlay.atz_count} aerodrome zones, {overlay.circuits} "
-                f"circuits at {overlay.circuit_fields} fields "
-                f"· {openair_size / 1024:.0f} KB",
-            )
-            + '<p class="asp-get-how"><strong>This file is not a full airspace set.</strong> '
-            "It holds the green and orange layers only — the aerodrome zones and traffic "
-            "circuits that XCTrack and XContest leave out — so load it <em>alongside</em> "
-            "your usual airspace, never instead of it. Nothing in red or amber on the map "
-            "above is in this file.<br>"
+            + "".join(download_link(href_prefix + d["name"], f"Download: {d['label'].lower()}",
+                                    f"OpenAir · {d['count']} · {d['size'] / 1024:.0f} KB")
+                      for d in downloads)
+            + '<p class="asp-get-how"><strong>These files are not a full airspace set.</strong> '
+            "They hold the green and orange layers only — the aerodrome zones and traffic "
+            "circuits that XCTrack and XContest leave out, one file each, so you can take "
+            "either — so load them <em>alongside</em> your usual airspace, never instead "
+            "of it. Nothing in red or amber on the map above is in them.<br>"
             "Import under <em>Preferences → Airspaces and obstacles → Files → Import "
-            "OpenAir files</em>, or copy it into the <code>XCTrack/Airspaces</code> "
-            "folder and tick it there.</p>"
+            "OpenAir files</em>, or copy them into the <code>XCTrack/Airspaces</code> "
+            "folder and tick them there.</p>"
             + warning()
             + "</div>"
         )
@@ -624,20 +621,25 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
              "Fly in an aerodrome zone, stay out of its circuit. Hover a zone for its limits; "
              "click the map (not drawing) for every zone above that point." + boxes)
     get = ""
-    if openair_name:
+    if downloads:
+        counts = ", ".join(d["count"] for d in downloads)
         get = (f'<div class="asp-get-float">'
                f'<span class="asp-get-label">ATZ layer for XCTrack'
                + common.info(
-                   "The aerodrome zones and circuits XCTrack leaves out: "
-                   f"{overlay.atz_count} zones, {overlay.circuits} circuits "
-                   f"(OpenAir, {openair_size / 1024:.0f} KB). <strong>Load it alongside your "
-                   "airspace, not instead.</strong> XCTrack: Preferences → Airspaces and "
-                   "obstacles → Files → Import OpenAir files.",
+                   "The aerodrome zones and circuits XCTrack leaves out, one OpenAir file "
+                   f"each so you can take either: {counts}. <strong>Load them alongside "
+                   "your airspace, not instead.</strong> XCTrack: Preferences → Airspaces "
+                   "and obstacles → Files → Import OpenAir files.",
                    "About the ATZ layer")
                + '</span>'
-               f'<a class="btn primary" download="{_escape((openair_href or openair_name).rsplit("/", 1)[-1])}" '
-               f'href="{_escape(openair_href or openair_name)}">'
-               f'{common.icon(common.ICONS["download"])}Download</a></div>')
+               + "".join(
+                   f'<a class="btn{" primary" if k == 0 else ""}" download="{_escape(d["name"])}" '
+                   f'href="{_escape(href_prefix + d["name"])}" '
+                   f'title="{_escape(d["label"])}: {_escape(d["count"])}, '
+                   f'{d["size"] / 1024:.0f} KB">'
+                   f'{common.icon(common.ICONS["download"])}{"ATZ" if d["kind"] == "atz" else "Okruhy"}</a>'
+                   for k, d in enumerate(downloads))
+               + '</div>')
     # The airspace map's own menu (`map3d`, the ▾ beside Airspaces) holds the kinds and
     # the floor; this page adds its hours and what the map is, moved in when the map is
     # built. They were a Layers panel under the task until October 2026.

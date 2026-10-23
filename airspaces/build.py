@@ -7,6 +7,16 @@ from dataclasses import dataclass, field
 
 from . import aerodromes, atz, circuits, openair, sources
 
+# The word in each download's name, and what the page calls it.
+FILE_WORDS = {"atz": "ATZ", "circuit": "okruhy"}
+FILE_LABELS = {"atz": "Aerodrome zones", "circuit": "Traffic circuits"}
+FILE_HOLDS = {
+    "atz": "THIS FILE holds the aerodrome zones only. The traffic circuits are the\n"
+           "companion file CZ_okruhy_*.txt; import either, or both.\n\n",
+    "circuit": "THIS FILE holds the traffic circuits only. The aerodrome zones are the\n"
+               "companion file CZ_ATZ_*.txt; import either, or both.\n\n",
+}
+
 HEADER = """Czech aerodrome zones and traffic circuits, for XCTrack
 
 ZONE (class W, green): the aerodrome traffic zone, or ATZ, at the 82 ICAO aerodromes, GND -
@@ -108,16 +118,15 @@ class Overlay:
         return sum(1 for a in self.airspaces
                    if a.meta.get("kind") == "circuit" and not a.meta.get("part"))
 
-    @property
-    def filename(self) -> str:
-        """What the download is called, in one place.
+    def filename(self, kind: str) -> str:
+        """What a download is called, in one place: `atz` or `circuit`.
 
-        The name a pilot reads in XCTrack's import list, so it says what the file holds
-        rather than which acronym the tool started life on: half the fields in here have
-        no ATZ at all, only a circuit. It lived in two `cli.py` files that had already
-        drifted apart once.
+        Two files (October 2026), because XCTrack imports a file whole and a pilot may
+        want the aerodrome zones without the circuits, or the other way round. The name
+        is what a pilot reads in XCTrack's import list, so it says what the file holds.
+        It lived in two `cli.py` files that had already drifted apart once.
         """
-        return f"CZ_airfield_zones_{self.atz_date or 'current'}.txt".replace("-", "")
+        return f"CZ_{FILE_WORDS[kind]}_{self.atz_date or 'current'}.txt".replace("-", "")
 
     @property
     def circuits(self) -> int:
@@ -313,7 +322,9 @@ def build(*, correct: bool = True, refresh: bool = False, with_circuits: bool = 
     )
 
 
-def to_openair(overlay: Overlay, *, corrected: bool = True, base_version: str = "") -> str:
+def to_openair(overlay: Overlay, *, corrected: bool = True, base_version: str = "",
+               kind: str | None = None) -> str:
+    """The OpenAir file: every zone and circuit, or with `kind` only one of the two."""
     east, north, samples = overlay.offset
     import math
 
@@ -326,9 +337,10 @@ def to_openair(overlay: Overlay, *, corrected: bool = True, base_version: str = 
         )
     else:
         correction = "\nGeometry reproduced from the publication unchanged."
+    spaces = [a for a in overlay.airspaces if kind is None or a.meta.get("kind") == kind]
     return openair.write(
-        overlay.airspaces,
-        HEADER.format(
+        spaces,
+        FILE_HOLDS.get(kind, "") + HEADER.format(
             beside=round(circuits.BESIDE_M),
             beyond=round(circuits.BEYOND_M),
             width=round(circuits.RIBBON_M),
@@ -340,3 +352,15 @@ def to_openair(overlay: Overlay, *, corrected: bool = True, base_version: str = 
             generated=dt.date.today().isoformat(),
         ),
     )
+
+
+def downloads(overlay: Overlay, *, corrected: bool = True, base_version: str = "") -> list[dict]:
+    """The two files the page offers: name, label, OpenAir text and what is in it."""
+    out = []
+    for kind in ("atz", "circuit"):
+        text = to_openair(overlay, corrected=corrected, base_version=base_version, kind=kind)
+        count = (f"{overlay.atz_count} aerodrome zones" if kind == "atz" else
+                 f"{overlay.circuits} circuits at {overlay.circuit_fields} fields")
+        out.append({"kind": kind, "name": overlay.filename(kind), "label": FILE_LABELS[kind],
+                    "text": text, "size": len(text), "count": count})
+    return out
