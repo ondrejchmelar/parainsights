@@ -240,7 +240,9 @@ so its filename is read from the directory listing instead of computed.
   circuit of their own (parallel and duplicate runways), and 51 have no rectangle to
   measure — not drawn, a trapezoid or a teardrop, crossing circuits too tangled to
   split, or a chart that disagrees with the runway data by more than its own error
-  (LKPC and LKSZ, 1.5 km from their surveyed runway: left alone rather than guessed).
+  (LKPC, LKMI: left alone rather than guessed). LKSZ's chart draws its strip 1.4 km
+  west of where it is — the pilot checked the surveyed runway on imagery — so its traced
+  circuit is moved 1 410 m east, onto the real strip.
   **Then everything that is not a rectangle was traced by hand** (`voc_shapes.txt`):
   LKKRAM's slanted leg, LKMB's and LKLB's teardrops, LKCH's and LKPN's crossing boxes,
   the hooks one-way strips publish (LKCHOR, LKHATH, LKKEJZ). What keeps a standard box
