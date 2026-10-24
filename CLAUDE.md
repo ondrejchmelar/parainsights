@@ -46,6 +46,11 @@ empty.
   should scroll the page like anywhere else; a tap reads a point, and a press held then
   dragged scrubs (`bindReader` in `meteo/js/meteo.js` is the pattern). Today a drag over
   the side view moves the cursor and the page does not scroll.
+- **Okruh: LKPC and LKMI, chart circuit far from the runway.** Both keep the standard
+  box on the surveyed runway, which matches the strip on imagery. LKPC's VOC chart draws
+  a small strip and hook ~1.7 km SW (near Lenešice), LKMI's a circuit ~3 km away. Find
+  where the circuit is flown, then trace it — or add both to `docs/atz-datum-hlaseni.md`
+  as charts to query.
 - **ECMWF sounding as a second model, once Open-Meteo serves its 9 km pressure levels.**
   ECMWF opened its 9 km IFS on 20 Oct 2026 (data.ecmwf.int `ifs/0p1/`: GRIB2, 2 h late,
   3-hourly, 1000/925/850/700/600 hPa under 4 km, no boundary layer height). The page
