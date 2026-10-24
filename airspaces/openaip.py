@@ -27,6 +27,7 @@ imports — and `ci/stale.sh` does not hold a change there against the page.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from .openair import Airspace
@@ -61,11 +62,26 @@ def read(path: Path) -> tuple[list[Airspace], str]:
     out = []
     for ring in data["airspaces"]:
         ring = decoded(ring)
+        meta = {"group": ring["k"]}
+        # An aerodrome zone names its aerodrome, so the map can link to its page.
+        icao = _atz_icao(ring["nm"]) if ring["k"] == "atz" else None
+        if icao:
+            meta.update(icao=icao, kind="atz")
         out.append(Airspace(name=ring["nm"], airspace_class=ring["ac"], floor=ring["lo"],
                             ceiling=ring["hi"],
                             points=list(zip(ring["lat"], ring["lon"])),
-                            meta={"group": ring["k"]}))
+                            meta=meta))
     return out, data["version"]
+
+
+# openAIP names a Czech ATZ "LKSN ATZ", all but the one it spells out.
+_ATZ_NAME = re.compile(r"^(LK[A-Z]{2,4}) ATZ\b")
+_ATZ_SPELLED = {"ATZ CESKE BUDEJOVICE": "LKCS"}
+
+
+def _atz_icao(name: str) -> str | None:
+    found = _ATZ_NAME.match(name)
+    return found.group(1) if found else _ATZ_SPELLED.get(name)
 
 
 def base(folder: Path) -> tuple[list[Airspace], str]:

@@ -72,6 +72,20 @@ def test_a_layer_file_gives_the_airspace_back(tmp_path):
     assert render_html.classify(back[0]) == "base"
 
 
+def test_a_czech_atz_names_its_aerodrome_for_the_map_to_link(tmp_path):
+    """The column panel links an ATZ to its aerodrome's VFR Manual page (`ad`)."""
+    from airspaces import scene
+
+    spaces = openaip_refresh.drawn("CZ", [item("LKSN ATZ", type_=13, country="CZ"),
+                                          item("ATZ CESKE BUDEJOVICE", type_=13, country="CZ"),
+                                          item("TMA I PRAHA", type_=4, country="CZ")])
+    data = openaip.layer_file(spaces, version="v", credit=openaip.CREDIT)
+    (tmp_path / "CZ.json").write_text(json.dumps(data))
+    back, _ = openaip.read(tmp_path / "CZ.json")
+    ads = {ring["n"].split("  ")[0]: ring.get("ad") for ring in scene.rings(back)}
+    assert ads == {"LKSN ATZ": "lksn", "ATZ CESKE BUDEJOVICE": "lkcs", "TMA I PRAHA": None}
+
+
 def test_the_index_lists_each_file_with_its_box_and_credit(tmp_path):
     data = openaip.layer_file(openaip_refresh.drawn("IT", [item()]), version="v", credit=openaip.CREDIT)
     (tmp_path / "IT.json").write_text(json.dumps(data))
