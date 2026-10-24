@@ -372,14 +372,16 @@ def write(known):
             traced.setdefault((ident, name), [])
             continue
         where, *coords = rest
+        # A third value is the turn's own radius there (`circuits.clean`).
         points = [tuple(float(v) for v in c.split(",")) for c in coords]
         if where.startswith("rw"):
             turn = float(where.split(":")[1]) if ":" in where else 0.0
             (mx, my), (ux, uy), (rx, ry) = _frame(known, ident, name, turn)
             # Traced with + across to the left.
-            points = [(mx + a * ux - c * rx, my + a * uy - c * ry) for a, c in points]
+            points = [(mx + a * ux - c * rx, my + a * uy - c * ry, *r) for a, c, *r in points]
         traced.setdefault((ident, name), []).append(
-            {"closed": kind == "closed", "points": [(round(e), round(n)) for e, n in points]})
+            {"closed": kind == "closed",
+             "points": [(round(e), round(n), *map(round, r)) for e, n, *r in points]})
 
     by_runway: dict[str, list[list[str]]] = {}
     for line in VERDICTS.read_text().splitlines():
@@ -415,7 +417,7 @@ def write(known):
     for ident, (de, dn) in shifts.items():
         for shapes in data.get(ident.upper(), {}).get("runways", {}).values():
             for shape in shapes:
-                shape["points"] = [(round(e + de), round(n + dn)) for e, n in shape["points"]]
+                shape["points"] = [(round(e + de), round(n + dn), *r) for e, n, *r in shape["points"]]
     body = pprint.pformat(data, width=96, sort_dicts=True)
     OUTPUT.write_text(f'''"""Traffic circuits off the AIP's VOC charts — generated, do not edit.
 
@@ -424,7 +426,8 @@ Written by `airspaces.voc_measure write` from the chart fits, the hand review in
 how a chart is read. Per aerodrome: `scale`, the chart's metres a pixel, and per runway
 (keyed by `Runway.name`) a list of outlines, each `closed` (a loop) or not (a hook or a
 U a one-way strip publishes), as points in metres east and north of the reference
-point — the chart's centre. **An empty list means the runway has no circuit of its
+point — the chart's centre — each with the radius of its turn as a third value where it
+has its own (`circuits.clean`). **An empty list means the runway has no circuit of its
 own**: a parallel or duplicate runway, whose sibling's circuit is the one flown.
 
 A runway that is not here keeps the standard box (`circuits.BESIDE_M`/`BEYOND_M`): its
@@ -480,8 +483,8 @@ def check(idents=()):
             notes.append(f"{r.name}: {kind}" + (f", {len(shapes)} shape(s)" if shapes else ""))
             ends = [plane.to_xy(r.low_lat, r.low_lon), plane.to_xy(r.high_lat, r.high_lon)]
             drawn.append((ends, shapes))
-        xs = [px(*p)[0] for ends, shapes in drawn for p in ends + [q for _, s in shapes for q in s]]
-        ys = [px(*p)[1] for ends, shapes in drawn for p in ends + [q for _, s in shapes for q in s]]
+        xs = [px(*p[:2])[0] for ends, shapes in drawn for p in ends + [q for _, s in shapes for q in s]]
+        ys = [px(*p[:2])[1] for ends, shapes in drawn for p in ends + [q for _, s in shapes for q in s]]
         pad = 1200 / mpx
         box = (max(0, min(xs) - pad), max(0, min(ys) - pad), min(w, max(xs) + pad), min(h, max(ys) + pad))
         zoom = max(1.0, min(3.0, 1100 / max(box[2] - box[0], box[3] - box[1])))
@@ -519,7 +522,7 @@ def check(idents=()):
                 line = [at(*p) for p in circuits.clean(points, closed)]
                 d.line(line + (line[:1] if closed else []), fill=(255, 0, 200, 230), width=3)
                 for p in points:
-                    x, y = at(*p)
+                    x, y = at(*p[:2])
                     d.ellipse([x - 4, y - 4, x + 4, y + 4], outline=(0, 140, 255, 255), width=2)
             d.line([at(*p) for p in ends], fill=(230, 0, 0, 255), width=6)
         title = f"{icao} {f.name}  ·  {mpx:g} m/px" + (f"  ·  shift {de:+g},{dn:+g} m" if (de, dn) != (0, 0) else "")

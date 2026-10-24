@@ -1,4 +1,6 @@
 # ident runway closed|path en|rw:turn  e,n (or along,left) metres from the chart centre / runway midpoint
+# A third value, e,n,r, turns that corner on an arc of r metres instead of circuits.TURN_M:
+# a corner where the chart's two legs meet, and the chart's own sweep, beats a run of points.
 # `none`: the chart draws this runway no circuit of its own (a parallel runway).
 # LKSN: the SE corner is cut off along the CTR Ruzyně boundary.
 lksn 07L/25R closed en -580,-180 600,230 1200,420 1450,330 1560,100 1560,-200 560,-1120 -1040,-1600 -1300,-1520 -1400,-1200 -1400,-600 -1280,-340
@@ -97,8 +99,8 @@ lkstip 09/27 closed en -440,-40 -200,0 1720,180 1860,90 1900,-40 1920,-680 1820,
 # Second pass off the control sheets (October 2026).
 lkhk 15L/33R closed en -1500,3240 -1700,3330 -3000,2790 -3810,0 -3780,-540 -3540,-750 -600,-1610 -360,-1570 480,-1110
 lkhk 15L/33R closed en 480,-1110 1260,-2430 1380,-2430 3150,-1450 2700,-480 1500,2220 1140,2970 840,3000 -780,2280 -960,2040
-lkbe 06/24 closed en -2080,-860 -1550,-760 -850,-320 2400,1420 2490,1700 2350,2050 1960,2800 1720,3130 1450,3165 -1300,1720 -2560,1060 -2935,720 -2850,320 -2350,-560
-lkbe 06/24 path en 350,-75 -1900,-170 -2150,220 -1830,900 -1350,1700
+lkbe 06/24 closed en 2651,1452,350 1677,3302,300 -2971,828,300 -2852,378 -2131,-907
+lkbe 06/24 path en 350,-75 -2419,-290,380 -1350,1700
 lkcb 05/23 closed en -700,-450 -1050,-400 -1375,-150 -1400,100 -1250,200 900,1725 1100,1725 1425,1200 1400,925 300,250 -300,-150
 lktd 09/27 closed en -2250,1850 -2050,2050 -1500,2080 1750,1800 1950,1600 1880,250 1650,-75 1450,-80 -1600,230 -1900,450 -2300,1100
 # LKTD: the dashed gliders' circuit south of the runway.

@@ -1426,3 +1426,19 @@ def test_the_rings_are_delta_encoded_and_lose_nothing():
     assert "enc" not in plain
     assert plain["lat"] == pytest.approx([50.0, 50.1234, 50.1234, 50.0], abs=1e-9)
     assert plain["lon"] == pytest.approx([14.0, 14.0, 14.5678, 14.5678], abs=1e-9)
+
+
+def test_a_traced_corner_turns_on_its_own_radius():
+    """`e,n,r` in `voc_shapes.txt`: the corner turns on an arc of r, the others on TURN_M,
+    so a chart's wide sweep takes one vertex rather than a run of them."""
+    def gap(points, corner):
+        return min(math.dist(p, corner) for p in points)
+
+    square = [(0, 0), (4000, 0), (4000, 4000), (0, 4000)]
+    plain = circuits.clean(square)
+    wide = circuits.clean([(0, 0), (4000, 0), (4000, 4000, 800), (0, 4000)])
+    # An arc of r cuts a right-angled corner by r(√2 − 1).
+    assert gap(plain, (4000, 4000)) == pytest.approx(circuits.TURN_M * (math.sqrt(2) - 1), abs=5)
+    assert gap(wide, (4000, 4000)) == pytest.approx(800 * (math.sqrt(2) - 1), abs=10)
+    assert gap(wide, (0, 0)) == pytest.approx(gap(plain, (0, 0)), abs=1)
+    assert all(len(p) == 2 for p in wide)
