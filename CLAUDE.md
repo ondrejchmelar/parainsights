@@ -48,9 +48,6 @@ empty.
   the side view moves the cursor and the page does not scroll.
 - **Okruh: LKPO's trace needs improving** (two loops, traced by hand off the thinned
   chart; `voc_shapes.txt`).
-- **Okruh: LKSTRZ is a bit offset and should be more symmetrical** — four crossing
-  boxes, all hung off the one runway the build knows; re-trace them as two symmetric
-  pairs about the chart's runway crossing.
 - **Okruh: the cut between a band's two halves shows as a wall in the 3D view.** No gap
   any more (`circuits.band` cuts each loop in two that meet exactly), but the map draws
   each half as a box, so the two end faces stand across the band. Draw the map's copy
