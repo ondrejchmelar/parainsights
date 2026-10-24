@@ -9,6 +9,8 @@ of which the package depends on. Run it when the charts change:
     uv run --with pillow,numpy,scipy python -m airspaces.voc_measure sheets
     # look at every sheet; correct airspaces/voc_verdicts.txt
     uv run --with pillow,numpy,scipy python -m airspaces.voc_measure write
+    uv run --with pillow,numpy,scipy python -m airspaces.voc_measure check [IDENT ...]
+    # one control image per field, the published circuit over its chart: check/IDENT.png
 
 **How a chart is read.** Every `{ident}_voc.jpg` is north-up — the bearing between two
 ATZ centres on one chart matches the true bearing to 0.01° — and centred on the field's
@@ -435,8 +437,105 @@ CHARTS = {body}
     print("wrote", OUTPUT, len(data), "aerodromes")
 
 
+def _shifts():
+    out = {}
+    for line in SHAPES.read_text().splitlines():
+        if line.startswith("shift "):
+            _, ident, by = line.split()[:3]
+            out[ident] = tuple(float(v) for v in by.split(","))
+    return out
+
+
+def check(idents=()):
+    """One control image per field: its VOC chart with the circuit exactly as published
+    on it — `circuits.circuit_shapes` (traced, fitted or the standard box, mirrored where
+    the AIP says so), its even-turned outline and the band — and our runway, all moved
+    back by the field's `shift` so they sit where the chart draws them. A 500 m grid
+    about the chart's centre gives the coordinates `voc_shapes.txt` is traced in."""
+    from PIL import Image, ImageDraw
+
+    from . import build, circuits, geo
+
+    out_dir = WORK / "check"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    scales = json.loads((WORK / "scale.json").read_text())
+    shifts = _shifts()
+    overlay = build.build(with_circuits=False)
+    wanted = {i.lower() for i in idents}
+    for icao, f in sorted(overlay.fields.items()):
+        ident = icao.lower()
+        if f.lat is None or (wanted and ident not in wanted) or not (WORK / f"{ident}.jpg").exists():
+            continue
+        mpx = scales.get(ident) or circuits.voc.CHARTS.get(icao, {}).get("scale") or 21.17
+        de, dn = shifts.get(ident, (0.0, 0.0))
+        plane = geo.Plane(f.lat, f.lon)
+        chart = _image(ident)
+        w, h = chart.size
+        px = lambda e, n: (w / 2 + (e - de) / mpx, h / 2 - (n - dn) / mpx)
+        drawn, notes = [], []
+        for r in f.runways:
+            traced = circuits.voc.CHARTS.get(icao, {}).get("runways", {}).get(r.name)
+            kind = ("traced" if traced else "no circuit") if traced is not None else "standard box"
+            shapes = circuits.circuit_shapes(f, r, plane) if traced != [] else []
+            notes.append(f"{r.name}: {kind}" + (f", {len(shapes)} shape(s)" if shapes else ""))
+            ends = [plane.to_xy(r.low_lat, r.low_lon), plane.to_xy(r.high_lat, r.high_lon)]
+            drawn.append((ends, shapes))
+        xs = [px(*p)[0] for ends, shapes in drawn for p in ends + [q for _, s in shapes for q in s]]
+        ys = [px(*p)[1] for ends, shapes in drawn for p in ends + [q for _, s in shapes for q in s]]
+        pad = 1200 / mpx
+        box = (max(0, min(xs) - pad), max(0, min(ys) - pad), min(w, max(xs) + pad), min(h, max(ys) + pad))
+        zoom = max(1.0, min(3.0, 1100 / max(box[2] - box[0], box[3] - box[1])))
+        image = chart.crop(tuple(round(v) for v in box)).resize(
+            (round((box[2] - box[0]) * zoom), round((box[3] - box[1]) * zoom)), Image.LANCZOS)
+        at = lambda e, n: ((px(e, n)[0] - box[0]) * zoom, (px(e, n)[1] - box[1]) * zoom)
+        iw, ih = image.size
+        image = image.convert("RGBA")
+        for ends, shapes in drawn:
+            for closed, points in shapes:
+                # One layer a shape, so one band's hole does not clear another's band.
+                tint = Image.new("RGBA", image.size, (0, 0, 0, 0))
+                t = ImageDraw.Draw(tint)
+                points = circuits.clean(points, closed)
+                if closed:
+                    outer, hole = circuits.band_rings(points)
+                    t.polygon([at(*p) for p in outer], fill=(255, 0, 200, 60))
+                    t.polygon([at(*p) for p in hole], fill=(0, 0, 0, 0))
+                else:
+                    for ring in circuits.band(points, closed=False):
+                        t.polygon([at(*p) for p in ring], fill=(255, 0, 200, 60))
+                image = Image.alpha_composite(image, tint)
+        d = ImageDraw.Draw(image, "RGBA")
+        for m in range(-8000, 8001, 500):
+            strong = m % 1000 == 0
+            x, _ = at(m + de, 0)
+            _, y = at(0, m + dn)
+            d.line([(x, 0), (x, ih)], fill=(0, 0, 0, 110 if strong else 45), width=1)
+            d.line([(0, y), (iw, y)], fill=(0, 0, 0, 110 if strong else 45), width=1)
+            if strong:
+                d.text((x + 3, ih - 14), f"{m / 1000:g}", fill=(0, 0, 0))
+                d.text((3, y + 2), f"{m / 1000:g}", fill=(0, 0, 0))
+        for ends, shapes in drawn:
+            for closed, points in shapes:
+                line = [at(*p) for p in circuits.clean(points, closed)]
+                d.line(line + (line[:1] if closed else []), fill=(255, 0, 200, 230), width=3)
+                for p in points:
+                    x, y = at(*p)
+                    d.ellipse([x - 4, y - 4, x + 4, y + 4], outline=(0, 140, 255, 255), width=2)
+            d.line([at(*p) for p in ends], fill=(230, 0, 0, 255), width=6)
+        title = f"{icao} {f.name}  ·  {mpx:g} m/px" + (f"  ·  shift {de:+g},{dn:+g} m" if (de, dn) != (0, 0) else "")
+        lines = [title, "; ".join(notes)]
+        d.rectangle([0, 0, max(9 * len(t) for t in lines) + 12, 36], fill=(255, 255, 255, 235))
+        for k, t in enumerate(lines):
+            d.text((6, 4 + 16 * k), t, fill=(0, 0, 0))
+        image.convert("RGB").save(out_dir / f"{icao}.png")
+        print(icao, image.size)
+
+
 def main(argv=None):
-    step = (argv or sys.argv[1:] or ["write"])[0]
+    args = argv or sys.argv[1:] or ["write"]
+    step = args[0]
+    if step == "check":
+        return check(args[1:])
     known = fields()
     {"fetch": fetch, "scale": scale, "fit": fit_all, "sheets": sheets, "write": write}[step](known)
 
