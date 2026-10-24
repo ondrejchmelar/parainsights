@@ -317,6 +317,8 @@
     for (var a = 0, b = n - 1; a < n; b = a++) {
       var ax = (ring.lon[a] - p[0]) * kx, ay = (ring.lat[a] - p[1]) * ky;
       var bx = (ring.lon[b] - p[0]) * kx, by = (ring.lat[b] - p[1]) * ky;
+      // A band's keyhole slit (`ho`) is no edge to be near.
+      if (ring.ho && ((a === ring.ho && b === ring.ho - 1) || (a === 0 && b === n - 1))) continue;
       var dx = bx - ax, dy = by - ay, len = dx * dx + dy * dy;
       var t = len ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len)) : 0;
       best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));

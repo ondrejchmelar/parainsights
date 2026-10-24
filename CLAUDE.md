@@ -48,11 +48,6 @@ empty.
   the side view moves the cursor and the page does not scroll.
 - **Okruh: LKPO's trace needs improving** (two loops, traced by hand off the thinned
   chart; `voc_shapes.txt`).
-- **Okruh: the cut between a band's two halves shows as a wall in the 3D view.** No gap
-  any more (`circuits.band` cuts each loop in two that meet exactly), but the map draws
-  each half as a box, so the two end faces stand across the band. Draw the map's copy
-  without them — one ring with a hole for the maps (GeoJSON can), the halves only in
-  the OpenAir file — or drop the end walls in `map3d`.
 - **ECMWF sounding as a second model, once Open-Meteo serves its 9 km pressure levels.**
   ECMWF opened its 9 km IFS on 20 Oct 2026 (data.ecmwf.int `ifs/0p1/`: GRIB2, 2 h late,
   3-hourly, 1000/925/850/700/600 hPa under 4 km, no boundary layer height). The page

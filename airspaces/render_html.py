@@ -309,7 +309,10 @@ def map_svg(airspaces, project) -> str:
             + f'data-label="{_escape(label)}" '
             f'fill="{colours[group]}" fill-opacity="0.18" '
             f'stroke="{colours[group]}" stroke-width="1.1" '
-            f'd="{_path(airspace.points, project)}"><title>{_escape(label)}</title></path>'
+            + ('fill-rule="evenodd" ' if airspace.meta.get("hole") else "")
+            + f'd="{_path(airspace.points, project)}'
+            + (f' {_path(airspace.meta["hole"], project)}' if airspace.meta.get("hole") else "")
+            + f'"><title>{_escape(label)}</title></path>'
         )
     for name, lat, lon in basemap.CITIES:
         x, y = project(lat, lon)

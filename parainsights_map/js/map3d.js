@@ -1047,8 +1047,12 @@
         }
         var floor = ring.g ? low : (ring.fu !== undefined ? low + ring.fu : ring.f);
         var top = ring.cu !== undefined ? high + ring.cu : ring.c;
+        var all = ring.lon.map(function (lon, i) { return [lon, ring.lat[i]]; });
+        // A traffic circuit's band carries its hole after the outer ring (`ho`,
+        // `airspaces.scene.rings`): drawn as a hole, with no wall across the band.
+        var outer = ring.ho ? all.slice(0, ring.ho - 1) : all;
         return { space: ring, name: ring.n, colour: (scene.airspaceColours || {})[ring.k] || '#888888',
-                 ring: ring.lon.map(function (lon, i) { return [lon, ring.lat[i]]; }),
+                 ring: outer, hole: ring.ho ? all.slice(ring.ho, all.length - 1) : null,
                  floor: floor, top: Math.max(top, floor + 30), capped: !!ring.t };
       }); }
       // A planner on the page draws only the zones near its task (`drawnAirspaces`), and
@@ -1231,13 +1235,19 @@
         return [ext];
       })();
 
+      // A zone's outline at height `at`, and its hole where it has one.
+      function withHole(d, at) {
+        var lift = function (p) { return [p[0], p[1], z(at)]; };
+        return d.hole ? [d.ring.map(lift), d.hole.map(lift)] : d.ring.map(lift);
+      }
+
       function layers() {
         var out = [];
         var drawn = same('airspace', boxes.filter(boxShown));
         if (airspaceOn && drawn.length) {
           out.push(new deck.SolidPolygonLayer({
             id: 'airspace', data: drawn, extruded: true, wireframe: false, pickable: true,
-            getPolygon: function (d) { return d.ring.map(function (p) { return [p[0], p[1], z(d.floor)]; }); },
+            getPolygon: function (d) { return withHole(d, d.floor); },
             getElevation: function (d) { return (d.top - d.floor) * vertical; },
             getFillColor: function (d) { return rgb(d.colour, 46); },
             material: false, parameters: GLASS,
@@ -1258,16 +1268,18 @@
             // buffer and reads it back, and the caps doubled that over all the airspace for
             // a name the walls around them already give.
             pickable: false,
-            getPolygon: function (c) { return c.box.ring.map(function (p) { return [p[0], p[1], z(c.at)]; }); },
+            getPolygon: function (c) { return withHole(c.box, c.at); },
             getFillColor: function (c) { return rgb(c.box.colour, 32); },
             parameters: GLASS, updateTriggers: { getPolygon: vertical }
           }));
           out.push(new deck.PathLayer({
             id: 'airspace-edges', data: kept('airspace-edges', [drawn, vertical], function () {
               return drawn.reduce(function (all, d) {
-                var shut = d.ring.concat([d.ring[0]]);
-                all.push({ colour: d.colour, path: shut.map(function (p) { return [p[0], p[1], z(d.floor)]; }) });
-                all.push({ colour: d.colour, path: shut.map(function (p) { return [p[0], p[1], z(d.top)]; }) });
+                [d.ring].concat(d.hole ? [d.hole] : []).forEach(function (loop) {
+                  var shut = loop.concat([loop[0]]);
+                  all.push({ colour: d.colour, path: shut.map(function (p) { return [p[0], p[1], z(d.floor)]; }) });
+                  all.push({ colour: d.colour, path: shut.map(function (p) { return [p[0], p[1], z(d.top)]; }) });
+                });
                 return all;
               }, []);
             }),
@@ -1278,7 +1290,7 @@
           out.push(new deck.LineLayer({
             id: 'airspace-corners', data: kept('airspace-corners', [drawn], function () {
               return drawn.reduce(function (all, d) {
-                if (d.ring.length > 24) return all;
+                if (d.hole || d.ring.length > 24) return all;
                 d.ring.forEach(function (p) { all.push({ colour: d.colour, p: p, floor: d.floor, top: d.top }); });
                 return all;
               }, []);

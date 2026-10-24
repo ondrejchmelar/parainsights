@@ -69,6 +69,14 @@ AERODROME_BEYOND_M = 1550.0
 # How wide the band around the circuit's path is.
 RIBBON_M = 300.0
 
+# Every turn of a circuit drawn as one arc of this radius (`clean`): a hand trace puts
+# two or three points round a corner, each corner a little differently, and the band
+# showed it as uneven kinks. An aeroplane's circuit turn is a rate-one turn, so one
+# radius for all of them is also the honest drawing.
+TURN_M = 250.0
+JITTER_M = 30.0      # a vertex this close to the line through its neighbours says nothing
+CORNER_RUN_M = 380.0  # edges shorter than this between two long sides are a traced corner
+
 # When the AIP publishes no circuit altitude, fall back to this above the aerodrome.
 # 1000 ft is the standard light-aircraft circuit height.
 DEFAULT_CIRCUIT_AGL_FT = 1000.0
@@ -114,6 +122,115 @@ def _offset(points, d, closed):
             # A mitre, capped where a corner is so sharp it would shoot off.
             scale = 1.0 / max(0.25, (1.0 + ax * bx + ay * by))
         out.append((points[i][0] + d * nx * scale, points[i][1] + d * ny * scale))
+    return out
+
+
+def _line_gap(p, a, b):
+    """Metres from `p` to the line through `a` and `b`."""
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    length = math.hypot(dx, dy) or 1.0
+    return abs((p[0] - a[0]) * dy - (p[1] - a[1]) * dx) / length
+
+
+def _cross(a, b, c, d):
+    """Where the line `a`–`b` meets the line `c`–`d`, or None when they are parallel."""
+    r = (b[0] - a[0], b[1] - a[1])
+    s = (d[0] - c[0], d[1] - c[1])
+    den = r[0] * s[1] - r[1] * s[0]
+    if abs(den) < 1e-9 * (math.hypot(*r) * math.hypot(*s) or 1):
+        return None
+    t = ((c[0] - a[0]) * s[1] - (c[1] - a[1]) * s[0]) / den
+    return (a[0] + t * r[0], a[1] + t * r[1])
+
+
+def clean(points, closed=True, radius: float = TURN_M):
+    """A circuit outline with even turns: jitter dropped, each corner rebuilt where its
+    two long sides meet, and every corner then turned on one arc of `radius`.
+
+    A run of short edges between two long sides is a corner traced point by point; it
+    becomes the sides' meeting point unless that lies far off (a real short side, such as
+    Slaný's end before the corner the CTR cuts off), which keeps its own vertices."""
+    pts = [tuple(p) for p in points]
+    # Jitter: drop the vertex nearest its neighbours' line, again, while one is close.
+    while len(pts) > (3 if closed else 2):
+        n = len(pts)
+        span = range(n) if closed else range(1, n - 1)
+        gap, k = min((_line_gap(pts[k], pts[k - 1], pts[(k + 1) % n]), k) for k in span)
+        if gap > JITTER_M:
+            break
+        del pts[k]
+    n = len(pts)
+    edges = n if closed else n - 1
+    short = [math.dist(pts[k], pts[(k + 1) % n]) < CORNER_RUN_M for k in range(edges)]
+    if not closed:
+        short[0] = short[-1] = False           # a path's ends are where it starts and stops
+    if all(short) or not any(short):
+        corners = pts
+    else:
+        # Walk from a long edge, so every run of short ones has a long side each end.
+        start = short.index(False)
+        corners, k = [], start
+        while True:
+            # Edge k is long; its end vertex starts whatever run follows.
+            j = (k + 1) % edges
+            run = [(k + 1) % n]
+            while short[j]:
+                run.append((j + 1) % n)
+                j = (j + 1) % edges
+            if len(run) > 1:
+                a, b = pts[k], pts[(k + 1) % n]
+                c, d = pts[j], pts[(j + 1) % n]
+                meet = _cross(a, b, c, d)
+                near = meet and min(math.dist(meet, pts[v]) for v in run) < CORNER_RUN_M
+                corners += [meet] if near else [pts[v] for v in run]
+            else:
+                corners.append(pts[run[0]])
+            k = j
+            if k == start or (not closed and k >= edges - 1):
+                break
+        if not closed:
+            corners = [pts[0]] + corners
+            if corners[-1] != pts[-1]:
+                corners.append(pts[-1])
+        else:
+            corners = corners[-1:] + corners[:-1]
+    return _fillet(corners, closed, radius)
+
+
+def _fillet(pts, closed, radius):
+    """Each interior corner of `pts` replaced by an arc of `radius`, smaller where the
+    sides are too short to hold it."""
+    n = len(pts)
+    out = []
+    for k in range(n):
+        if not closed and k in (0, n - 1):
+            out.append(pts[k])
+            continue
+        p, a, b = pts[k], pts[k - 1], pts[(k + 1) % n]
+        ua = (a[0] - p[0], a[1] - p[1]); la = math.hypot(*ua)
+        ub = (b[0] - p[0], b[1] - p[1]); lb = math.hypot(*ub)
+        if not la or not lb:
+            continue
+        ua = (ua[0] / la, ua[1] / la); ub = (ub[0] / lb, ub[1] / lb)
+        cos = max(-1.0, min(1.0, ua[0] * ub[0] + ua[1] * ub[1]))
+        inner = math.acos(cos)                 # the angle between the two sides
+        turn = math.pi - inner
+        if turn < math.radians(4):
+            out.append(p)
+            continue
+        tangent = min(radius / math.tan(inner / 2), 0.45 * la, 0.45 * lb)
+        r = tangent * math.tan(inner / 2)
+        t0 = (p[0] + ua[0] * tangent, p[1] + ua[1] * tangent)
+        t1 = (p[0] + ub[0] * tangent, p[1] + ub[1] * tangent)
+        bis = (ua[0] + ub[0], ua[1] + ub[1]); lbis = math.hypot(*bis)
+        centre = (p[0] + bis[0] / lbis * r / math.sin(inner / 2),
+                  p[1] + bis[1] / lbis * r / math.sin(inner / 2))
+        a0 = math.atan2(t0[1] - centre[1], t0[0] - centre[0])
+        a1 = math.atan2(t1[1] - centre[1], t1[0] - centre[0])
+        sweep = (a1 - a0 + math.pi) % (2 * math.pi) - math.pi
+        steps = max(2, math.ceil(abs(sweep) / math.radians(15)))
+        out += [(centre[0] + r * math.cos(a0 + sweep * s / steps),
+                 centre[1] + r * math.sin(a0 + sweep * s / steps)) for s in range(steps + 1)]
     return out
 
 
@@ -180,6 +297,17 @@ def band(points, closed=True, at=(0.0, 0.0), width: float = RIBBON_M):
         return out + back
 
     return [half(i, t, j, u), half(j, u, i, t)]
+
+
+def band_rings(points, width: float = RIBBON_M):
+    """A closed circuit's band as the maps draw it: its outer ring and the hole inside —
+    one shape, so the 3D view shows no wall where `band` cuts it in two for OpenAir."""
+    h = width / 2
+    points = list(points)
+    if _area(points) < 0:
+        points = points[::-1]
+    # The hole wound the other way, so the two read as one weakly simple keyhole too.
+    return _offset(points, -h, True), _offset(points, h, True)[::-1]
 
 
 def standard_box(runway: Runway, side: int, beside: float = BESIDE_M,
@@ -358,6 +486,9 @@ def to_airspaces(field: Aerodrome) -> list[openair.Airspace]:
         heading = geo.bearing(runway.low_lat, runway.low_lon, runway.high_lat, runway.high_lon)
         for closed, points in circuit_shapes(field, runway, plane):
             where = geo.cardinal((heading + 90 * _side(points, a, b)) % 360)
+            points = clean(points, closed)
+            # The maps' one ring with its hole rides on the first half.
+            whole = band_rings(points) if closed else None
             for k, part in enumerate(band(points, closed, mid)):
                 out.append(
                     openair.Airspace(
@@ -369,7 +500,9 @@ def to_airspaces(field: Aerodrome) -> list[openair.Airspace]:
                         points=[plane.to_ll(*q) for q in part],
                         meta={"icao": field.icao, "kind": "circuit",
                               "runway": runway.name, "side": where, "part": k,
-                              "hours": field.hours.payload()},
+                              "hours": field.hours.payload(),
+                              **({"whole": [[plane.to_ll(*q) for q in ring] for ring in whole]}
+                                 if whole and k == 0 else {})},
                     )
                 )
     return out

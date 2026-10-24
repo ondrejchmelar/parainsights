@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from . import aerodromes, atz, circuits, openair, sources
 
@@ -109,8 +109,21 @@ class Overlay:
     @property
     def circuit_airspaces(self) -> list:
         """What the maps draw of this layer: the circuits. Aerodrome zones on the maps are
-        openAIP's (`openaip.py`); ours stay in the OpenAir download for XCTrack."""
-        return [a for a in self.airspaces if a.meta.get("kind") == "circuit"]
+        openAIP's (`openaip.py`); ours stay in the OpenAir download for XCTrack.
+
+        A closed band is one ring with a hole here (`meta["hole"]`), not the two halves the
+        OpenAir file needs: the halves' cut stood in the 3D view as a wall."""
+        out = []
+        for a in self.airspaces:
+            # The second half of a closed band: drawn by the first's whole ring.
+            if a.meta.get("kind") != "circuit" or a.meta.get("part"):
+                continue
+            whole = a.meta.get("whole")
+            if whole:
+                meta = {k: v for k, v in a.meta.items() if k != "whole"}
+                a = replace(a, points=whole[0], meta={**meta, "hole": whole[1]})
+            out.append(a)
+        return out
 
     @property
     def circuit_count(self) -> int:

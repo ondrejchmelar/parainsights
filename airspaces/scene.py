@@ -31,6 +31,9 @@ from .render_html import CLASSES, ceiling_metres, classify, floor_metres, limit_
 # Rings are simplified before they ship: at the zoom this map opens on, a 5 500 m circle
 # is 40 pixels across and its 72 published vertices are 36 of them wasted.
 RING_TOLERANCE_DEG = 0.0015    # about 110 m
+# A traffic circuit is a few kilometres across and its turns are 250 m arcs: thinned at
+# 110 m its turns came out as uneven chamfers. Kept to the encoding's own 1e-4° steps.
+CIRCUIT_TOLERANCE_DEG = 0.0001
 
 # Where a drawn box stops being the airspace's own ceiling and becomes a cap.
 #
@@ -196,7 +199,18 @@ def rings(airspaces, *, source: bool = False) -> list[dict]:
     for airspace in ranked:
         if len(airspace.points) < 3:
             continue
-        points = _thin(airspace.points, RING_TOLERANCE_DEG)
+        tolerance = (CIRCUIT_TOLERANCE_DEG if airspace.meta.get("kind") == "circuit"
+                     else RING_TOLERANCE_DEG)
+        points = _thin(airspace.points, tolerance)
+        hole = airspace.meta.get("hole")
+        if hole:
+            # A band's hole rides in the same arrays as a keyhole: the outer ring, back to
+            # its first point, the hole, back to its first, and the ring's own closing edge
+            # out again. Crossing counts read it right as it is (the slit's two edges
+            # cancel); the views split it at `ho` and draw the hole as a hole.
+            inner = _thin(hole, tolerance)
+            outer_count = len(points) + 1
+            points = list(points) + [points[0]] + list(inner) + [inner[0]]
         label, act, off = activation(airspace.name, airspace.airspace_class)
         if airspace.floor or airspace.ceiling:
             label += f"  ({airspace.floor} – {airspace.ceiling})"
@@ -214,6 +228,8 @@ def rings(airspaces, *, source: bool = False) -> list[dict]:
             "lon": _deltas([round(lon * 1e4) for _, lon in points]),
             "lat": _deltas([round(lat * 1e4) for lat, _ in points]),
         }
+        if hole:
+            ring["ho"] = outer_count
         # Only where hours were actually read. A ring with no `w` is a ring the time
         # filter must never hide — that covers all 251 base airspaces, whose activation
         # lives in NOTAMs this repository does not fetch, and the 74 SLZ okruhy, whose
