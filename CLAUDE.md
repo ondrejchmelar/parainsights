@@ -57,6 +57,10 @@ empty.
   top the reader sees it. Not worth a GRIB pipeline in CI for 3-hourly, coarse levels.
 - **One format for the debrief.** Its parts — the figures that open it, the finding cards,
   the context cards, the note — each have their own shape; make them read as one.
+- **Flaky test: `tests/test_merged_controls.py::test_a_shift_drag_turns_and_tilts_about_the_ground_grabbed[grab1-move1]`.**
+  Failed once in a full `pytest -q -x` run on 24 Oct 2026 and passed on re-run, alone and
+  in the full suite. Find what it races on (likely timing under xdist load) and make it
+  deterministic.
 
 **Where the "no shared code" rule applies, and where it does not.** `airspaces/geo.py`
 exists alongside `tracklog_viewer/js/geo.js` rather than sharing it, because they are not

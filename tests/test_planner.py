@@ -647,6 +647,36 @@ def test_a_click_off_drawing_lists_every_zone_above_the_point_top_down():
 
 
 @needs_chrome
+def test_the_column_links_an_atz_and_an_okruh_to_their_aerodrome_page():
+    atz = _band("ATZ TEST", 14.3, 14.7, 49.3, 49.7, floor="GND", ceiling="4000ft MSL", klass="D")
+    atz.meta.update(icao="LKTE", kind="atz")
+    okruh = _band("OKRUH TEST", 14.4, 14.6, 49.4, 49.6, floor="GND", ceiling="3000ft MSL")
+    okruh.meta.update(icao="LKTE", kind="circuit")
+    other = _band("TMA", 14.2, 14.8, 49.2, 49.8, floor="FL 65", ceiling="FL 95")
+    answer = _run(_DROP + _VIEW + """
+    document.getElementById('plan-draw').click();          // Draw off
+    var view = document.querySelector('.merged-view');
+    if (!view) {
+      view = document.createElement('div');
+      view.className = 'merged-view';
+      view.innerHTML = '<div class="m3-corner"><div class="m3-corner-row"></div></div>';
+      document.body.appendChild(view);
+    }
+    at(14.5, 49.5);
+    var rows = Array.prototype.map.call(document.querySelectorAll('.plan-column-list li'), function (li) {
+      var a = li.querySelector('a');
+      return [li.querySelector('b').textContent, a ? a.href : null];
+    });
+    return { rows: rows };
+    """, spaces=[atz, okruh, other])
+    links = {name.split("  ")[0]: href for name, href in answer["rows"]}
+    page = "https://aim.rlp.cz/vfrmanual/actual/lkte_text_en.html"
+    assert links["ATZ TEST"] == page
+    assert links["OKRUH TEST"] == page
+    assert links["TMA"] is None, "a zone with no aerodrome got a link"
+
+
+@needs_chrome
 def test_a_tap_s_zone_name_does_not_sit_over_the_panel():
     """deck.gl picks again after a tap, so the map's zone name came back over the
     "Above this point" panel that had just named it. A finger gets no name while the

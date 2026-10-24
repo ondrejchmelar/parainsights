@@ -416,6 +416,8 @@
   // what is loaded; the point's country's layer is fetched if it is not, and the list
   // redone when it lands. A nudge to look, as the rest of the page is: the AIS decides.
   var COLUMN_TOP = 4000;    // the bar's scale, metres above sea level
+  // `airspaces.sources.VFR_MANUAL`: an aerodrome's VFR Manual page, text and charts.
+  var AD_PAGE = 'https://aim.rlp.cz/vfrmanual/actual/{icao}_text_en.html';
   var pin = null, columnPanel = null;
   function heights(ring, at) {
     var ground = handle.groundAt ? handle.groundAt(at[0], at[1]) : null;
@@ -502,6 +504,16 @@
       var sub = document.createElement('small');
       sub.textContent = [ring.cc || 'CZ', ring.ac, limits ? ring.lo + ' – ' + ring.hi : '']
         .filter(function (part) { return part; }).join(' · ');
+      if (ring.ad) {
+        // An ATZ or okruh: its aerodrome's page has the circuit rules and the VOC chart.
+        var page = document.createElement('a');
+        page.href = AD_PAGE.replace('{icao}', ring.ad);
+        page.target = '_blank';
+        page.rel = 'noopener';
+        page.textContent = 'Aerodrome page';
+        if (sub.textContent) sub.appendChild(document.createTextNode(' · '));
+        sub.appendChild(page);
+      }
       text.appendChild(sub);
       row.appendChild(swatch);
       row.appendChild(text);

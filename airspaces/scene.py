@@ -236,6 +236,10 @@ def rings(airspaces, *, source: bool = False) -> list[dict]:
         # fields publish no hours at all.
         if airspace.meta.get("hours"):
             ring["w"] = airspace.meta["hours"]
+        # The aerodrome an ATZ or okruh belongs to, lowercase as its VFR Manual page is
+        # named (`sources.VFR_MANUAL`): the column panel links to it.
+        if airspace.meta.get("kind") in ("atz", "circuit") and airspace.meta.get("icao"):
+            ring["ad"] = airspace.meta["icao"].lower()
         if airspace.meta.get("notam"):
             ring["nt"] = True        # active only by NOTAM (openAIP)
         if act is not None:
