@@ -1,0 +1,690 @@
+<!DOCTYPE html><html xmlns:vfr="http://whatever">
+   <head>
+      <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+      <meta charset="UTF-8">
+      <meta http-equiv="X-UA-Compatible" content="IE=8,IE=9,IE=10">
+      <meta name="apple-mobile-web-app-capable" content="yes">
+      <meta name="apple-mobile-web-app-status-bar-style" content="black">
+      <meta name="format-detection" content="telephone=no">
+      <meta name="viewport" id="viewport" content="width=320, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+      <meta name="MobileOptimized" id="optimized" content="320">
+      <meta http-equiv="cache-control" content="max-age=0">
+      <meta http-equiv="cache-control" content="no-cache">
+      <meta http-equiv="expires" content="0">
+      <meta http-equiv="expires" content="Tue, 01 Jan 1980 1:00:00 GMT">
+      <meta http-equiv="pragma" content="no-cache">
+      <link rel="apple-touch-icon" href="apple-touch-icon.png">
+      <link rel="icon" type="image/vnd.microsoft.icon" href="design/favicon.png">
+      <link rel="shortcut icon" type="image/x-icon" href="design/favicon.ico">
+      <link rel="stylesheet" href="design/styly6.css" media="all" type="text/css">
+      <link rel="stylesheet" href="design/text6.css" media="all" type="text/css">
+      <link rel="stylesheet" href="design/aerodrome6.css" media="all" type="text/css"><script src="design/skripty6.js"></script><title>VFR Manual - Czech Republic</title>
+   </head>
+   <body>
+      <div id="header">
+         <h1><img src="design/vfrmanual_logo_en.png" alt="VFR MANUAL"><span>Czech<span>Republic</span></span></h1><a href="#menu" class="menu" onclick="javascript: toggleMenu(); return false;"><img src="design/menu.png" alt="Menu"></a><a href="http://www.rlp.cz" class="logo" onclick="javascript: toggleFloatingMenu('rlpmenu'); return false;"><img src="design/ans_logo_en.png" alt="Air Navigation Services of the Czech Republic"></a><div id="icons"><a href="../index_en.html" id="wef" onclick="javascript: return confirm('Are you sure you want to select different effective date?');">WEF
+               <strong>06 AUG 26 (1)
+                  </strong><img src="design/wef.png" alt="- change effective date"></a><div id="iconsmenu"><a href="pdf/ad-lkmb_map_en.pdf"><img src="design/pdfprint.png" alt="">Charts</a><a href="pdf/ad-lkmb_text_en.pdf"><img src="design/pdfprint.png" alt="">Text</a></div>
+         </div>
+         <div id="rlpmenu" class="hidden"><img src="design/floatingmenuarrow.png" alt="" class="arrow"><a href="http://lis.rlp.cz/ais_data/www_main_control/frm_en_aip.htm" id="linkaip">AIP C.R. on-line</a><a href="http://www.rlp.cz/en" id="linkrlp">ANS C.R website</a><a href="http://lis.rlp.cz/?lang=en" id="linklis">AIS ANS C.R. website</a></div>
+      </div>
+      <div id="content">
+         <div class="aerodrome"><a href="#content" id="admenubutton" onclick="javascript: toggleAdMenu(''); return false;"><img src="design/admenu.png" alt="Vybrat sekci"></a><div id="admenubar">
+               <h2>LKMB - Mladá Boleslav</h2>
+               <div id="admenu"><a href="#ad-info" id="admenu-info" onclick="javascript: return toggleAdMenu('info', false, this);"><img src="design/icon-info.png" alt="">INFO</a><a href="#vfrc-chart" class="aktivni" onclick="javascript: return toggleAdMenu('voc', false, this);" title="VOC"><img src="design/icon-voc.png" alt="">VOC</a><a href="#adc-chart" onclick="javascript: return toggleAdMenu('adc', false, this);" title="ADC"><img src="design/icon-adc.png" alt="">ADC</a><a href="#ad-text" onclick="javascript: return toggleAdMenu('text', false, this);"><img src="design/icon-text.png" alt="">TEXT</a></div>
+            </div>
+            <div id="adinfomenu"><a href="#ad-statut" class="aktivni" onclick="javascript: return toggleAdInfoMenu('info', this);"><img src="ad/icons/infomenu-info.png" alt="Basic information"></a><a href="#ad-frekvence" onclick="javascript: return toggleAdInfoMenu('frekvence', this);"><img src="ad/icons/infomenu-frekvence.png" alt="Frequencies"></a><a href="#ad-postupy" onclick="javascript: return toggleAdInfoMenu('postupy', this);"><img src="ad/icons/infomenu-postupy.png" alt="Procedures"></a><a href="#ad-drahy" onclick="javascript: return toggleAdInfoMenu('drahy', this);"><img src="ad/icons/infomenu-drahy.png" alt="Runways"></a><a href="#ad-kontakty" onclick="javascript: return toggleAdInfoMenu('kontakty', this);"><img src="ad/icons/infomenu-kontakty.png" alt="Contacts"></a><a href="#" id="adinfomenu-skryt" onclick="javascript: return toggleAdInfoMenu('skryt', this);"><img src="ad/icons/infomenu-skryt.png" alt="Hide information panel"></a></div>
+            <div id="aerodrome-info">
+               <h2>LKMB - Mladá Boleslav</h2>
+               <div id="aerodrome-statut"><img src="ad/icons/statut.png" class="aerodrome-icon" alt="Statut">Public domestic aerodrome
+               </div>
+               <div id="aerodrome-provoz"><img src="ad/icons/provoz.png" class="aerodrome-icon" alt="Provoz">VFR
+                   day, parachute jumping operation
+               </div>
+               <div id="aerodrome-poloha"><strong>ARP:</strong> 50°&nbsp;23'&nbsp;54"&nbsp;N, 14°&nbsp;53'&nbsp;54"&nbsp;E<br>2 km SSW Mladá Boleslav<br><strong>ELEV:</strong> 765 ft / 233 m<br><strong>Circuit:</strong>  1750 ft / 540 m AMSL
+               </div>
+               <div id="aerodrome-sluzby">
+                  <div><img src="ad/icons/provoznidoba.png" alt="Provozní doba" class="aerodrome-icon">15 APR - 15 OCT 0700-1600,<br>otherwise O/R
+                  </div>
+                  <div><img src="ad/icons/palivo.png" alt="Palivo" class="aerodrome-icon">AVGAS 100 LL, Natural 95, Jet-A1 self-service with TWINTRANS card, without card in
+                     operational hours, otherwise HO or O/R
+                  </div>
+                  <div><img src="ad/icons/olej.png" alt="Olej" class="aerodrome-icon">TOTAL D100
+                  </div>
+                  <div><img src="ad/icons/hangarovani.png" alt="Hangárování" class="aerodrome-icon">O/R, limited
+                  </div>
+                  <div><img src="ad/icons/servis.png" alt="Servis" class="aerodrome-icon">NIL
+                  </div>
+                  <div><img src="ad/icons/ubytovani.png" alt="Ubytování" class="aerodrome-icon">O/R, hotels Mladá Boleslav
+                  </div>
+                  <div><img src="ad/icons/restaurace.png" alt="Restaurace" class="aerodrome-icon">Restaurant MG at the aerodrome
+                  </div>
+                  <div><img src="ad/icons/doprava.png" alt="Doprava" class="aerodrome-icon">train, bus, taxi Mladá Boleslav
+                  </div>
+               </div>
+               <div id="aerodrome-frekvence"><img src="ad/icons/frekvence.png" class="aerodrome-icon" alt="Frekvence"><div><span>Boleslav RADIO</span>123,610
+                  </div>
+               </div>
+               <div id="aerodrome-postupy"><img src="ad/icons/dulezite.png" class="aerodrome-icon" alt="Důležité informace"><p>Customs and immigration clearance:
+                     NIL
+                  </p>
+                  <p>Noise abatement procedures
+                     <ul>
+                        <li>After take-off from RWY 04, with regard to the safe conduct of the flight, turn to
+                           the right to reduce the noise load of the built-up area in front of THR RWY 22.
+                        </li>
+                        <li>After taking-off from RWY 34, with regard to the safe conduct of the flights, turn
+                           to the left to reduce the noise load of the built-up area in front of THR RWY 16.
+                        </li>
+                        <li>While carrying out a traffic circuit, with regard to the safe execution of the flight,
+                           pilots in command are requested not to fly over the villages of Vinec and Písková
+                           Lhota. The populated area, except in areas of climb and descent, shall be flown around
+                           at 1750 ft / 540 m AMSL.
+                        </li>
+                        <li>Except when necessary to maintain flight safety, pilots in command are requested to
+                           consistently follow the shape of the traffic circuit.
+                        </li>
+                        <li>The traffic circuit flights, except for the arrival and departure flights, flights
+                           of operators from other aerodromes are prohibited from 1800 until 0600 UTC. Traffic
+                           circuits carried out by the ultralight aircraft are allowed.
+                        </li>
+                     </ul>
+                  </p>
+                  <p>Take off climb surface of RWY 04 and approach surface of RWY 22 is corrupted by factory
+                     chimney. DIST 3 km, AGL 200 m, AAL 175 m.
+                     <ul></ul>
+                  </p>
+               </div>
+               <table id="aerodrome-drahy">
+                  <tr>
+                     <th>RWY</th>
+                     <th>Magnetic direction</th>
+                     <th>RWY dimensions</th>
+                     <th>Strength</th>
+                     <th>TORA</th>
+                     <th>TODA</th>
+                     <th>ASDA</th>
+                     <th>LDA</th>
+                  </tr>
+                  <tr>
+                     <td><strong>04L</strong></td>
+                     <td>039°
+                        
+                     </td>
+                     <td>775 x 20</td>
+                     <td>5700 kg / 0.7 MPa</td>
+                     <td><strong>775</strong></td>
+                     <td><strong>835</strong></td>
+                     <td><strong>775</strong></td>
+                     <td><strong>775</strong></td>
+                  </tr>
+                  <tr>
+                     <td><strong>22R</strong></td>
+                     <td>219°
+                        
+                     </td>
+                     <td>775 x 20</td>
+                     <td>5700 kg / 0.7 MPa</td>
+                     <td><strong>775</strong></td>
+                     <td><strong>835</strong></td>
+                     <td><strong>775</strong></td>
+                     <td><strong>775</strong></td>
+                  </tr>
+                  <tr>
+                     <td><strong>04R</strong></td>
+                     <td>039°
+                        
+                     </td>
+                     <td>775 x 20</td>
+                     <td>5700 kg / 0.7 MPa</td>
+                     <td><strong>775</strong></td>
+                     <td><strong>835</strong></td>
+                     <td><strong>775</strong></td>
+                     <td><strong>775</strong></td>
+                  </tr>
+                  <tr>
+                     <td><strong>22L</strong></td>
+                     <td>219°
+                        
+                     </td>
+                     <td>775 x 20</td>
+                     <td>5700 kg / 0.7 MPa</td>
+                     <td><strong>775</strong></td>
+                     <td><strong>835</strong></td>
+                     <td><strong>775</strong></td>
+                     <td><strong>775</strong></td>
+                  </tr>
+                  <tr>
+                     <td><strong>16L</strong></td>
+                     <td>158°
+                        
+                     </td>
+                     <td>900 x 20</td>
+                     <td>5700 kg / 0.7 MPa</td>
+                     <td><strong>900</strong></td>
+                     <td><strong>960</strong></td>
+                     <td><strong>900</strong></td>
+                     <td><strong>900</strong></td>
+                  </tr>
+                  <tr>
+                     <td><strong>34R</strong></td>
+                     <td>338°
+                        
+                     </td>
+                     <td>900 x 20</td>
+                     <td>5700 kg / 0.7 MPa</td>
+                     <td><strong>900</strong></td>
+                     <td><strong>960</strong></td>
+                     <td><strong>900</strong></td>
+                     <td><strong>900</strong></td>
+                  </tr>
+                  <tr>
+                     <td><strong>16R</strong></td>
+                     <td>158°
+                        
+                     </td>
+                     <td>900 x 20</td>
+                     <td>5700 kg / 0.7 MPa</td>
+                     <td><strong>900</strong></td>
+                     <td><strong>960</strong></td>
+                     <td><strong>900</strong></td>
+                     <td><strong>900</strong></td>
+                  </tr>
+                  <tr>
+                     <td><strong>34L</strong></td>
+                     <td>338°
+                        
+                     </td>
+                     <td>900 x 20</td>
+                     <td>5700 kg / 0.7 MPa</td>
+                     <td><strong>900</strong></td>
+                     <td><strong>960</strong></td>
+                     <td><strong>900</strong></td>
+                     <td><strong>900</strong></td>
+                  </tr>
+               </table>
+               <div id="aerodrome-kontakty"><img src="ad/icons/kontakty.png" alt="Kontakty" class="aerodrome-icon"><div id="operator">
+                     <p><strong>Aeroklub Mladá Boleslav, z.s.</strong><br>Regnerova 1306, 293 01 Mladá Boleslav,
+                         <img class="icon" src="text/tel.png" alt="telephone">&nbsp;+420&nbsp;606&nbsp;608&nbsp;530,
+                         &nbsp;<a href="mailto:akmb@akmb.cz">akmb@akmb.cz</a></p>
+                  </div>
+                  <p><strong>Providing information to known traffic</strong> - <img class="icon" src="text/tel.png" alt="telephone">&nbsp;+420&nbsp;725&nbsp;900&nbsp;160
+                  </p>
+                  <p><strong>Igor Karul - head of air traffic</strong> - <img class="icon" src="text/tel.png" alt="telephone">&nbsp;+420&nbsp;606&nbsp;608&nbsp;530
+                  </p>
+                  <p><strong>Zdeněk Ježek - chairman of aeroclub</strong> - <img class="icon" src="text/tel.png" alt="telephone">&nbsp;+420&nbsp;607&nbsp;944&nbsp;250,
+                      &nbsp;<a href="mailto:zdenek@jezek-z.cz">zdenek@jezek-z.cz</a>,
+                      EN
+                  </p>
+                  <p><strong>Tomáš Svárovský</strong> - <img class="icon" src="text/tel.png" alt="telephone">&nbsp;+420&nbsp;603&nbsp;527&nbsp;107
+                  </p>
+                  <p><strong>Michal Grusz</strong> - <img class="icon" src="text/tel.png" alt="telephone">&nbsp;+420&nbsp;608&nbsp;073&nbsp;733,
+                      &nbsp;<a href="mailto:michal.grusz@img-management.cz">michal.grusz@img-management.cz</a>,
+                      EN,
+                      GER,
+                      RUS
+                  </p>
+               </div>
+            </div>
+            <div id="chartview">
+               <div id="vfrc-chart" class="chart"><img src="ad/lkmb_voc.jpg" alt="VOC" onError="this.src='ad/error.jpg';"></div>
+               <div id="adc-chart" class="chart"><img src="ad/lkmb_adc.jpg" alt="ADC" onError="this.src='ad/error.jpg';"></div>
+            </div>
+            <div id="controls"><a href="ad/lkmb_voc.jpg" id="control-zoomin" target="_blank" onclick="javascript: return chartzoom(false, 1);"><img src="design/zoomin.png" alt="Zoom in"></a><a href="ad/lkmb_voc.jpg" id="control-zoomout" target="_blank" onclick="javascript: return chartzoom(false, -1);"><img src="design/zoomout.png" alt="Zoom out"></a><div id="aerodrome-mapka"><img src="ad/prehledove_mapky/lkmb.png" alt=""></div>
+            </div>
+         </div>
+         <div class="text ad" id="aerodrome-text">
+            <p><span class="number">1</span>Local traffic regulations and restrictions
+            </p>
+            <p class="level1"><span class="number">1.1</span>Snow clearance is not provided in the winter season.
+            </p>
+            <p class="level1"><span class="number">1.2</span>The traffic circuits:
+               <ul class="level1">
+                  <li>RWY 04, 16 - right hand</li>
+                  <li>RWY 22, 34 - left hand</li>
+               </ul>
+               <p class="level2"><span class="number">1.2.1</span>The traffic circuit altitude is 1750 ft / 540 m AMSL.
+               </p>
+            </p>
+            <p class="level1"><span class="number">1.3</span>Noise abatement procedures
+               <p class="level2"><span class="number">1.3.1</span>After take-off from RWY 04, with regard to the safe conduct of the flight, turn to
+                  the right to reduce the noise load of the built-up area in front of THR RWY 22.
+               </p>
+               <p class="level2"><span class="number">1.3.2</span>After taking-off from RWY 34, with regard to the safe conduct of the flights, turn
+                  to the left to reduce the noise load of the built-up area in front of THR RWY 16.
+               </p>
+               <p class="level2"><span class="number">1.3.3</span>While carrying out a traffic circuit, with regard to the safe execution of the flight,
+                  pilots in command are requested not to fly over the villages of Vinec and Písková
+                  Lhota. The populated area, except in areas of climb and descent, shall be flown around
+                  at 1750 ft / 540 m AMSL.
+               </p>
+               <p class="level2"><span class="number">1.3.4</span>Except when necessary to maintain flight safety, pilots in command are requested to
+                  consistently follow the shape of the traffic circuit.
+               </p>
+               <p class="level2"><span class="number">1.3.5</span>The traffic circuit flights, except for the arrival and departure flights, flights
+                  of operators from other aerodromes are prohibited from 1800 until 0600 UTC. Traffic
+                  circuits carried out by the ultralight aircraft are allowed.
+               </p>
+            </p>
+            <p class="level1"><span class="number">1.4</span>Other regulations and restrictions
+               <p class="level2"><span class="number">1.4.1</span>Take off climb surface of RWY 04 and approach surface of RWY 22 is corrupted by factory
+                  chimney. DIST 3 km, AGL 200 m, AAL 175 m.
+               </p>
+               <p class="level2"><span class="number">1.4.2</span>The arrival without two way radio contact is possible only after previous agreement
+                  with AD operator.
+               </p>
+               <p class="level2"><span class="number">1.4.3</span>The arrivals outside operational hours are allowed only after previous approval of
+                  AD operator.
+               </p>
+               <p class="level2"><span class="number">1.4.4</span>Arrivals of training flights (to obtain a qualification) outside the operational hours
+                  are only allowed by the AD operator approval.
+               </p>
+               <p class="level2"><span class="number">1.4.5</span>While flying through the ATZ with no intention to land at LKMB, avoid the traffic
+                  circuit vertically at 2500 ft / 760 m AGL or 600 m horizontally.
+               </p>
+               <p class="level2"><span class="number">1.4.6</span>Arrivals and departures to/from the AD outside operational hours are considered as
+                  a flight from unoccupied area.
+               </p>
+               <p class="level2"><span class="number">1.4.7</span>In case of training flights, gliders acrobacy, or aviation event at the Metodej Vlach
+                  museum, arrivals/departures to/from the AD can be restricted or prohibited to ensure
+                  operational safety.
+               </p>
+               <p class="level2"><span class="number">1.4.8</span>Pilots in command are obliged to report engine startup prior to commencement of taxiing
+                  to ensure safety in the event of parachute jumping activity.
+               </p>
+               <p class="level2"><span class="number">1.4.9</span>AD charges are paid in cash at the RADIO unit.
+               </p>
+               <p class="level2"><span class="number">1.4.10</span>Parallel operations on all RWY are forbidden.
+               </p>
+            </p>
+            <p><span class="number">2</span>Additional information
+            </p>
+            <p class="level1"><span class="number">2.1</span>Providing information to known traffic in English language is O/R 48 hours in advance.
+            </p>
+            <p class="level1"><span class="number">2.2</span>Arrival/departure of an aircraft with total length greater than or equal to 9 m or
+               with maximum fuselage width greater than 2 m is permitted only by prior agreement
+               with the aerodrome operator (to arrange rescue and firefighting services).
+            </p>
+            <p class="level1"><span class="number">2.3</span>Refueling forbidden at the Twintrans gas station with the engine running.
+            </p>
+            <p><span class="number">3</span>Charges for aerodromes
+            </p>
+            <p class="level1"><span class="number">3.1</span>Landing charges
+            </p>
+            <table class="charges">
+               <tr>
+                  <td>Ultralight aircraft</td>
+                  <td>200,00</td>
+               </tr>
+               <tr>
+                  <td>Aeroplanes and helicopters up to 2500 kg MTOW</td>
+                  <td>200,00</td>
+               </tr>
+               <tr>
+                  <td>Aeroplanes and helicopters over 2500 kg MTOW</td>
+                  <td>300,00</td>
+               </tr>
+            </table>
+            <p class="level1"><span class="number">3.2</span>Parking charges
+            </p>
+            <table class="charges">
+               <tr>
+                  <td>Parking area - per day</td>
+                  <td>150,00</td>
+               </tr>
+               <tr>
+                  <td>Hangar (after an agreement) - per day</td>
+                  <td>350,00</td>
+               </tr>
+            </table>
+            <p class="level1 note">Price reduction for parking longer than one month (contract needed).</p>
+            <p class="level1"><span class="number">3.3</span>Charges for passenger service
+            </p>
+            <p class="level1">NIL</p>
+         </div>
+      </div>
+      <div id="menu">
+         <h2>Contents</h2>
+         <ul>
+            <li class="sup"><a href="">VFR-SUP <span>Supplements</span></a><ul>
+                  <li><a href="sup1414_en.html" title="SUP 14/14 (01 MAY 14 - UFN)">
+                        VFR-SUP 14/14 <span>Marianske Lazne (LKMR) - AD closed</span></a></li>
+                  <li><a href="sup1713_en.html" title="SUP 13/17 (31 AUG 17 - UFN)">
+                        VFR-SUP 13/17 <span>Heliport Nová Amerika closed</span></a></li>
+                  <li><a href="sup2013_en.html" title="SUP 13/20 (17 DEC 20 - UFN)">
+                        VFR-SUP 13/20 <span>Hosín (LKHS) - VFR day operation only</span></a></li>
+                  <li><a href="sup2211_en.html" title="SUP 11/22 (07 APR 22 - UFN)">
+                        VFR-SUP 11/22 <span>Unserviceable en route obstacles marking</span></a></li>
+                  <li><a href="sup2218_en.html" title="SUP 18/22 (28 JUL 22 - UFN)">
+                        VFR-SUP 18/22 <span>Brno - Sv. Anna (LKBV) - obstacle in vicinity of heliport</span></a></li>
+                  <li><a href="sup2225_en.html" title="SUP 25/22 (16 NOV 22 - UFN)">
+                        VFR-SUP 25/22 <span>Russian invasion of Ukraine</span></a></li>
+                  <li><a href="sup2226_en.html" title="SUP 26/22 (16 NOV 22 - UFN)">
+                        VFR-SUP 26/22 <span>Russian invasion of Ukraine</span></a></li>
+                  <li><a href="sup2308_en.html" title="SUP 8/23 (20 APR 23 - UFN)">
+                        VFR-SUP 8/23 <span>Zlin (LKZL) - RWY 17R/35L (grass) closed</span></a></li>
+                  <li><a href="sup2317_en.html" title="SUP 17/23 (28 DEC 23 - UFN)">
+                        VFR-SUP 17/23 <span>Olomouce (LKOL) - Wildlife in the vicinity of the airport</span></a></li>
+                  <li><a href="sup2411_en.html" title="SUP 11/24 (08 AUG 24 - UFN)">
+                        VFR-SUP 11/24 <span>Liberec Nemocnice (LKLC) - obstacles in vicinity of heliport</span></a></li>
+                  <li><a href="sup2412_en.html" title="SUP 12/24 (08 AUG 24 - UFN)">
+                        VFR-SUP 12/24 <span>Brno Bohunice MAIN (LKBG) - obstacles in vicinity of heliport</span></a></li>
+                  <li><a href="sup2415_en.html" title="SUP 15/24 (31 OCT 24 - UFN)">
+                        VFR-SUP 15/24 <span>Heliport HEMS Praha 5 - Motol (LKPH) - obstacles in vicinity of heliport</span></a></li>
+                  <li><a href="sup2502_en.html" title="SUP 2/25 (20 FEB 25 - UFN)">
+                        VFR-SUP 2/25 <span>Brno Bohunice MAIN (LKBG) - obstacles in vicinity of heliport</span></a></li>
+                  <li><a href="sup2504_en.html" title="SUP 4/25 (20 FEB 25 - UFN)">
+                        VFR-SUP 4/25 <span>Heliport HEMS Hradec Králové Nemocnice (LKHR) - obstacles in vicinity of heliport</span></a></li>
+                  <li><a href="sup2506_en.html" title="SUP 6/25 (20 FEB 25 - UFN)">
+                        VFR-SUP 6/25 <span>Heliport HEMS Mělník (LKME) - temporary closure</span></a></li>
+                  <li><a href="sup2507_en.html" title="SUP 7/25 (20 FEB 25 - UFN)">
+                        VFR-SUP 7/25 <span>Heliport HEMS Mladá Boleslav - Nemocnice (LKML) - temporary closure</span></a></li>
+                  <li><a href="sup2512_en.html" title="SUP 12/25 (15 MAY 25 - UFN)">
+                        VFR-SUP 12/25 <span>HEMS heliport Brno - Černá pole (LKBP) - obstacles in vicinity of heliport</span></a></li>
+                  <li><a href="sup2514_en.html" title="SUP 14/25 (12 JUN 25 - UFN)">
+                        VFR-SUP 14/25 <span>PRAHA/Ruzyne (LKPR) - obstacles in vicinity of AD</span></a></li>
+                  <li><a href="sup2526_en.html" title="SUP 26/25 (30 OCT 25 - 31 AUG 26 18:00 UTC)">
+                        VFR-SUP 26/25 <span>Praha 5 - Motol (LKPH) - obstacles in vicinity of heliport</span></a></li>
+                  <li><a href="sup2527_en.html" title="SUP 27/25 (27 NOV 25 - 31 AUG 26 18:00 UTC)">
+                        VFR-SUP 27/25 <span>Praha 5 - Motol (LKPH) - obstacles in vicinity of heliport</span></a></li>
+                  <li><a href="sup2528_en.html" title="SUP 28/25 (25 DEC 25 - UFN)">
+                        VFR-SUP 28/25 <span>PRAHA/Ruzyne (LKPR) - obstacles in vicinity of AD</span></a></li>
+                  <li><a href="sup2601_en.html" title="SUP 1/26 (30 MAR 26 06:00 UTC - 14 AUG 26 13:00 UTC)">
+                        VFR-SUP 1/26 <span>PRAHA/Ruzyně (LKPR) - RWY 06/24 closure</span></a></li>
+                  <li><a href="sup2603_en.html" title="SUP 3/26 (19 FEB 26 - 20 AUG 26 18:00 UTC)">
+                        VFR-SUP 3/26 <span>Letňany (LKLT) - obstacle in vicinity of AD</span></a></li>
+                  <li><a href="sup2605_en.html" title="SUP 5/26 (01 APR 26 - 31 OCT 26)">
+                        VFR-SUP 5/26 <span>Temporary reserved area LKTRA7 Klatovy</span></a></li>
+                  <li><a href="sup2606_en.html" title="SUP 6/26 (25 APR 26 23:00 UTC - 30 SEP 26 22:00 UTC)">
+                        VFR-SUP 6/26 <span>Brno Bohunice MAIN (LKBG) - temporary closure of the heliport</span></a></li>
+                  <li><a href="sup2607_en.html" title="SUP 7/26 (16 APR 26 - UFN)">
+                        VFR-SUP 7/26 <span>Pardubice (LKPD) - obstacles in vicinity of AD</span></a></li>
+                  <li><a href="sup2608_en.html" title="SUP 8/26 (16 APR 26 - 28 FEB 27 18:00 UTC)">
+                        VFR-SUP 8/26 <span>Letňany (LKLT) - obstacles in vicinity of AD</span></a></li>
+                  <li><a href="sup2609_en.html" title="SUP 9/26 (14 MAY 26 - 30 SEP 26 EST)">
+                        VFR-SUP 9/26 <span>Restricted area LKR11 Chotusice</span></a></li>
+                  <li><a href="sup2611_en.html" title="SUP 11/26 (11 JUN 26 - UFN)">
+                        VFR-SUP 11/26 <span>Heliport Brno - Bohunice RESERVE (LKBN) - obstacles in vicinity of heliport</span></a></li>
+                  <li><a href="sup2612_en.html" title="SUP 12/26 (10 AUG 26 12:00 UTC - 14 AUG 26 10:00 UTC)">
+                        VFR-SUP 12/26 <span>Letňany (LKLT) - temporary LKLT ATZ</span></a></li>
+                  <li><a href="sup2613_en.html" title="SUP 13/26 (06 SEP 26 - 18 SEP 26)">
+                        VFR-SUP 13/26 <span>Temporary reserved areas and temporary segregated areas for international military
+                           air exercise AMPLE STRIKE 2026</span></a></li>
+               </ul>
+            </li>
+            <li><a href="gen_1_en.html">VFR-GEN <span>General</span></a><ul>
+                  <li><a href="gen_1_en.html">VFR-GEN-1 <span>Introduction</span></a></li>
+                  <li><a href="gen_2_en.html">VFR-GEN-2 <span>Ten tips</span></a></li>
+                  <li><a href="gen_3_en.html">VFR-GEN-3 <span>Abbreviations</span></a></li>
+                  <li><a href="gen_4_en.html">VFR-GEN-4 <span>Symbols</span></a></li>
+                  <li><a href="gen_5_en.html">VFR-GEN-5 <span>Designated authorities</span></a></li>
+                  <li><a href="gen_6_en.html">VFR-GEN-6 <span>Air Traffic Services</span></a></li>
+                  <li><a href="gen_7_en.html">VFR-GEN-7 <span>Meteorological services</span></a></li>
+                  <li><a href="gen_8_en.html">VFR-GEN-8 <span>Aeronautical information</span></a></li>
+                  <li><a href="gen_9_en.html">VFR-GEN-9 <span>Search and rescue</span></a></li>
+               </ul>
+            </li>
+            <li><a href="enr_1_en.html">VFR-ENR <span>En route</span></a><ul>
+                  <li><a href="enr_1_en.html">VFR-ENR-1 <span>Airspace</span></a></li>
+                  <li><a href="enr_2_en.html">VFR-ENR-2 <span>Visual flight rules</span></a></li>
+                  <li><a href="enr_3_en.html">VFR-ENR-3 <span>Altimeter setting</span></a></li>
+                  <li><a href="enr_4_en.html">VFR-ENR-4 <span>SSR transponder</span></a></li>
+                  <li><a href="enr_5_en.html">VFR-ENR-5 <span>Flight planning</span></a></li>
+                  <li><a href="enr_6_en.html">VFR-ENR-6 <span>Phraseology</span></a></li>
+                  <li><a href="enr_7_en.html">VFR-ENR-7 <span>Operational frequencies</span></a></li>
+               </ul>
+            </li>
+            <li><a href="lkbe_text_en.html">VFR-AD <span>Aerodromes</span></a><ul>
+                  <li><a href="ad_1_en.html">VFR-AD-1 <span>Aerodromes and SLZ fields - general</span></a></li>
+                  <li><a href="lkbe_text_en.html">LKBE <span>Benešov</span></a></li>
+                  <li><a href="lkbo_text_en.html">LKBO <span>Bohuňovice</span></a></li>
+                  <li><a href="lktb_text_en.html">LKTB <span>BRNO/Tuřany</span></a></li>
+                  <li><a href="lkbr_text_en.html">LKBR <span>Broumov</span></a></li>
+                  <li><a href="lkba_text_en.html">LKBA <span>Břeclav</span></a></li>
+                  <li><a href="lkbu_text_en.html">LKBU <span>Bubovice</span></a></li>
+                  <li><a href="lkce_text_en.html">LKCE <span>Česká Lípa</span></a></li>
+                  <li><a href="lkcs_text_en.html">LKCS <span>České Budějovice</span></a></li>
+                  <li><a href="lkdk_text_en.html">LKDK <span>Dvůr Králové</span></a></li>
+                  <li><a href="lker_text_en.html">LKER <span>Erpužice</span></a></li>
+                  <li><a href="lkfr_text_en.html">LKFR <span>Frýdlant</span></a></li>
+                  <li><a href="lkhb_text_en.html">LKHB <span>Havlíčkův Brod</span></a></li>
+                  <li><a href="lkhd_text_en.html">LKHD <span>Hodkovice</span></a></li>
+                  <li><a href="lkhc_text_en.html">LKHC <span>Hořice</span></a></li>
+                  <li><a href="lkhv_text_en.html">LKHV <span>Hořovice</span></a></li>
+                  <li><a href="lkhs_text_en.html">LKHS <span>Hosín</span></a></li>
+                  <li><a href="lkhk_text_en.html">LKHK <span>Hradec Králové</span></a></li>
+                  <li><a href="lkhn_text_en.html">LKHN <span>Hranice</span></a></li>
+                  <li><a href="lkcb_text_en.html">LKCB <span>Cheb</span></a></li>
+                  <li><a href="lkch_text_en.html">LKCH <span>Chomutov</span></a></li>
+                  <li><a href="lkct_text_en.html">LKCT <span>Chotěboř</span></a></li>
+                  <li><a href="lkcr_text_en.html">LKCR <span>Chrudim</span></a></li>
+                  <li><a href="lkja_text_en.html">LKJA <span>Jaroměř</span></a></li>
+                  <li><a href="lkjc_text_en.html">LKJC <span>Jičín</span></a></li>
+                  <li><a href="lkji_text_en.html">LKJI <span>Jihlava</span></a></li>
+                  <li><a href="lkjh_text_en.html">LKJH <span>Jindřichův Hradec</span></a></li>
+                  <li><a href="lkkv_text_en.html">LKKV <span>Karlovy Vary</span></a></li>
+                  <li><a href="lkkl_text_en.html">LKKL <span>Kladno</span></a></li>
+                  <li><a href="lkkt_text_en.html">LKKT <span>Klatovy</span></a></li>
+                  <li><a href="lkko_text_en.html">LKKO <span>Kolín</span></a></li>
+                  <li><a href="lkkr_text_en.html">LKKR <span>Krnov</span></a></li>
+                  <li><a href="lkkm_text_en.html">LKKM <span>Kroměříž</span></a></li>
+                  <li><a href="lkka_text_en.html">LKKA <span>Křižanov</span></a></li>
+                  <li><a href="lkku_text_en.html">LKKU <span>Kunovice</span></a></li>
+                  <li><a href="lkky_text_en.html">LKKY <span>Kyjov</span></a></li>
+                  <li><a href="lkpl_text_en.html">LKPL <span>Letkov</span></a></li>
+                  <li><a href="lklt_text_en.html">LKLT <span>Letňany</span></a></li>
+                  <li><a href="lklb_text_en.html">LKLB <span>Liberec</span></a></li>
+                  <li><a href="lklu_text_en.html">LKLU <span>Luhačovice</span></a></li>
+                  <li><a href="lkmr_text_en.html">LKMR <span>Mariánské Lázně</span></a></li>
+                  <li><a href="lkcm_text_en.html">LKCM <span>Medlánky</span></a></li>
+                  <li><a href="lkmi_text_en.html">LKMI <span>Mikulovice</span></a></li>
+                  <li class="menu_active"><a href="lkmb_text_en.html">LKMB <span>Mladá Boleslav</span></a></li>
+                  <li><a href="lkmh_text_en.html">LKMH <span>Mnichovo Hradiště</span></a></li>
+                  <li><a href="lkmk_text_en.html">LKMK <span>Moravská Třebová</span></a></li>
+                  <li><a href="lkmo_text_en.html">LKMO <span>Most</span></a></li>
+                  <li><a href="lknm_text_en.html">LKNM <span>Nové Město</span></a></li>
+                  <li><a href="lkol_text_en.html">LKOL <span>Olomouc</span></a></li>
+                  <li><a href="lkmt_text_en.html">LKMT <span>OSTRAVA/Mošnov</span></a></li>
+                  <li><a href="lkpc_text_en.html">LKPC <span>Panenský Týnec</span></a></li>
+                  <li><a href="lkpd_text_en.html">LKPD <span>Pardubice</span></a></li>
+                  <li><a href="lkps_text_en.html">LKPS <span>Plasy</span></a></li>
+                  <li><a href="lkln_text_en.html">LKLN <span>Plzeň/Líně</span></a></li>
+                  <li><a href="lkpn_text_en.html">LKPN <span>Podhořany</span></a></li>
+                  <li><a href="lkpa_text_en.html">LKPA <span>Polička</span></a></li>
+                  <li><a href="lkpr_text_en.html">LKPR <span>PRAHA/Ruzyně</span></a></li>
+                  <li><a href="lkvo_text_en.html">LKVO <span>PRAHA/Vodochody</span></a></li>
+                  <li><a href="lkpj_text_en.html">LKPJ <span>Prostějov</span></a></li>
+                  <li><a href="lkpo_text_en.html">LKPO <span>Přerov</span></a></li>
+                  <li><a href="lkpm_text_en.html">LKPM <span>Příbram</span></a></li>
+                  <li><a href="lkpi_text_en.html">LKPI <span>Přibyslav</span></a></li>
+                  <li><a href="lkrk_text_en.html">LKRK <span>Rakovník</span></a></li>
+                  <li><a href="lkra_text_en.html">LKRA <span>Raná</span></a></li>
+                  <li><a href="lkry_text_en.html">LKRY <span>Rokycany</span></a></li>
+                  <li><a href="lkro_text_en.html">LKRO <span>Roudnice</span></a></li>
+                  <li><a href="lksz_text_en.html">LKSZ <span>Sazená</span></a></li>
+                  <li><a href="lksk_text_en.html">LKSK <span>Skuteč</span></a></li>
+                  <li><a href="lksn_text_en.html">LKSN <span>Slaný</span></a></li>
+                  <li><a href="lkso_text_en.html">LKSO <span>Soběslav</span></a></li>
+                  <li><a href="lksa_text_en.html">LKSA <span>Staňkov</span></a></li>
+                  <li><a href="lksb_text_en.html">LKSB <span>Stichovice</span></a></li>
+                  <li><a href="lkst_text_en.html">LKST <span>Strakonice</span></a></li>
+                  <li><a href="lksr_text_en.html">LKSR <span>Strunkovice</span></a></li>
+                  <li><a href="lksu_text_en.html">LKSU <span>Šumperk</span></a></li>
+                  <li><a href="lkta_text_en.html">LKTA <span>Tábor</span></a></li>
+                  <li><a href="lktd_text_en.html">LKTD <span>Tachov</span></a></li>
+                  <li><a href="lktc_text_en.html">LKTC <span>Točná</span></a></li>
+                  <li><a href="lkto_text_en.html">LKTO <span>Toužim</span></a></li>
+                  <li><a href="lkul_text_en.html">LKUL <span>Ústí nad Labem</span></a></li>
+                  <li><a href="lkuo_text_en.html">LKUO <span>Ústí nad Orlicí</span></a></li>
+                  <li><a href="lkvp_text_en.html">LKVP <span>Velké Poříčí</span></a></li>
+                  <li><a href="lkvl_text_en.html">LKVL <span>Vlašim</span></a></li>
+                  <li><a href="lkvr_text_en.html">LKVR <span>Vrchlabí</span></a></li>
+                  <li><a href="lkvm_text_en.html">LKVM <span>Vysoké Mýto</span></a></li>
+                  <li><a href="lkvy_text_en.html">LKVY <span>Vyškov</span></a></li>
+                  <li><a href="lkza_text_en.html">LKZA <span>Zábřeh</span></a></li>
+                  <li><a href="lkzb_text_en.html">LKZB <span>Zbraslavice</span></a></li>
+                  <li><a href="lkzl_text_en.html">LKZL <span>Zlín</span></a></li>
+                  <li><a href="lkzn_text_en.html">LKZN <span>Znojmo</span></a></li>
+                  <li><a href="lkzm_text_en.html">LKZM <span>Žamberk</span></a></li>
+                  <li><a href="lkzd_text_en.html">LKZD <span>Žatec/Macerka</span></a></li>
+               </ul>
+            </li>
+            <li><a href="lkbore_text_en.html">VFR-SLZ <span>SLZ fields</span></a><ul>
+                  <li><a href="lkbole_text_en.html">LKBOLE <span>Boleradice</span></a></li>
+                  <li><a href="lkbore_text_en.html">LKBORE <span>Borek</span></a></li>
+                  <li><a href="lkbrto_text_en.html">LKBRTO <span>Brťov</span></a></li>
+                  <li><a href="lkbrus_text_en.html">LKBRUS <span>Brusné</span></a></li>
+                  <li><a href="lkbrez_text_en.html">LKBREZ <span>Březí Falcon</span></a></li>
+                  <li><a href="lkbudk_text_en.html">LKBUDK <span>Budkovice</span></a></li>
+                  <li><a href="lkbyno_text_en.html">LKBYNO <span>Bynovec</span></a></li>
+                  <li><a href="lkbyst_text_en.html">LKBYST <span>Bystřice nad Pernštejnem</span></a></li>
+                  <li><a href="lkcast_text_en.html">LKCAST <span>Částkovice</span></a></li>
+                  <li><a href="lkcebi_text_en.html">LKCEBI <span>Čebín</span></a></li>
+                  <li><a href="lkcdub_text_en.html">LKCDUB <span>Český Dub</span></a></li>
+                  <li><a href="lkdetr_text_en.html">LKDETR <span>Dětřichov Oáza</span></a></li>
+                  <li><a href="lkdoud_text_en.html">LKDOUD <span>Doudleby</span></a></li>
+                  <li><a href="lkdruz_text_en.html">LKDRUZ <span>Druzcov u Lípy</span></a></li>
+                  <li><a href="lkdusn_text_en.html">LKDUSN <span>Dušníky</span></a></li>
+                  <li><a href="lkexca_text_en.html">LKEXCA <span>Hatě Excalibur</span></a></li>
+                  <li><a href="lkhath_text_en.html">LKHATH <span>Hať u Hlučína</span></a></li>
+                  <li><a href="lkhlas_text_en.html">LKHLAS <span>Hláska</span></a></li>
+                  <li><a href="lkpoca_text_en.html">LKPOCA <span>Horní Počaply</span></a></li>
+                  <li><a href="lkprim_text_en.html">LKPRIM <span>Horní Přím</span></a></li>
+                  <li><a href="lkhrad_text_en.html">LKHRAD <span>Hradčany</span></a></li>
+                  <li><a href="lkchar_text_en.html">LKCHAR <span>Charvátce</span></a></li>
+                  <li><a href="lkchoc_text_en.html">LKCHOC <span>Choceň</span></a></li>
+                  <li><a href="lkchor_text_en.html">LKCHOR <span>Chornice</span></a></li>
+                  <li><a href="lkchot_text_en.html">LKCHOT <span>Choteč</span></a></li>
+                  <li><a href="lkchov_text_en.html">LKCHOV <span>Chotěšov</span></a></li>
+                  <li><a href="lkchra_text_en.html">LKCHRA <span>Chrášťany</span></a></li>
+                  <li><a href="lkchri_text_en.html">LKCHRI <span>Chřibská</span></a></li>
+                  <li><a href="lkchvo_text_en.html">LKCHVO <span>Chvojenec</span></a></li>
+                  <li><a href="lkkapl_text_en.html">LKKAPL <span>Kaplice</span></a></li>
+                  <li><a href="lkkejz_text_en.html">LKKEJZ <span>Kejžlice</span></a></li>
+                  <li><a href="lkkost_text_en.html">LKKOST <span>Kostomlaty</span></a></li>
+                  <li><a href="lkkotv_text_en.html">LKKOTV <span>Kotvrdovice</span></a></li>
+                  <li><a href="lkkozy_text_en.html">LKKOZY <span>Kozmice</span></a></li>
+                  <li><a href="lkkram_text_en.html">LKKRAM <span>Kramolín</span></a></li>
+                  <li><a href="lkkrpy_text_en.html">LKKRPY <span>Krpy</span></a></li>
+                  <li><a href="lkjiri_text_en.html">LKJIRI <span>Křelovice - Jiřičky</span></a></li>
+                  <li><a href="lkkriz_text_en.html">LKKRIZ <span>Kříženec</span></a></li>
+                  <li><a href="lkkune_text_en.html">LKKUNE <span>Kunětice</span></a></li>
+                  <li><a href="lkleto_text_en.html">LKLETO <span>Letovice</span></a></li>
+                  <li><a href="lkliba_text_en.html">LKLIBA <span>Libáň</span></a></li>
+                  <li><a href="lklomn_text_en.html">LKLOMN <span>Lomnice nad Popelkou</span></a></li>
+                  <li><a href="lklouc_text_en.html">LKLOUC <span>Loučeň</span></a></li>
+                  <li><a href="lklukl_text_en.html">LKLUKL <span>Lukla</span></a></li>
+                  <li><a href="lkmilo_text_en.html">LKMILO <span>Milovice</span></a></li>
+                  <li><a href="lkmiro_text_en.html">LKMIRO <span>Miroslav</span></a></li>
+                  <li><a href="lkmira_text_en.html">LKMIRA <span>Miroslav AirCon</span></a></li>
+                  <li><a href="lkmist_text_en.html">LKMIST <span>Místek</span></a></li>
+                  <li><a href="lkmlad_text_en.html">LKMLAD <span>Mladá</span></a></li>
+                  <li><a href="lknabo_text_en.html">LKNABO <span>Nabočany</span></a></li>
+                  <li><a href="lknach_text_en.html">LKNACH <span>Náchod</span></a></li>
+                  <li><a href="lknapa_text_en.html">LKNAPA <span>Napajedla</span></a></li>
+                  <li><a href="lknepl_text_en.html">LKNEPL <span>Neplachov</span></a></li>
+                  <li><a href="lknvce_text_en.html">LKNVCE <span>Nová Včelnice</span></a></li>
+                  <li><a href="lknuci_text_en.html">LKNUCI <span>Nučice</span></a></li>
+                  <li><a href="lknymb_text_en.html">LKNYMB <span>Nymburk</span></a></li>
+                  <li><a href="lkopav_text_en.html">LKOPAV <span>Opava</span></a></li>
+                  <li><a href="lkosic_text_en.html">LKOSIC <span>Osičiny</span></a></li>
+                  <li><a href="lkostr_text_en.html">LKOSTR <span>Ostrov</span></a></li>
+                  <li><a href="lkpano_text_en.html">LKPANO <span>Panoší Újezd</span></a></li>
+                  <li><a href="lkpisk_text_en.html">LKPISK <span>Písek - Krašovice</span></a></li>
+                  <li><a href="lkpole_text_en.html">LKPOLE <span>Polepy</span></a></li>
+                  <li><a href="lkrams_text_en.html">LKRAMS <span>Ramš</span></a></li>
+                  <li><a href="lkslus_text_en.html">LKSLUS <span>Slušovice</span></a></li>
+                  <li><a href="lkspak_text_en.html">LKSPAK <span>Stará Paka</span></a></li>
+                  <li><a href="lkstrz_text_en.html">LKSTRZ <span>Strážnice</span></a></li>
+                  <li><a href="lkstet_text_en.html">LKSTET <span>Štětí</span></a></li>
+                  <li><a href="lktepl_text_en.html">LKTEPL <span>Teplice</span></a></li>
+                  <li><a href="lktere_text_en.html">LKTERE <span>Terezín</span></a></li>
+                  <li><a href="lktrut_text_en.html">LKTRUT <span>Trutnov</span></a></li>
+                  <li><a href="lktrbh_text_en.html">LKTRBH <span>Třebihošť</span></a></li>
+                  <li><a href="lkpavl_text_en.html">LKPAVL <span>Velké Pavlovice</span></a></li>
+                  <li><a href="lkvrat_text_en.html">LKVRAT <span>Vrátkov</span></a></li>
+                  <li><a href="lkstip_text_en.html">LKSTIP <span>Zlín - Štípa</span></a></li>
+               </ul>
+            </li>
+            <li><a href="hel_1_en.html">VFR-HEL <span>Heliports</span></a><ul>
+                  <li><a href="hel_1_en.html">VFR-HEL-1 <span>Heliports</span></a></li>
+                  <li><a href="lkbh_text_en.html">LKBH <span>Benešov</span></a></li>
+                  <li><a href="lkbl_text_en.html">LKBL <span>Blansko</span></a></li>
+                  <li><a href="lkbs_text_en.html">LKBS <span>Boskovice</span></a></li>
+                  <li><a href="lkbg_text_en.html">LKBG <span>Brno - Bohunice MAIN</span></a></li>
+                  <li><a href="lkbn_text_en.html">LKBN <span>Brno - Bohunice RESERVE</span></a></li>
+                  <li><a href="lkbp_text_en.html">LKBP <span>Brno - Černá Pole</span></a></li>
+                  <li><a href="lkbv_text_en.html">LKBV <span>Brno - Sv. Anna</span></a></li>
+                  <li><a href="lkbd_text_en.html">LKBD <span>Brodek u Přerova</span></a></li>
+                  <li><a href="lkbi_text_en.html">LKBI <span>Břeclav - Nemocnice</span></a></li>
+                  <li><a href="lkcc_text_en.html">LKCC <span>České Budějovice - Nemocnice</span></a></li>
+                  <li><a href="lkca_text_en.html">LKCA <span>České Budějovice - Základna HEMS</span></a></li>
+                  <li><a href="lkdc_text_en.html">LKDC <span>Děčín</span></a></li>
+                  <li><a href="lkdo_text_en.html">LKDO <span>Domažlice</span></a></li>
+                  <li><a href="lkfm_text_en.html">LKFM <span>Frýdek-Místek</span></a></li>
+                  <li><a href="lkha_text_en.html">LKHA <span>Havířov</span></a></li>
+                  <li><a href="lkhl_text_en.html">LKHL <span>Havlíčkův Brod - Nemocnice</span></a></li>
+                  <li><a href="lkhr_text_en.html">LKHR <span>Hradec Králové - Nemocnice</span></a></li>
+                  <li><a href="lkhh_text_en.html">LKHH <span>Hradec Králové - Základna HEMS</span></a></li>
+                  <li><a href="lkcp_text_en.html">LKCP <span>Chodová Planá</span></a></li>
+                  <li><a href="lkcu_text_en.html">LKCU <span>Chomutov - Nemocnice</span></a></li>
+                  <li><a href="lkco_text_en.html">LKCO <span>Chotouň</span></a></li>
+                  <li><a href="lkcd_text_en.html">LKCD <span>Chrudim - Nemocnice</span></a></li>
+                  <li><a href="lkje_text_en.html">LKJE <span>Jeseník</span></a></li>
+                  <li><a href="lkjl_text_en.html">LKJL <span>Jihlava - Základna HEMS</span></a></li>
+                  <li><a href="lkjr_text_en.html">LKJR <span>Jindřichův Hradec - Nemocnice</span></a></li>
+                  <li><a href="lkke_text_en.html">LKKE <span>Karlov</span></a></li>
+                  <li><a href="lkkn_text_en.html">LKKN <span>Karlovy Vary - Nemocnice</span></a></li>
+                  <li><a href="lkki_text_en.html">LKKI <span>Krnov - Nemocnice</span></a></li>
+                  <li><a href="lkkz_text_en.html">LKKZ <span>Kroměříž - Nemocnice</span></a></li>
+                  <li><a href="lkkj_text_en.html">LKKJ <span>Kyjov - Nemocnice</span></a></li>
+                  <li><a href="lkla_text_en.html">LKLA <span>Liberec - ACL</span></a></li>
+                  <li><a href="lklc_text_en.html">LKLC <span>Liberec - Nemocnice</span></a></li>
+                  <li><a href="lklh_text_en.html">LKLH <span>Liberec - Základna HEMS</span></a></li>
+                  <li><a href="lklo_text_en.html">LKLO <span>Litoměřice</span></a></li>
+                  <li><a href="lkme_text_en.html">LKME <span>Mělník</span></a></li>
+                  <li><a href="lkml_text_en.html">LKML <span>Mladá Boleslav - Nemocnice</span></a></li>
+                  <li><a href="lkms_text_en.html">LKMS <span>Most - Nemocnice</span></a></li>
+                  <li><a href="lknc_text_en.html">LKNC <span>Náchod</span></a></li>
+                  <li><a href="lkne_text_en.html">LKNE <span>Nedanice</span></a></li>
+                  <li><a href="lknr_text_en.html">LKNR <span>Neratovice</span></a></li>
+                  <li><a href="lknk_text_en.html">LKNK <span>Nová Amerika</span></a></li>
+                  <li><a href="lkno_text_en.html">LKNO <span>Nové Město na Moravě</span></a></li>
+                  <li><a href="lkoc_text_en.html">LKOC <span>Olomouc - Nemocnice</span></a></li>
+                  <li><a href="lkot_text_en.html">LKOT <span>Olomouc - Základna HEMS</span></a></li>
+                  <li><a href="lkov_text_en.html">LKOV <span>Opava</span></a></li>
+                  <li><a href="lkop_text_en.html">LKOP <span>Ostrava - Nemocnice</span></a></li>
+                  <li><a href="lkoz_text_en.html">LKOZ <span>Ostrava - Základna HEMS</span></a></li>
+                  <li><a href="lkpu_text_en.html">LKPU <span>Pardubice - Nemocnice</span></a></li>
+                  <li><a href="lkpe_text_en.html">LKPE <span>Pelhřimov</span></a></li>
+                  <li><a href="lkpf_text_en.html">LKPF <span>Písek</span></a></li>
+                  <li><a href="lkpz_text_en.html">LKPZ <span>Plzeň - MAIN</span></a></li>
+                  <li><a href="lkpy_text_en.html">LKPY <span>Praha 10 - Vinohrady</span></a></li>
+                  <li><a href="lklk_text_en.html">LKLK <span>Praha 19 - Kbely</span></a></li>
+                  <li><a href="lkpk_text_en.html">LKPK <span>Praha 4 - Krč</span></a></li>
+                  <li><a href="lkph_text_en.html">LKPH <span>Praha 5 - Motol</span></a></li>
+                  <li><a href="lkpt_text_en.html">LKPT <span>Praha 6 - Střešovice (MIL)</span></a></li>
+                  <li><a href="lkpb_text_en.html">LKPB <span>Praha 8 - Bulovka</span></a></li>
+                  <li><a href="lkpg_text_en.html">LKPG <span>Prachatice</span></a></li>
+                  <li><a href="lkpp_text_en.html">LKPP <span>Přední Kopanina</span></a></li>
+                  <li><a href="lkrv_text_en.html">LKRV <span>Rakovník - Nemocnice</span></a></li>
+                  <li><a href="lkrz_text_en.html">LKRZ <span>Rozvadov</span></a></li>
+                  <li><a href="lksl_text_en.html">LKSL <span>Solnice - ACL</span></a></li>
+                  <li><a href="lksv_text_en.html">LKSV <span>Svitavy</span></a></li>
+                  <li><a href="lksp_text_en.html">LKSP <span>Šumperk - Nemocnice</span></a></li>
+                  <li><a href="lktr_text_en.html">LKTR <span>Tábor - Nemocnice</span></a></li>
+                  <li><a href="lkth_text_en.html">LKTH <span>Těchonín</span></a></li>
+                  <li><a href="lktu_text_en.html">LKTU <span>Trutnov</span></a></li>
+                  <li><a href="lkuh_text_en.html">LKUH <span>Uherské Hradiště - Mařatice</span></a></li>
+                  <li><a href="lkun_text_en.html">LKUN <span>Uherské Hradiště - Nemocnice</span></a></li>
+                  <li><a href="lkus_text_en.html">LKUS <span>Ústí nad Labem - Nemocnice</span></a></li>
+                  <li><a href="lkub_text_en.html">LKUB <span>Ústí nad Labem - Základna HEMS</span></a></li>
+                  <li><a href="lkvn_text_en.html">LKVN <span>Vyškov - Nemocnice</span></a></li>
+                  <li><a href="lkzi_text_en.html">LKZI <span>Zlín - Nemocnice</span></a></li>
+                  <li><a href="lkzo_text_en.html">LKZO <span>Znojmo - Nemocnice</span></a></li>
+               </ul>
+            </li>
+         </ul>
+      </div>
+   </body>
+</html>
