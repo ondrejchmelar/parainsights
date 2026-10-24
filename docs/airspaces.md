@@ -239,8 +239,7 @@ so its filename is read from the directory listing instead of computed.
   `voc_verdicts.txt`: of 196 runways, 90 fits stand, 22 were read by hand, 33 have no
   circuit of their own (parallel and duplicate runways), and 51 have no rectangle to
   measure — not drawn, a trapezoid or a teardrop, crossing circuits too tangled to
-  split, or a chart that disagrees with the runway data by more than its own error
-  (LKPC, LKMI: left alone rather than guessed). Three charts draw their strip away
+  split. Three charts draw their strip away
   from where it is: LKSZ 1.4 km west, LKBR 0.85 km north, LKKL 0.76 km north. Every
   chart was laid over our runway, and the suspects over satellite imagery; at those
   three the reference point, OurAirports and the imagery agree and only the chart
@@ -249,8 +248,11 @@ so its filename is read from the directory listing instead of computed.
   **Then everything that is not a rectangle was traced by hand** (`voc_shapes.txt`):
   LKKRAM's slanted leg, LKMB's and LKLB's teardrops, LKCH's and LKPN's crossing boxes,
   the hooks one-way strips publish (LKCHOR, LKHATH, LKKEJZ). What keeps a standard box
-  is a chart with no readable scale, or one that puts it kilometres from
-  the runway (LKMI, LKPC). A chart that draws no circuit at all (only TKOF/LDG
+  is a chart with no circuit to measure. LKMI's and LKPC's charts seemed to put the
+  circuit kilometres from the runway; they are drawn off-centre (LKPC's field 1.7 km
+  W and S of the image centre, LKMI's 4.2 km N — read off the ATZ ring and the
+  villages), and traced about the field's own symbol the circuits sit on the runway.
+  A chart that draws no circuit at all (only TKOF/LDG
   labels: LKBYNO, LKCDUB, LKLIBA, LKLOUC, LKNUCI, LKNVCE, LKPOCA, LKPOLE, LKPRIM, LKTRBH)
   gets no band — the pilot's call.
   Those 51 get a standard box, the measured median.

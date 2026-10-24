@@ -46,11 +46,6 @@ empty.
   should scroll the page like anywhere else; a tap reads a point, and a press held then
   dragged scrubs (`bindReader` in `meteo/js/meteo.js` is the pattern). Today a drag over
   the side view moves the cursor and the page does not scroll.
-- **Okruh: LKPC and LKMI, chart circuit far from the runway.** Both keep the standard
-  box on the surveyed runway, which matches the strip on imagery. LKPC's VOC chart draws
-  a small strip and hook ~1.7 km SW (near Lenešice), LKMI's a circuit ~3 km away. Find
-  where the circuit is flown, then trace it — or add both to `docs/atz-datum-hlaseni.md`
-  as charts to query.
 - **Okruh: LKPO's trace needs improving** (two loops, traced by hand off the thinned
   chart; `voc_shapes.txt`).
 - **Okruh: LKSTRZ is a bit offset and should be more symmetrical** — four crossing
@@ -163,8 +158,9 @@ charts are north-up and centred on the field but come at **three scales** (16.85
 automatically and every fit looked at; anything else — slanted legs, teardrops,
 crossing boxes, one-way hooks — is traced by hand, point by point. The standard box
 (the measured median, 1.3 km abeam at an SLZ strip, 1.5 km at an aerodrome) is left
-only where the chart disagrees with the runway by kilometres (LKMI, LKPC — checked on
-imagery, the box is fine there). The ten charts without village marks were scaled from
+only where the chart has no circuit to measure. LKHC's, LKMI's and LKPC's charts are
+not centred on the field (read off the ATZ ring and the villages); their circuits are
+traced about the field's own symbol. The ten charts without village marks were scaled from
 their own zone ring or neighbouring airfields' symbols, and traced (October 2026). Three charts draw their strip
 away from the real one — LKSZ 1.4 km W, LKBR 0.85 km N, LKKL 0.76 km N, found by laying
 every chart over imagery with our runway on it — so their circuits are moved onto the

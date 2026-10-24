@@ -76,6 +76,13 @@ shift lkkl -90,-760
 # outline is read from the field's symbol and then laid onto the runway with `shift`.
 lkhc 12/30 closed en -2050,1000 1000,-950 450,-2100 -2350,-1000 -2600,-450
 shift lkhc 300,300
+# Two more charts not centred on their field (October 2026), found from the ATZ ring and
+# the villages: LKPC's field lies 1.66 km W / 1.75 km S of the image centre, LKMI's
+# 4.2 km N. Traced about the field itself, so neither needs a `shift`. LKPC's chart
+# draws its 2.5 km runway half as long; the circuit is traced as drawn.
+lkpc 09/27 closed en -1600,-50 -1800,30 -1850,250 -1850,800 -1760,980 -1500,1080 0,1250 1400,1380 1780,1340 1910,1170 1925,350 1860,180 1680,110 0,30
+lkmi 05/23 closed rw:0 -2230,0 1660,0 1660,1610 -2230,1610
+lkmi 05/23 closed rw:0 -1745,0 2050,0 2050,-1410 -1745,-1410
 lkhn 05/23 closed en -1800,900 0,2050 500,2000 1400,1000 -1100,-950 -1500,-900 -2050,-200 -2050,300
 lkhv 06/24 closed en -3800,300 -3500,1100 -2000,1900 0,2950 800,3200 1050,3150 1950,1350 1950,950 -1100,-450 -2650,-1400 -3000,-1300 -3900,-200
 lktc 09/27 closed en -1600,0 3200,0 3200,-2950 -1750,-2800

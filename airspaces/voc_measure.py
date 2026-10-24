@@ -42,9 +42,8 @@ traced runway overrides its rectangle fit. A chart that draws no circuit at all 
 band (LKBYNO, LKCDUB, LKLIBA, LKLOUC, LKNUCI, LKNVCE, LKPOCA, LKPOLE, LKPRIM, LKTRBH:
 `none`, October 2026, the pilot's call). The ten charts with no village marks (LKBRUS, LKHC, LKHN, LKHV, LKKOST, LKPISK, LKPO,
 LKSTRZ, LKTC, LKZAHO) were scaled by hand — from their own zone ring, or from other
-airfields' symbols at known places — and traced. LKHC's is the one chart not centred
-on its field. What is still on the standard box: LKMI and LKPC, whose drawn circuit is
-kilometres from the runway.
+airfields' symbols at known places — and traced. Three charts are not centred on their
+field (LKHC, LKMI, LKPC); their outlines are traced about the field's own symbol.
 """
 
 from __future__ import annotations
