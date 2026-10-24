@@ -11,7 +11,6 @@ lkjc 12/30 closed en -1376,1400 1456,-2016 720,-3496 -2880,-656
 lkvm 14/32 closed en -1384,1264 1296,-1416 376,-2416 -2320,440
 lkbole 09/27 path en -2320,-1280 -1320,80 720,80
 lkhlas 08/26 closed en -2384,-880 -544,-80 1536,256 1920,-560 1776,-1040 -2160,-1584
-lkkejz 17/35 path en 40,-296 -80,1024 -400,1464 -1200,1664 -1640,1464 -1320,-616
 lkpano 09/27 closed en -904,1304 1336,1064 1216,-56 -584,64
 lkchov 09/27 path en -304,1176 -1880,1024 -1944,80 -1720,-120 296,104
 lkhath 01/19 path en -960,1304 160,1264 0,-16
@@ -40,8 +39,6 @@ lknm 18/36 closed en -1560,2024 -64,2024 -64,-1960 -1560,-1960
 lknm 08/26 closed en -2320,560 -1800,880 920,1320 1480,1360 1640,960 1656,480 1440,304 -680,-96 -2000,-304 -2240,-120
 lkra 11/29 closed rw:0 -2000,0 1950,0 1950,-1480 -2000,-1450
 lkra 22/04 closed rw:0 -2000,0 1950,0 1950,-1500 -2000,-1480
-lksu 06/24 closed rw:0 -600,0 1800,40 1980,400 1960,1200 1500,1560 -2000,1500 -2000,1000 -1500,550
-lksu 18/36 closed rw:0 -2000,0 1950,0 1950,-1500 -2000,-1500
 # LKSZ: the chart draws its strip ~1.4 km west of where it is (OurAirports's surveyed
 # thresholds, confirmed on imagery by the pilot); traced, then moved 1410 m E, 30 m S so
 # the chart's runway box sits on the real strip.
@@ -71,8 +68,6 @@ shift lkkl -90,-760
 # their own zone ring, or from neighbouring airfields' symbols at known places. All are
 # centred on the field except LKHC, drawn 3.5 km E / 1.9 km S of the image centre, whose
 # outline is read from the field's symbol and then laid onto the runway with `shift`.
-lkhc 12/30 closed en -2050,1000 1000,-950 450,-2100 -2350,-1000 -2600,-450
-shift lkhc 300,300
 # Two more charts not centred on their field (October 2026), found from the ATZ ring and
 # the villages: LKPC's field lies 1.66 km W / 1.75 km S of the image centre, LKMI's
 # 4.2 km N. Traced about the field itself, so neither needs a `shift`. LKPC's chart
@@ -125,3 +120,24 @@ lkchor 09/27 path en -400,75 1550,-240 1720,-80 1800,100 1900,350 1925,725
 lkchor 09/27 path en 1550,-240 1660,-400 1670,-950 1550,-1150 1350,-1240 -350,-900
 # LKRK: the chart draws one circuit, for 09L/27R.
 lkrk 09R/27L none
+# Third pass off the control sheets (October 2026).
+lkbu 10L/28R closed en -2280,420 1700,-450 2150,-750 2280,-1500 2050,-1950 -2250,-920 -2450,-600 -2400,200
+# LKBU: the dashed gliders' circuit north of the runway.
+lkbu 10L/28R closed en -1500,400 -1450,1600 -1200,1850 950,1450 1400,1300 1750,900 1700,0
+lkdusn 17/35 closed en -100,950 -150,1150 -1400,1050 -1600,800 -1500,-1200 -1300,-1450 -100,-1450 100,-1200
+lkkejz 17/35 path en 0,-300 -50,900 -250,1400 -600,1650 -1350,1700 -1600,1550 -1700,1200 -1600,-550
+lkkejz 17/35 path en -50,900 -600,1000 -1400,1050 -1650,850
+# LKHC: read about the field's own symbol (the chart is drawn 3.2 km E / 2.2 km S of its centre).
+lkhc 12/30 closed en -1650,1320 1250,-750 0,-2250 -2550,-450
+# LKKL: two loops sharing the runway line, both at 2000 ft (moved onto the strip by its shift).
+lkkl 12/30 closed en -1600,1750 920,-200 -760,-1150 -2450,-50 -2400,500
+lkkl 12/30 closed en -1600,1750 -700,3000 2500,550 1900,-150 920,-200
+lkmiro 18/36 closed en -1750,800 -1450,1350 -100,1780 80,1500 -250,-1700 -450,-1800 -1850,-1620 -1950,-1400 -1950,-1000
+lknymb 09/27 closed en -1500,-950 1600,-950 1600,-50 -1500,-50
+# LKNYMB: the second 1400 ft circuit north of the runway.
+lknymb 09/27 closed en -1470,0 -1620,250 -1550,550 900,1200 1100,1150 1150,200 1000,0
+lkvy 01/19 closed en -800,-2450 -100,-1100 350,800 1000,1750 1700,1720 1950,1450 950,-2600 500,-2800 -600,-2750
+lksu 06/24 closed en -2500,-100 -2300,-400 -550,-400 1470,950 1470,1800 1200,2100 300,2100
+lksu 18/36 closed en -1550,1950 -50,1950 -50,-2000 -1550,-2000
+lksu 18/36 closed en -50,1980 1470,1980 1470,-900 -50,-1250
+lkvrat 11/29 closed en -700,250 1800,-620 2120,-1000 1950,-1600 1600,-1950 -1000,-1100 -1450,-900 -1600,-600 -1500,-200 -1200,100

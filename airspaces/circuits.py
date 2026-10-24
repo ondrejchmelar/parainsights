@@ -419,7 +419,8 @@ def circuit_shapes(field: Aerodrome, runway: Runway, plane: geo.Plane):
               for s in traced]
     if "gliders mirrored" in (field.circuit_note or "") and shapes:
         drawn = {_side(p, a, b) for _, p in shapes}
-        shapes += [(c, _mirror(p, a, b)) for c, p in shapes if -_side(p, a, b) not in drawn]
+        # Only the loops: a join-up hook is the powered traffic's way in, not the gliders'.
+        shapes += [(c, _mirror(p, a, b)) for c, p in shapes if c and -_side(p, a, b) not in drawn]
     return shapes
 
 
