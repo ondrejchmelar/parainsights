@@ -5,7 +5,8 @@ Written by `airspaces.voc_measure write` from the chart fits, the hand review in
 how a chart is read. Per aerodrome: `scale`, the chart's metres a pixel, and per runway
 (keyed by `Runway.name`) a list of outlines, each `closed` (a loop) or not (a hook or a
 U a one-way strip publishes), as points in metres east and north of the reference
-point — the chart's centre. **An empty list means the runway has no circuit of its
+point — the chart's centre — each with the radius of its turn as a third value where it
+has its own (`circuits.clean`). **An empty list means the runway has no circuit of its
 own**: a parallel or duplicate runway, whose sibling's circuit is the one flown.
 
 A runway that is not here keeps the standard box (`circuits.BESIDE_M`/`BEYOND_M`): its
@@ -20,26 +21,13 @@ CHARTS = {'LKBA': {'runways': {'08/26': [{'closed': True,
                                             (-2467, -478)]}]},
           'scale': 26.8},
  'LKBE': {'runways': {'06/24': [{'closed': True,
-                                 'points': [(-2080, -860),
-                                            (-1550, -760),
-                                            (-850, -320),
-                                            (2400, 1420),
-                                            (2490, 1700),
-                                            (2350, 2050),
-                                            (1960, 2800),
-                                            (1720, 3130),
-                                            (1450, 3165),
-                                            (-1300, 1720),
-                                            (-2560, 1060),
-                                            (-2935, 720),
-                                            (-2850, 320),
-                                            (-2350, -560)]},
+                                 'points': [(2651, 1452, 350),
+                                            (1677, 3302, 300),
+                                            (-2971, 828, 300),
+                                            (-2852, 378),
+                                            (-2131, -907)]},
                                 {'closed': False,
-                                 'points': [(350, -75),
-                                            (-1900, -170),
-                                            (-2150, 220),
-                                            (-1830, 900),
-                                            (-1350, 1700)]}],
+                                 'points': [(350, -75), (-2419, -290, 380), (-1350, 1700)]}],
                       '09L/27R': [],
                       '09R/27L': []},
           'scale': 21.17},

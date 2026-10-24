@@ -145,7 +145,9 @@ def _cross(a, b, c, d):
 
 def clean(points, closed=True, radius: float = TURN_M):
     """A circuit outline with even turns: jitter dropped, each corner rebuilt where its
-    two long sides meet, and every corner then turned on one arc of `radius`.
+    two long sides meet, and every corner then turned on one arc of `radius` — or of its
+    own, where a vertex carries one as a third value `(x, y, r)`: a chart that draws a
+    wide sweep is matched by one vertex and its radius rather than by a run of points.
 
     A run of short edges between two long sides is a corner traced point by point; it
     becomes the sides' meeting point unless that lies far off (a real short side, such as
@@ -161,7 +163,7 @@ def clean(points, closed=True, radius: float = TURN_M):
         del pts[k]
     n = len(pts)
     edges = n if closed else n - 1
-    short = [math.dist(pts[k], pts[(k + 1) % n]) < CORNER_RUN_M for k in range(edges)]
+    short = [math.dist(pts[k][:2], pts[(k + 1) % n][:2]) < CORNER_RUN_M for k in range(edges)]
     if not closed:
         short[0] = short[-1] = False           # a path's ends are where it starts and stops
     if all(short) or not any(short):
@@ -181,7 +183,7 @@ def clean(points, closed=True, radius: float = TURN_M):
                 a, b = pts[k], pts[(k + 1) % n]
                 c, d = pts[j], pts[(j + 1) % n]
                 meet = _cross(a, b, c, d)
-                near = meet and min(math.dist(meet, pts[v]) for v in run) < CORNER_RUN_M
+                near = meet and min(math.dist(meet, pts[v][:2]) for v in run) < CORNER_RUN_M
                 corners += [meet] if near else [pts[v] for v in run]
             else:
                 corners.append(pts[run[0]])
@@ -198,15 +200,16 @@ def clean(points, closed=True, radius: float = TURN_M):
 
 
 def _fillet(pts, closed, radius):
-    """Each interior corner of `pts` replaced by an arc of `radius`, smaller where the
-    sides are too short to hold it."""
+    """Each interior corner of `pts` replaced by an arc of `radius` (or the corner's own
+    third value), smaller where the sides are too short to hold it."""
     n = len(pts)
     out = []
     for k in range(n):
         if not closed and k in (0, n - 1):
-            out.append(pts[k])
+            out.append(tuple(pts[k][:2]))
             continue
-        p, a, b = pts[k], pts[k - 1], pts[(k + 1) % n]
+        p, a, b = pts[k][:2], pts[k - 1][:2], pts[(k + 1) % n][:2]
+        r = pts[k][2] if len(pts[k]) > 2 else radius
         ua = (a[0] - p[0], a[1] - p[1]); la = math.hypot(*ua)
         ub = (b[0] - p[0], b[1] - p[1]); lb = math.hypot(*ub)
         if not la or not lb:
@@ -218,7 +221,7 @@ def _fillet(pts, closed, radius):
         if turn < math.radians(4):
             out.append(p)
             continue
-        tangent = min(radius / math.tan(inner / 2), 0.45 * la, 0.45 * lb)
+        tangent = min(r / math.tan(inner / 2), 0.45 * la, 0.45 * lb)
         r = tangent * math.tan(inner / 2)
         t0 = (p[0] + ua[0] * tangent, p[1] + ua[1] * tangent)
         t1 = (p[0] + ub[0] * tangent, p[1] + ub[1] * tangent)
@@ -383,18 +386,18 @@ def _mirror(points, a, b):
     dx, dy = bx - ax, by - ay
     k = dx * dx + dy * dy or 1.0
     out = []
-    for x, y in points:
+    for x, y, *radius in points:
         t = ((x - ax) * dx + (y - ay) * dy) / k
         px, py = ax + t * dx, ay + t * dy
-        out.append((2 * px - x, 2 * py - y))
+        out.append((2 * px - x, 2 * py - y, *radius))
     return out
 
 
 def _side(points, a, b):
     """+1 if the outline lies right of a→b, −1 if left."""
     (ax, ay), (bx, by) = a, b
-    cx = sum(x for x, _ in points) / len(points)
-    cy = sum(y for _, y in points) / len(points)
+    cx = sum(p[0] for p in points) / len(points)
+    cy = sum(p[1] for p in points) / len(points)
     return 1 if (bx - ax) * (cy - ay) - (by - ay) * (cx - ax) < 0 else -1
 
 
@@ -415,7 +418,7 @@ def circuit_shapes(field: Aerodrome, runway: Runway, plane: geo.Plane):
         return [(True, [plane.to_xy(*p) for p in standard_box(runway, side, beside, beyond)])
                 for side in published_sides(field, runway)]
     centre = geo.Plane(field.lat, field.lon)
-    shapes = [(s["closed"], [plane.to_xy(*centre.to_ll(e, n)) for e, n in s["points"]])
+    shapes = [(s["closed"], [(*plane.to_xy(*centre.to_ll(e, n)), *r) for e, n, *r in s["points"]])
               for s in traced]
     if "gliders mirrored" in (field.circuit_note or "") and shapes:
         drawn = {_side(p, a, b) for _, p in shapes}
