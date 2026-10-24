@@ -51,6 +51,16 @@ empty.
   a small strip and hook ~1.7 km SW (near Lenešice), LKMI's a circuit ~3 km away. Find
   where the circuit is flown, then trace it — or add both to `docs/atz-datum-hlaseni.md`
   as charts to query.
+- **Okruh: LKPO's trace needs improving** (two loops, traced by hand off the thinned
+  chart; `voc_shapes.txt`).
+- **Okruh: LKSTRZ is a bit offset and should be more symmetrical** — four crossing
+  boxes, all hung off the one runway the build knows; re-trace them as two symmetric
+  pairs about the chart's runway crossing.
+- **Okruh: the cut between a band's two halves shows as a wall in the 3D view.** No gap
+  any more (`circuits.band` cuts each loop in two that meet exactly), but the map draws
+  each half as a box, so the two end faces stand across the band. Draw the map's copy
+  without them — one ring with a hole for the maps (GeoJSON can), the halves only in
+  the OpenAir file — or drop the end walls in `map3d`.
 - **ECMWF sounding as a second model, once Open-Meteo serves its 9 km pressure levels.**
   ECMWF opened its 9 km IFS on 20 Oct 2026 (data.ecmwf.int `ifs/0p1/`: GRIB2, 2 h late,
   3-hourly, 1000/925/850/700/600 hPa under 4 km, no boundary layer height). The page
