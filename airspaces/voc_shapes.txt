@@ -37,8 +37,8 @@ lkln 06/24 closed en 2153,1263 -2172,-1288 -1357,-2742 3048,-226,500
 lkmlad 08/26 closed en -2074,-396 -2487,1771,300 990,2395 1400,289,400
 lknm 18/36 closed en -1503,2005 0,2005 0,-1990 -1503,-1990
 lknm 08/26 closed en -2342,727 1605,1432 1738,318 -2159,-361
-lkra 11/29 closed rw:0 -2000,0 1950,0 1950,-1480 -2000,-1450
-lkra 22/04 closed rw:0 -2000,0 1950,0 1950,-1500 -2000,-1480
+lkra 11/29 closed en -2186,804 1552,-565 1040,-1961 -2697,-591
+lkra 22/04 closed en 1679,1576 -1229,-1150 -2255,-56 653,2670
 # LKSZ: the chart draws its strip ~1.4 km west of where it is (OurAirports's surveyed
 # thresholds, confirmed on imagery by the pilot); traced, then moved 1410 m E, 30 m S so
 # the chart's runway box sits on the real strip.
@@ -191,3 +191,5 @@ lkpl 08/26 closed en -2003,1342,400 1969,1475,400 1997,87,400 -1989,-69,400
 lkpl 08/26 closed en -1989,-69,400 1997,87,400 2023,-1338,400 -1973,-1471,400
 lkpm 06L/24R closed en -3274,-352 645,2198 1438,993 -2475,-1559
 lkpm 06L/24R closed en -1786,-1107 1438,993 2227,-231 -1010,-2330
+lkps 03/21 closed en -1169,-1636 1160,1619 2382,745 53,-2510
+lkrams 12/30 closed en -817,2569 2091,378 1151,-870 -1757,1320
