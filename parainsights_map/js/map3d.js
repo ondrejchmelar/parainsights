@@ -1077,6 +1077,12 @@
       // the set changes the view is framed on all of them, keeping its tilt and heading.
       var others = [], ownColour = null, ownName = '';
       var othersList = view.querySelector('.m3-others');
+      // A row of the legend pressed hides that flight on this map, and shows it again:
+      // by name, so it stays hidden while the set around it changes. This flight's own
+      // row is `OWN`. Hidden is not gone — the replay's span and the framing still hold it.
+      var hiddenFlights = {}, OWN = '#this';
+      function off(o) { return o.far || !!hiddenFlights[o.name]; }
+      function ownOff() { return !!ownColour && !!hiddenFlights[OWN]; }
       function firstAt(times, t) {
         var lo = 0, hi = times.length;
         while (lo < hi) { var mid = (lo + hi) >> 1; if (times[mid] < t) lo = mid + 1; else hi = mid; }
@@ -1149,19 +1155,8 @@
         }
         ownColour = others.length && compared.own ? compared.own.colour : null;
         ownName = others.length && compared.own ? compared.own.name : '';
-        // Top left, one short line a flight: this one in bold; how each is aligned in time
-        // is in its tooltip.
-        othersList.innerHTML = (ownColour ? '<li class="is-own" title="This flight"><i style="background:' +
-            ownColour + '"></i>' + ownName.replace(/[<&]/g, '') + '</li>' : '') + others.map(function (o) {
-          // Another day is aligned by launch without saying so on the line: the tooltip has
-          // it, and the line has no room for it beside the (i).
-          var note = o.far ? ' · too far to show' : '';
-          var title = o.far ? 'More than 150 km away: not drawn'
-            : o.sameDay ? 'Same day: replayed on the same clock' : 'Another day: replayed by time since launch';
-          return '<li' + (o.far ? ' class="is-far"' : '') + ' title="' + title + '"><i style="background:' +
-            o.colour + '"></i>' + o.name.replace(/[<&]/g, '') + note + '</li>';
-        }).join('');
-        othersList.hidden = !others.length;
+        if (!others.length) hiddenFlights = {};
+        showLegend();
         var shown = others.filter(function (o) { return !o.far; });
         var key = shown.map(function (o) { return o.name; }).join('|');
         if (key && key !== framedFor) {
@@ -1180,6 +1175,43 @@
         refresh();
       }
       var framedFor = '';
+      // Top left, one short line a flight: this one in bold; how each is aligned in time
+      // is in its tooltip. Every row near enough to draw is a switch for its flight.
+      function showLegend() {
+        function row(key, name, colour, cls, title) {
+          var hidden = !!hiddenFlights[key];
+          return '<li' + (cls ? ' class="' + cls + (hidden ? ' is-off' : '') + '"' : hidden ? ' class="is-off"' : '') +
+            ' title="' + title + (key !== null ? (hidden ? ' · tap to show' : ' · tap to hide') : '') + '"' +
+            (key !== null ? ' role="button" tabindex="0" aria-pressed="' + !hidden + '" data-flight="' +
+                            String(key).replace(/[<&"]/g, '') + '"' : '') +
+            '><i style="background:' + colour + '"></i>' + name.replace(/[<&]/g, '') + '</li>';
+        }
+        othersList.innerHTML = (ownColour ? row(OWN, ownName, ownColour, 'is-own', 'This flight') : '') +
+          others.map(function (o) {
+            // Another day is aligned by launch without saying so on the line: the tooltip
+            // has it, and the line has no room for it beside the (i).
+            if (o.far) return row(null, o.name + ' · too far to show', o.colour, 'is-far', 'More than 150 km away: not drawn');
+            return row(o.name, o.name, o.colour, '',
+                       o.sameDay ? 'Same day: replayed on the same clock' : 'Another day: replayed by time since launch');
+          }).join('');
+        othersList.hidden = !others.length;
+      }
+      function toggleFlight(event) {
+        var li = event.target.closest && event.target.closest('li[data-flight]');
+        if (!li || !othersList.contains(li)) return;
+        var key = li.getAttribute('data-flight');
+        if (hiddenFlights[key]) delete hiddenFlights[key]; else hiddenFlights[key] = true;
+        showLegend();
+        refresh();
+        if (replay && !replay.hidden) showNow();
+      }
+      othersList.addEventListener('click', toggleFlight);
+      othersList.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        event.stopPropagation();
+        toggleFlight(event);
+      });
       // Room around what is framed: the map's own buttons.
       function framePadding() {
         return { top: 70, bottom: 110, left: 50, right: 90 };
@@ -1355,7 +1387,9 @@
             updateTriggers: { getPosition: vertical }, parameters: ON_TOP
           }));
         }
-        if (!hasTime) out.push(new deck.PathLayer({
+        // This flight's own marks, unless its row in the legend hid them.
+        var own = !ownOff();
+        if (own && !hasTime) out.push(new deck.PathLayer({
           id: 'track', data: lines,
           getPath: function (d) { return d.path.map(function (p) { return [p[0], p[1], z(p[2])]; }); },
           getColor: function (d) { return d.colour; }, getWidth: TRACK_WIDTH, widthUnits: 'pixels',
@@ -1364,7 +1398,7 @@
         }));
         // The track between the two handles, in its climb colours: a trip whose "now" is
         // the right handle and whose trail reaches back to the left one, unfaded.
-        if (hasTime) out.push(new deck.TripsLayer({
+        if (own && hasTime) out.push(new deck.TripsLayer({
                     id: 'track', data: linesFrom(),
           getPath: function (d) { return d.path.map(function (p) { return [p[0], p[1], z(p[2])]; }); },
           getTimestamps: function (d) { return d.times; },
@@ -1391,7 +1425,7 @@
         }));
         // Where each climb was, as a dot: the numbers crowded the track and said nothing
         // the climbs table does not.
-        out.push(new deck.ScatterplotLayer({
+        if (own) out.push(new deck.ScatterplotLayer({
           extensions: DOTS,
           id: 'climbs', data: same('climbs', marks.filter(function (d) { return inWindow(d.t); })),
           getPosition: function (d) { return [d.position[0], d.position[1], z(d.position[2])]; },
@@ -1405,7 +1439,7 @@
           parameters: ON_TOP
         }));
         // Where this glider is at the replay's "now", as each compared one is shown.
-        if (hasTime && replay && !replay.hidden && cutoff >= 0 && cutoff <= duration) {
+        if (own && hasTime && replay && !replay.hidden && cutoff >= 0 && cutoff <= duration) {
           var me = positionAt(cutoff);
           out.push(new deck.ScatterplotLayer({
           extensions: DOTS,
@@ -1417,7 +1451,7 @@
             billboard: true, parameters: ON_TOP, updateTriggers: { getPosition: vertical }
           }));
         }
-        if (scene.landing && inWindow(duration)) out.push(new deck.ScatterplotLayer({
+        if (own && scene.landing && inWindow(duration)) out.push(new deck.ScatterplotLayer({
           extensions: DOTS,
           id: 'landing', data: landingData,
           getPosition: function (d) { return [d.lon, d.lat, z(d.alt)]; },
@@ -1429,10 +1463,10 @@
         // inside the replay's window on each one's own clock, as their climbs are.
         var replayOpen = hasTime && replay && !replay.hidden;
         var phasesNow = phaseLabels.filter(function (p) {
-          return labels[p.kind] && inWindow(p.t[0]) && inWindow(p.t[1]);
+          return own && labels[p.kind] && inWindow(p.t[0]) && inWindow(p.t[1]);
         });
         others.forEach(function (o) {
-          if (o.far) return;
+          if (off(o)) return;
           o.phases.forEach(function (p) {
             if (!labels[p.kind]) return;
             if (replayOpen && !(p.t[0] >= from - o.offset - 1 && p.t[1] <= cutoff - o.offset + 1)) return;
@@ -1477,7 +1511,7 @@
         // whole track; or, while the replay is open, the part flown inside the same window
         // of the shared clock and a dot where the glider was at its "now".
         others.forEach(function (o, k) {
-          if (o.far) return;
+          if (off(o)) return;
           var replaying = hasTime && replay && !replay.hidden;
           if (replaying) {
             var hi = cutoff - o.offset;
@@ -1789,7 +1823,7 @@
         var flying = cutoff >= 0 && cutoff <= duration;
         if (flying && article && article.__cursorAtTime) article.__cursorAtTime(cutoff);
         var lines = [];
-        if (flying) {
+        if (flying && !ownOff()) {
           var climb = (heightAt(cutoff + 10) - heightAt(cutoff - 10)) / 20;
           // In this flight's comparison colour when comparing, as every other mark of it is.
           lines.push('<span' + (ownColour ? ' style="color:' + ownColour + '"' : '') + '><b>' +
@@ -1798,7 +1832,7 @@
         }
         others.forEach(function (o) {
           var at = cutoff - o.offset;
-          if (o.far || at < o.t[0] || at > o.t[o.t.length - 1]) return;
+          if (off(o) || at < o.t[0] || at > o.t[o.t.length - 1]) return;
           var rate = (positionOf(o, at + 10)[2] - positionOf(o, at - 10)[2]) / 20;
           lines.push('<span style="color:' + o.colour + '"><b>' +
                      Math.round(positionOf(o, at)[2]).toLocaleString('en-US') + ' m</b> · ' +
@@ -2042,9 +2076,9 @@
         // Every glider in the air at "now", this one included only while it is flying: in
         // the map all compared flights are equal, and the replay outlasts the shortest.
         var fitZoom = Infinity, fitting = false;
-        var group = (others.length && (cutoff < 0 || cutoff > duration)) ? [] : [p];
+        var group = (others.length && (cutoff < 0 || cutoff > duration || ownOff())) ? [] : [p];
         others.forEach(function (o) {
-          if (o.far) return;
+          if (off(o)) return;
           var at = cutoff - o.offset;
           if (at < o.t[0] || at > o.t[o.t.length - 1]) return;
           group.push(steadyOf(o, at));
@@ -2255,7 +2289,7 @@
         followZoomBy(event.shiftKey ? -1 : 1);
       }, true);
       var touch = null;   // { x, y } of one finger, or two: { spread, y, angle }
-      var lastTap = 0;
+      var lastTap = null; // { x, y, at } where and when the last quick tap ended
       function spread(touches) {
         return Math.hypot(touches[0].clientX - touches[1].clientX,
                           touches[0].clientY - touches[1].clientY);
@@ -2280,10 +2314,15 @@
           touch = fingers(event.touches);
           takeTouch(event);
         } else {
-          touch = { x: event.touches[0].clientX, y: event.touches[0].clientY, at: Date.now() };
-          // A double tap zooms in, as MapLibre's own does.
-          if (touch.at - lastTap < 300) { followZoomBy(1); takeTouch(event); }
-          lastTap = touch.at;
+          touch = { x: event.touches[0].clientX, y: event.touches[0].clientY, at: event.timeStamp };
+          // A second tap: on its release a double tap zooms in, and held and slid it zooms
+          // — down in, up out — as MapLibre's own do (500 ms, 30 px, 128 px a level).
+          if (lastTap && touch.at - lastTap.at < 500 &&
+              Math.hypot(touch.x - lastTap.x, touch.y - lastTap.y) < 30) {
+            touch.zoomDrag = touch.y;
+            takeTouch(event);
+          }
+          lastTap = null;
         }
       }, { capture: true, passive: false });
       view.addEventListener('touchmove', function (event) {
@@ -2299,6 +2338,12 @@
           }
           touch = now;
           takeTouch(event);
+        } else if (touch.zoomDrag !== undefined) {
+          var y = event.touches[0].clientY;
+          followZoomBy((y - touch.zoomDrag) / 128, true);
+          touch.zoomDrag = y;
+          touch.slid = true;
+          takeTouch(event);
         } else if (touch.x !== undefined && Math.hypot(event.touches[0].clientX - touch.x,
                                                       event.touches[0].clientY - touch.y) > 8) {
           touch = null;
@@ -2313,7 +2358,15 @@
         if (touch.spread) {
           takeTouch(event);
           if (!event.touches.length) touch = null;
-        } else if (!event.touches.length) touch = null;
+        } else if (touch.zoomDrag !== undefined) {
+          if (!touch.slid) followZoomBy(1);
+          takeTouch(event);
+          touch = null;
+        } else if (!event.touches.length) {
+          var end = event.changedTouches[0];
+          if (end && event.timeStamp - touch.at < 500) lastTap = { x: end.clientX, y: end.clientY, at: event.timeStamp };
+          touch = null;
+        }
       }, { capture: true, passive: false });
       // Keys anywhere in the view, not only on the map: the reader has just pressed the
       // follow button, so that is where focus is, and arrows sent there did nothing.

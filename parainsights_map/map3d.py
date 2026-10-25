@@ -167,6 +167,12 @@ STYLE = """
 .merged-view .m3-others li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .merged-view .m3-others .is-own { font-weight: 600; }
 .merged-view .m3-others .is-far { color: var(--ink-2); }
+/* A row is a switch for its flight: pressed, the flight is hidden on this map. */
+.merged-view .m3-others li[data-flight] { cursor: pointer; border-radius: 6px; }
+.merged-view .m3-others li[data-flight]:hover { background: var(--panel-2); }
+.merged-view .m3-others li.is-off { color: var(--ink-2); text-decoration: line-through; }
+.merged-view .m3-others li.is-off i { opacity: .35; }
+@media (pointer: coarse) { .merged-view .m3-others li[data-flight] { padding: 5px 0; } }
 .merged-view .m3-status { position: absolute; left: 12px; top: 56px; z-index: 3; margin: 0;
   font-size: 15px; color: var(--ink-2); }
 """

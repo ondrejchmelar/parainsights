@@ -746,3 +746,109 @@ def test_follow_keeps_every_compared_glider_in_the_picture(browser):
 def test_no_errors_along_the_way(browser):
     assert browser.js("window.__errors") == []
 
+
+
+
+def _one_finger(browser):
+    """A touch function for one finger, its events stamped 50 ms apart: a software-GL
+    frame takes a second or more here and every event waits for one, which turned each
+    tap into a long press. `gap()` starts a new gesture rather than a third tap."""
+    clock = [time.time()]
+
+    def touch(kind, points=()):
+        clock[0] += 0.05
+        browser.call("Input.dispatchTouchEvent", type=kind, timestamp=clock[0],
+                     touchPoints=[{"x": px, "y": py, "id": 0} for px, py in points])
+
+    def gap():
+        clock[0] += 1
+
+    return touch, gap
+
+
+def _double_tap_and_slide(browser, zoom, settle):
+    left, top, width, height = _box(browser)
+    x, y = left + width / 2, top + height / 2
+    browser.call("Emulation.setTouchEmulationEnabled", enabled=True, maxTouchPoints=2)
+    try:
+        touch, gap = _one_finger(browser)
+        before = zoom()
+        for _ in range(2):
+            touch("touchStart", [(x, y)])
+            touch("touchEnd")
+        settle(before + 1)
+        assert zoom() == pytest.approx(before + 1, abs=0.05), "a double tap zooms in a level"
+        gap()
+        before = zoom()
+        touch("touchStart", [(x, y)])
+        touch("touchEnd")
+        touch("touchStart", [(x, y)])
+        for k in range(1, 5):                      # slid 128 px up: out a level
+            touch("touchMove", [(x, y - 32 * k)])
+        touch("touchEnd")
+        settle(before - 1)
+        assert zoom() == pytest.approx(before - 1, abs=0.1), "a tap then a slide up zooms out"
+        gap()
+        before = zoom()
+        touch("touchStart", [(x, y)])
+        touch("touchEnd")
+        touch("touchStart", [(x, y)])
+        for k in range(1, 3):                      # and 64 px down: in half a level
+            touch("touchMove", [(x, y + 32 * k)])
+        touch("touchEnd")
+        settle(before + 0.5)
+        assert zoom() == pytest.approx(before + 0.5, abs=0.1), "and down zooms in"
+    finally:
+        browser.call("Emulation.setTouchEmulationEnabled", enabled=False)
+
+
+def test_a_double_tap_zooms_in_and_a_tap_then_slide_zooms(browser):
+    """On a phone, Google Maps' one-finger zoom: a double tap zooms in a level, and a tap
+    then a finger held down and slid zooms — up out, down in. MapLibre's own gestures."""
+    _reset(browser, pitch=0)
+    _double_tap_and_slide(
+        browser, lambda: browser.js(f"({MAP}).getZoom()"),
+        lambda want: browser.wait(f"!({MAP}).isMoving() && Math.abs(({MAP}).getZoom() - {want}) < 0.1", timeout=30))
+
+
+def test_the_follow_camera_takes_a_double_tap_and_a_tap_then_slide(browser):
+    """Following, the same two gestures zoom the follow camera, and neither ends it: the
+    slide is a zoom, not the drag that hands the camera back."""
+    _reset(browser)
+    _follow(browser)
+    cam = f"({ENTRY}).followCamera().zoom"
+    _double_tap_and_slide(browser, lambda: browser.js(cam), lambda want: None)
+    assert browser.js(f"({ENTRY}).following()")
+
+
+def test_a_row_of_the_compared_legend_hides_and_shows_its_flight(browser):
+    """Comparing, a press on a flight's row in the legend hides that flight on the map, and
+    a second shows it again; this flight's own row too. A flight too far to draw has no
+    switch."""
+    _reset(browser)
+    browser.js(f"""(() => {{
+      var tr = __handle.built.scene.track, start = __handle.built.scene.start || 1700000000;
+      var near = {{ lon: tr.lon.map(x => x + 0.01), lat: tr.lat.slice(), alt: tr.alt.slice(), t: tr.t.slice() }};
+      var far = {{ lon: tr.lon.map(x => x + 20), lat: tr.lat.slice(), alt: tr.alt.slice(), t: tr.t.slice() }};
+      __handle.built.scene.start = start;
+      ({ENTRY}).setOthers({{ own: {{ name: 'THIS', colour: '#e0893a' }}, others: [
+        {{ name: 'NEAR', colour: '#3aa8d0', track: near, start: start }},
+        {{ name: 'FAR', colour: '#c9483c', track: far, start: start }}] }});
+      return 1; }})()""")
+    ids = f"({ENTRY}).layers().map(d => d.id)"
+    browser.wait(f"{ids}.includes('other-0')")
+    row = "document.querySelector('.merged-view .m3-others li[data-flight=\"%s\"]')"
+    assert browser.js("document.querySelectorAll('.merged-view .m3-others li[data-flight]').length") == 2
+    browser.js(f"{row % 'NEAR'}.click(); 1")
+    assert "other-0" not in browser.js(ids)
+    assert browser.js(f"{row % 'NEAR'}.getAttribute('aria-pressed')") == "false"
+    browser.js(f"{row % 'NEAR'}.click(); 1")
+    assert "other-0" in browser.js(ids)
+    own = "document.querySelector('.merged-view .m3-others li.is-own')"
+    assert "track" in browser.js(ids)
+    browser.js(f"{own}.click(); 1")
+    assert "track" not in browser.js(ids) and "climbs" not in browser.js(ids)
+    assert browser.js(f"{own}.classList.contains('is-off')")
+    browser.js(f"{own}.click(); 1")
+    assert "track" in browser.js(ids)
+    browser.js(f"({ENTRY}).setOthers(null); 1")

@@ -647,7 +647,10 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   `spanEnd`), and follow frames whichever gliders are in the air, this one only while it
   is; the figures stay relative to the selected flight. Compared tracks are drawn flat
   like the own one — billboarded they faced the camera and read thicker. The legend sits
-  top left (this flight bold; how each is aligned in time is in its tooltip). The map carries no
+  top left (this flight bold; how each is aligned in time is in its tooltip), and each
+  row near enough to draw is a switch: a press hides that flight on this map, its own
+  row included, and a second shows it (October 2026); hidden is not gone, so the
+  replay's span and the framing still hold it. The map carries no
   credits control: every source is named in the page's footer (October 2026).
   Every flight is drawn alike in the replay: its track, its climbs and a dot at "now" —
   this one too — and no white leading stretch while comparing; each flight is one colour
@@ -838,8 +841,9 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   handing back re-anchors on the ground under the middle of the view and corrects the
   centre by however far the camera slid, so the view does not jump. Measuring the glider
   with `transform.coordinatePoint` was a dead end: it disagrees with where deck.gl draws
-  it by ~190 px. While following, the wheel, a pinch, a double-click or double-tap and `+`/`−` zoom
-  the follow camera — MapLibre's own zoom gestures would be stopped by its next frame,
+  it by ~190 px. While following, the wheel, a pinch, a double-click or double-tap, a tap then a
+  finger slid (down in, up out: MapLibre's own one-finger zoom, which works off follow)
+  and `+`/`−` zoom the follow camera — MapLibre's own zoom gestures would be stopped by its next frame,
   so these are taken from it — and only a drag (4 px of mouse, 8 px of one finger) ends
   following, not a press; and the arrows turn the view off the
   direction of flight (← →, 15°, kept as the flight turns) and tilt it (↑ ↓, 10°) without
