@@ -871,9 +871,21 @@ def test_a_double_tap_is_a_zoom_and_not_two_taps(browser):
         m.fire('click', {{ lngLat: m.getCenter(), point: {{ x: r.width / 2, y: r.height / 2 }},
                           originalEvent: {{ timeStamp: t, clientX: x, clientY: y, pointerType: 'touch' }} }});
       }}
+      // Made before any is sent: an event is stamped when it is made, and each one sent
+      // here can wait a second for a software-GL frame.
+      function finger(kind) {{
+        var t = new Touch({{ identifier: 1, target: canvas, clientX: x, clientY: y }});
+        return new TouchEvent(kind, {{ bubbles: true, cancelable: true,
+          touches: kind === 'touchstart' ? [t] : [], changedTouches: [t] }});
+      }}
       tap(t0); tap(t0 + 200);                       // a double tap: nothing
       setTimeout(() => {{ got.push(__tapLog.length); tap(t0 + 5000);   // a tap: one, after a wait
         got.push(__tapLog.length);
-        setTimeout(() => {{ got.push(__tapLog.length); done(got); }}, 500); }}, 500);
+        setTimeout(() => {{ got.push(__tapLog.length);
+          // MapLibre's double tap: the second tap's touchend is prevented, so only the
+          // first tap's click arrives. The second finger down drops it.
+          var up = finger('touchend'), down = finger('touchstart'), up2 = finger('touchend');
+          canvas.dispatchEvent(up); tap(t0 + 10000); canvas.dispatchEvent(down); canvas.dispatchEvent(up2);
+          setTimeout(() => {{ got.push(__tapLog.length); done(got); }}, 600); }}, 600); }}, 600);
     }})""")
-    assert taps == [0, 0, 1], taps
+    assert taps == [0, 0, 1, 1], taps

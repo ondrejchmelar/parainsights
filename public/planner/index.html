@@ -4705,12 +4705,31 @@ function initView3d(root, cursorTrack, preset) {
           tapTimer = null;
           if (second) { lastTapAt = null; return; }
           lastTapAt = e ? { t: e.timeStamp, x: e.clientX, y: e.clientY } : null;
-          tapTimer = setTimeout(function () { tapTimer = null; clicked(at, e); }, 350);
+          tapTimer = setTimeout(function () { tapTimer = null; clicked(at, e); }, 450);
           return;
         }
         clicked(at, e);
       });
       var tapTimer = null, lastTapAt = null;
+      // MapLibre takes the second tap of a double tap whole — its touchend is
+      // prevented, so no click follows — and only the first one's click arrives. So the
+      // second is caught as it starts: a finger down within 500 ms and 30 px of a tap's
+      // release drops the tap waiting. On the window, ahead of the follow camera's
+      // handlers on the view, which stop a double tap from going further.
+      var lastRelease = null;
+      window.addEventListener('touchend', function (event) {
+        if (event.touches.length || event.changedTouches.length !== 1) return;
+        var t = event.changedTouches[0];
+        lastRelease = { t: event.timeStamp, x: t.clientX, y: t.clientY };
+      }, true);
+      window.addEventListener('touchstart', function (event) {
+        if (!tapTimer || !lastRelease || event.touches.length !== 1) return;
+        var t = event.touches[0], gap = event.timeStamp - lastRelease.t;
+        if (gap >= 0 && gap < 500 && Math.hypot(t.clientX - lastRelease.x, t.clientY - lastRelease.y) < 30) {
+          clearTimeout(tapTimer);
+          tapTimer = null;
+        }
+      }, true);
       function clicked(at, e) {
         // Measuring takes the click: it is not also a turnpoint.
         if (measuring) { measurePoints.push(at); showMeasure(); return; }
