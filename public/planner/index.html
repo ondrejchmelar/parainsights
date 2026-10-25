@@ -4676,6 +4676,7 @@ function initView3d(root, cursorTrack, preset) {
       view.addEventListener('pointerdown', function (event) {
         if (!map.getCanvasContainer().contains(event.target)) return;
         press = { x: event.clientX, y: event.clientY, button: event.button,
+                  touch: event.pointerType === 'touch',
                   modified: event.shiftKey || event.ctrlKey || event.altKey || event.metaKey };
         turned = false;
       }, true);
@@ -4692,11 +4693,29 @@ function initView3d(root, cursorTrack, preset) {
         // A press on a turnpoint took it; the click it ends in is not a new one.
         if (justDragged || (dragging && dragging.moved)) return;
         if (!plainClick(event)) return;
-        var at = [event.lngLat.lng, event.lngLat.lat];
+        var at = [event.lngLat.lng, event.lngLat.lat], e = event.originalEvent;
+        // A tap waits to see whether it is the first of a double tap, which is MapLibre's
+        // zoom and nothing else: a double tap opened "Above this point", or dropped two
+        // turnpoints, as well as zooming. 500 ms and 30 px are MapLibre's own window.
+        if (press && press.touch) {
+          var gap = lastTapAt && e ? e.timeStamp - lastTapAt.t : Infinity;
+          var second = gap >= 0 && gap < 500 &&
+            Math.hypot(e.clientX - lastTapAt.x, e.clientY - lastTapAt.y) < 30;
+          clearTimeout(tapTimer);
+          tapTimer = null;
+          if (second) { lastTapAt = null; return; }
+          lastTapAt = e ? { t: e.timeStamp, x: e.clientX, y: e.clientY } : null;
+          tapTimer = setTimeout(function () { tapTimer = null; clicked(at, e); }, 350);
+          return;
+        }
+        clicked(at, e);
+      });
+      var tapTimer = null, lastTapAt = null;
+      function clicked(at, e) {
         // Measuring takes the click: it is not also a turnpoint.
         if (measuring) { measurePoints.push(at); showMeasure(); return; }
-        clickers.forEach(function (fn) { fn(at, event.originalEvent); });
-      });
+        clickers.forEach(function (fn) { fn(at, e); });
+      }
 
       // A comparison chosen before this view was built.
       var myUid = (panel.querySelector('.view3d') || { id: '' }).id.replace(/^view3d-/, '');

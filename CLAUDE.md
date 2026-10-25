@@ -192,7 +192,9 @@ not the page's coarse grid, which floated a turnpoint hundreds of metres off the
 clicked; and only a plain left press that stayed put is a click (`plainClick`): a tilt
 ended in one and dropped a point. Drawing is a mode (*Draw*), off by
 default, because on a phone a tap on this map names the zone under the finger and one
-gesture must not mean two things. The map is built once by `airspaces.render_html.
+gesture must not mean two things. A tap reaches the page only 350 ms later, once it is
+clear it was not the first of a double tap (`clicked` in `map3d`): a double tap is
+MapLibre's zoom and nothing else, and it opened *Above this point* (October 2026). The map is built once by `airspaces.render_html.
 SCRIPT3D`, which publishes the handle as `window.__airspaceMap`; the planner's script
 waits on it, and only the airspace script sets the airspace filter (class, floor, time) —
 the planner listens to the time control only to re-mark its list. Its drawing tools —

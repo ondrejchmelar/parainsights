@@ -852,3 +852,28 @@ def test_a_row_of_the_compared_legend_hides_and_shows_its_flight(browser):
     browser.js(f"{own}.click(); 1")
     assert "track" in browser.js(ids)
     browser.js(f"({ENTRY}).setOthers(null); 1")
+
+
+def test_a_double_tap_is_a_zoom_and_not_two_taps(browser):
+    """A tap reaches the page (the planner's "Above this point", a turnpoint) only once it
+    is clear it was not the first of a double tap, which is the zoom alone. Driven with
+    synthetic events: real taps here are a second or more apart, every event waiting
+    for a software-GL frame."""
+    _reset(browser)
+    taps = browser.js(f"""new Promise(done => {{
+      var m = {MAP}, canvas = m.getCanvas(), r = canvas.getBoundingClientRect();
+      var x = r.left + r.width / 2, y = r.top + r.height / 2, got = [], t0 = performance.now() + 10000;
+      if (!window.__tapLog) {{ window.__tapLog = []; ({ENTRY}).onClick(at => __tapLog.push(at)); }}
+      __tapLog.length = 0;
+      function tap(t) {{
+        canvas.dispatchEvent(new PointerEvent('pointerdown', {{ pointerType: 'touch', clientX: x, clientY: y,
+                                                               bubbles: true, isPrimary: true }}));
+        m.fire('click', {{ lngLat: m.getCenter(), point: {{ x: r.width / 2, y: r.height / 2 }},
+                          originalEvent: {{ timeStamp: t, clientX: x, clientY: y, pointerType: 'touch' }} }});
+      }}
+      tap(t0); tap(t0 + 200);                       // a double tap: nothing
+      setTimeout(() => {{ got.push(__tapLog.length); tap(t0 + 5000);   // a tap: one, after a wait
+        got.push(__tapLog.length);
+        setTimeout(() => {{ got.push(__tapLog.length); done(got); }}, 500); }}, 500);
+    }})""")
+    assert taps == [0, 0, 1], taps
