@@ -3,7 +3,7 @@
 # a corner where the chart's two legs meet, and the chart's own sweep, beats a run of points.
 # `none`: the chart draws this runway no circuit of its own (a parallel runway).
 # LKSN: the SE corner is cut off along the CTR Ruzyně boundary.
-lksn 07L/25R closed en -1420,-384 1571,460 1571,-341 430,-1242 -1420,-1756,330
+lksn 07L/25R closed en -1598,-431 1470,422 1662,-268 430,-1242 -1243,-1707,330
 lkkram 09/27 closed en -2580,1266,400 -570,40 1452,-76 1396,-1016 -2674,-823
 lkmira 12/30 closed en -1497,714 2269,-1160 1238,-3175 -1589,-1850
 lkpa 15/33 closed en -2158,1158 -959,1771 670,-1436 -529,-2045
@@ -201,7 +201,9 @@ lksk 03/21 closed en -486,-2091 741,1719 2166,1259 938,-2550
 lksk 13/31 closed en -1705,1288 1577,-1041 711,-2262 -2571,67
 lkslus 04/22 closed en -1651,-266 465,2288 1309,1589 -807,-965
 lkso 08/26 closed en -2372,-108 2155,-108 2155,-1646 -2372,-1646
+lkso 08/26 path en -2380,-1250 -982,-94
 lkso 18/36 closed en 13,2043 -81,-1894 -2365,-1839 -2271,2098
+lkso 18/36 path en -1556,2091 0,1075
 lkspak 10/28 closed en -1521,385 1110,-235 752,-1757 -1880,-1137
 lksr 15/33 closed en 319,1823 1650,-840 632,-1349 -699,1315
 lksr 15/33 closed en -699,1315 632,-1349 -387,-1857 -1717,806
