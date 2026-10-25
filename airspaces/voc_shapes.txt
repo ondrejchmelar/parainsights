@@ -53,7 +53,7 @@ lkliba 07/25 none
 lklouc 17/35 none
 lknuci 08/26 none
 lknvce 18/36 none
-lkpoca 13/31 none
+lkpoca 13/31 path en -1671,1403 329,-276
 lkpole 01/19 none
 lkpole 05/23 none
 lkprim 09/27 none
