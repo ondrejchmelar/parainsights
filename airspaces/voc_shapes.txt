@@ -72,7 +72,7 @@ shift lkkl -90,-760
 # the villages: LKPC's field lies 1.66 km W / 1.75 km S of the image centre, LKMI's
 # 4.2 km N. Traced about the field itself, so neither needs a `shift`. LKPC's chart
 # draws its 2.5 km runway half as long; the circuit is traced as drawn.
-lkpc 09/27 closed en -1899,-152 -1962,1071 1998,1359 1903,177
+lkpc 09/27 closed en -1902,-157 -2002,1030 1901,1361 2001,174
 lkmi 05/23 closed rw:0 -2308,0 1670,0 1670,1546 -2308,1546
 lkmi 05/23 closed rw:0 -1822,0 2128,0 2128,-1463 -1822,-1463
 lktc 09/27 closed en -1600,0 3200,0 3200,-2950 -1750,-2800
