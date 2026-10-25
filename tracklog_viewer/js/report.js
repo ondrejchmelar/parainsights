@@ -527,13 +527,8 @@
     var ldLegend = '<ul class="legend legend-row"><li>Glide over the ground:</li>' +
       ['under 5', '5–7', '7–9', '9–12', 'over 12'].map(function (t, i) { return '<li><i style="background:var(--ld-' + (i + 1) + ')"></i>' + t + '</li>'; }).join('') + '</ul>';
 
-    // The page's title while this flight is the one shown (`flightTabs.show`, page/report.js).
-    var pageTitle = summary.date + ' · ' + (summary.site || 'flight') + ' — flight review';
-    return '<article class="flight" data-flight-report="' + uid + '"' + compare + ' data-compare-name="' + compareName + '"' + compareWho +
-      ' data-title="' + esc(pageTitle) + '"' + (options.hidden ? ' hidden' : '') + '>\n' +
-      '  <header class="masthead">\n    <h1>' + esc(summary.site || 'Flight') + ' <span>' + esc(summary.date) + '</span></h1>\n' +
-      '    <p class="who"><b>' + esc(summary.pilot || '—') + '</b> · ' + esc(summary.glider || '—') + chip + '</p>\n  </header>\n' +
-      '  <div class="figs keys">' + figs.join('') + '</div>\n' + mapSection + '\n' + debriefSection + airspaceSection + '\n\n' +
+    // The climbs and glides tables sit at the foot, just above the sources (the pilot's call, October 2026).
+    var tables =
       '  <section>\n    <h2>Climbs' + info(glossary([
         ['Climb', 'The circling, not the run-in. Click a row to find it on the map.'],
         ['Core', 'Best 20&nbsp;s of the climb against its average.'],
@@ -552,7 +547,15 @@
       '    <div class="panel">\n      <div class="table-scroll">\n        <table class="table-glides">\n          <thead><tr><th>#</th><th>Start</th><th>Time</th><th>km</th>\n' +
       '            <th>Glide</th><th>km/h</th></tr></thead>\n          <tbody>' + glideRows(a, sample) + '</tbody>\n        </table>\n      </div>\n    </div>\n    ' + ldLegend + '\n' +
       (glideCount > GLIDES_SHOWN ? '    <button type="button" class="btn more" data-show-all="glides" aria-expanded="false">Show all ' + glideCount + ' glides</button>\n' : '') +
-      '  </section>\n\n' +
+      '  </section>\n\n';
+
+    // The page's title while this flight is the one shown (`flightTabs.show`, page/report.js).
+    var pageTitle = summary.date + ' · ' + (summary.site || 'flight') + ' — flight review';
+    return '<article class="flight" data-flight-report="' + uid + '"' + compare + ' data-compare-name="' + compareName + '"' + compareWho +
+      ' data-title="' + esc(pageTitle) + '"' + (options.hidden ? ' hidden' : '') + '>\n' +
+      '  <header class="masthead">\n    <h1>' + esc(summary.site || 'Flight') + ' <span>' + esc(summary.date) + '</span></h1>\n' +
+      '    <p class="who"><b>' + esc(summary.pilot || '—') + '</b> · ' + esc(summary.glider || '—') + chip + '</p>\n  </header>\n' +
+      '  <div class="figs keys">' + figs.join('') + '</div>\n' + mapSection + '\n' + debriefSection + airspaceSection + '\n\n' +
       '  <section>\n    <h2>How the air was used' + info(glossary([
         ['Time', 'Climbing, gliding, and the rest: transitions too short to call.'],
         ['Climb rates while circling', 'Time circling by climb rate, in 0.5&nbsp;m/s bins.']]),
@@ -562,7 +565,7 @@
       '    <div class="chart chart-half">\n      <h3>Climb rates while circling</h3>\n' +
       '      <p class="sub">' + histogramVerdict(a) + '</p>\n' +
       '      <div class="panel">' + (histogram || '<p class="note">No thermalling time to summarise.</p>') + '</div>\n    </div>\n  </section>\n\n' +
-      topView + metSection + '\n' + sourcesFold([
+      topView + metSection + '\n' + tables + sourcesFold([
         ['Track', sampling],
         ['Weather', (meteo ? esc(meteo.source) + ', valid ' + esc(meteo.valid_at) : 'Open-Meteo, live') +
                     ', at the middle of the course line. A model: ceilings ±100&nbsp;m.'],
