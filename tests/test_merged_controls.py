@@ -185,7 +185,7 @@ class Browser:
             except OSError:
                 time.sleep(0.2)
         page = [t for t in tabs if t["type"] == "page"][0]
-        self.ws = websocket.create_connection(page["webSocketDebuggerUrl"], timeout=120)
+        self.ws = websocket.create_connection(page["webSocketDebuggerUrl"], timeout=300)
         self.n = 0
         self.call("Page.navigate",
                   url=f"http://127.0.0.1:{self.server.server_address[1]}/page.html")
@@ -205,6 +205,10 @@ class Browser:
                            awaitPromise=True)
         if result.get("exceptionDetails"):
             raise RuntimeError(result["exceptionDetails"])
+        # -0, NaN and the infinities do not travel as JSON: they come as a string beside
+        # no value, and a bearing of -0 after a drag read as None.
+        if "unserializableValue" in result["result"]:
+            return float(result["result"]["unserializableValue"])
         return result["result"].get("value")
 
     def wait(self, expression, timeout=90.0):
@@ -310,13 +314,18 @@ def _box(browser):
 
 def _frame(browser):
     """Until the map has drawn a frame from where it is now."""
-    browser.js(f"new Promise(r => {{ ({MAP}).once('render', () => r(1)); ({MAP}).triggerRepaint(); }})")
+    # The timer is the fallback, and it keeps the promise referenced: with only the map's
+    # listener holding it, Chrome once collected it and the call failed.
+    browser.js(f"new Promise(r => {{ setTimeout(() => r(0), 60000); ({MAP}).once('render', () => r(1));"
+               f" ({MAP}).triggerRepaint(); }})")
 
 
-def _still(browser, timeout=60.0):
+def _still(browser, timeout=150.0):
     """Until the camera has stopped — the same over two frames, no easing, nothing frozen
     for a drag — and every tile it asks for is in. Where a test used to sleep for a
-    while and hope, this is what it was waiting for."""
+    while and hope, this is what it was waiting for. Generous, because it returns as soon
+    as that holds: on a loaded machine (the suite's other Chromes) a frame over terrain
+    takes seconds, the tiles minutes, and while they come in the camera's height moves."""
     held = browser.js(f"""new Promise(done => {{ var m = {MAP}, end = Date.now() + {timeout * 1000}, was = null;
       function look() {{
         var c = m.transform.getCameraPosition(), now = JSON.stringify([c.lngLat.lng.toFixed(7),
@@ -324,6 +333,7 @@ def _still(browser, timeout=60.0):
         if ((now === was && !m.isMoving() && !m._elevationFreeze && m.areTilesLoaded()) || Date.now() > end)
           return done(now === was);
         was = now; m.once('render', look); m.triggerRepaint(); }}
+      setTimeout(() => done(false), {timeout * 1000 + 30000});
       m.once('render', look); m.triggerRepaint(); }})""")
     if not held:
         raise TimeoutError("the camera did not come to rest")
