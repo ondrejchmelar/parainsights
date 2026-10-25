@@ -5,4 +5,5 @@
 # `--openair` writes locally, and the test asserting CRLF would pass while the download
 # did not have it. `-text` disables end-of-line conversion in both directions.
 public/airspace/*.txt -text
+public/planner/*.txt -text
 *.oair -text
