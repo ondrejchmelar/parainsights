@@ -125,8 +125,8 @@ lkkejz 17/35 path en 71,-280 -294,1486,450 -1704,1707 -1396,-600
 lkkejz 17/35 path en -145,812 -1614,1028 -1563,650
 # LKHC: read about the field's own symbol (the chart is drawn 3.2 km E / 2.2 km S of its centre).
 # LKKL: two loops sharing the runway line, both at 2000 ft (moved onto the strip by its shift).
-lkkl 12/30 closed en -1540,1838 945,-304 -716,-1099,300 -2689,227,500
-lkkl 12/30 closed en -1540,1838 -721,3154,350 2958,313,600 887,-254
+lkkl 12/30 closed en -1580,1776 1372,-169 -706,-1106,300 -2689,227,500
+lkkl 12/30 closed en -1580,1776 -721,3154,350 2847,399,600 1372,-169
 lkmiro 18/36 closed en -1750,800 -1450,1350 -100,1780 80,1500 -250,-1700 -450,-1800 -1850,-1620 -1950,-1400 -1950,-1000
 lknymb 09/27 closed en -1500,-950 1600,-950 1600,-50 -1500,-50
 # LKNYMB: the second 1400 ft circuit north of the runway.
