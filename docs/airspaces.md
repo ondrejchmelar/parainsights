@@ -253,8 +253,16 @@ so its filename is read from the directory listing instead of computed.
   W and S of the image centre, LKMI's 4.2 km N — read off the ATZ ring and the
   villages), and traced about the field's own symbol the circuits sit on the runway.
   A chart that draws no circuit at all (only TKOF/LDG
-  labels: LKBYNO, LKCDUB, LKLIBA, LKLOUC, LKNUCI, LKNVCE, LKPOCA, LKPOLE, LKPRIM, LKTRBH)
-  gets no band — the pilot's call.
+  labels: LKBYNO, LKCDUB, LKLIBA, LKLOUC, LKNUCI, LKNVCE, LKPOLE, LKPRIM, LKTRBH)
+  gets no band — the pilot's call. LKPOCA's chart draws a straight-in leg through the
+  strip, and has that as its circuit.
+  **Every field was refitted and reviewed by the pilot in October 2026**, six at a time:
+  a vertex per turn (a radius where the chart's turn is wider), legs fitted to the
+  circuit line and not the runway's outline, arrows or labels, opposite legs parallel,
+  90° turns unless the chart slants a side, corner-cutting take-off legs as paths of
+  their own, overlapping circuits as separate loops (LKPO is three).
+  `docs/okruhy-control.jpg` is the sheet that review ended on: every field's chart with
+  our circuit over it in green. Lay a new trace over the same view before changing one.
   Those 51 get a standard box, the measured median.
 
   | | abeam, median (quartiles) | past the threshold |
