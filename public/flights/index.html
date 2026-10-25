@@ -4823,7 +4823,10 @@ function initView3d(root, cursorTrack, preset) {
         var at = [event.lngLat.lng, event.lngLat.lat], e = event.originalEvent;
         // A tap waits to see whether it is the first of a double tap, which is MapLibre's
         // zoom and nothing else: a double tap opened "Above this point", or dropped two
-        // turnpoints, as well as zooming. 500 ms and 30 px are MapLibre's own window.
+        // turnpoints, as well as zooming. 500 ms and 30 px are MapLibre's own window, but
+        // a tap held that long felt laggy (the pilot, October 2026): it waits `TAP_WAIT`,
+        // which a quick double tap's second finger is down well inside, and a slower
+        // one zooms after the tap's panel has opened.
         if (press && press.touch) {
           var gap = lastTapAt && e ? e.timeStamp - lastTapAt.t : Infinity;
           var second = gap >= 0 && gap < 500 &&
@@ -4832,12 +4835,12 @@ function initView3d(root, cursorTrack, preset) {
           tapTimer = null;
           if (second) { lastTapAt = null; return; }
           lastTapAt = e ? { t: e.timeStamp, x: e.clientX, y: e.clientY } : null;
-          tapTimer = setTimeout(function () { tapTimer = null; clicked(at, e); }, 450);
+          tapTimer = setTimeout(function () { tapTimer = null; clicked(at, e); }, TAP_WAIT);
           return;
         }
         clicked(at, e);
       });
-      var tapTimer = null, lastTapAt = null;
+      var tapTimer = null, lastTapAt = null, TAP_WAIT = 250;
       // MapLibre takes the second tap of a double tap whole — its touchend is
       // prevented, so no click follows — and only the first one's click arrives. So the
       // second is caught as it starts: a finger down within 500 ms and 30 px of a tap's
