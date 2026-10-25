@@ -3,7 +3,7 @@
 Every 3D panel is a `.renderer-host` holding a `view3d.panel`; once the panel's scene is
 ready (`initView3dWhenReady`), `window.__openMap(host)` mounts the map over it. MapLibre
 and deck.gl are loaded from unpkg once per page, on the first map opened. Nothing needs an
-API key: the terrain is the AWS Open Data terrarium DEM and the imagery is the panel's
+API key: the terrain is Mapterhorn's terrarium DEM and the imagery is the panel's
 own tile sources.
 
 There used to be three renderers behind a switch here — the canvas (`view3d`), plain
@@ -19,7 +19,7 @@ from pathlib import Path
 
 MAPLIBRE = "https://unpkg.com/maplibre-gl@4.7.1/dist"
 DECK = "https://unpkg.com/deck.gl@9.0.35/dist.min.js"
-TERRARIUM = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
+TERRARIUM = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp"
 
 
 STYLE = """

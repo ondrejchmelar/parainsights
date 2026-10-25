@@ -1,11 +1,17 @@
 """Ground elevation from DEM tiles, for the build.
 
-Source is the AWS Open Data terrarium DEM — global, free, no API key. The CLI fetches the
+Source is Mapterhorn's terrarium DEM — global, free, no API key: Copernicus' 30 m model
+everywhere, with the national and regional surveys merged in where they are open. It
+replaced the AWS Open Data terrain tiles in October 2026, whose 30 m model of the Alps cut
+45-70 m off every Dolomite summit (Gran Vernel 3 140 m for 3 210, Marmolada 3 284 for
+3 343); Mapterhorn has them within 10 m, and a phone's GPS altitude on the ground at Col
+Rodella within 5 m of it. Its tiles are 512 px WebP, and every one exists to level 12,
+the deepest this asks for. The CLI fetches the
 grid the JavaScript asks for (`TV.terrain.remoteFor`), so the articles can measure height
 above the ground; the page itself carries only the box (`Terrain.to_remote`) and fetches
 the same tiles at view time to draw them.
 
-Terrarium encodes elevation in the RGB channels of an ordinary PNG:
+Terrarium encodes elevation in the RGB channels of an ordinary image:
 
     metres = R * 256 + G + B / 256 - 32768
 """
@@ -20,10 +26,11 @@ from pathlib import Path
 
 import numpy as np
 
-TILE_URL = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
-CACHE = Path.home() / ".cache" / "parainsights" / "dem"
-TILE_SIZE = 256
-MAX_TILES = 64
+TILE_URL = "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp"
+CACHE = Path.home() / ".cache" / "parainsights" / "dem-mapterhorn"
+TILE_SIZE = 512
+# A quarter of the 64 256-px tiles it was, so the mosaic is the same size.
+MAX_TILES = 16
 TIMEOUT = 30
 USER_AGENT = "parainsights-tracklog-viewer/0.1 (+https://github.com/)"
 
@@ -73,7 +80,7 @@ class Terrain:
             "west": round(self.west, 6), "east": round(self.east, 6),
             "south": round(self.south, 6), "north": round(self.north, 6),
             "rows": self.rows, "cols": self.cols,
-            "remote": {"url": TILE_URL,
+            "remote": {"url": TILE_URL, "size": TILE_SIZE,
                        "zoom": _choose_zoom(self.west, self.east, self.south, self.north)},
         }
 
@@ -112,7 +119,7 @@ def _fetch_tile(zoom: int, x: int, y: int, *, problems: list | None = None
     something anyone can act on. A deploy spent two runs saying exactly that.
     """
     CACHE.mkdir(parents=True, exist_ok=True)
-    cached = CACHE / f"{zoom}-{x}-{y}.png"
+    cached = CACHE / f"{zoom}-{x}-{y}.webp"
     if cached.exists():
         data = cached.read_bytes()
     else:
@@ -132,7 +139,7 @@ def _fetch_tile(zoom: int, x: int, y: int, *, problems: list | None = None
     try:
         from PIL import Image
     except ImportError:
-        _note(problems, "Pillow is not installed, so a PNG tile cannot be decoded")
+        _note(problems, "Pillow is not installed, so a tile cannot be decoded")
         return None
     try:
         with Image.open(io.BytesIO(data)) as image:
@@ -241,7 +248,8 @@ def remote(west: float, east: float, south: float, north: float, *,
         "west": round(west, 6), "east": round(east, 6),
         "south": round(south, 6), "north": round(north, 6),
         "rows": rows, "cols": cols,
-        "remote": {"url": TILE_URL, "zoom": _choose_zoom(west, east, south, north)},
+        "remote": {"url": TILE_URL, "size": TILE_SIZE,
+                   "zoom": _choose_zoom(west, east, south, north)},
     }
 
 

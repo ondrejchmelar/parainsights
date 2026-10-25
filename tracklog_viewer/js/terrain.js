@@ -75,8 +75,8 @@
   }
 
   // ---- the grid an upload asks for: `terrain.for_flight` + `Terrain.to_remote` ---------
-  var TILE_URL = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
-  var MAX_TILES = 64;
+  var TILE_URL = 'https://tiles.mapterhorn.com/{z}/{x}/{y}.webp', TILE_SIZE = 512;
+  var MAX_TILES = 16;
 
   function tileIndices(lat, lon, zoom) {
     var n = Math.pow(2, zoom), r = lat * TV.np.DEG;
@@ -112,7 +112,7 @@
     west -= padX; east += padX; south -= padY; north += padY;
     var size = grid(west, east, south, north, cols, maxPoints);
     return { west: np.pyRound(west, 6), east: np.pyRound(east, 6), south: np.pyRound(south, 6), north: np.pyRound(north, 6),
-             rows: size[0], cols: size[1], remote: { url: TILE_URL, zoom: chooseZoom(west, east, south, north) } };
+             rows: size[0], cols: size[1], remote: { url: TILE_URL, size: TILE_SIZE, zoom: chooseZoom(west, east, south, north) } };
   }
 
   TV.terrain = { at: at, clearance: clearance, valleyFloor: valleyFloor, valleyClearance: valleyClearance,

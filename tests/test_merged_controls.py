@@ -101,16 +101,16 @@ def _ground(lon, lat):
 # Made once and kept: a run asks for a few hundred tiles, every worker and every run the
 # same ones. Named by a hash of the code that draws them, so a change redraws them.
 _DEM_CACHE = vendor.FOLDER.parent / "dem" / hashlib.sha1(
-    (inspect.getsource(_ground) + "terrarium-256").encode()).hexdigest()[:12]
+    (inspect.getsource(_ground) + "terrarium-512").encode()).hexdigest()[:12]
 
 
 def _dem_tile(z: int, x: int, y: int) -> bytes:
     """A terrarium PNG of `_ground` for tile z/x/y: height + 32 768 m in red·256 + green +
-    blue/256, as the AWS tiles the map asks for are."""
+    blue/256, 512 px, as the Mapterhorn tiles the map asks for are."""
     path = _DEM_CACHE / f"{z}-{x}-{y}.png"
     if path.is_file():
         return path.read_bytes()
-    size, n = 256, 2 ** z
+    size, n = 512, 2 ** z
     middle = (np.arange(size) + 0.5) / size
     lon = (x + middle) / n * 360 - 180
     lat = np.degrees(np.arctan(np.sinh(np.pi * (1 - 2 * (y + middle) / n))))

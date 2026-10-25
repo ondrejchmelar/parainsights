@@ -9,6 +9,6 @@ it, which is why it is a package of its own rather than a corner of one of them.
 - `view3d`      the panel the map mounts in, and the scene, ground grid and airspace it
                 draws from; the handle the charts drive it through (`js/view3d.js`)
 - `render_map`  loading MapLibre and deck.gl, opening the map, reviving a lost context
-- `terrain`     DEM grids from the AWS terrarium tiles, fetched at build time or described
+- `terrain`     DEM grids from Mapterhorn's terrarium tiles, fetched at build time or described
                 for the page to fetch (`Terrain.to_remote`, `remote`)
 """

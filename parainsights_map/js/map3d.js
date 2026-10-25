@@ -246,6 +246,93 @@
     });
   }
 
+  // The 3D ground: Mapterhorn's terrarium tiles. It serves every tile to level 12 (from
+  // Copernicus' 30 m DEM) and deeper only where a national or regional survey has been
+  // merged in (the Dolomites to 15); a deeper tile elsewhere is a 404, and MapLibre
+  // leaves a 404 as a hole in the ground. So a missing tile is cut from the nearest
+  // level above it that exists, interpolated in metres (blending terrarium's colours
+  // would mix the red and green that carry the height), and every tile under a known
+  // 404 goes straight there without asking.
+  var DEM_EVERYWHERE = 12;
+  function registerDem() {
+    if (window.__m3Dem) return;
+    window.__m3Dem = true;
+    var missing = {}, decoded = {}, decodedOrder = [];
+    function key(z, x, y) { return z + '/' + x + '/' + y; }
+    function url(z, x, y) {
+      return window.__mapTerrarium.replace('{z}', z).replace('{x}', x).replace('{y}', y);
+    }
+    // One tile's heights, or null where it is a 404. Kept for the few tiles a screen's
+    // worth of deeper tiles is cut from.
+    function heights(z, x, y) {
+      var k = key(z, x, y);
+      if (decoded[k]) return decoded[k];
+      var job = fetch(url(z, x, y)).then(function (response) {
+        if (response.status === 404) { missing[k] = true; return null; }
+        if (!response.ok) throw new Error(response.status + ' ' + url(z, x, y));
+        return response.blob().then(createImageBitmap).then(function (bitmap) {
+          var size = bitmap.width, canvas = document.createElement('canvas');
+          canvas.width = canvas.height = size;
+          var ctx = canvas.getContext('2d', { willReadFrequently: true });
+          ctx.drawImage(bitmap, 0, 0);
+          var px = ctx.getImageData(0, 0, size, size).data, h = new Float32Array(size * size);
+          for (var i = 0; i < h.length; i++) h[i] = px[i * 4] * 256 + px[i * 4 + 1] + px[i * 4 + 2] / 256 - 32768;
+          return { size: size, h: h };
+        });
+      });
+      job.catch(function () { delete decoded[k]; });
+      decoded[k] = job;
+      decodedOrder.push(k);
+      if (decodedOrder.length > 24) delete decoded[decodedOrder.shift()];
+      return job;
+    }
+    // Tile z/x/y cut from the nearest level above that exists, as a terrarium image.
+    function fromAbove(z, x, y) {
+      function tryLevel(up) {
+        var pz = z - up, k = 1 << up;
+        if (pz < DEM_EVERYWHERE) return Promise.reject(new Error('no ground over ' + key(z, x, y)));
+        var px = x >> up, py = y >> up;
+        if (missing[key(pz, px, py)]) return tryLevel(up + 1);
+        return heights(pz, px, py).then(function (parent) {
+          if (!parent) return tryLevel(up + 1);
+          var s = parent.size, cell = s / k, ox = (x - px * k) * cell, oy = (y - py * k) * cell;
+          var canvas = document.createElement('canvas');
+          canvas.width = canvas.height = s;
+          var ctx = canvas.getContext('2d'), out = ctx.createImageData(s, s), d = out.data;
+          for (var r = 0; r < s; r++) {
+            var v = Math.min(Math.max(oy + (r + 0.5) / k - 0.5, 0), s - 1);
+            var r0 = Math.min(Math.floor(v), s - 2), fv = v - r0;
+            for (var c = 0; c < s; c++) {
+              var u = Math.min(Math.max(ox + (c + 0.5) / k - 0.5, 0), s - 1);
+              var c0 = Math.min(Math.floor(u), s - 2), fu = u - c0, i = r0 * s + c0, h = parent.h;
+              var m = (h[i] * (1 - fu) + h[i + 1] * fu) * (1 - fv) + (h[i + s] * (1 - fu) + h[i + s + 1] * fu) * fv;
+              var e = m + 32768, whole = Math.floor(e), o = (r * s + c) * 4;
+              d[o] = whole >> 8; d[o + 1] = whole & 255; d[o + 2] = Math.floor((e - whole) * 256); d[o + 3] = 255;
+            }
+          }
+          ctx.putImageData(out, 0, 0);
+          return createImageBitmap(canvas).then(function (bitmap) { return { data: bitmap }; });
+        });
+      }
+      return tryLevel(1);
+    }
+    maplibregl.addProtocol('m3dem', function (params, abortController) {
+      var parts = params.url.slice('m3dem://'.length).split('/');
+      var z = +parts[0], x = +parts[1], y = +parts[2];
+      for (var up = 0; z - up > DEM_EVERYWHERE; up++) {
+        if (missing[key(z - up, x >> up, y >> up)]) return fromAbove(z, x, y);
+      }
+      return fetch(url(z, x, y), { signal: abortController.signal }).then(function (response) {
+        if (response.status === 404 && z > DEM_EVERYWHERE) {
+          missing[key(z, x, y)] = true;
+          return fromAbove(z, x, y);
+        }
+        if (!response.ok) throw new Error(response.status + ' ' + url(z, x, y));
+        return response.arrayBuffer().then(function (data) { return { data: data }; });
+      });
+    });
+  }
+
   // Whether a map's WebGL is gone: MapLibre's canvas or deck.gl's. A phone takes the
   // contexts of a page it backgrounds or locks and often never gives them back, and the
   // view then stays black while every button still answers.
@@ -450,6 +537,7 @@
 
     window.__mapLibs().then(function () {
       registerStitching();
+      registerDem();
       view.querySelector('.m3-status').hidden = true;
       view.querySelector('.view3d-controls').hidden = false;
       view.querySelectorAll('.view3d-controls-extra').forEach(function (box) { box.hidden = false; });
@@ -538,17 +626,22 @@
       function groundColour(key) { return key === 'off' ? '#d6d2c4' : '#3d4436'; }
       function style(key) {
         var sources = {
-          // Declared at half their size so MapLibre asks one zoom deeper than it would:
-          // four times the tiles, and relief and imagery as sharp as the canvas view's grid was.
-          // At their natural size the DEM it picks is ~4x coarser and the hills read flat.
-          dem: { type: 'raster-dem', tiles: [window.__mapTerrarium], tileSize: 128, maxzoom: 15,
-                 encoding: 'terrarium', attribution: 'Terrain: AWS Open Data Terrain Tiles' },
+          // Declared at half their size (512 px) so MapLibre asks one zoom deeper than it
+          // would: four times the tiles, and relief and imagery as sharp as the canvas
+          // view's grid was. At their natural size the DEM it picks is ~4x coarser and the
+          // hills read flat. Through `m3dem`, which fills the levels Mapterhorn has no
+          // survey for. Mapterhorn and not AWS's terrain tiles (October 2026): those
+          // carry the Alps from a 30 m model that cuts 45-70 m off every Dolomite summit,
+          // so a glider circling level with Gran Vernel's top was drawn 70 m over it.
+          dem: { type: 'raster-dem', tiles: ['m3dem://{z}/{x}/{y}'], tileSize: 256, maxzoom: 15,
+                 encoding: 'terrarium',
+                 attribution: 'Terrain: <a href="https://mapterhorn.com/attribution">\u00a9 Mapterhorn</a>' },
           // Its own source for the shading: MapLibre renders both worse when the hillshade
           // and the 3D terrain share one.
           // The shading from level 12 at most, smoothed up from there: at 15 the DEM's
           // whole-metre steps terraced every gentle slope into bands, plain to see in the
           // relief view.
-          shade: { type: 'raster-dem', tiles: [window.__mapTerrarium], tileSize: 128, maxzoom: 12,
+          shade: { type: 'raster-dem', tiles: [window.__mapTerrarium], tileSize: 256, maxzoom: 12,
                    encoding: 'terrarium' }
         };
         // Under the imagery: what shows where a tile has not arrived yet. A pale beige

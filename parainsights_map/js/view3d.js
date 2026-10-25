@@ -38,7 +38,8 @@ window.addEventListener('resize', function () {
 // linspace is start + i × step, `np.round` rounds a half to even, and the bounds are the
 // unrounded heights'. A test builds both from the same tiles and compares every node.
 function loadTerrain(dem) {
-  var zoom = dem.remote.zoom, n = Math.pow(2, zoom), size = 256;
+  // A page built before the move to Mapterhorn carries AWS's 256 px tiles and no size.
+  var zoom = dem.remote.zoom, n = Math.pow(2, zoom), size = dem.remote.size || 256;
   function tileX(lon) { return (lon + 180) / 360 * n; }
   function tileY(lat) {
     var rad = lat * (Math.PI / 180);

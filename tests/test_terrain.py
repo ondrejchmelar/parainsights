@@ -188,7 +188,7 @@ class TestASilentFailureIsNotAFailureReport:
         assert len(said) == 1
         line = said[0]
         assert "0 of" in line and "tiles" in line
-        assert "s3.amazonaws.com" in line, "a reader cannot check a host that is unnamed"
+        assert "tiles.mapterhorn.com" in line, "a reader cannot check a host that is unnamed"
         assert "CERTIFICATE_VERIFY_FAILED" in line
         assert "URLError" in line, (
             "the exception class matters: URLError around an SSL failure and URLError "

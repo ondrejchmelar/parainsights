@@ -327,7 +327,8 @@ circle-drift estimate, since nothing in the flight data knows about the model.
 
 ## Decisions taken
 
-- **3D in the browser: MapLibre GL JS + deck.gl, DEM from AWS terrarium**
+- **3D in the browser: MapLibre GL JS + deck.gl, DEM from AWS terrarium** (Mapterhorn's
+  since October 2026: AWS's 30 m Alps cut 45-70 m off the summits; see CLAUDE.md)
   (`https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png`,
   `encoding: 'terrarium'`) — no API key, works offline-ish via tile cache.
   Rejected CesiumJS: it can load our KMZ directly and does support `BalloonStyle` +

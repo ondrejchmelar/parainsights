@@ -11,7 +11,6 @@ import functools
 import http.server
 import io
 import json
-import math
 import re
 import subprocess
 import threading
@@ -28,22 +27,22 @@ COLS, MAX_NODES = 90, 5000
 
 def _elevation(lat, lon):
     """Relief with fractions in it, including exact halves, so rounding is compared."""
-    return (400 + 350 * math.sin(lat * 7.1) * math.cos(lon * 5.3)
-            + (int(lat * 1000 + lon * 1000) % 4) * 0.5 + 0.25 * (int(lon * 3000) % 2))
+    # Numpy arrays; every coordinate here is positive, so floor() is the int() it was.
+    return (400 + 350 * np.sin(lat * 7.1) * np.cos(lon * 5.3)
+            + np.floor(lat * 1000 + lon * 1000) % 4 * 0.5 + 0.25 * (np.floor(lon * 3000) % 2))
 
 
 def _tile_png(zoom, x, y):
     from PIL import Image
 
-    n = 2 ** zoom
-    pixels = np.zeros((256, 256, 3), dtype=np.uint8)
-    for r in range(256):
-        lat = math.degrees(math.atan(math.sinh(math.pi * (1 - 2 * (y + (r + 0.5) / 256) / n))))
-        for c in range(256):
-            lon = (x + (c + 0.5) / 256) / n * 360 - 180
-            value = _elevation(lat, lon) + 32768
-            whole = int(value)
-            pixels[r, c] = (whole // 256, whole % 256, int(round((value - whole) * 256)) % 256)
+    n, size = 2 ** zoom, terrain.TILE_SIZE
+    middle = (np.arange(size) + 0.5) / size
+    lat = np.degrees(np.arctan(np.sinh(np.pi * (1 - 2 * (y + middle) / n))))[:, None]
+    lon = ((x + middle) / n * 360 - 180)[None, :]
+    value = _elevation(lat, lon) + 32768
+    whole = np.floor(value).astype(np.int64)
+    pixels = np.stack([whole // 256, whole % 256,
+                       np.round((value - whole) * 256).astype(np.int64) % 256], axis=-1).astype(np.uint8)
     out = io.BytesIO()
     Image.fromarray(pixels, "RGB").save(out, "PNG")
     return out.getvalue()

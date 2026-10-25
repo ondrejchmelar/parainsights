@@ -726,7 +726,7 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   (`easeTo({bearing: 0})`), and is not also a turnpoint for the planner.
 - **An uploaded track fetches its own DEM, and CORS is why it can.** `js/upload.js` asks
   for the box the CLI would (`TV.terrain.remoteFor`: 64 tiles, 120 000 nodes over up to
-  480 columns) and the page's own `loadTerrain` fills it — mosaicking the terrarium tiles
+  480 columns) and the page's own `loadTerrain` fills it — mosaicking Mapterhorn's terrarium tiles
   onto a canvas and decoding `R * 256 + G + B / 256 - 32768`, the formula in
   `terrain.py`. It works because the tiles carry `Access-Control-Allow-Origin: *`;
   without that the canvas is tainted, `getImageData` throws, and the upload goes on with
@@ -802,9 +802,18 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   canvas's hillshade *colours* — warm white (255, 252, 242) on sunlit slopes, dark blue
   (18, 26, 38) in shadow, lit from the sun's real azimuth and following the cursor —
   through MapLibre's `hillshade-highlight-color`/`-shadow-color`; its default black and
-  white is what greyed the photograph. The DEM and the photograph are declared at
-  `tileSize: 128` so MapLibre asks one zoom deeper (4x the tiles): at their natural size
-  it picks a DEM ~4x coarser than the canvas's grid was and the relief reads flat. Two
+  white is what greyed the photograph. The DEM and the photograph are declared at half
+  their size (Mapterhorn's 512 px tiles at `tileSize: 256`, the photograph's 256 at 128)
+  so MapLibre asks one zoom deeper (4x the tiles): at their natural size
+  it picks a DEM ~4x coarser than the canvas's grid was and the relief reads flat.
+  **The ground is Mapterhorn's, not AWS's terrain tiles** (October 2026; map, build grid
+  and upload alike). AWS carries the Alps from a 30 m model that cut 45-70 m off every
+  Dolomite summit (Gran Vernel 3 140 m for 3 210, Marmolada 3 284 for 3 343), so a pilot
+  working level with a summit was drawn figure-eighting over the ridge; the GPS was right
+  (XCTrack's `HFALG:GEO`, 5 m off Mapterhorn's ground on takeoff and landing at Col
+  Rodella). Mapterhorn has every tile to level 12 and deeper only where a survey is merged
+  in; the rest 404, so the map's DEM goes through the `m3dem://` protocol, which cuts a
+  missing tile from the nearest level above, interpolated in metres. Two
   MapLibre facts the map honours: terrain is exaggerated **from sea level**, so
   anything drawn over it is `alt × vertical`; and deck.gl layers sharing a point fight
   for depth, so markers and labels draw with `depthCompare: 'always'`.
