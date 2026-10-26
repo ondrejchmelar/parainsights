@@ -1783,6 +1783,24 @@ function initView3d(root, cursorTrack, preset) {
     var v = parseInt(String(hex).replace('#', ''), 16);
     return [(v >> 16) & 255, (v >> 8) & 255, v & 255, alpha];
   }
+  // While comparing, each flight in its own colour and its climb in shades of it: by the
+  // ramp's index per fix (3 the grey middle, 4-6 climbing, 0-2 sinking), lighter and
+  // wider the stronger the climb, darker and thinner the stronger the sink. The ramp
+  // itself on every track was too many colours to tell the flights apart (the pilot's
+  // pick of four mocks, October 2026).
+  function shade(hex, ci) {
+    var c = rgb(hex, 255), s = ci - 3, to = s > 0 ? 255 : 0, f = s > 0 ? 0.25 * s : -0.22 * s;
+    return [0, 1, 2].map(function (i) { return Math.round(c[i] + (to - c[i]) * f); }).concat(255);
+  }
+  function shadeWidth(ci) {
+    var s = ci - 3;
+    return TRACK_WIDTH * (s > 0 ? 1 + 0.55 * s : 1 + 0.15 * s);
+  }
+
+  // The ramp's grey middle (index 3, under ±0.7 m/s) drawn near-white on the map: the
+  // charts' grey vanished into Alpine meadow and rock (the pilot's call, October 2026).
+  var NEUTRAL = 3, NEUTRAL_MAP = [236, 232, 222];
+  function paletteColour(scene, i) { return i === NEUTRAL ? NEUTRAL_MAP : scene.palette[i]; }
 
   // The track as runs of one colour, by the palette index per fix the scene carries.
   // Each run carries its fixes' times too, so the track can be cut to a window of the
@@ -1796,13 +1814,13 @@ function initView3d(root, cursorTrack, preset) {
       times.push(t[i] || 0);
       if (colour === null) colour = tr.c[i];
       if (tr.c[i] !== colour) {
-        if (run.length > 1) out.push({ path: run, times: times, colour: scene.palette[colour] });
+        if (run.length > 1) out.push({ path: run, times: times, colour: paletteColour(scene, colour), ci: colour });
         run = [point];
         times = [t[i] || 0];
         colour = tr.c[i];
       }
     }
-    if (run.length > 1) out.push({ path: run, times: times, colour: scene.palette[colour] });
+    if (run.length > 1) out.push({ path: run, times: times, colour: paletteColour(scene, colour), ci: colour });
     return out;
   }
 
@@ -2843,7 +2861,7 @@ function initView3d(root, cursorTrack, preset) {
           var times = run.times, lo = 0, hi = times.length;
           while (lo < hi) { var mid = (lo + hi) >> 1; if (times[mid] < from) lo = mid + 1; else hi = mid; }
           if (times.length - lo < 2) return;
-          clipped.push(lo ? { path: run.path.slice(lo), times: times.slice(lo), colour: run.colour } : run);
+          clipped.push(lo ? { path: run.path.slice(lo), times: times.slice(lo), colour: run.colour, ci: run.ci } : run);
         });
         return clipped;
       }
@@ -2962,7 +2980,7 @@ function initView3d(root, cursorTrack, preset) {
             var phases = (o.phases || []).map(function (p) {
               return phaseLabel(p, [flown(p.lon[0], p.lat[0]), flown(p.lon[1], p.lat[1])]);
             });
-            return { name: o.name, colour: o.colour, lon: tr2.lon, lat: tr2.lat, alt: tr2.alt, climbs: climbs,
+            return { name: o.name, colour: o.colour, lon: tr2.lon, lat: tr2.lat, alt: tr2.alt, c: tr2.c, climbs: climbs,
                      phases: phases,
                      t: tr2.t || tr2.lon.map(function (_, i) { return i; }), far: far,
                      offset: sameDay ? o.start - scene.start : 0, sameDay: !!sameDay };
@@ -3229,13 +3247,13 @@ function initView3d(root, cursorTrack, preset) {
                     id: 'track', data: linesFrom(),
           getPath: function (d) { return d.path.map(function (p) { return [p[0], p[1], z(p[2])]; }); },
           getTimestamps: function (d) { return d.times; },
-          // While comparing, one colour per flight instead of the climb ramp: several
-          // tracks each in five climb colours were five times too many colours to read.
-          getColor: function (d) { return ownColour ? rgb(ownColour, 235) : d.colour; },
-          getWidth: TRACK_WIDTH, widthUnits: 'pixels',
+          // While comparing, the flight's own colour shaded by its climb (`shade`).
+          getColor: function (d) { return ownColour ? shade(ownColour, d.ci) : d.colour; },
+          getWidth: function (d) { return ownColour ? shadeWidth(d.ci) : TRACK_WIDTH; },
+          widthUnits: 'pixels',
           currentTime: cutoff, trailLength: Math.max(cutoff - from, 0) + 0.5, fadeTrail: false,
           capRounded: true, jointRounded: true,
-          updateTriggers: { getPath: vertical, getColor: ownColour }
+          updateTriggers: { getPath: vertical, getColor: ownColour, getWidth: ownColour }
         }));
         // While the replay runs, its leading edge: the last seven minutes in white.
         // Not while comparing: each flight is its one colour there, and a white stretch on
@@ -3368,15 +3386,22 @@ function initView3d(root, cursorTrack, preset) {
             parameters: ON_TOP, updateTriggers: { getPosition: vertical }
           }));
           // Built once, and again only when the left handle moves: from that fix on, on
-          // this flight's clock. The right end is the TripsLayer's `currentTime`, on the
-          // GPU, as this flight's own track is cut (`linesFrom`).
+          // this flight's clock, in runs of one climb shade. The right end is the
+          // TripsLayer's `currentTime`, on the GPU, as this flight's own track is cut
+          // (`linesFrom`).
           var track = kept('other-' + k, [o, replaying ? from : null], function () {
-            var a = replaying ? firstAt(o.t, from - o.offset) : 0, path = [], times = [];
+            var a = replaying ? firstAt(o.t, from - o.offset) : 0, runs = [], path = [], times = [], ci = null;
             for (var i = a; i < o.t.length; i++) {
-              path.push([o.lon[i], o.lat[i], o.alt[i]]);
-              times.push(o.t[i] + o.offset);
+              var p = [o.lon[i], o.lat[i], o.alt[i]], t = o.t[i] + o.offset, c = o.c ? o.c[i] : 3;
+              if (ci !== null && c !== ci) {
+                if (path.length > 1) runs.push({ path: path, times: times, ci: ci });
+                path = [path[path.length - 1]]; times = [times[times.length - 1]];
+              }
+              ci = c;
+              path.push(p); times.push(t);
             }
-            return path.length > 1 ? [{ path: path, times: times }] : [];
+            if (path.length > 1) runs.push({ path: path, times: times, ci: ci });
+            return runs;
           });
           if (!track.length) return;
           out.push(new deck.TripsLayer({
@@ -3385,7 +3410,8 @@ function initView3d(root, cursorTrack, preset) {
             getTimestamps: function (d) { return d.times; },
             // Drawn as this flight's own track is (a TripsLayer, not billboarded): as a
             // billboard it faced the camera at full width and read thicker at any tilt.
-            getColor: rgb(o.colour, 235), getWidth: TRACK_WIDTH, widthUnits: 'pixels',
+            getColor: function (d) { return shade(o.colour, d.ci); },
+            getWidth: function (d) { return shadeWidth(d.ci); }, widthUnits: 'pixels',
             currentTime: replaying ? cutoff : spanEnd + 1, trailLength: spanEnd - spanStart + 2,
             fadeTrail: false, capRounded: true, jointRounded: true,
             updateTriggers: { getPath: vertical }

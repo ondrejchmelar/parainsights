@@ -631,10 +631,16 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   all. `tests/test_compare.py` taps them in the touch layout. **Each compared flight's
   merged map draws the others** (`entry.setOthers`, fed by `window.__compareFor`, which a
   map built later asks itself): **one thin line in one muted colour per flight, this
-  map's own flight included — the climb ramp is dropped while comparing**, XContest's way
+  map's own flight included — the climb ramp is not drawn while comparing**, XContest's way
   (orange, sky blue, brick red, indigo, olive; the first try's bright magenta and cyan over
   every track's five climb colours was unreadable), a flight keeping its colour on every
-  map, with a legend, and the view framed on all of them. **Following, the camera frames
+  map, with a legend, and the view framed on all of them. **The climb is shades of that
+  colour** (`shade`, `shadeWidth` in `map3d`, by the ramp's index per fix): lighter and
+  wider the stronger the climb, darker and thinner the stronger the sink — the pilot's
+  pick of four mocks (October 2026) over the ramp inside a casing of the flight's colour,
+  the ramp on one flight in focus, and the ramp in thermals only (every climb then the
+  same orange, whoever flew it). A strong climb on orange and on brick red both lighten
+  towards salmon; the glides between tell them apart. **Following, the camera frames
   the whole group** at the shared "now": it looks at the middle of the gliders' steady
   positions and pulls back just enough to hold them, never closer than the reader's zoom —
   a pinhole fit, because a glider nearer the camera is magnified and the look-ahead puts
@@ -900,6 +906,9 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   the centre where the line of sight meets MapLibre's own heights (`groundOnSightLine`),
   camera kept: `recalculateZoom` reads that point from the last frame's coarse coordinate
   buffer, and its recentres shifted the picture 14 px on CI.
+  **The ramp's grey middle is near-white on the map** (`NEUTRAL_MAP`, October 2026): the
+  charts' grey (169, 164, 154) under ±0.7 m/s vanished into Alpine meadow and rock; a dark
+  outline under the track was tried and did less. The charts keep the grey.
   Climbs are dots, not
   numbers, and the track is the canvas's width (2.6 px over the device ratio, capped at
   2). **Ground and exaggeration are one cycling button each**, against the canvas's

@@ -99,8 +99,9 @@
   // once per flight; a map built later asks `__compareFor` itself.
   // XContest's own way of telling tracks apart: thin lines, one muted colour each — orange,
   // sky blue, brick red, indigo, olive. Bright ones shouted over the ground; the climb ramp
-  // is dropped while comparing, because five climb colours a track times several tracks
-  // is no way to tell them apart. A flight keeps its colour on every map.
+  // is not drawn while comparing, because five climb colours a track times several tracks
+  // is no way to tell them apart — the climb is shades of the flight's colour instead
+  // (`shade` in `map3d`). A flight keeps its colour on every map.
   var OTHER_COLOURS = ['#e0893a', '#3aa8d0', '#c9483c', '#5a5fc0', '#8a9a3a'];
   var scenes = {};
   function sceneOf(article) {
