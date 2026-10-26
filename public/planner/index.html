@@ -2126,7 +2126,9 @@ function initView3d(root, cursorTrack, preset) {
       .filter(function (v) { return v > 0; });
     var openVertical = parseFloat(panel.dataset.vertical) || offered[0] || 1;
     var hasPhases = !!(scene.phases && scene.phases.length);
+    var hasTrack = tr.lon.length > 1;
 
+    var layersName = hasTrack ? 'Ground, height and track' : 'Ground and height';
     var view = document.createElement('div');
     view.className = 'maplibre-view merged-view';
     view.innerHTML =
@@ -2197,10 +2199,16 @@ function initView3d(root, cursorTrack, preset) {
       '<div class="m3-corner view3d-controls-extra" hidden><div class="m3-corner-row">' +
         '<div class="m3-layers">' +
           '<button type="button" data-m3="layers" class="m3-icon" aria-expanded="false" aria-haspopup="true"' +
-          ' title="Ground and height" aria-label="Ground and height">' + ICON.layers + '</button>' +
+          ' title="' + layersName + '" aria-label="' + layersName + '">' + ICON.layers + '</button>' +
           '<div class="m3-layers-panel" hidden>' +
             '<span>Ground</span><div class="view3d-seg m3-grounds" role="group" aria-label="Ground"></div>' +
             '<span>Height</span><div class="view3d-seg m3-verticals" role="group" aria-label="Vertical exaggeration"></div>' +
+            // The track's shadow on the ground and the wall down to it, each on or off.
+            (hasTrack ? '<span>Track</span><div class="view3d-seg m3-trace" role="group" aria-label="Under the track">' +
+              '<button type="button" data-m3-trace="shadow" aria-pressed="false"' +
+              ' title="The track\'s shadow on the ground">Shadow</button>' +
+              '<button type="button" data-m3-trace="wall" aria-pressed="false"' +
+              ' title="A see-through wall from the track down to the ground">Wall</button></div>' : '') +
           '</div></div>' +
         // None under the flight (the layers cover Europe; Hunza is not): the button greyed
         // and, pressed, saying why under it — a title is no use on a phone, and without
@@ -2307,6 +2315,8 @@ function initView3d(root, cursorTrack, preset) {
       var spanStart = 0, spanEnd = duration;
       if (restore) basemap = restore.basemap;
       var labels = { climb: false, glide: false }, airspaceOn = alwaysAirspace;
+      // Under the track: its shadow on the ground, and a wall from it down to that shadow.
+      var trace = { shadow: false, wall: false };
       // The panel handle's airspace filter (class, floor, hours), followed here: the
       // page's controls set it on that handle, and the two maps must hide the same rings.
       var airspaceFilter = handle.airspaceFilter ? handle.airspaceFilter() : null;
@@ -2643,11 +2653,12 @@ function initView3d(root, cursorTrack, preset) {
           if (shapes) shapes.setData({ type: 'FeatureCollection', features: pendingShapes });
         }
         if (vertical !== 1) map.setTerrain({ source: 'dem', exaggeration: vertical });
-        // A task stands on the map's terrain (`planZ`), finer as tiles arrive: once they
-        // settle, and after a zoom, it is placed again.
+        // A task, and the track's shadow and wall, stand on the map's terrain (`planZ`,
+        // `onGround`), finer as tiles arrive: once they settle, and after a zoom, they are
+        // placed again.
         var regrounding = null;
         function reground() {
-          if (!route) return;
+          if (!route && !trace.shadow && !trace.wall) return;
           clearTimeout(regrounding);
           regrounding = setTimeout(function () { groundTick++; refresh(); }, 150);
         }
@@ -2852,17 +2863,21 @@ function initView3d(root, cursorTrack, preset) {
       // this one does not fade — so the left handle moved and the track stayed. Cut here
       // instead, and only when the handle has moved: each run sliced from its first fix at
       // or after `from`.
+      function cutFrom(runs, t) {
+        var out = [];
+        runs.forEach(function (run) {
+          var times = run.times, lo = 0, hi = times.length;
+          while (lo < hi) { var mid = (lo + hi) >> 1; if (times[mid] < t) lo = mid + 1; else hi = mid; }
+          if (times.length - lo < 2) return;
+          out.push(lo ? { path: run.path.slice(lo), times: times.slice(lo), colour: run.colour, ci: run.ci } : run);
+        });
+        return out;
+      }
       var clippedFrom = 0, clipped = lines;
       function linesFrom() {
         if (from === clippedFrom) return clipped;
         clippedFrom = from;
-        clipped = [];
-        lines.forEach(function (run) {
-          var times = run.times, lo = 0, hi = times.length;
-          while (lo < hi) { var mid = (lo + hi) >> 1; if (times[mid] < from) lo = mid + 1; else hi = mid; }
-          if (times.length - lo < 2) return;
-          clipped.push(lo ? { path: run.path.slice(lo), times: times.slice(lo), colour: run.colour, ci: run.ci } : run);
-        });
+        clipped = cutFrom(lines, from);
         return clipped;
       }
       function inWindow(t) { return !hasTime || (t >= from - 1 && t <= cutoff + 1); }
@@ -3118,6 +3133,54 @@ function initView3d(root, cursorTrack, preset) {
         return d.hole ? [d.ring.map(lift), d.hole.map(lift)] : d.ring.map(lift);
       }
 
+      // Under a track (`trace`): its shadow, the track laid on the map's own ground (the
+      // finest loaded, `surfaceZ`, a few metres up so the ground does not cover it), and a
+      // see-through wall between the two, in the track's colours. The wall is a quad per
+      // pair of fixes, built once, and cut to the replay's window on the GPU by its time.
+      function onGround(runs) {
+        return runs.map(function (r) {
+          return { times: r.times, colour: r.colour, ci: r.ci, path: r.path.map(function (p) {
+            return [p[0], p[1], surfaceZ(p[0], p[1]) + 3 * vertical];
+          }) };
+        });
+      }
+      function wallOf(runs, below) {
+        var out = [];
+        runs.forEach(function (r, i) {
+          var g = below[i].path;
+          for (var j = 1; j < r.path.length; j++) {
+            var a = r.path[j - 1], b = r.path[j];
+            out.push({ t: r.times[j], colour: r.colour, ci: r.ci,
+                       polygon: [[a[0], a[1], z(a[2])], [b[0], b[1], z(b[2])], g[j], g[j - 1]] });
+          }
+        });
+        return out;
+      }
+      var BY_TIME = [new deck.DataFilterExtension({ filterSize: 1 })];
+      // `runs` as the track has them (heights unscaled), `colour` a run's colour at an
+      // alpha, `cut` the left handle (shadow) and `range` the window (wall), `clock` the
+      // track's own TripsLayer clock.
+      function underTrack(out, id, runs, colour, cut, range, clock) {
+        if (!trace.shadow && !trace.wall) return;
+        var below = kept(id + '-ground', [runs, vertical, groundTick], function () { return onGround(runs); });
+        if (trace.wall) out.push(new deck.SolidPolygonLayer({
+          id: id + '-wall', data: kept(id + '-wall', [below], function () { return wallOf(runs, below); }),
+          _full3d: true, pickable: false,
+          getPolygon: function (d) { return d.polygon; },
+          getFillColor: function (d) { return colour(d, 64); },
+          extensions: BY_TIME, getFilterValue: function (d) { return d.t; }, filterRange: range,
+          parameters: GLASS, updateTriggers: { getFillColor: ownColour }
+        }));
+        if (trace.shadow) out.push(new deck.TripsLayer({
+          id: id + '-shadow', data: kept(id + '-shadow', [below, cut], function () { return cutFrom(below, cut); }),
+          getPath: function (d) { return d.path; }, getTimestamps: function (d) { return d.times; },
+          getColor: [12, 14, 18, 150], getWidth: TRACK_WIDTH, widthUnits: 'pixels',
+          currentTime: clock[0], trailLength: clock[1], fadeTrail: false,
+          capRounded: true, jointRounded: true, parameters: GLASS
+        }));
+      }
+      var ALWAYS = [-1e9, 1e9];
+
       function layers() {
         var out = [];
         var drawn = same('airspace', boxes.filter(boxShown));
@@ -3234,6 +3297,11 @@ function initView3d(root, cursorTrack, preset) {
         }
         // This flight's own marks, unless its row in the legend hid them.
         var own = !ownOff();
+        if (own && hasTrack) underTrack(out, 'own', lines, function (d, alpha) {
+          var c = ownColour ? shade(ownColour, d.ci) : d.colour;
+          return [c[0], c[1], c[2], alpha];
+        }, hasTime ? from : -Infinity, hasTime ? [from - 0.5, cutoff + 0.5] : ALWAYS,
+        hasTime ? [cutoff, Math.max(cutoff - from, 0) + 0.5] : [1e9, 2e9]);
         if (own && !hasTime) out.push(new deck.PathLayer({
           id: 'track', data: lines,
           getPath: function (d) { return d.path.map(function (p) { return [p[0], p[1], z(p[2])]; }); },
@@ -3404,6 +3472,11 @@ function initView3d(root, cursorTrack, preset) {
             return runs;
           });
           if (!track.length) return;
+          var clockNow = replaying ? cutoff : spanEnd + 1;
+          underTrack(out, 'other-' + k, track, function (d, alpha) {
+            var c = shade(o.colour, d.ci);
+            return [c[0], c[1], c[2], alpha];
+          }, -Infinity, [-1e9, clockNow + 0.5], [clockNow, spanEnd - spanStart + 2]);
           out.push(new deck.TripsLayer({
                       id: 'other-' + k, data: track,
             getPath: function (d) { return d.path.map(function (p) { return [p[0], p[1], z(p[2])]; }); },
@@ -4514,6 +4587,8 @@ function initView3d(root, cursorTrack, preset) {
         // arriving, long after 'load' has fired, and a press then was silently lost — the
         // track went to x2 over ground left at x1.
         if (styleReady) map.setTerrain({ source: 'dem', exaggeration: v });
+        // The shadow and the wall read the ground as now exaggerated: placed again.
+        if (styleReady && (trace.shadow || trace.wall)) { groundTick++; refresh(); }
       }
       label();
       function toggle(button, on) {
@@ -4554,7 +4629,11 @@ function initView3d(root, cursorTrack, preset) {
         if (!b || !view.contains(b)) return;
         var act = b.dataset.m3;
         if (act === 'layers') layersOpen(layersPanel.hidden);
-        else if (b.dataset.m3Label) {
+        else if (b.dataset.m3Trace) {
+          trace[b.dataset.m3Trace] = !trace[b.dataset.m3Trace];
+          toggle(b, trace[b.dataset.m3Trace]);
+          refresh();
+        } else if (b.dataset.m3Label) {
           labels[b.dataset.m3Label] = !labels[b.dataset.m3Label];
           toggle(b, labels[b.dataset.m3Label]);
           refresh();
@@ -4669,6 +4748,7 @@ function initView3d(root, cursorTrack, preset) {
         return { center: [c.lng, c.lat], zoom: map.getZoom(), bearing: map.getBearing(),
                  pitch: map.getPitch(), basemap: basemap, vertical: vertical,
                  labels: { climb: labels.climb, glide: labels.glide }, airspace: airspaceOn,
+                 trace: { shadow: trace.shadow, wall: trace.wall },
                  replay: !!(replay && !replay.hidden), from: from, cutoff: cutoff, speed: speed,
                  follow: following, airspaceMenu: aspMenu.state ? aspMenu.state() : null };
       };
@@ -4700,6 +4780,10 @@ function initView3d(root, cursorTrack, preset) {
         ['climb', 'glide'].forEach(function (kind) {
           var b = view.querySelector('[data-m3-label="' + kind + '"]');
           if (b && restore.labels[kind] !== labels[kind]) b.click();
+        });
+        ['shadow', 'wall'].forEach(function (kind) {
+          var b = view.querySelector('[data-m3-trace="' + kind + '"]');
+          if (b && restore.trace && restore.trace[kind] !== trace[kind]) b.click();
         });
         var a = view.querySelector('[data-m3="airspace"]');
         if (a && restore.airspace !== airspaceOn) a.click();

@@ -909,6 +909,11 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   **The ramp's grey middle is near-white on the map** (`NEUTRAL_MAP`, October 2026): the
   charts' grey (169, 164, 154) under ±0.7 m/s vanished into Alpine meadow and rock; a dark
   outline under the track was tried and did less. The charts keep the grey.
+  **The track's shadow and wall** (October 2026, the layers panel's *Track* row, each a
+  switch, both off by default): the shadow is the track laid on the map's own ground
+  (`surfaceZ`, placed again as finer tiles arrive), the wall a see-through quad per pair
+  of fixes between the two in the track's colours, cut to the replay's window on the GPU
+  (`DataFilterExtension` on each quad's time); compared flights get theirs too.
   Climbs are dots, not
   numbers, and the track is the canvas's width (2.6 px over the device ratio, capped at
   2). **Ground and exaggeration are one cycling button each**, against the canvas's

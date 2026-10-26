@@ -753,6 +753,31 @@ def test_follow_keeps_every_compared_glider_in_the_picture(browser):
     browser.js(f"({ENTRY}).setFollow(false); ({ENTRY}).setOthers(null); 1")
 
 
+def test_the_track_s_shadow_and_wall_switch_on_and_off_apart(browser):
+    """The layers panel's Track row: Shadow lays the track on the ground, Wall hangs a
+    see-through curtain from it down to there, each on its own; the wall is glass, so
+    it hides nothing behind it."""
+    _reset(browser)
+    ids = f"({ENTRY}).layers().map(d => d.id)"
+    button = "document.querySelector('.merged-view [data-m3-trace=\"%s\"]')"
+    assert "own-shadow" not in browser.js(ids) and "own-wall" not in browser.js(ids)
+    browser.js(f"{button % 'shadow'}.click(); 1")
+    assert "own-shadow" in browser.js(ids) and "own-wall" not in browser.js(ids)
+    assert browser.js(f"{button % 'shadow'}.getAttribute('aria-pressed')") == "true"
+    browser.js(f"{button % 'wall'}.click(); 1")
+    assert {"own-shadow", "own-wall"} <= set(browser.js(ids))
+    browser.js(f"{button % 'shadow'}.click(); 1")
+    layers = {d["id"]: d["parameters"] for d in browser.js(f"({ENTRY}).layers()")}
+    assert "own-shadow" not in layers and "own-wall" in layers
+    assert layers["own-wall"].get("depthWriteEnabled") is False
+    order = list(layers)
+    assert order.index("own-wall") < order.index("track"), "the track drawn over its wall"
+    browser.js(f"{button % 'wall'}.click(); 1")
+    assert "own-wall" not in browser.js(ids)
+    _frame(browser)
+    assert browser.js("window.__errors") == []
+
+
 def test_no_errors_along_the_way(browser):
     assert browser.js("window.__errors") == []
 
