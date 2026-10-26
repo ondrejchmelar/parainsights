@@ -351,7 +351,9 @@ def footer() -> str:
         f'<a href="{SOURCE}" rel="noreferrer">{_GITHUB_MARK}parainsights on GitHub</a>. Airspace © '
         '<a href="https://www.openaip.net" rel="noreferrer">openAIP</a> (CC BY-NC 4.0); '
         "imagery © Esri, Maxar, Earthstar Geographics; place names © OpenMapTiles, "
-        "© OpenStreetMap contributors; terrain: AWS Open Data; weather: Open-Meteo. "
+        "© OpenStreetMap contributors; terrain © "
+        '<a href="https://mapterhorn.com/attribution" rel="noreferrer">Mapterhorn</a> '
+        "(Copernicus DEM and national surveys); weather: Open-Meteo. "
         "Visits are counted by Cloudflare Web Analytics, without cookies."
         f"</footer>{_ANALYTICS}"
     )

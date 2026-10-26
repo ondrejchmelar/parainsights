@@ -32,7 +32,8 @@ a replay that can follow the glider, the airspace over it, and a distance tool.
 - Czech traffic circuits and aerodrome zones: this project, from ŘLP ČR publications
 - Imagery © Esri, Maxar, Earthstar Geographics; place names from
   [OpenFreeMap](https://openfreemap.org), © OpenMapTiles, © OpenStreetMap contributors
-- Terrain: AWS Open Data Terrain Tiles
+- Terrain © [Mapterhorn](https://mapterhorn.com/attribution): the Copernicus DEM, with
+  national and regional surveys merged in where they are open
 - Weather: [Open-Meteo](https://open-meteo.com); meteograms linked from flymet.cz
 - Glider classes: the DHV Geräteportal and Air Turquoise's report list
 
