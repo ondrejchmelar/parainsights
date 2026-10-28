@@ -203,9 +203,10 @@ a drag, an import, a clear). The ATZ layer's downloads (the page says *ATZ layer
 the map's own menu, the ▾ beside *Airspaces* (`aspMenu` in `map3d.js`, on a flight's map
 too, where it counts and filters only the zones near the track): the kinds, the floor,
 and on this page the hours row moved in from `.m3-airspace-extra` (October 2026; it was a
-Layers panel under the task), and at its head (`.m3-airspace-lead`) *Near the task* or
-*All in view*: every zone in view, any country, its layers fetched as the map moves, up to
-a 300 km square around the view's middle (`scope`, `VIEW_MAX` in `planner.js`). With Draw
+Layers panel under the task), and at its head (`.m3-airspace-lead`) *All in view* —
+the default and first since October 2026 (the pilot's call) — or *Near the task*: every zone
+in view, any country, its layers fetched as the map moves, up to a 300 km square around the
+view's middle (`scope`, `VIEW_MAX` in `planner.js`). With Draw
 off a click (a tap) reads the **column** over that point: every zone above it, top down,
 with its limits and activation tags, in a panel; the map goes on drawing its own
 selection and following the view (`openColumn`). The planner's **Takeoff** — a day and a time slider, opening

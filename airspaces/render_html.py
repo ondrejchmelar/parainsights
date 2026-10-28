@@ -655,8 +655,8 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
     extra += ('<div class="m3-airspace-lead" hidden>'
               '<span class="m3-drop-head">Draw</span>'
               '<div class="view3d-seg asp-scope" role="group" aria-label="Which zones to draw">'
-              '<button type="button" data-scope="near" class="is-on" aria-pressed="true">Near the task</button>'
-              '<button type="button" data-scope="view" aria-pressed="false">All in view</button></div>'
+              '<button type="button" data-scope="view" class="is-on" aria-pressed="true">All in view</button>'
+              '<button type="button" data-scope="near" aria-pressed="false">Near the task</button></div>'
               '<p class="asp-when-note asp-scope-note" id="asp-scope-note"></p>'
               '</div>')
     return f"""<article class="flight airspace-article" id="{uid}-article"{plan_attr}>

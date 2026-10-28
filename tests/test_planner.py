@@ -588,7 +588,7 @@ def test_a_zone_off_for_the_summer_leaves_the_map_and_a_booked_one_says_so():
 
 # The map's view, as far as the planner asks it: a box, its middle, and a move.
 _VIEW = """
-var bounds = null;
+var bounds = [0.0, 0.1, 0.0, 0.1];                    // a real map always has a view
 entry.map = { getBounds: function () { return { getWest: function () { return bounds[0]; },
                                                 getEast: function () { return bounds[1]; },
                                                 getSouth: function () { return bounds[2]; },
@@ -605,6 +605,7 @@ def test_all_in_view_draws_the_zones_in_view_with_no_task():
     east = _band("EAST", 14.8, 14.9, 49.4, 49.6)
     answer = _run(_DROP + _VIEW + """
     bounds = [14.0, 14.5, 49.0, 50.0];
+    window.__plannerScope('near');
     var near = drawn();
     window.__plannerScope('view');
     var west = drawn();

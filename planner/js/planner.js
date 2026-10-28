@@ -227,7 +227,7 @@
   // continent, "in view" would be every file there is.
   var NEAR = 10000;         // 5 km until October 2026: too tight to see what is coming
   var VIEW_MAX = 300000;
-  var scope = 'near';
+  var scope = 'view';        // every zone in view until the pilot narrows it (October 2026)
   var column = null;        // the zones above a clicked point, { at, rings }: below
   var LAYERS = ((document.querySelector('meta[name="airspace-layers"]') || {}).content) || 'layers/';
   var OWN_FILES = /^(CZ|cz-circuits)\.json$/;
@@ -394,7 +394,7 @@
   // For the tests: the import path a file, a code and a QR code all end in.
   window.__plannerImport = function (text) { return readTask(text).then(function (task) { importTask(task, 'a test'); return points.length; }); };
   // Whether the map is drawing a selection yet (the menu's counts mean nothing before).
-  handle.planned = function () { return points.length >= 2 || scope === 'view'; };
+  handle.planned = function () { return points.length >= 2 || (scope === 'view' && !!viewBox()); };
   var loading = null;
   function refreshAirspace() {
     showNear();

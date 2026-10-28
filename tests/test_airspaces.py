@@ -1190,6 +1190,27 @@ def test_only_a_ring_with_published_hours_carries_a_schedule(zones):
     assert scheduled["w"]["r"] == 1, "LKTA says 'otherwise O/R' and the ring must say so"
 
 
+def test_the_map_opens_on_every_zone_in_view_and_offers_that_first():
+    """The pilot's call (October 2026): a map that draws nothing until a task is drawn
+    reads as broken. All in view is the first choice and the one on."""
+    import numpy as np
+
+    from airspaces import scene as airspace_scene
+    from parainsights_map import terrain as terrain_module
+
+    overlay, base = _hours_fixture()
+    ground = terrain_module.Terrain(west=14.0, east=16.0, south=49.0, north=51.0,
+                                    elevations=np.full((4, 4), 400.0))
+    payload = airspace_scene.build(base + overlay.airspaces, terrain=ground, tiles=False)
+    markup = render_html.body(overlay, base, "26-04-01", scene=payload)
+    seg = re.search(r'<div class="view3d-seg asp-scope".*?</div>', markup, re.S).group()
+    buttons = re.findall(r'<button[^>]*data-scope="(\w+)"[^>]*>', seg)
+    assert buttons == ["view", "near"]
+    on = re.search(r'<button[^>]*class="is-on"[^>]*>', seg).group()
+    assert 'data-scope="view"' in on and 'aria-pressed="true"' in on
+    assert "var scope = 'view'" in (Path(__file__).parents[1] / "planner" / "js" / "planner.js").read_text()
+
+
 def test_the_time_filter_is_off_when_the_page_opens():
     """Same decision as the floor slider, and for a stronger reason: this one would
     withhold airspace on the strength of prose parsed out of a VFR manual page."""
