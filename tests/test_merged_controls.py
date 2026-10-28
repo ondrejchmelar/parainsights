@@ -89,6 +89,9 @@ def _scene_with_time() -> dict:
     scene["airspaceClasses"] = [["base", "Controlled"], ["restricted", "Restricted"],
                                 ["gliding", "Gliding"]]
     scene["tiles"] = dict(view3d.TILE_SOURCES)
+    # Two climbs that sounded the air, for the Wind switch's particles.
+    scene["windField"] = [{"t": 600, "alt": 1600, "vx": 4.0, "vy": 1.0, "w": 0.8},
+                          {"t": 2400, "alt": 2000, "vx": 3.0, "vy": -1.0, "w": 0.6}]
     return scene
 
 
@@ -774,6 +777,25 @@ def test_the_track_s_shadow_and_wall_switch_on_and_off_apart(browser):
     assert order.index("own-wall") < order.index("track"), "the track drawn over its wall"
     browser.js(f"{button % 'wall'}.click(); 1")
     assert "own-wall" not in browser.js(ids)
+    _frame(browser)
+    assert browser.js("window.__errors") == []
+
+
+def test_the_wind_switch_sets_particles_drifting_and_takes_them_away(browser):
+    """The layers panel's Air row: Wind draws the climbs' wind as particles, moving from
+    frame to frame, and a second press takes them and their animation away."""
+    _reset(browser)
+    ids = f"({ENTRY}).layers().map(d => d.id)"
+    button = "document.querySelector('.merged-view [data-m3=\"wind\"]')"
+    assert "wind" not in browser.js(ids)
+    browser.js(f"{button}.click(); 1")
+    assert browser.js(f"{button}.getAttribute('aria-pressed')") == "true"
+    assert "wind" in browser.js(ids)
+    clock = f"({ENTRY}).layers().find(d => d.id === 'wind').time"
+    first = browser.js(clock)
+    browser.wait(f"{clock} > {first}")
+    browser.js(f"{button}.click(); 1")
+    assert "wind" not in browser.js(ids)
     _frame(browser)
     assert browser.js("window.__errors") == []
 

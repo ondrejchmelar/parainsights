@@ -393,6 +393,11 @@
     var openVertical = parseFloat(panel.dataset.vertical) || offered[0] || 1;
     var hasPhases = !!(scene.phases && scene.phases.length);
     var hasTrack = tr.lon.length > 1;
+    // The climbs that measured the wind (`TV.scene.data`'s `windField`), for the particles.
+    var soundings = (scene.windField || []).filter(function (s) {
+      return isFinite(s.alt) && isFinite(s.vx) && isFinite(s.vy);
+    });
+    var hasAir = hasTrack && soundings.length > 0;
 
     var layersName = hasTrack ? 'Ground, height and track' : 'Ground and height';
     var view = document.createElement('div');
@@ -475,6 +480,10 @@
               ' title="The track\'s shadow on the ground">Shadow</button>' +
               '<button type="button" data-m3-trace="wall" aria-pressed="false"' +
               ' title="A see-through wall from the track down to the ground">Wall</button></div>' : '') +
+            // The wind the climbs measured, as particles drifting through the air.
+            (hasAir ? '<span>Air</span><div class="view3d-seg m3-air" role="group" aria-label="Air">' +
+              '<button type="button" data-m3="wind" aria-pressed="false"' +
+              ' title="The wind the climbs measured, drifting through the air around the track">Wind</button></div>' : '') +
           '</div></div>' +
         // None under the flight (the layers cover Europe; Hunza is not): the button greyed
         // and, pressed, saying why under it — a title is no use on a phone, and without
@@ -1447,6 +1456,147 @@
       }
       var ALWAYS = [-1e9, 1e9];
 
+      // ---- the wind --------------------------------------------------------------------
+      // Particles drifting through the air around the track, carried by the wind the
+      // climbs measured: weighted by time and height as `TV.airmass.windAt` weights them,
+      // at the replay's "now" while it is open and by height alone while it is not (the
+      // day's wind, not a moment's). They live in the track's box, from below the lowest
+      // climb to over the highest point, and never under the ground. The speed is a
+      // picture, not the wind's: 5 m/s would cross a pixel in seconds, so it is sped up to
+      // move about AIR_PX pixels a second at the mean speed, whatever the zoom; faster air
+      // still moves faster and draws a longer tail.
+      var AIR_PX = 45, AIR_TAIL = 1.4, AIR_STEP = 50, AIR_SAMPLE = 0.08;
+      var air = { on: false, frame: null, last: 0, tick: 0, clock: 0, sampled: 0, table: null, key: null };
+      if (hasAir) (function () {
+        var w = Infinity, e = -Infinity, s = Infinity, n = -Infinity;
+        tr.lon.forEach(function (lon, i) {
+          w = Math.min(w, lon); e = Math.max(e, lon); s = Math.min(s, tr.lat[i]); n = Math.max(n, tr.lat[i]);
+        });
+        var mid = (s + n) / 2;
+        air.mLat = 110540; air.mLon = 111320 * Math.cos(mid * Math.PI / 180);
+        // A margin of a fifth of the box, and never under 2 km.
+        var mx = Math.max((e - w) * 0.2, 2000 / air.mLon), my = Math.max((n - s) * 0.2, 2000 / air.mLat);
+        air.box = [w - mx, s - my, e + mx, n + my];
+        // Two to the square kilometre, within bounds: a 15 km triangle and a 200 km
+        // line both read as air, not as rain or as nothing.
+        var km2 = (air.box[2] - air.box[0]) * air.mLon * (air.box[3] - air.box[1]) * air.mLat / 1e6;
+        air.count = Math.round(Math.max(500, Math.min(1600, km2 * 2)));
+        var lows = soundings.map(function (d) { return d.alt; });
+        air.lo = Math.max((scene.terrain || {}).min || 0, Math.min.apply(null, lows) - 400);
+        air.hi = Math.max(scene.trackTop || 0, Math.max.apply(null, lows)) + 300;
+        air.mean = soundings.reduce(function (sum, d) { return sum + Math.hypot(d.vx, d.vy); }, 0) / soundings.length;
+        // Each particle a short trail of where it has been, faded by the TripsLayer.
+        air.parts = [];
+        for (var i = 0; i < air.count; i++) air.parts.push({ path: [], times: [], age: 0, life: 0 });
+      })();
+      // The wind every AIR_STEP metres from `lo` to `hi`, at flight time `t` (null: any).
+      function airTable(t) {
+        var levels = Math.ceil((air.hi - air.lo) / AIR_STEP) + 1, out = new Float64Array(levels * 2);
+        for (var k = 0; k < levels; k++) {
+          var alt = air.lo + k * AIR_STEP, weights = 0, vx = 0, vy = 0;
+          soundings.forEach(function (d) {
+            var dt = t === null ? 0 : (t - d.t) / 2400, dz = (alt - d.alt) / 600;
+            var weight = (d.w || 1) / (dt * dt + dz * dz + 0.05);
+            weights += weight; vx += weight * d.vx; vy += weight * d.vy;
+          });
+          out[2 * k] = vx / weights; out[2 * k + 1] = vy / weights;
+        }
+        return out;
+      }
+      // Where a particle is born: the part of the box in view, so a long flight seen
+      // close up is not 1 600 particles spread over 200 km with a handful on screen.
+      function airView() {
+        var b = air.box, v = map.getBounds();
+        var w = Math.max(b[0], v.getWest()), s = Math.max(b[1], v.getSouth());
+        var e = Math.min(b[2], v.getEast()), n = Math.min(b[3], v.getNorth());
+        air.born = w < e && s < n ? [w, s, e, n] : b;
+      }
+      function airSpawn(p, anywhere) {
+        var b = air.born || air.box;
+        p.path = []; p.times = []; p.age = 0;
+        for (var tries = 0; tries < 6; tries++) {
+          var lon = b[0] + Math.random() * (b[2] - b[0]), lat = b[1] + Math.random() * (b[3] - b[1]);
+          var floor = Math.max(air.lo, ground(lon, lat) + 40);
+          if (floor >= air.hi) continue;
+          p.path.push([lon, lat, floor + Math.random() * (air.hi - floor)]);
+          p.times.push(air.clock);
+          p.life = 3 + Math.random() * 4;
+          // At the start they are spread through their lives, so they do not all go at once.
+          if (anywhere) p.age = Math.random() * p.life;
+          return;
+        }
+        p.life = 0.5;
+      }
+      function airStep(dt) {
+        var replayOpen = hasTime && replay && !replay.hidden;
+        var key = replayOpen ? Math.round(cutoff / 30) : 'day';
+        if (key !== air.key) { air.key = key; air.table = airTable(replayOpen ? cutoff : null); }
+        var c = map.getCenter();
+        var perPixel = 78271.517 * Math.cos(c.lat * Math.PI / 180) / Math.pow(2, map.getZoom());
+        var speedup = AIR_PX * perPixel / Math.max(air.mean, 0.5);
+        air.clock += dt;
+        airView();
+        // A point of the trail every AIR_SAMPLE seconds; between them the head moves alone.
+        var sample = air.clock - air.sampled >= AIR_SAMPLE;
+        if (sample) air.sampled = air.clock;
+        var top = air.table.length / 2 - 1, b = air.box, tab = air.table;
+        air.parts.forEach(function (p) {
+          p.age += dt;
+          var n = p.path.length;
+          if (!n) { if (p.age > p.life) airSpawn(p); return; }
+          var head = p.path[n - 1];
+          var at = Math.max(0, Math.min(top, (head[2] - air.lo) / AIR_STEP)), k = Math.floor(at), f = at - k;
+          var k2 = Math.min(top, k + 1);
+          var vx = tab[2 * k] + (tab[2 * k2] - tab[2 * k]) * f, vy = tab[2 * k + 1] + (tab[2 * k2 + 1] - tab[2 * k + 1]) * f;
+          var next = [head[0] + vx * speedup * dt / air.mLon, head[1] + vy * speedup * dt / air.mLat, head[2]];
+          if (sample || n < 2) { p.path.push(next); p.times.push(air.clock); }
+          else { p.path[n - 1] = next; p.times[n - 1] = air.clock; }
+          while (p.times.length > 2 && p.times[1] < air.clock - AIR_TAIL) { p.path.shift(); p.times.shift(); }
+          if (p.age > p.life || next[0] < b[0] || next[0] > b[2] || next[1] < b[1] || next[1] > b[3] ||
+              next[2] < ground(next[0], next[1]) + 20) airSpawn(p);
+        });
+        air.tick++;
+      }
+      function airLoop(now) {
+        air.frame = null;
+        if (!air.on) return;
+        if (onScreen && !view.hidden && document.visibilityState === 'visible') {
+          // A long gap (the tab away, a slow frame) is not a leap across the box.
+          airStep(air.last ? Math.min((now - air.last) / 1000, 0.1) : 0);
+          refresh();
+        }
+        air.last = now;
+        air.frame = requestAnimationFrame(airLoop);
+      }
+      function setAir(on) {
+        air.on = on;
+        if (on) {
+          airView();
+          air.parts.forEach(function (p) { airSpawn(p, true); });
+          air.key = null; air.last = 0;
+          airStep(0);
+          if (!air.frame) air.frame = requestAnimationFrame(airLoop);
+        } else if (air.frame) { cancelAnimationFrame(air.frame); air.frame = null; }
+        refresh();
+      }
+      function airLayer() {
+        // White over a photograph, a dark blue over the paler map and bare relief.
+        var colour = basemap === 'satellite' ? [255, 255, 255] : [24, 60, 120];
+        return new deck.TripsLayer({
+          id: 'wind', data: air.parts,
+          getPath: function (p) { return p.path.map(function (q) { return [q[0], q[1], z(q[2])]; }); },
+          getTimestamps: function (p) { return p.times; },
+          // Faded in as it is born and out as it dies, as well as along its tail.
+          getColor: function (p) {
+            var a = Math.max(0, Math.min(1, p.age / 0.6, (p.life - p.age) / 1.2));
+            return [colour[0], colour[1], colour[2], Math.round(235 * a)];
+          },
+          getWidth: 2, widthUnits: 'pixels', capRounded: true, jointRounded: true,
+          currentTime: air.clock, trailLength: AIR_TAIL, fadeTrail: true, parameters: GLASS,
+          updateTriggers: { getPath: [air.tick, vertical], getTimestamps: air.tick, getColor: [air.tick, basemap] }
+        });
+      }
+
       function layers() {
         var out = [];
         var drawn = same('airspace', boxes.filter(boxShown));
@@ -1756,6 +1906,7 @@
             updateTriggers: { getPath: vertical }
           }));
         });
+        if (air.on) out.push(airLayer());
         return out;
       }
 
@@ -2895,7 +3046,10 @@
         if (!b || !view.contains(b)) return;
         var act = b.dataset.m3;
         if (act === 'layers') layersOpen(layersPanel.hidden);
-        else if (b.dataset.m3Trace) {
+        else if (act === 'wind') {
+          setAir(!air.on);
+          toggle(b, air.on);
+        } else if (b.dataset.m3Trace) {
           trace[b.dataset.m3Trace] = !trace[b.dataset.m3Trace];
           toggle(b, trace[b.dataset.m3Trace]);
           refresh();
@@ -3014,13 +3168,15 @@
         return { center: [c.lng, c.lat], zoom: map.getZoom(), bearing: map.getBearing(),
                  pitch: map.getPitch(), basemap: basemap, vertical: vertical,
                  labels: { climb: labels.climb, glide: labels.glide }, airspace: airspaceOn,
-                 trace: { shadow: trace.shadow, wall: trace.wall },
+                 trace: { shadow: trace.shadow, wall: trace.wall }, wind: air.on,
                  replay: !!(replay && !replay.hidden), from: from, cutoff: cutoff, speed: speed,
                  follow: following, airspaceMenu: aspMenu.state ? aspMenu.state() : null };
       };
       api.dispose = function () {
         pause();
         setFollow(false);
+        if (air.frame) cancelAnimationFrame(air.frame);
+        air.on = false;
         clearTimeout(sleepTimer); clearTimeout(lightTimer);
         watchers.forEach(function (w) { w.disconnect(); });
         unwrap.forEach(function (w) { if (handle[w.name] === w.wrapper) handle[w.name] = w.original; });
@@ -3051,6 +3207,8 @@
           var b = view.querySelector('[data-m3-trace="' + kind + '"]');
           if (b && restore.trace && restore.trace[kind] !== trace[kind]) b.click();
         });
+        var windButton = view.querySelector('[data-m3="wind"]');
+        if (windButton && !!restore.wind !== air.on) windButton.click();
         var a = view.querySelector('[data-m3="airspace"]');
         if (a && restore.airspace !== airspaceOn) a.click();
         if (restore.airspaceMenu && aspMenu.restore) aspMenu.restore(restore.airspaceMenu);
@@ -3254,10 +3412,13 @@
         onClick: function (fn) { clickers.push(fn); },
         // fn(index, [lon, lat], done) while a turnpoint is dragged; done on letting go.
         onDragPoint: function (fn) { draggers.push(fn); },
-        // What deck.gl draws now, as ids and depth parameters: for the tests, which cannot
-        // tell a hidden track from a missing one by looking.
+        // What deck.gl draws now, as ids, depth parameters and a trail's clock: for the
+        // tests, which cannot tell a hidden track from a missing one by looking.
         layers: function () {
-          return layers().map(function (l) { return { id: l.id, parameters: l.props.parameters || null }; });
+          return layers().map(function (l) {
+            return { id: l.id, parameters: l.props.parameters || null,
+                     time: l.props.currentTime === undefined ? null : l.props.currentTime };
+          });
         },
         // GeoJSON polygons drawn on the ground under everything else on the map, each with
         // optional `colour` and `opacity` properties; null or [] clears them.

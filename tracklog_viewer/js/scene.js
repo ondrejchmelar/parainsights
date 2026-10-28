@@ -103,7 +103,15 @@
       // Its wall clock's offset from UTC there and then, seconds: a compared flight from
       // another day labels the side view's time axis with its own clock as well.
       utcOffset: utcOffset(f.time[0], f.timezone),
-      wind: a.wind ? { ms: R(a.wind.speed, 1), from: R(a.wind.direction, 1), cardinal: a.wind.cardinal } : null
+      wind: a.wind ? { ms: R(a.wind.speed, 1), from: R(a.wind.direction, 1), cardinal: a.wind.cardinal } : null,
+      // The air the particles drift in: each climb that measured the wind, as
+      // `TV.airmass.field` trusts them — the flight's clock, the climb's mid-height and
+      // where the air was going, m/s east and north. The map weights them as `windAt`
+      // does. Empty for a flight that circled nothing.
+      windField: (TV.airmass ? TV.airmass.field(a).soundings : []).map(function (s) {
+        return { t: Math.round(s.t), alt: Math.round(s.altitude), vx: R(s.vx, 2), vy: R(s.vy, 2),
+                 w: R(s.confidence, 2) };
+      })
     };
     if (options.airspaceRemote) {
       // Loaded when the map is opened (`loadAirspace` in `parainsights_map.view3d`): the

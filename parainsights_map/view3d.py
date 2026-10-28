@@ -143,6 +143,7 @@ STYLE = """
 .view3d-seg button + button { margin-left: -1px; }
 .view3d-seg button:first-child { border-radius: 10px 0 0 10px; }
 .view3d-seg button:last-child { border-radius: 0 10px 10px 0; }
+.view3d-seg button:only-child { border-radius: 10px; }
 .m3-rail .view3d-seg button + button { margin-left: 0; margin-top: -1px; }
 .m3-rail .view3d-seg button:first-child { border-radius: 10px 10px 0 0; }
 .m3-rail .view3d-seg button:last-child { border-radius: 0 0 10px 10px; }

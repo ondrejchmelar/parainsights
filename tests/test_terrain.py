@@ -140,6 +140,19 @@ class TestView3dPayload:
         # Mostly one or two characters a step at 1 Hz, which is the whole saving.
         assert max(abs(v) for v in track["lon"][1:]) < 100
 
+    def test_the_wind_particles_drift_in_what_the_climbs_measured(self, ramp, tmp_path):
+        """`windField` is each climb that sounded the air, where the air was going: a
+        climb drifting east at 4 m/s carries the particles east, at its own height."""
+        from tests.test_analysis import build, circling
+        out = js.run("""var a = TV.analysis.analyse(await load(input.path));
+          return TV.scene.data(a, input.grid, {}).windField;""",
+                     path=build(tmp_path / "w.igc", circling(200, drift=(4.0, 0.0))), grid=_grid(ramp))
+        assert len(out) == 1
+        assert out[0]["vx"] == pytest.approx(4.0, abs=0.3) and abs(out[0]["vy"]) < 0.3
+        assert 1000 < out[0]["alt"] < 1400 and out[0]["w"] > 0
+        still = self._scene(ramp, tmp_path).scene["windField"]
+        assert all(abs(d["vx"]) < 0.3 and abs(d["vy"]) < 0.3 for d in still)
+
     def test_the_airspace_is_loaded_by_the_page(self, ramp, tmp_path):
         """A page with airspace offers it on every flight: the map loads the layers under
         its ground (`loadAirspace`) and its switch then draws them or says why not

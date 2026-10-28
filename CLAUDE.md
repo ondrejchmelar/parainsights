@@ -731,6 +731,21 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   drawing it along the bearing is the classic 180° error that still looks like a
   perfectly good arrow. **A click on the rose turns the map north**
   (`easeTo({bearing: 0})`), and is not also a turnpoint for the planner.
+- **The wind as particles is the climbs' wind, not a model's** (October 2026). The layers
+  panel's Air row has a Wind switch on a flight whose climbs measured any: the scene
+  carries `windField`, each sounding `TV.airmass.field` trusts (flight clock, mid-height,
+  where the air was going in m/s east and north, its confidence), and the map weights them
+  as `windAt` does — by time and height at the replay's "now" while it is open, by height
+  alone while it is not. Particles live in the track's box plus a fifth, from 400 m under
+  the lowest climb to 300 m over the top of the track, never under the page's ground grid,
+  and are born in the part of that box in view (a 400 km flight seen close up otherwise had
+  a handful on screen). **Their speed is a picture**: sped up so the mean wind moves about
+  45 px a second at any zoom, since 5 m/s would cross a pixel in seconds; faster air still
+  moves faster and draws a longer tail. Trails are a `TripsLayer` with `fadeTrail`, white
+  over the photograph and dark blue over the map and relief. The animation is its own
+  `requestAnimationFrame` loop calling `refresh()`, which stops with the switch and idles
+  off screen. The planner's 850 hPa wind (`setWind`) is one number for a country and is
+  not drawn this way.
 - **An uploaded track fetches its own DEM, and CORS is why it can.** `js/upload.js` asks
   for the box the CLI would (`TV.terrain.remoteFor`: 64 tiles, 120 000 nodes over up to
   480 columns) and the page's own `loadTerrain` fills it — mosaicking Mapterhorn's terrarium tiles
