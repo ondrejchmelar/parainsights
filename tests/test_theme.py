@@ -153,13 +153,18 @@ def test_the_welcome_shows_once_and_is_remembered():
     var closedAtLoad = !dialog.open;
     var opened = window.__welcome.maybe(true);
     var open = dialog.open;
-    dialog.querySelector('.btn.primary').click();
-    // The dialog's close event is queued, not dispatched inside click().
-    return new Promise(function (done) { setTimeout(function () {
-      done({ closedAtLoad: closedAtLoad, opened: opened, open: open, after: dialog.open,
-             stored: localStorage.getItem(window.__welcome.key),
-             again: window.__welcome.maybe(true) });
-    }, 50); });
+    // The dialog's close event is queued, not dispatched inside click(), so the answer
+    // waits for it: a 50 ms timer lost the race on a loaded CI runner (October 2026).
+    return new Promise(function (done) {
+      function answer() {
+        done({ closedAtLoad: closedAtLoad, opened: opened, open: open, after: dialog.open,
+               stored: localStorage.getItem(window.__welcome.key),
+               again: window.__welcome.maybe(true) });
+      }
+      dialog.addEventListener('close', function () { setTimeout(answer, 0); }, { once: true });
+      setTimeout(answer, 5000);
+      dialog.querySelector('.btn.primary').click();
+    });
     """)
     assert answer["closedAtLoad"], "the welcome opened on a page off the published site"
     assert answer["opened"] and answer["open"]
