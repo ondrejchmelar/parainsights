@@ -459,16 +459,16 @@ _PICTURES = {
 WELCOME = {
     "meteo": ("Is it worth driving anywhere today, and where?", [
         "Compare any takeoffs side by side, four days ahead",
-        "Wind by hour and height, the thermal top and the cloudbase",
+        "An airgram with the thermal top and the cloudbase",
         "The sounding, and flymet's meteogram for the nearest airfield"]),
-    "airspace": ("What is that task worth, and what does it cross?", [
+    "airspace": ("What is that task worth, and which airspace do I need to check?", [
         "Draw a task on a 3D map and see its XContest score",
         "Every airspace it crosses, floor to ceiling, plus Czech ATZs and circuits",
         "Export to XCTrack, sun and wind for your takeoff time"]),
     "flights": ("How did that flight go?", [
         "Drop in your IGC or KMZ; it is analysed in your browser, nothing is uploaded",
-        "Every climb and glide, the wind you flew in, a replay in 3D",
-        "A debrief of where the flight lost time and height; compare with friends"]),
+        "Every climb and glide, a 3D replay, compare with friends",
+        "A debrief of where the flight could be improved"]),
 }
 
 WELCOME_STYLE = """
@@ -533,8 +533,8 @@ def welcome(current: str, depth: int = 1) -> str:
         '<form method="dialog" class="w-box">'
         f'<button class="tool w-close" aria-label="Close">{icon(ICONS["close"])}</button>'
         '<h2 id="welcome-title">Welcome to parainsights</h2>'
-        '<p class="w-lead">Free tools for paraglider pilots, one for each part of the day: is it '
-        'worth going, what to fly, and how it went.</p>'
+        '<p class="w-lead">Free tools for paraglider pilots, split into three steps: where to go, '
+        'what to fly, and how it went.</p>'
         f'<ul class="w-cards">{"".join(cards)}</ul>'
         '<div class="w-foot"><p>The tabs at the top of every page switch between the three.</p>'
         '<button class="btn primary">Got it</button></div>'
