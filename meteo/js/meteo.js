@@ -526,6 +526,8 @@
     }
     ends(frame);
     add.innerHTML = PLUS_ICON + '<span>Add takeoff</span>';
+    // Nothing chosen: + is the one thing on the page to press, so it says so.
+    add.classList.toggle('is-invite', !chosen().length);
     add.setAttribute('aria-label', 'Add takeoff');
     // The cap, said only when it matters: on the button that stops working.
     add.disabled = chosen().length >= MAX_CHOSEN;
@@ -971,19 +973,6 @@
           + '<canvas class="met-canvas met-col-sounding" width="380" height="300"></canvas>'
           + '<p class="met-col-top" hidden><span class="txt"></span></p>'
           + '<figure class="met-col-fly" hidden></figure>';
-
-  // While the day's forecast is still on its way on a first visit, a column the size a
-  // takeoff's will be stands where it will go. It used to be nothing, and the page under
-  // it jumped down half a screen when the first takeoff arrived (layout shift, measured
-  // at 0.19 on a phone).
-  function drawWaiting() {
-    var box = document.getElementById('met-columns');
-    box.classList.add('is-single');
-    box.classList.remove('is-two');
-    box.innerHTML = '<div class="met-col met-col-wait" aria-hidden="true">' + COLUMN + '</div>';
-    box.querySelector('.name').textContent = '\u00a0';
-    box.querySelector('.met-col-rose span').textContent = '\u00a0';
-  }
 
   function drawColumns() {
     var box = document.getElementById('met-columns');
@@ -1824,13 +1813,11 @@
   function drawSite() {
     var panel = document.getElementById('met-panel');
     var picked = chosen();
-    var waiting = !picked.length && !state.surface && !state.failed;
-    panel.hidden = !picked.length && !waiting;
+    panel.hidden = !picked.length;
     document.getElementById('met-sub').textContent = picked.length > 1
       ? picked.length + ' takeoffs, the same hour and the same model'
       : '';
     if (!picked.length) {
-      if (waiting) drawWaiting();
       drawKeys();
       return;
     }
@@ -2082,13 +2069,17 @@
     say('');
     drawModel();
     drawList();
-    // Open the best takeoff of the day rather than an empty page: this page's answer to
-    // "is it worth going anywhere" is a sounding, and making the reader pick a hill
-    // before it will show them one hides the point. Only on a first visit — a reader who
-    // has chosen their own hills is not shown a fourth one they did not ask for.
+    // Nothing chosen opens the picker, ranked for the day, rather than choosing for the
+    // reader: it used to pick the best-ranked takeoff, a hill the reader may never fly
+    // (the pilot's call, October 2026). After the welcome, if that is up: two dialogs
+    // stacked is one too many.
     if (!chosen().length) {
-      var first = document.querySelector('.met-site');
-      if (first) toggle(Number(first.dataset.index));
+      var welcome = document.getElementById('welcome');
+      if (welcome && welcome.open) {
+        welcome.addEventListener('close', function () {
+          if (!chosen().length) openPicker();
+        }, { once: true });
+      } else openPicker();
     } else {
       drawCompare();
       loadProfiles();

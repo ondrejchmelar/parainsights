@@ -402,8 +402,17 @@ def _local_flymet():
         server.shutdown()
 
 
-def _probe_page(body: str, *, site_count: int = 3, hold: bool = False) -> dict:
-    """Run the real meteo page against a stubbed Open-Meteo and return what `body` says."""
+# The takeoff a returning reader has chosen, for every probe that does not ask for an
+# empty page: the one the page used to choose by itself on a first visit, before it
+# opened the picker instead — under the stub's wind every takeoff with a rose is "too
+# strong", so it was the first without one.
+_REMEMBERED = [next(i for i, s in enumerate(sites.SITES) if not s["winds"])]
+
+
+def _probe_page(body: str, *, site_count: int = 3, hold: bool = False,
+                remembered: list | None = _REMEMBERED) -> dict:
+    """Run the real meteo page against a stubbed Open-Meteo and return what `body` says.
+    `remembered` is the takeoffs chosen on an earlier visit; None is a first visit."""
     chrome = CHROME
     profile = json.dumps(_as_two_models(_fake_profile()))
     surface = json.dumps([{
@@ -428,6 +437,15 @@ def _probe_page(body: str, *, site_count: int = 3, hold: bool = False) -> dict:
     window.__held = %s;
     var released = null;
     window.__release = function () { if (released) released(); };
+    (function (remembered) {
+      var key = 'parainsights.meteo.sites';
+      try {
+        if (remembered) {
+          localStorage.setItem(key, JSON.stringify(remembered));
+          localStorage.setItem(key + '.order', JSON.stringify(remembered));
+        } else { localStorage.removeItem(key); localStorage.removeItem(key + '.order'); }
+      } catch (error) { /* file:// without storage: a first visit */ }
+    })(%s);
     window.fetch = function (url) {
       var surfaceAsk = String(url).indexOf('meta.json') < 0 && String(url).indexOf('geopotential_height') < 0;
       if (window.__held && surfaceAsk) {
@@ -443,7 +461,8 @@ def _probe_page(body: str, *, site_count: int = 3, hold: bool = False) -> dict:
       } });
     };
     </script>
-    """ % (profile, surface, json.dumps(_FAKE_META), "true" if hold else "false")
+    """ % (profile, surface, json.dumps(_FAKE_META), "true" if hold else "false",
+       json.dumps(remembered))
     page = cli.page(render_html.body(), "Meteo")
     assert _FLYMET_HOST in page, "flymet's host moved; this test rewrites it by hand"
     probe = """
@@ -628,17 +647,36 @@ def test_flymet_carries_the_hour_on_its_own_utc_axis():
 
 @needs_chrome
 class TestChoosingTakeoffs:
-    def test_the_page_opens_with_the_best_takeoff_already_chosen(self):
-        """A page that shows nothing until the reader picks a hill hides its own answer
-        to "is it worth going anywhere today"."""
+    def test_a_first_visit_chooses_nothing_and_opens_the_picker(self):
+        """The page used to choose the day's best-ranked takeoff, a hill the reader may
+        never fly. Now nothing is chosen, + is lit, and the ranked list is open."""
+        answer = _probe_page("""
+        var m = window.__meteo;
+        var add = document.getElementById('met-add');
+        var open = document.getElementById('met-modal').open === true;
+        var lit = add.classList.contains('is-invite');
+        m.add(0);
+        return { chosen: m.chosen().length, open: open, lit: lit,
+                 rows: document.querySelectorAll('.met-site').length,
+                 litAfter: add.classList.contains('is-invite') };
+        """, remembered=None)
+        assert answer["open"] is True, "the picker should open by itself"
+        assert answer["rows"] == len(sites.SITES)
+        assert answer["lit"] is True
+        assert answer["litAfter"] is False, "+ stays lit after a takeoff is chosen"
+
+    def test_a_remembered_takeoff_opens_without_the_picker(self):
         answer = _probe_page("""
         var m = window.__meteo;
         return { chosen: m.chosen().length, focused: m.state.site,
+                 open: document.getElementById('met-modal').open === true,
+                 lit: document.getElementById('met-add').classList.contains('is-invite'),
                  panel: document.getElementById('met-panel').hidden,
                  chips: document.querySelectorAll('.met-pick').length };
         """)
         assert answer["chosen"] == 1
-        assert answer["focused"] is not None
+        assert answer["focused"] == _REMEMBERED[0]
+        assert answer["open"] is False and answer["lit"] is False
         assert answer["panel"] is False
         assert answer["chips"] == 1
 
@@ -1494,28 +1532,26 @@ def test_the_airgram_draws_the_day_and_reads_the_wind_under_the_pointer():
 
 @needs_chrome
 def test_nothing_moves_when_the_first_forecast_arrives():
-    """Layout shift: on a first visit the page waited for the day's forecast with no
-    column at all, and the first takeoff's arrived half a screen tall, pushing the page
-    under it down (0.19 of the 0.23 measured on a phone). A column of the same size
-    stands in until then; the status is a notice floating over the page, not a line in
-    its header, and the day row is its height before its buttons are added."""
+    """Layout shift: the page once waited for the day's forecast with no column at all,
+    and the first takeoff's arrived half a screen tall, pushing the page under it down
+    (0.19 of the 0.23 measured on a phone). A remembered takeoff's column stands where it
+    will be from the start (a first visit has none: it opens the picker); the status is a
+    notice floating over the page, not a line in its header, and the day row is its
+    height before its buttons are added."""
     answer = _probe_page("""
     function box(selector) {
       var r = document.querySelector(selector).getBoundingClientRect();
       return [Math.round(r.top), Math.round(r.left), Math.round(r.width), Math.round(r.height)];
     }
     var before = { air: box('.met-col-air'), sounding: box('.met-col-sounding'),
-                   waiting: !!document.querySelector('.met-col-wait'),
                    status: getComputedStyle(document.getElementById('met-status')).position,
                    days: document.getElementById('met-days').getBoundingClientRect().height };
     window.__release();
     return new Promise(function (done) { setTimeout(done, 600); }).then(function () {
-      return { before: before, after: { air: box('.met-col-air'), sounding: box('.met-col-sounding'),
-               waiting: !!document.querySelector('.met-col-wait') } };
+      return { before: before, after: { air: box('.met-col-air'), sounding: box('.met-col-sounding') } };
     });
     """, hold=True)
     before, after = answer["before"], answer["after"]
-    assert before["waiting"] and not after["waiting"]
     assert before["status"] == "fixed"
     assert before["days"] >= 44
     # The charts arrive exactly where the stand-in's were.

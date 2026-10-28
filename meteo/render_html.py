@@ -101,11 +101,6 @@ STYLE = """
   max-width:calc(100vw - 32px); width:max-content; padding:8px 16px; border-radius:999px;
   background:var(--pop-bg); color:var(--pop-ink); font-size:15px; box-shadow:var(--float-shadow); }
 .met-status:empty { display:none; }
-/* The column standing in for a takeoff while the forecast loads. */
-.met-col-wait .met-col-tools { visibility:hidden; }
-.met-col-wait .met-canvas { animation: met-wait 1.4s ease-in-out infinite alternate; }
-@keyframes met-wait { from { opacity:.55; } to { opacity:1; } }
-@media (prefers-reduced-motion: reduce) { .met-col-wait .met-canvas { animation:none; } }
 
 /* The chosen takeoffs, as one switcher, then +; the list of every takeoff is behind +.
    Wider than its row the switcher scrolls, and an end with more takeoffs past it fades
@@ -129,6 +124,12 @@ STYLE = """
 .met-picks.more-l .met-more-l, .met-picks.more-r .met-more-r { opacity:1; }
 .met-add { border-style:dashed; color:var(--ink-2); cursor: pointer; flex:none; }
 .met-add:disabled { opacity: .5; cursor: default; }
+/* No takeoff chosen: + in the accent, with a slow ring, until one is. */
+.met-add.is-invite { border-style:solid; border-color:var(--accent); background:var(--accent);
+  color:var(--on-accent); animation: met-invite 1.8s ease-out infinite; }
+.met-add.is-invite:hover { background:var(--accent); filter:brightness(1.06); }
+@keyframes met-invite { from { box-shadow:0 0 0 0 var(--accent); } to { box-shadow:0 0 0 10px transparent; } }
+@media (prefers-reduced-motion: reduce) { .met-add.is-invite { animation:none; } }
 .met-cap { display: none; }
 
 /* The comparison: the page's answer, so its largest text. It is also the palette's
