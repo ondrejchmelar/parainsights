@@ -459,12 +459,12 @@ _PICTURES = {
 WELCOME = {
     "meteo": ("Is it worth driving anywhere today, and where?", [
         "Compare any takeoffs side by side, four days ahead",
-        "An airgram with the thermal top and the cloudbase",
+        "The airgram, with the thermal top and the cloudbase",
         "The sounding, and flymet's meteogram for the nearest airfield"]),
-    "airspace": ("What is that task worth, and which airspace do I need to check?", [
-        "Draw a task on a 3D map and see its XContest score",
+    "airspace": ("What is that task worth, and which airspaces do I need to check?", [
+        "Draw a task on a 3D map, see its XContest score and export it to XCTrack",
         "Every airspace it crosses, floor to ceiling, plus Czech ATZs and circuits",
-        "Export to XCTrack, sun and wind for your takeoff time"]),
+        "The sun and the wind at your takeoff time"]),
     "flights": ("How did that flight go?", [
         "Drop in your IGC or KMZ; it is analysed in your browser, nothing is uploaded",
         "Every climb and glide, a 3D replay, compare with friends",
@@ -474,6 +474,9 @@ WELCOME = {
 WELCOME_STYLE = """
 .welcome { border: 0; padding: 0; background: transparent; color: var(--ink); width: 100%;
   max-width: min(1040px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); }
+/* The page behind stays where it is: a wheel or a swipe past the dialog's end scrolled it. */
+html:has(dialog.welcome[open]) { overflow: hidden; }
+.welcome { overscroll-behavior: contain; }
 .welcome::backdrop { background: rgba(10, 10, 9, .55); backdrop-filter: blur(2px); }
 .welcome .w-box { position: relative; padding: 26px 28px 24px; background: var(--paper);
   border: 1px solid var(--rule); border-radius: 14px; box-shadow: 0 18px 60px rgba(0,0,0,.4); }

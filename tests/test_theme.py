@@ -153,11 +153,13 @@ def test_the_welcome_shows_once_and_is_remembered():
     var closedAtLoad = !dialog.open;
     var opened = window.__welcome.maybe(true);
     var open = dialog.open;
+    var locked = getComputedStyle(document.documentElement).overflowY;
     // The dialog's close event is queued, not dispatched inside click(), so the answer
     // waits for it: a 50 ms timer lost the race on a loaded CI runner (October 2026).
     return new Promise(function (done) {
       function answer() {
-        done({ closedAtLoad: closedAtLoad, opened: opened, open: open, after: dialog.open,
+        done({ locked: locked, unlocked: getComputedStyle(document.documentElement).overflowY,
+             closedAtLoad: closedAtLoad, opened: opened, open: open, after: dialog.open,
                stored: localStorage.getItem(window.__welcome.key),
                again: window.__welcome.maybe(true) });
       }
@@ -170,4 +172,6 @@ def test_the_welcome_shows_once_and_is_remembered():
     assert answer["opened"] and answer["open"]
     assert not answer["after"], "Got it did not close it"
     assert answer["stored"] == "seen"
+    # A wheel or swipe past the dialog's end scrolled the page behind it.
+    assert answer["locked"] == "hidden" and answer["unlocked"] != "hidden"
     assert answer["again"] is False, "it opened a second time"
