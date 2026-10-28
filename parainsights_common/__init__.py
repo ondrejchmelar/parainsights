@@ -424,10 +424,9 @@ _PICTURES = {
       <line x1="110" y1="18" x2="110" y2="104" stroke="var(--ink)" stroke-width="1.2" stroke-dasharray="2 3"/>
       <path d="M40 30l10 6M70 28l10 4M140 28l10 2M40 76l8 8M140 74l9 6" stroke="var(--ink-2)" stroke-width="1.5" stroke-linecap="round"/>
       <path d="M196 18 V104 H300" fill="none" stroke="var(--rule)" stroke-width="1.5"/>
-      <path d="M282 104 L250 58 L262 22" fill="none" stroke="var(--climb)" stroke-width="2.5"/>
-      <path d="M232 104 L220 60 L206 24" fill="none" stroke="var(--sink)" stroke-width="2.5" stroke-dasharray="4 3"/>
-      <path d="M282 104 L246 52" stroke="var(--ink-2)" stroke-width="1.2" stroke-dasharray="3 3"/>
-      <circle cx="250" cy="58" r="5" fill="none" stroke="var(--ink)" stroke-width="2"/>
+      <path d="M292 104 L246 60 L224 22" fill="none" stroke="var(--climb)" stroke-width="2.5"/>
+      <path d="M262 104 L245 61 L221 23" fill="none" stroke="var(--sink)" stroke-width="2.5" stroke-dasharray="4 3"/>
+      <circle cx="246" cy="60" r="5" fill="none" stroke="var(--ink)" stroke-width="2"/>
       <text class="w-cap" x="24" y="126">wind · thermal top · cloudbase</text>""",
     "airspace": """
       <path d="M0 108 L40 92 L80 100 L120 78 L160 90 L210 70 L260 88 L320 76 L320 140 L0 140Z" fill="var(--shadow-ink)" opacity=".7"/>
