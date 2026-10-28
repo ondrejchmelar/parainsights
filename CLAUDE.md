@@ -1055,6 +1055,14 @@ The numbers are checkable, so check them:
 - **Don't pipe a command whose exit code you care about** — `cmd | tail` reports tail's
   status, which once hid a `NameError` for two runs.
 
+**The welcome** (October 2026): a modal on a browser's first visit to any of the three
+pages, a card per tool — a picture drawn in the tokens, its question, three bullets, a link
+(`common.welcome`, `js/welcome.js`). Closed any way, it is `seen` in localStorage
+(`parainsights.welcome`) and never shows again; it opens only on the published host
+(`SITE_HOST`) or with `?welcome`, so local builds and the browser tests never meet it.
+The report carries it only when built for the site. Change a tool's bullets in
+`common.WELCOME` when the tool changes.
+
 **One order across the site, and one theme switch.** `parainsights_common.PAGES` is the
 order — meteo, planner, flights, which is the order a day happens in — and the
 report's own view strip follows it too; it used to list its in-document views first and

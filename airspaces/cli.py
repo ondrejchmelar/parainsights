@@ -52,6 +52,7 @@ a {{ color: inherit; }}
 {common.nav("airspace", depth=1)}
 {article}
 {common.footer()}
+{common.welcome("airspace")}
 </div>
 <script>{render_html.SCRIPT}</script>
 <script>{common.THEME_SCRIPT}</script>

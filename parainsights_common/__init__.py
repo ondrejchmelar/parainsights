@@ -95,6 +95,10 @@ TOKENS = f"""
 :root[data-theme="dark"] {{ color-scheme: dark; {_DARK} }}
 """
 
+# The published site's host: what counts visits and shows the welcome, so a page built and
+# opened locally does neither.
+SITE_HOST = "ondrejchmelar.github.io"
+
 # Applied before anything is painted. A theme read from storage *after* the first paint
 # is a white flash on a dark page every time the reader opens it, which is worse than
 # not remembering at all — so this is the one script that goes in the head, and it is
@@ -115,6 +119,9 @@ THEME_SCRIPT = (Path(__file__).parent / "js/theme.js").read_text(encoding="utf-8
 # The text-size switch and the ⓘ: shipped with the theme's script because
 # every page that has the one has the others.
 THEME_SCRIPT += (Path(__file__).parent / "js/prefs.js").read_text(encoding="utf-8")
+# And the welcome (`welcome`), which does nothing on a page without one.
+THEME_SCRIPT += ((Path(__file__).parent / "js/welcome.js").read_text(encoding="utf-8")
+                 .replace("__SITE_HOST__", SITE_HOST))
 
 
 # One icon set for the whole site: 20 px, a 1.75 px round stroke in `currentColor`. A
@@ -331,7 +338,6 @@ def strip_end() -> str:
     return '<span class="site-sp"></span>' + text_button() + theme_button()
 
 
-SITE_HOST = "ondrejchmelar.github.io"
 ANALYTICS_TOKEN = "fb27179888c0414ca33f514014e088d2"
 # Cloudflare Web Analytics: no cookies, nothing stored on the reader's device. Loaded only on
 # the published site, so a report built and opened locally neither counts nor calls out.
@@ -403,3 +409,133 @@ def nav(current: str, depth: int = 0) -> str:
             parts.append(f'<a href="{up}{where}">{label}</a>')
     parts.append(strip_end())
     return f'<nav class="site-nav" aria-label="The tools here">{"".join(parts)}</nav>'
+
+
+# The welcome: a modal on a browser's first visit to any of the three pages, a card per
+# tool (October 2026, the pilot's pick of a mock). Each card's picture is drawn in the
+# tokens, not a screenshot: it holds in both themes and does not go stale when a page
+# changes. Only on the published site (`js/welcome.js`); `?welcome` shows it anywhere.
+_PICTURES = {
+    "meteo": """
+      <path d="M24 92 C 60 88, 80 60, 110 50 S 150 64, 174 80 L174 104 L24 104 Z" fill="var(--climb-1)" opacity=".5"/>
+      <rect x="24" y="18" width="150" height="86" fill="var(--sink-1)" opacity=".3" rx="4"/>
+      <path d="M24 92 C 60 88, 80 60, 110 50 S 150 64, 174 80" fill="none" stroke="var(--series-1)" stroke-width="2.5"/>
+      <path d="M24 60 C 70 56, 110 44, 174 52" fill="none" stroke="var(--ink-2)" stroke-width="1.5" stroke-dasharray="4 4"/>
+      <line x1="110" y1="18" x2="110" y2="104" stroke="var(--ink)" stroke-width="1.2" stroke-dasharray="2 3"/>
+      <path d="M40 30l10 6M70 28l10 4M140 28l10 2M40 76l8 8M140 74l9 6" stroke="var(--ink-2)" stroke-width="1.5" stroke-linecap="round"/>
+      <path d="M196 18 V104 H300" fill="none" stroke="var(--rule)" stroke-width="1.5"/>
+      <path d="M282 104 L250 58 L262 22" fill="none" stroke="var(--climb)" stroke-width="2.5"/>
+      <path d="M232 104 L220 60 L206 24" fill="none" stroke="var(--sink)" stroke-width="2.5" stroke-dasharray="4 3"/>
+      <path d="M282 104 L246 52" stroke="var(--ink-2)" stroke-width="1.2" stroke-dasharray="3 3"/>
+      <circle cx="250" cy="58" r="5" fill="none" stroke="var(--ink)" stroke-width="2"/>
+      <text class="w-cap" x="24" y="126">wind · thermal top · cloudbase</text>""",
+    "airspace": """
+      <path d="M0 108 L40 92 L80 100 L120 78 L160 90 L210 70 L260 88 L320 76 L320 140 L0 140Z" fill="var(--shadow-ink)" opacity=".7"/>
+      <path d="M196 34 L262 26 L262 76 L196 84 Z" fill="var(--bad)" fill-opacity=".16" stroke="var(--bad)" stroke-width="1.6"/>
+      <path d="M196 34 L222 44 L288 36 L262 26 M222 44 L222 94 M288 36 L288 86 L262 76" fill="none" stroke="var(--bad)" stroke-width="1.2" opacity=".7"/>
+      <path d="M58 98 L150 36 L178 104 Z" fill="var(--accent)" fill-opacity=".12" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round"/>
+      <g fill="var(--panel)" stroke="var(--accent)" stroke-width="2.5">
+        <circle cx="58" cy="98" r="6"/><circle cx="150" cy="36" r="6"/><circle cx="178" cy="104" r="6"/></g>
+      <text x="80" y="62" font-weight="700">96 km</text>
+      <text class="w-cap" x="24" y="126">task · score · airspace it crosses</text>""",
+    "flights": """
+      <path d="M0 112 L50 96 L100 106 L150 84 L210 100 L260 86 L320 98 L320 140 L0 140Z" fill="var(--shadow-ink)" opacity=".7"/>
+      <path d="M24 100 C 50 96, 60 88, 76 84" fill="none" stroke="var(--neutral)" stroke-width="2.5"/>
+      <g fill="none" stroke-width="2.5">
+        <ellipse cx="86" cy="80" rx="12" ry="4" stroke="var(--climb-1)"/>
+        <ellipse cx="88" cy="66" rx="12" ry="4" stroke="var(--climb-2)"/>
+        <ellipse cx="90" cy="52" rx="12" ry="4" stroke="var(--climb-3)"/>
+        <ellipse cx="92" cy="38" rx="12" ry="4" stroke="var(--climb-2)"/>
+        <ellipse cx="206" cy="64" rx="11" ry="4" stroke="var(--climb-1)"/>
+        <ellipse cx="208" cy="52" rx="11" ry="4" stroke="var(--climb-2)"/>
+        <ellipse cx="210" cy="40" rx="11" ry="4" stroke="var(--climb-3)"/></g>
+      <path d="M104 38 C 140 44, 170 58, 196 66" fill="none" stroke="var(--sink-2)" stroke-width="2.5"/>
+      <path d="M221 40 C 250 48, 276 60, 296 74" fill="none" stroke="var(--sink-1)" stroke-width="2.5"/>
+      <circle cx="296" cy="74" r="4.5" fill="var(--ink)"/>
+      <text class="w-cap" x="24" y="126">climbs · glides · debrief</text>""",
+}
+
+# key → the question it answers and three bullets; the label and the address are `PAGES`'.
+WELCOME = {
+    "meteo": ("Is it worth driving anywhere today, and where?", [
+        "Compare any takeoffs side by side, four days ahead",
+        "Wind by hour and height, the thermal top and the cloudbase",
+        "The sounding, and flymet's meteogram for the nearest airfield"]),
+    "airspace": ("What is that task worth, and what does it cross?", [
+        "Draw a task on a 3D map and see its XContest score",
+        "Every airspace it crosses, floor to ceiling, plus Czech ATZs and circuits",
+        "Export to XCTrack, sun and wind for your takeoff time"]),
+    "flights": ("How did that flight go?", [
+        "Drop in your IGC or KMZ; it is analysed in your browser, nothing is uploaded",
+        "Every climb and glide, the wind you flew in, a replay in 3D",
+        "A debrief of where the flight lost time and height; compare with friends"]),
+}
+
+WELCOME_STYLE = """
+.welcome { border: 0; padding: 0; background: transparent; color: var(--ink); width: 100%;
+  max-width: min(1040px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); }
+.welcome::backdrop { background: rgba(10, 10, 9, .55); backdrop-filter: blur(2px); }
+.welcome .w-box { position: relative; padding: 26px 28px 24px; background: var(--paper);
+  border: 1px solid var(--rule); border-radius: 14px; box-shadow: 0 18px 60px rgba(0,0,0,.4); }
+.welcome h2 { margin: 0; padding-right: 52px; font-size: 26px; line-height: 1.2; font-weight: 700; }
+.welcome .w-lead { margin: 6px 0 22px; color: var(--ink-2); max-width: 60ch; }
+.welcome .w-close { position: absolute; top: 14px; right: 14px; }
+.welcome .w-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 0;
+  padding: 0; list-style: none; }
+.welcome .w-card { display: flex; flex-direction: column; overflow: hidden; background: var(--panel);
+  border: 1px solid var(--rule); border-radius: 14px; }
+.welcome .w-card.is-here { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.welcome .w-pic { display: block; width: 100%; height: auto; background: var(--panel-2);
+  border-bottom: 1px solid var(--rule); }
+.welcome .w-pic text { font-family: inherit; font-size: 15px; fill: var(--ink-2); }
+.welcome .w-pic text:not(.w-cap) { fill: var(--ink); }
+.welcome .w-body { display: flex; flex-direction: column; flex: 1; padding: 14px 18px 16px; }
+.welcome h3 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 19px; line-height: 1.3; }
+.welcome .w-q { margin: 2px 0 10px; color: var(--ink-2); font-size: 15.5px; }
+.welcome .w-pts { margin: 0 0 14px; padding: 0 0 0 18px; font-size: 15.5px; line-height: 1.5; }
+.welcome .w-pts li + li { margin-top: 4px; }
+.welcome .w-go { margin-top: auto; align-self: flex-start; }
+.welcome .w-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  flex-wrap: wrap; margin: 20px 0 0; }
+.welcome .w-foot p { margin: 0; color: var(--ink-2); font-size: 15px; }
+@media (max-width: 860px) {
+  .welcome .w-box { padding: 20px 16px 16px; }
+  .welcome h2 { font-size: 22px; }
+  .welcome .w-cards { grid-template-columns: 1fr; gap: 12px; }
+  .welcome .w-pic { height: 96px; }
+  .welcome .w-cap { display: none; }
+  .welcome .w-foot .btn { width: 100%; }
+}
+"""
+STYLE += WELCOME_STYLE
+
+
+def welcome(current: str, depth: int = 1) -> str:
+    """The welcome dialog, closed; `js/welcome.js` opens it on a first visit. The card
+    for `current` is marked and closes the dialog; the others link to their pages."""
+    up = "../" * depth
+    cards = []
+    for key, label, where in PAGES:
+        question, points = WELCOME[key]
+        here = key == current
+        go = ('<button class="w-go lnk">Start here</button>' if here else
+              f'<a class="w-go lnk" href="{up}{where}">Open {"the " if key == "airspace" else ""}'
+              f'{label} {icon(ICONS["arrow"], 18)}</a>')
+        badge = ' <span class="badge accent">You are here</span>' if here else ""
+        cards.append(
+            f'<li class="w-card{" is-here" if here else ""}">'
+            '<svg class="w-pic" viewBox="0 0 320 140" preserveAspectRatio="xMidYMid slice" aria-hidden="true">'
+            f'{_PICTURES[key]}</svg>'
+            f'<div class="w-body"><h3>{label}{badge}</h3><p class="w-q">{question}</p>'
+            f'<ul class="w-pts">{"".join(f"<li>{p}</li>" for p in points)}</ul>{go}</div></li>')
+    return (
+        '<dialog class="welcome" id="welcome" aria-labelledby="welcome-title">'
+        '<form method="dialog" class="w-box">'
+        f'<button class="tool w-close" aria-label="Close">{icon(ICONS["close"])}</button>'
+        '<h2 id="welcome-title">Welcome to parainsights</h2>'
+        '<p class="w-lead">Free tools for paraglider pilots, one for each part of the day: is it '
+        'worth going, what to fly, and how it went.</p>'
+        f'<ul class="w-cards">{"".join(cards)}</ul>'
+        '<div class="w-foot"><p>The tabs at the top of every page switch between the three.</p>'
+        '<button class="btn primary">Got it</button></div>'
+        '</form></dialog>')

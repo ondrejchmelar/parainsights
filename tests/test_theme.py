@@ -118,3 +118,51 @@ def test_the_switch_flips_remembers_and_relabels():
     # the site's stroked sun or moon (`common.ICONS`), and the title says it in words.
     assert "svg" in answer["glyph"]  # escaped by the DOM dump the probe reads
     assert answer["title"] in ("Switch to the light theme", "Switch to the dark theme")
+
+
+class TestTheWelcome:
+    def test_every_page_carries_it_with_its_own_card_marked(self):
+        from airspaces import cli as airspaces_cli
+        from meteo import cli as meteo_cli
+        from tracklog_viewer import render_html
+
+        for module, key in ((meteo_cli, "meteo"), (airspaces_cli, "airspace"),
+                            (render_html, "flights")):
+            source = __import__("pathlib").Path(module.__file__).read_text(encoding="utf-8")
+            assert f'common.welcome("{key}")' in source, module.__name__
+        page = common.welcome("airspace")
+        assert page.count('<li class="w-card') == 3
+        assert page.count("is-here") == 1 and "You are here" in page
+        # The other two link on, relative to a page one level down.
+        assert 'href="../meteo/"' in page and 'href="../flights/"' in page
+        assert 'href="../planner/"' not in page
+
+    def test_it_opens_only_on_the_published_site(self):
+        """A page built and opened locally, and every browser test, opens onto itself."""
+        assert f"'{common.SITE_HOST}'" in common.THEME_SCRIPT
+        assert "__SITE_HOST__" not in common.THEME_SCRIPT
+
+
+@needs_chrome
+def test_the_welcome_shows_once_and_is_remembered():
+    from tests.test_meteo_view import _probe_page
+
+    answer = _probe_page("""
+    localStorage.removeItem(window.__welcome.key);
+    var dialog = document.getElementById('welcome');
+    var closedAtLoad = !dialog.open;
+    var opened = window.__welcome.maybe(true);
+    var open = dialog.open;
+    dialog.querySelector('.btn.primary').click();
+    // The dialog's close event is queued, not dispatched inside click().
+    return new Promise(function (done) { setTimeout(function () {
+      done({ closedAtLoad: closedAtLoad, opened: opened, open: open, after: dialog.open,
+             stored: localStorage.getItem(window.__welcome.key),
+             again: window.__welcome.maybe(true) });
+    }, 50); });
+    """)
+    assert answer["closedAtLoad"], "the welcome opened on a page off the published site"
+    assert answer["opened"] and answer["open"]
+    assert not answer["after"], "Got it did not close it"
+    assert answer["stored"] == "seen"
+    assert answer["again"] is False, "it opened a second time"

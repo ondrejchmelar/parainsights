@@ -170,6 +170,41 @@ details.fold tr:last-child, details.fold tr:last-child > * { border-bottom: 0; }
 .gloss dd { margin: 0; }
 @media (max-width: 640px) { .gloss { grid-template-columns: 1fr; gap: 0; } .gloss dd { margin-bottom: 6px; } }
 
+.welcome { border: 0; padding: 0; background: transparent; color: var(--ink); width: 100%;
+  max-width: min(1040px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); }
+.welcome::backdrop { background: rgba(10, 10, 9, .55); backdrop-filter: blur(2px); }
+.welcome .w-box { position: relative; padding: 26px 28px 24px; background: var(--paper);
+  border: 1px solid var(--rule); border-radius: 14px; box-shadow: 0 18px 60px rgba(0,0,0,.4); }
+.welcome h2 { margin: 0; padding-right: 52px; font-size: 26px; line-height: 1.2; font-weight: 700; }
+.welcome .w-lead { margin: 6px 0 22px; color: var(--ink-2); max-width: 60ch; }
+.welcome .w-close { position: absolute; top: 14px; right: 14px; }
+.welcome .w-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 0;
+  padding: 0; list-style: none; }
+.welcome .w-card { display: flex; flex-direction: column; overflow: hidden; background: var(--panel);
+  border: 1px solid var(--rule); border-radius: 14px; }
+.welcome .w-card.is-here { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.welcome .w-pic { display: block; width: 100%; height: auto; background: var(--panel-2);
+  border-bottom: 1px solid var(--rule); }
+.welcome .w-pic text { font-family: inherit; font-size: 15px; fill: var(--ink-2); }
+.welcome .w-pic text:not(.w-cap) { fill: var(--ink); }
+.welcome .w-body { display: flex; flex-direction: column; flex: 1; padding: 14px 18px 16px; }
+.welcome h3 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 19px; line-height: 1.3; }
+.welcome .w-q { margin: 2px 0 10px; color: var(--ink-2); font-size: 15.5px; }
+.welcome .w-pts { margin: 0 0 14px; padding: 0 0 0 18px; font-size: 15.5px; line-height: 1.5; }
+.welcome .w-pts li + li { margin-top: 4px; }
+.welcome .w-go { margin-top: auto; align-self: flex-start; }
+.welcome .w-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  flex-wrap: wrap; margin: 20px 0 0; }
+.welcome .w-foot p { margin: 0; color: var(--ink-2); font-size: 15px; }
+@media (max-width: 860px) {
+  .welcome .w-box { padding: 20px 16px 16px; }
+  .welcome h2 { font-size: 22px; }
+  .welcome .w-cards { grid-template-columns: 1fr; gap: 12px; }
+  .welcome .w-pic { height: 96px; }
+  .welcome .w-cap { display: none; }
+  .welcome .w-foot .btn { width: 100%; }
+}
+
 
 /* The takeoff colours are `--series-1..6` in `common.TOKENS`: an identity palette of
    their own (violet, cyan, pink, then amber-brown, slate, olive), so a takeoff's dot is
@@ -503,6 +538,41 @@ details.fold tr:last-child, details.fold tr:last-child > * { border-bottom: 0; }
   <script type="application/json" class="met-data">{"sites":[{"name":"Ran\u00e1","country":"CZ","lat":50.4075,"lon":13.7715,"alt":426,"landing":293,"tow":false,"winds":[2,0,0,2,2,0,0,2],"id":10099},{"name":"Krupka","country":"CZ","lat":50.6964,"lon":13.8769,"alt":644,"landing":248,"tow":false,"winds":[0,0,0,1,2,1,0,0],"id":6737},{"name":"Koz\u00e1kov","country":"CZ","lat":50.5933,"lon":15.2632,"alt":737,"landing":487,"tow":false,"winds":[0,0,0,1,2,2,2,1],"id":7197},{"name":"\u010cern\u00e1 hora","country":"CZ","lat":50.6496,"lon":15.74,"alt":1254,"landing":684,"tow":false,"winds":[0,0,0,1,2,1,0,0],"id":7188},{"name":"Doln\u00ed Morava","country":"CZ","lat":50.1544,"lon":16.8377,"alt":1228,"landing":724,"tow":false,"winds":[0,0,0,1,2,1,0,0],"id":21878},{"name":"Velk\u00fd Lopen\u00edk","country":"SK","lat":48.9152,"lon":17.7824,"alt":866,"landing":705,"tow":false,"winds":[0,0,1,2,2,2,1,0],"id":10270},{"name":"Martinsk\u00e9 hole","country":"SK","lat":49.0963,"lon":18.8238,"alt":1433,"landing":null,"tow":false,"winds":[],"id":22106},{"name":"P\u00e1lava - D\u011bv\u00edn","country":"CZ","lat":48.8674,"lon":16.6523,"alt":504,"landing":322,"tow":false,"winds":[0,0,2,2,0,0,0,0],"id":22931},{"name":"V\u0161echov","country":"CZ","lat":49.4379,"lon":14.6222,"alt":489,"landing":486,"tow":true,"winds":[1,1,1,2,1,1,1,2],"id":10333},{"name":"Doubrava","country":"CZ","lat":49.4328,"lon":13.2028,"alt":715,"landing":419,"tow":false,"winds":[0,0,0,0,0,0,2,0],"id":12436},{"name":"Hausstein","country":"DE","lat":48.8712,"lon":13.0729,"alt":880,"landing":501,"tow":false,"winds":[0,0,0,2,0,0,0,0],"id":8590},{"name":"Bassano","country":"IT","lat":45.8238,"lon":11.7694,"alt":865,"landing":159,"tow":false,"winds":[0,0,0,1,2,1,0,0],"id":9200},{"name":"Col Rodella","country":"IT","lat":46.4972,"lon":11.7535,"alt":2360,"landing":1415,"tow":false,"winds":[2,1,0,1,2,2,1,1],"id":7243},{"name":"Meduno","country":"IT","lat":46.2306,"lon":12.8069,"alt":983,"landing":264,"tow":false,"winds":[0,0,0,0,1,2,1,0],"id":19791},{"name":"Kobala","country":"SI","lat":46.1805,"lon":13.7791,"alt":1061,"landing":158,"tow":false,"winds":[0,0,2,1,1,1,2,0],"id":7183}],"octants":["N","NE","E","SE","S","SW","W","NW"],"levels":[1000,975,950,925,900,850,800,700,600,500],"endpoint":"https://api.open-meteo.com/v1/forecast","attribution":"Takeoffs from ParaglidingEarth, CC BY-SA","fetched":"2026-10-11","flymet":{"near":[{"slug":"RANA","name":"Rana","km":1.5},{"slug":"USTI-NL","name":"\u00dast\u00ed n.L.","km":11.0},{"slug":"DRZKOV","name":"Drzkov","km":10.7},{"slug":"VRCHLABI","name":"Vrchlab\u00ed","km":7.3},{"slug":"KRALIKY","name":"Kraliky","km":10.0},{"slug":"TRENCIN","name":"Trencin","km":18.1},{"slug":"MARTIN","name":"Martin","km":9.9},{"slug":"BRECLAV","name":"B\u0159eclav","km":19.9},{"slug":"TABOR","name":"T\u00e1bor","km":8.5},{"slug":"KLATOVY","name":"Klatovy","km":8.7},{"slug":"DEGGENDORF","name":"Deggendorf","km":9.6},null,null,null,null],"today":"https://flymet.meteopress.cz/meteogram/{slug}.png","tomorrow":"https://flymet.meteopress.cz/meteogram2/{slug}.png","index":"https://flymet.meteopress.cz/meteogram/"}}</script>
 </article>
 <footer class="site-foot"><a href="https://github.com/ondrejchmelar/parainsights" rel="noreferrer"><svg class="gh" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>parainsights on GitHub</a>. Airspace © <a href="https://www.openaip.net" rel="noreferrer">openAIP</a> (CC BY-NC 4.0); imagery © Esri, Maxar, Earthstar Geographics; place names © OpenMapTiles, © OpenStreetMap contributors; terrain © <a href="https://mapterhorn.com/attribution" rel="noreferrer">Mapterhorn</a> (Copernicus DEM and national surveys); weather: Open-Meteo. Visits are counted by Cloudflare Web Analytics, without cookies.</footer><script>if (location.hostname === 'ondrejchmelar.github.io') {const s = document.createElement('script'); s.defer = true;s.src = 'https://static.cloudflareinsights.com/beacon.min.js';s.dataset.cfBeacon = '{"token": "fb27179888c0414ca33f514014e088d2"}';document.head.appendChild(s); }</script>
+<dialog class="welcome" id="welcome" aria-labelledby="welcome-title"><form method="dialog" class="w-box"><button class="tool w-close" aria-label="Close"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15"/></svg></button><h2 id="welcome-title">Welcome to parainsights</h2><p class="w-lead">Free tools for paraglider pilots, one for each part of the day: is it worth going, what to fly, and how it went.</p><ul class="w-cards"><li class="w-card is-here"><svg class="w-pic" viewBox="0 0 320 140" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <path d="M24 92 C 60 88, 80 60, 110 50 S 150 64, 174 80 L174 104 L24 104 Z" fill="var(--climb-1)" opacity=".5"/>
+      <rect x="24" y="18" width="150" height="86" fill="var(--sink-1)" opacity=".3" rx="4"/>
+      <path d="M24 92 C 60 88, 80 60, 110 50 S 150 64, 174 80" fill="none" stroke="var(--series-1)" stroke-width="2.5"/>
+      <path d="M24 60 C 70 56, 110 44, 174 52" fill="none" stroke="var(--ink-2)" stroke-width="1.5" stroke-dasharray="4 4"/>
+      <line x1="110" y1="18" x2="110" y2="104" stroke="var(--ink)" stroke-width="1.2" stroke-dasharray="2 3"/>
+      <path d="M40 30l10 6M70 28l10 4M140 28l10 2M40 76l8 8M140 74l9 6" stroke="var(--ink-2)" stroke-width="1.5" stroke-linecap="round"/>
+      <path d="M196 18 V104 H300" fill="none" stroke="var(--rule)" stroke-width="1.5"/>
+      <path d="M282 104 L250 58 L262 22" fill="none" stroke="var(--climb)" stroke-width="2.5"/>
+      <path d="M232 104 L220 60 L206 24" fill="none" stroke="var(--sink)" stroke-width="2.5" stroke-dasharray="4 3"/>
+      <path d="M282 104 L246 52" stroke="var(--ink-2)" stroke-width="1.2" stroke-dasharray="3 3"/>
+      <circle cx="250" cy="58" r="5" fill="none" stroke="var(--ink)" stroke-width="2"/>
+      <text class="w-cap" x="24" y="126">wind · thermal top · cloudbase</text></svg><div class="w-body"><h3>Meteo <span class="badge accent">You are here</span></h3><p class="w-q">Is it worth driving anywhere today, and where?</p><ul class="w-pts"><li>Compare any takeoffs side by side, four days ahead</li><li>Wind by hour and height, the thermal top and the cloudbase</li><li>The sounding, and flymet's meteogram for the nearest airfield</li></ul><button class="w-go lnk">Start here</button></div></li><li class="w-card"><svg class="w-pic" viewBox="0 0 320 140" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <path d="M0 108 L40 92 L80 100 L120 78 L160 90 L210 70 L260 88 L320 76 L320 140 L0 140Z" fill="var(--shadow-ink)" opacity=".7"/>
+      <path d="M196 34 L262 26 L262 76 L196 84 Z" fill="var(--bad)" fill-opacity=".16" stroke="var(--bad)" stroke-width="1.6"/>
+      <path d="M196 34 L222 44 L288 36 L262 26 M222 44 L222 94 M288 36 L288 86 L262 76" fill="none" stroke="var(--bad)" stroke-width="1.2" opacity=".7"/>
+      <path d="M58 98 L150 36 L178 104 Z" fill="var(--accent)" fill-opacity=".12" stroke="var(--accent)" stroke-width="2.5" stroke-linejoin="round"/>
+      <g fill="var(--panel)" stroke="var(--accent)" stroke-width="2.5">
+        <circle cx="58" cy="98" r="6"/><circle cx="150" cy="36" r="6"/><circle cx="178" cy="104" r="6"/></g>
+      <text x="80" y="62" font-weight="700">96 km</text>
+      <text class="w-cap" x="24" y="126">task · score · airspace it crosses</text></svg><div class="w-body"><h3>Planner</h3><p class="w-q">What is that task worth, and what does it cross?</p><ul class="w-pts"><li>Draw a task on a 3D map and see its XContest score</li><li>Every airspace it crosses, floor to ceiling, plus Czech ATZs and circuits</li><li>Export to XCTrack, sun and wind for your takeoff time</li></ul><a class="w-go lnk" href="../planner/">Open the Planner <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10h12M12 6l4 4-4 4"/></svg></a></div></li><li class="w-card"><svg class="w-pic" viewBox="0 0 320 140" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <path d="M0 112 L50 96 L100 106 L150 84 L210 100 L260 86 L320 98 L320 140 L0 140Z" fill="var(--shadow-ink)" opacity=".7"/>
+      <path d="M24 100 C 50 96, 60 88, 76 84" fill="none" stroke="var(--neutral)" stroke-width="2.5"/>
+      <g fill="none" stroke-width="2.5">
+        <ellipse cx="86" cy="80" rx="12" ry="4" stroke="var(--climb-1)"/>
+        <ellipse cx="88" cy="66" rx="12" ry="4" stroke="var(--climb-2)"/>
+        <ellipse cx="90" cy="52" rx="12" ry="4" stroke="var(--climb-3)"/>
+        <ellipse cx="92" cy="38" rx="12" ry="4" stroke="var(--climb-2)"/>
+        <ellipse cx="206" cy="64" rx="11" ry="4" stroke="var(--climb-1)"/>
+        <ellipse cx="208" cy="52" rx="11" ry="4" stroke="var(--climb-2)"/>
+        <ellipse cx="210" cy="40" rx="11" ry="4" stroke="var(--climb-3)"/></g>
+      <path d="M104 38 C 140 44, 170 58, 196 66" fill="none" stroke="var(--sink-2)" stroke-width="2.5"/>
+      <path d="M221 40 C 250 48, 276 60, 296 74" fill="none" stroke="var(--sink-1)" stroke-width="2.5"/>
+      <circle cx="296" cy="74" r="4.5" fill="var(--ink)"/>
+      <text class="w-cap" x="24" y="126">climbs · glides · debrief</text></svg><div class="w-body"><h3>Flights</h3><p class="w-q">How did that flight go?</p><ul class="w-pts"><li>Drop in your IGC or KMZ; it is analysed in your browser, nothing is uploaded</li><li>Every climb and glide, the wind you flew in, a replay in 3D</li><li>A debrief of where the flight lost time and height; compare with friends</li></ul><a class="w-go lnk" href="../flights/">Open Flights <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10h12M12 6l4 4-4 4"/></svg></a></div></li></ul><div class="w-foot"><p>The tabs at the top of every page switch between the three.</p><button class="btn primary">Got it</button></div></form></dialog>
 </div>
 <script>(function () {
   var holder = document.querySelector('.meteo-article');
@@ -2708,5 +2778,37 @@ details.fold tr:last-child, details.fold tr:last-child > * { border-bottom: 0; }
     if (!(event.target.closest && event.target.closest('.info-pop'))) closeAll(null);
   }, true);
   document.addEventListener('keydown', function (event) { if (event.key === 'Escape') closeAll(null); });
+})();
+// The welcome: the three tools, once per browser. Shown on the published site only, so a
+// page built and opened locally (and every test) opens straight onto itself; `?welcome`
+// shows it anywhere, to look at. Seen is remembered however it was closed — × , Esc,
+// "Got it", a click beside it or a card's link — and a browser that cannot remember
+// (private mode) is not shown it at all, rather than shown it on every page.
+(function () {
+  var KEY = 'parainsights.welcome';
+  var dialog = document.getElementById('welcome');
+  function seen() {
+    try { return localStorage.getItem(KEY) === 'seen'; } catch (e) { return true; }
+  }
+  function remember() {
+    try { localStorage.setItem(KEY, 'seen'); } catch (e) { /* nothing to remember in */ }
+  }
+  function maybe(force) {
+    if (!dialog || dialog.open || seen()) return false;
+    if (!force && location.hostname !== 'ondrejchmelar.github.io' && !/[?&]welcome\b/.test(location.search)) return false;
+    dialog.showModal();
+    // No focus ring on the × the moment it opens; Tab still starts there.
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    return true;
+  }
+  if (dialog) {
+    dialog.addEventListener('close', remember);
+    dialog.addEventListener('click', function (event) {
+      if (event.target === dialog) dialog.close();  // the backdrop
+      else if (event.target.closest('a[href]')) remember();
+    });
+  }
+  window.__welcome = { maybe: maybe, key: KEY };
+  maybe(false);
 })();
 </script>

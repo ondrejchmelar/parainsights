@@ -526,6 +526,7 @@ def _page(title: str, bodies: list[str], tabs: str = "", extras: "list[Extra]" =
 {_flights_view(tabs, bodies, extras)}
 {"".join(f'<section data-view="{e.uid}" hidden>{e.body}</section>' for e in extras)}
 {common.footer()}
+{common.welcome("flights") if site else ""}
 </div>
 <div class="tooltip" id="tip" role="status" aria-live="polite"></div>
 <script>{view3d.SCRIPT}

@@ -35,6 +35,7 @@ a {{ color: inherit; }}
 {common.nav("meteo", depth=1)}
 {article}
 {common.footer()}
+{common.welcome("meteo")}
 </div>
 <script>{render_html.SCRIPT}</script>
 <script>{common.THEME_SCRIPT}</script>
