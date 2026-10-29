@@ -24,7 +24,9 @@
     dialog.addEventListener('close', remember);
     dialog.addEventListener('click', function (event) {
       if (event.target === dialog) dialog.close();  // the backdrop
-      else if (event.target.closest('a[href]')) remember();
+      // A link, × or "Got it" remembers on the press itself, not only through `close`:
+      // on CI's Chrome 156 the dialog closed and nothing was stored (October 2026).
+      else if (event.target.closest('a[href], button')) remember();
     });
   }
   window.__welcome = { maybe: maybe, key: KEY };
