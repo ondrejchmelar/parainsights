@@ -738,8 +738,13 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   panel's Air row has a Wind switch on a flight whose climbs measured any: the scene
   carries `windField`, each sounding `TV.airmass.field` trusts (flight clock, mid-height,
   where the air was going in m/s east and north, its confidence), and the map weights them
-  as `windAt` does — by time and height at the replay's "now" while it is open, by height
-  alone while it is not. Particles live in the track's box plus a fifth, from 400 m under
+  by time and height at the replay's "now" while it is open, smoothed broadly (an hour, a
+  kilometre, confidence squared); while it is not, every particle takes the flight's one
+  wind, the rose's. **The climbs one by one are noisy** (Col Rodella: 0.2-1 m/s, every
+  direction), and weighted by height alone each band of air took its nearest climb's — the
+  pilot saw particles running against each other (October 2026). Kept sparse and faint, the
+  pilot's call: under one particle a square kilometre (200-600), 1.2 px, alpha 140, a one
+  second tail. Particles live in the track's box plus a fifth, from 400 m under
   the lowest climb to 300 m over the top of the track, never under the page's ground grid,
   and are born in the part of that box in view (a 400 km flight seen close up otherwise had
   a handful on screen). **Their speed is a picture**: sped up so the mean wind moves about

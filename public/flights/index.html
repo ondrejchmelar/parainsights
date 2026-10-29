@@ -3392,14 +3392,13 @@ function initView3d(root, cursorTrack, preset) {
 
       // ---- the wind --------------------------------------------------------------------
       // Particles drifting through the air around the track, carried by the wind the
-      // climbs measured: weighted by time and height as `TV.airmass.windAt` weights them,
-      // at the replay's "now" while it is open and by height alone while it is not (the
-      // day's wind, not a moment's). They live in the track's box, from below the lowest
+      // climbs measured: at the replay's "now", smoothed over time and height, while it
+      // is open; the flight's one wind, as the rose says it, while not (`airTable`). They live in the track's box, from below the lowest
       // climb to over the highest point, and never under the ground. The speed is a
       // picture, not the wind's: 5 m/s would cross a pixel in seconds, so it is sped up to
       // move about AIR_PX pixels a second at the mean speed, whatever the zoom; faster air
       // still moves faster and draws a longer tail.
-      var AIR_PX = 45, AIR_TAIL = 1.4, AIR_STEP = 50, AIR_SAMPLE = 0.08;
+      var AIR_PX = 45, AIR_TAIL = 1.0, AIR_STEP = 50, AIR_SAMPLE = 0.08;
       var air = { on: false, frame: null, last: 0, tick: 0, clock: 0, sampled: 0, table: null, key: null };
       if (hasAir) (function () {
         var w = Infinity, e = -Infinity, s = Infinity, n = -Infinity;
@@ -3411,10 +3410,10 @@ function initView3d(root, cursorTrack, preset) {
         // A margin of a fifth of the box, and never under 2 km.
         var mx = Math.max((e - w) * 0.2, 2000 / air.mLon), my = Math.max((n - s) * 0.2, 2000 / air.mLat);
         air.box = [w - mx, s - my, e + mx, n + my];
-        // Two to the square kilometre, within bounds: a 15 km triangle and a 200 km
-        // line both read as air, not as rain or as nothing.
+        // Under one to the square kilometre, within bounds: a hint of the air over the
+        // track, not a layer over it (twice that read as rain and hid the ground).
         var km2 = (air.box[2] - air.box[0]) * air.mLon * (air.box[3] - air.box[1]) * air.mLat / 1e6;
-        air.count = Math.round(Math.max(500, Math.min(1600, km2 * 2)));
+        air.count = Math.round(Math.max(200, Math.min(600, km2 * 0.7)));
         var lows = soundings.map(function (d) { return d.alt; });
         air.lo = Math.max((scene.terrain || {}).min || 0, Math.min.apply(null, lows) - 400);
         air.hi = Math.max(scene.trackTop || 0, Math.max.apply(null, lows)) + 300;
@@ -3423,14 +3422,31 @@ function initView3d(root, cursorTrack, preset) {
         air.parts = [];
         for (var i = 0; i < air.count; i++) air.parts.push({ path: [], times: [], age: 0, life: 0 });
       })();
-      // The wind every AIR_STEP metres from `lo` to `hi`, at flight time `t` (null: any).
+      // The wind every AIR_STEP metres from `lo` to `hi`, at flight time `t`. With no time
+      // (the replay closed) it is the flight's one wind, the rose's, at every height: the
+      // climbs one by one are weak and noisy (half a metre a second, any direction), and
+      // weighted by height alone each band of air took the nearest climb's and the
+      // particles ran in every direction at once. In time they are smoothed broadly (an
+      // hour and a kilometre, the confident ones counted more) for the same reason.
       function airTable(t) {
         var levels = Math.ceil((air.hi - air.lo) / AIR_STEP) + 1, out = new Float64Array(levels * 2);
+        var day = null;
+        if (t === null) {
+          if (wind) {
+            var to = (wind.from + 180) * Math.PI / 180;
+            day = [wind.ms * Math.sin(to), wind.ms * Math.cos(to)];
+          } else {
+            var sw = 0, sx = 0, sy = 0;
+            soundings.forEach(function (d) { var q = (d.w || 1) * (d.w || 1); sw += q; sx += q * d.vx; sy += q * d.vy; });
+            day = [sx / sw, sy / sw];
+          }
+        }
         for (var k = 0; k < levels; k++) {
+          if (day) { out[2 * k] = day[0]; out[2 * k + 1] = day[1]; continue; }
           var alt = air.lo + k * AIR_STEP, weights = 0, vx = 0, vy = 0;
           soundings.forEach(function (d) {
-            var dt = t === null ? 0 : (t - d.t) / 2400, dz = (alt - d.alt) / 600;
-            var weight = (d.w || 1) / (dt * dt + dz * dz + 0.05);
+            var dt = (t - d.t) / 3600, dz = (alt - d.alt) / 1000;
+            var weight = (d.w || 1) * (d.w || 1) / (dt * dt + dz * dz + 0.5);
             weights += weight; vx += weight * d.vx; vy += weight * d.vy;
           });
           out[2 * k] = vx / weights; out[2 * k + 1] = vy / weights;
@@ -3523,9 +3539,9 @@ function initView3d(root, cursorTrack, preset) {
           // Faded in as it is born and out as it dies, as well as along its tail.
           getColor: function (p) {
             var a = Math.max(0, Math.min(1, p.age / 0.6, (p.life - p.age) / 1.2));
-            return [colour[0], colour[1], colour[2], Math.round(235 * a)];
+            return [colour[0], colour[1], colour[2], Math.round(140 * a)];
           },
-          getWidth: 2, widthUnits: 'pixels', capRounded: true, jointRounded: true,
+          getWidth: 1.2, widthUnits: 'pixels', capRounded: true, jointRounded: true,
           currentTime: air.clock, trailLength: AIR_TAIL, fadeTrail: true, parameters: GLASS,
           updateTriggers: { getPath: [air.tick, vertical], getTimestamps: air.tick, getColor: [air.tick, basemap] }
         });
