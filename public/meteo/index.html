@@ -263,6 +263,7 @@ html:has(dialog.welcome[open]) { overflow: hidden; }
 .met-add.is-invite:hover { background:var(--accent); filter:brightness(1.06); }
 @keyframes met-invite { from { box-shadow:0 0 0 0 var(--accent); } to { box-shadow:0 0 0 10px transparent; } }
 @media (prefers-reduced-motion: reduce) { .met-add.is-invite { animation:none; } }
+
 .met-cap { display: none; }
 
 /* The comparison: the page's answer, so its largest text. It is also the palette's
@@ -299,6 +300,80 @@ html:has(dialog.welcome[open]) { overflow: hidden; }
 .met-modal-foot { display:flex; justify-content:space-between; align-items:center; gap:10px;
   padding:12px 16px; border-top:1px solid var(--rule); font-size:15px; color:var(--ink-2); }
 .met-list { max-height:56vh; overflow-y:auto; }
+/* The two steps in the one dialog: where the reader flies (`met-prefs`, first visit and
+   the pencil), then that country's regions and their takeoffs (`met-pick`). On a desktop
+   the regions and the takeoffs are two panes; on a phone one at a time, drilled into. */
+.met-modal.is-pick { width:min(940px, 94vw); }
+.met-modal.is-prefs { width:min(640px, 94vw); }
+.met-modal[open] { display:flex; flex-direction:column; }
+.met-step { display:flex; flex-direction:column; min-height:0; flex:1; }
+.met-step[hidden] { display:none; }
+.met-prefs-head { padding:22px 22px 14px; }
+.met-prefs-head h2 { margin:0 0 8px; font-size:24px; }
+.met-prefs-head p { margin:0; color:var(--ink-2); line-height:1.45; }
+.met-tiles { padding:4px 22px 18px; overflow-y:auto; display:grid; gap:10px;
+  grid-template-columns:repeat(2, minmax(0, 1fr)); }
+.met-tile { display:grid; grid-template-columns:auto 1fr; gap:2px 14px; align-items:center; text-align:left;
+  padding:14px 16px; border-radius:14px; border:1px solid var(--edge); background:var(--panel);
+  min-height:72px; color:var(--ink); font:inherit; cursor:pointer; }
+.met-tile:hover { background:var(--panel-2); }
+.met-tile.is-on { border-color:var(--accent); background:var(--panel-2); }
+.met-tile .box { grid-row:1 / span 2; width:24px; height:24px; border-radius:5px; border:2px solid var(--edge);
+  display:flex; align-items:center; justify-content:center; }
+.met-tile.is-on .box { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
+.met-tile .box svg { display:none; }
+.met-tile.is-on .box svg { display:block; }
+.met-tile > b { font-size:17px; }
+.met-tile > span { grid-column:2; font-size:15px; color:var(--ink-2); }
+.met-modal-foot.is-prefs { padding:14px 22px; }
+.met-mine { display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:10px 16px;
+  border-bottom:1px solid var(--rule); font-size:15px; color:var(--ink-2); }
+.met-mine .lnk { font-size:16px; }
+.met-edit { width:32px; height:32px; margin:-6px 0; border:0; border-radius:50%; background:transparent;
+  color:var(--ink-2); display:inline-flex; align-items:center; justify-content:center; padding:0; cursor:pointer; }
+.met-edit:hover { background:var(--panel-2); color:var(--ink); }
+.met-panes { flex:1; min-height:0; display:grid; grid-template-columns:300px minmax(0, 1fr); }
+.met-panes > div { overflow-y:auto; min-height:0; }
+.met-regions { border-right:1px solid var(--rule); }
+.met-modal.is-pick .met-list { max-height:none; }
+.met-panes[hidden], .met-list[hidden] { display:none; }
+#met-hits { flex:1; min-height:0; overflow-y:auto; }
+#met-mine-list { display:inline-flex; flex-wrap:wrap; gap:0 6px; }
+.met-country { padding:14px 16px 6px; font-size:15px; font-weight:600; color:var(--ink-2);
+  border-bottom:1px solid var(--rule); background:var(--panel); position:sticky; top:0; z-index:1; }
+.met-region { display:grid; grid-template-columns:1fr auto; gap:2px 12px; width:100%; text-align:left; border:0;
+  border-bottom:1px solid var(--rule); border-radius:0; padding:12px 16px; background:transparent;
+  color:var(--ink); font:inherit; cursor:pointer; }
+.met-region:hover { background:var(--panel-2); }
+.met-region.is-on { background:var(--panel-2); box-shadow:inset 3px 0 0 var(--accent); }
+.met-region > b { font-weight:600; font-size:16px; }
+.met-region > span { grid-column:1; font-size:15px; color:var(--ink-2); }
+.met-region > i { grid-column:2; grid-row:1 / span 2; align-self:center; display:flex; color:var(--ink-2); }
+.met-region .fly { color:var(--good); font-weight:600; }
+.met-sub { display:flex; align-items:center; gap:10px; padding:12px 16px 8px; border-bottom:1px solid var(--rule);
+  background:var(--panel); position:sticky; top:0; z-index:1; }
+.met-sub b { display:block; font-size:17px; }
+.met-sub span { font-size:15px; color:var(--ink-2); }
+.met-back { width:40px; height:40px; flex:none; border-radius:10px; border:1px solid var(--edge);
+  background:transparent; color:var(--ink); display:inline-flex; align-items:center; justify-content:center;
+  cursor:pointer; padding:0; }
+.met-back:hover { background:var(--panel-2); }
+.met-sites-pane { transition:transform .2s ease, opacity .2s ease; }
+.met-sites-pane.is-dragged { transition:none; }
+/* A phone: the dialog takes the screen, the countries one to a row, and the regions and
+   the takeoffs one pane at a time. */
+@media (max-width: 719px) {
+  .met-modal.is-pick, .met-modal.is-prefs { width:calc(100vw - 16px); max-width:none;
+    height:calc(100dvh - 16px); max-height:none; }
+  .met-tiles { grid-template-columns:minmax(0, 1fr); }
+  .met-panes { grid-template-columns:minmax(0, 1fr); }
+  .met-regions { border-right:0; }
+  .met-panes.is-in .met-regions, .met-panes:not(.is-in) .met-sites-pane { display:none; }
+}
+@media (min-width: 720px) {
+  .met-modal.is-pick { height:min(740px, 86vh); }
+  .met-back { display:none; }
+}
 .met-site { display:grid; grid-template-columns: auto 1fr auto; gap:2px 12px; width:100%; text-align:left;
   border:0; border-bottom:1px solid var(--rule); border-radius:0; padding:12px 16px; background:transparent;
   cursor:pointer; color:var(--ink); font: inherit; }
@@ -504,16 +579,47 @@ html:has(dialog.welcome[open]) { overflow: hidden; }
   </div>
 
   <dialog class="met-modal" id="met-modal" aria-labelledby="met-modal-title">
-    <div class="met-modal-head">
-      <h2 id="met-modal-title">Takeoffs</h2>
-      <input type="search" class="met-search" id="met-search" aria-label="Search takeoffs"
-             placeholder="Search 15 takeoffs, best of the day first">
-      <button type="button" class="tool" id="met-close" aria-label="Close"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15"/></svg></button>
+    <!-- 1. Where the reader flies: a first visit's first question, and the pencil's. -->
+    <div class="met-step" id="met-prefs" hidden>
+      <div class="met-prefs-head">
+        <h2 id="met-prefs-title">Where do you fly?</h2>
+        <p>Tick the countries you’d drive to. The takeoff list shows only these, grouped
+          by region. You can change this any time.</p>
+      </div>
+      <div class="met-tiles" id="met-tiles"></div>
+      <div class="met-modal-foot is-prefs">
+        <span id="met-prefs-count"></span>
+        <button type="button" class="btn primary" id="met-prefs-go">Show takeoffs</button>
+      </div>
     </div>
-    <div class="met-list" id="met-list"></div>
-    <div class="met-modal-foot">
-      <span id="met-count"></span>
-      <button type="button" class="btn primary" id="met-done">Done</button>
+    <!-- 2. Those countries' regions, then a region's takeoffs. -->
+    <div class="met-step" id="met-pick">
+      <div class="met-modal-head">
+        <h2 id="met-modal-title">Takeoffs</h2>
+        <input type="search" class="met-search" id="met-search" aria-label="Search takeoffs"
+               placeholder="Search takeoffs">
+        <button type="button" class="tool" id="met-close" aria-label="Close"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15"/></svg></button>
+      </div>
+      <div class="met-mine" id="met-mine">
+        <span>Your countries:</span><span id="met-mine-list"></span>
+        <button type="button" class="met-edit" id="met-edit" aria-label="Change countries"
+                title="Change countries"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 16l1-4 8.5-8.5 3 3L8 15z"/><path d="M11.5 5.5l3 3"/></svg></button>
+      </div>
+      <div class="met-panes" id="met-panes">
+        <div class="met-regions" id="met-regions"></div>
+        <div class="met-sites-pane" id="met-sites-pane">
+          <div class="met-sub" id="met-sub-head">
+            <button type="button" class="met-back" id="met-back" aria-label="Back to regions"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5.5 7.5 10l4.5 4.5"/></svg></button>
+            <div><b id="met-region-name"></b><span id="met-region-meta"></span></div>
+          </div>
+          <div class="met-list" id="met-list"></div>
+        </div>
+      </div>
+      <div class="met-list" id="met-hits" hidden></div>
+      <div class="met-modal-foot">
+        <span id="met-count"></span>
+        <button type="button" class="btn primary" id="met-done">Done</button>
+      </div>
     </div>
   </dialog>
   <!-- Where everything on the page comes from, folded at the foot as on the Planner
@@ -525,8 +631,10 @@ html:has(dialog.welcome[open]) { overflow: hidden; }
         <tr><td>Forecast</td><td><a href="https://open-meteo.com/" rel="noreferrer">Open-Meteo</a>:
           DWD ICON-D2 (2&nbsp;km) as far as it reaches, ICON-EU (7&nbsp;km) after, and the
           boundary layer height from ECMWF IFS, which ICON does not publish</td></tr>
-        <tr><td>Takeoffs</td><td>Chosen after <a href="https://gfs.pgweb.cz/" rel="noreferrer">gfs.pgweb.cz</a>'s
-          essentials. Takeoffs from ParaglidingEarth, CC BY-SA</td></tr>
+        <tr><td>Takeoffs</td><td><a href="https://meteoweb.pgweb.cz/termika/" rel="noreferrer">pgweb</a>'s list,
+          646 takeoffs in 8 countries; wind directions
+          from <a href="https://www.paraglidingearth.com/" rel="noreferrer">ParaglidingEarth</a>
+          (CC BY-SA), where it records them</td></tr>
         <tr><td>Airfield meteograms</td><td>Meteograms by FLYMET, Meteopress, from
           <a href="https://flymet.meteopress.cz/meteogram/" rel="noreferrer">flymet</a>: 186
           stations, each takeoff shown its nearest</td></tr>
@@ -539,7 +647,7 @@ html:has(dialog.welcome[open]) { overflow: hidden; }
       <dt>Thermal top</dt><dd>Two estimates: ECMWF’s mixing height (dashed) and a dry parcel lifted from the 2&nbsp;m air (ring). The parcel is usually lower.</dd>
     </dl>
   </div></details>
-  <script type="application/json" class="met-data">{"sites":[{"name":"Ran\u00e1","country":"CZ","lat":50.4075,"lon":13.7715,"alt":426,"landing":293,"tow":false,"winds":[2,0,0,2,2,0,0,2],"id":10099},{"name":"Krupka","country":"CZ","lat":50.6964,"lon":13.8769,"alt":644,"landing":248,"tow":false,"winds":[0,0,0,1,2,1,0,0],"id":6737},{"name":"Koz\u00e1kov","country":"CZ","lat":50.5933,"lon":15.2632,"alt":737,"landing":487,"tow":false,"winds":[0,0,0,1,2,2,2,1],"id":7197},{"name":"\u010cern\u00e1 hora","country":"CZ","lat":50.6496,"lon":15.74,"alt":1254,"landing":684,"tow":false,"winds":[0,0,0,1,2,1,0,0],"id":7188},{"name":"Doln\u00ed Morava","country":"CZ","lat":50.1544,"lon":16.8377,"alt":1228,"landing":724,"tow":false,"winds":[0,0,0,1,2,1,0,0],"id":21878},{"name":"Velk\u00fd Lopen\u00edk","country":"SK","lat":48.9152,"lon":17.7824,"alt":866,"landing":705,"tow":false,"winds":[0,0,1,2,2,2,1,0],"id":10270},{"name":"Martinsk\u00e9 hole","country":"SK","lat":49.0963,"lon":18.8238,"alt":1433,"landing":null,"tow":false,"winds":[],"id":22106},{"name":"P\u00e1lava - D\u011bv\u00edn","country":"CZ","lat":48.8674,"lon":16.6523,"alt":504,"landing":322,"tow":false,"winds":[0,0,2,2,0,0,0,0],"id":22931},{"name":"V\u0161echov","country":"CZ","lat":49.4379,"lon":14.6222,"alt":489,"landing":486,"tow":true,"winds":[1,1,1,2,1,1,1,2],"id":10333},{"name":"Doubrava","country":"CZ","lat":49.4328,"lon":13.2028,"alt":715,"landing":419,"tow":false,"winds":[0,0,0,0,0,0,2,0],"id":12436},{"name":"Hausstein","country":"DE","lat":48.8712,"lon":13.0729,"alt":880,"landing":501,"tow":false,"winds":[0,0,0,2,0,0,0,0],"id":8590},{"name":"Bassano","country":"IT","lat":45.8238,"lon":11.7694,"alt":865,"landing":159,"tow":false,"winds":[0,0,0,1,2,1,0,0],"id":9200},{"name":"Col Rodella","country":"IT","lat":46.4972,"lon":11.7535,"alt":2360,"landing":1415,"tow":false,"winds":[2,1,0,1,2,2,1,1],"id":7243},{"name":"Meduno","country":"IT","lat":46.2306,"lon":12.8069,"alt":983,"landing":264,"tow":false,"winds":[0,0,0,0,1,2,1,0],"id":19791},{"name":"Kobala","country":"SI","lat":46.1805,"lon":13.7791,"alt":1061,"landing":158,"tow":false,"winds":[0,0,2,1,1,1,2,0],"id":7183}],"octants":["N","NE","E","SE","S","SW","W","NW"],"levels":[1000,975,950,925,900,850,800,700,600,500],"endpoint":"https://api.open-meteo.com/v1/forecast","attribution":"Takeoffs from ParaglidingEarth, CC BY-SA","fetched":"2026-10-11","flymet":{"near":[{"slug":"RANA","name":"Rana","km":1.5},{"slug":"USTI-NL","name":"\u00dast\u00ed n.L.","km":11.0},{"slug":"DRZKOV","name":"Drzkov","km":10.7},{"slug":"VRCHLABI","name":"Vrchlab\u00ed","km":7.3},{"slug":"KRALIKY","name":"Kraliky","km":10.0},{"slug":"TRENCIN","name":"Trencin","km":18.1},{"slug":"MARTIN","name":"Martin","km":9.9},{"slug":"BRECLAV","name":"B\u0159eclav","km":19.9},{"slug":"TABOR","name":"T\u00e1bor","km":8.5},{"slug":"KLATOVY","name":"Klatovy","km":8.7},{"slug":"DEGGENDORF","name":"Deggendorf","km":9.6},null,null,null,null],"today":"https://flymet.meteopress.cz/meteogram/{slug}.png","tomorrow":"https://flymet.meteopress.cz/meteogram2/{slug}.png","index":"https://flymet.meteopress.cz/meteogram/"}}</script>
+  <script type="application/json" class="met-data">{"sites":[{"name":"Ran\u00e1","country":"CZ","lat":50.4075,"lon":13.7715,"alt":426,"landing":293,"tow":false,"winds":[2,0,0,2,2,0,0,2],"id":10099},{"name":"Krupka","country":"CZ","lat":50.6964,"lon":13.8769,"alt":644,"landing":248,"tow":false,"winds":[0,0,0,1,2,1,0,0],"id":6737},{"name":"Koz\u00e1kov","country":"CZ","lat":50.5933,"lon":15.2632,"alt":737,"landing":487,"tow":false,"winds":[0,0,0,1,2,2,2,1],"id":7197},{"name":"\u010cern\u00e1 hora","country":"CZ","lat":50.6496,"lon":15.74,"alt":1254,"landing":684,"tow":false,"winds":[0,0,0,1,2,1,0,0],"id":7188},{"name":"Doln\u00ed Morava","country":"CZ","lat":50.1544,"lon":16.8377,"alt":1228,"landing":724,"tow":false,"winds":[0,0,0,1,2,1,0,0],"id":21878},{"name":"Velk\u00fd Lopen\u00edk","country":"CZ","lat":48.9152,"lon":17.7824,"alt":866,"landing":705,"tow":false,"winds":[0,0,1,2,2,2,1,0],"id":10270},{"name":"Martinsk\u00e9 hole","country":"SK","lat":49.0964,"lon":18.8238,"alt":1442,"landing":null,"tow":false,"winds":[],"id":0},{"name":"P\u00e1lava - D\u011bv\u00edn","country":"CZ","lat":48.8674,"lon":16.6523,"alt":504,"landing":322,"tow":false,"winds":[0,0,2,2,0,0,0,0],"id":22931},{"name":"V\u0161echov","country":"CZ","lat":49.4379,"lon":14.6222,"alt":489,"landing":486,"tow":true,"winds":[1,1,1,2,1,1,1,2],"id":10333},{"name":"Doubrava","country":"CZ","lat":49.4328,"lon":13.2028,"alt":715,"landing":419,"tow":false,"winds":[0,0,0,0,0,0,2,0],"id":12436},{"name":"Hausstein","country":"DE","lat":48.8712,"lon":13.0729,"alt":880,"landing":501,"tow":false,"winds":[0,0,0,2,0,0,0,0],"id":8590},{"name":"Zlatn\u00edk","country":"CZ","lat":50.514,"lon":13.715,"alt":452,"landing":null,"tow":false,"winds":[],"id":0},{"name":"\u010cer\u0165\u00e1k","country":"CZ","lat":50.619,"lon":14.053,"alt":441,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Brn\u00e1","country":"CZ","lat":50.636,"lon":14.074,"alt":459,"landing":null,"tow":false,"winds":[],"id":0},{"name":"J\u00edlov\u00e9","country":"CZ","lat":50.751,"lon":14.091,"alt":488,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kapuc\u00edn","country":"CZ","lat":50.574,"lon":13.518,"alt":568,"landing":null,"tow":false,"winds":[],"id":0},{"name":"\u010cern\u00fd vrch","country":"CZ","lat":50.362,"lon":13.17,"alt":539,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Fichtelberg","country":"DE","lat":50.423,"lon":12.962,"alt":994,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Keblice","country":"CZ","lat":50.471,"lon":14.113,"alt":175,"landing":null,"tow":false,"winds":[],"id":0},{"name":"\u0158\u00edp","country":"CZ","lat":50.385,"lon":14.291,"alt":462,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Jevin\u011bves","country":"CZ","lat":50.338,"lon":14.323,"alt":268,"landing":null,"tow":false,"winds":[],"id":0},{"name":"\u0158evni\u010dov","country":"CZ","lat":50.187,"lon":13.792,"alt":511,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Mokropsy","country":"CZ","lat":49.938,"lon":14.336,"alt":341,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Sta\u0148kovka","country":"CZ","lat":49.969,"lon":14.325,"alt":360,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Beroun","country":"CZ","lat":49.971,"lon":14.057,"alt":402,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Hrobce","country":"CZ","lat":49.974,"lon":13.864,"alt":507,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Koukolova hora","country":"CZ","lat":49.918,"lon":14.009,"alt":354,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kn\u00ed\u017ekovice","country":"CZ","lat":49.914,"lon":13.953,"alt":398,"landing":null,"tow":false,"winds":[],"id":0},{"name":"B\u00edtov","country":"CZ","lat":49.935,"lon":14.064,"alt":445,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Suchomasty","country":"CZ","lat":49.901,"lon":14.062,"alt":405,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Hrad\u010dany","country":"CZ","lat":50.619,"lon":14.733,"alt":273,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Je\u0161t\u011bd","country":"CZ","lat":50.728,"lon":14.994,"alt":910,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Ra\u0161ovka","country":"CZ","lat":50.708,"lon":15.015,"alt":762,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Hodkovice","country":"CZ","lat":50.663,"lon":15.077,"alt":415,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Z\u00e1sada","country":"CZ","lat":50.705,"lon":15.264,"alt":675,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Zvi\u010dina","country":"CZ","lat":50.457,"lon":15.695,"alt":625,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Lys\u00e1 hora","country":"CZ","lat":50.753,"lon":15.5,"alt":1235,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kopa","country":"PL","lat":50.748,"lon":15.728,"alt":1331,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Czolo","country":"PL","lat":50.754,"lon":15.82,"alt":1214,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Wolowa Gora","country":"PL","lat":50.768,"lon":15.817,"alt":1028,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Rudnik","country":"PL","lat":50.774,"lon":15.867,"alt":833,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Mieroszow","country":"PL","lat":50.673,"lon":16.21,"alt":628,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Andrzejowka","country":"PL","lat":50.692,"lon":16.276,"alt":822,"landing":null,"tow":false,"winds":[],"id":0},{"name":"\u017d\u010f\u00e1rky","country":"CZ","lat":50.464,"lon":16.242,"alt":435,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Srebrn\u00e1 Gurka","country":"PL","lat":50.57,"lon":16.658,"alt":527,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Srbce","country":"CZ","lat":49.917,"lon":16.056,"alt":357,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Tet\u0159ev\u00ed hora","country":"CZ","lat":50.168,"lon":16.875,"alt":1189,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kamen\u00e1\u010d","country":"CZ","lat":50.054,"lon":16.764,"alt":684,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Jakubovice","country":"CZ","lat":50.001,"lon":16.821,"alt":675,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kamenec","country":"CZ","lat":50.079,"lon":17.138,"alt":1183,"landing":null,"tow":false,"winds":[],"id":0},{"name":"B\u0159idli\u010dn\u00e1 hora","country":"CZ","lat":50.033,"lon":17.186,"alt":1329,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Paseka","country":"CZ","lat":49.805,"lon":17.243,"alt":580,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Koterov","country":"CZ","lat":49.722,"lon":13.435,"alt":382,"landing":null,"tow":false,"winds":[],"id":0},{"name":"\u0160vihov","country":"CZ","lat":49.494,"lon":13.267,"alt":485,"landing":null,"tow":false,"winds":[],"id":0},{"name":"S\u00e1dek","country":"CZ","lat":49.429,"lon":12.782,"alt":860,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Dubi\u010dn\u00e9","country":"CZ","lat":48.978,"lon":14.541,"alt":544,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kle\u0165","country":"CZ","lat":48.865,"lon":14.285,"alt":1067,"landing":null,"tow":false,"winds":[],"id":0},{"name":"K\u0159epli\u010d\u00e1k","country":"CZ","lat":49.011,"lon":13.965,"alt":882,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kalovy","country":"CZ","lat":49.233,"lon":13.545,"alt":685,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Svatobor","country":"CZ","lat":49.234,"lon":13.492,"alt":818,"landing":null,"tow":false,"winds":[],"id":0},{"name":"M\u016fstek","country":"CZ","lat":49.202,"lon":13.245,"alt":1227,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Osser","country":"DE","lat":49.203,"lon":13.1,"alt":1173,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Hogen Bogen","country":"DE","lat":49.235,"lon":12.942,"alt":1009,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Proeller","country":"DE","lat":49.023,"lon":12.823,"alt":1010,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Grainet","country":"DE","lat":48.799,"lon":13.651,"alt":695,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Hufberg","country":"DE","lat":48.77,"lon":13.835,"alt":1347,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Oedt","country":"AT","lat":48.604,"lon":14.048,"alt":662,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Loket","country":"CZ","lat":49.648,"lon":14.122,"alt":446,"landing":null,"tow":true,"winds":[],"id":0},{"name":"Uh\u0159\u00ednov","country":"CZ","lat":49.577,"lon":17.665,"alt":429,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Javorov\u00fd","country":"CZ","lat":49.629,"lon":18.627,"alt":919,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Pra\u0161iv\u00e1","country":"CZ","lat":49.637,"lon":18.482,"alt":687,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Skalka","country":"CZ","lat":49.554,"lon":18.299,"alt":917,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Velk\u00fd Javorn\u00edk","country":"CZ","lat":49.527,"lon":18.162,"alt":905,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Skrzyczne","country":"PL","lat":49.6878,"lon":19.031,"alt":1186,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Zar","country":"PL","lat":49.7874,"lon":19.225,"alt":752,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Mikul\u010d\u00e1k/Vy\u0161kovec","country":"CZ","lat":48.94,"lon":17.831,"alt":775,"landing":null,"tow":false,"winds":[],"id":0},{"name":"B\u00fdkovice","country":"CZ","lat":49.428,"lon":16.551,"alt":349,"landing":null,"tow":false,"winds":[],"id":0},{"name":"P\u00e1lava - Stolov\u00e1","country":"CZ","lat":48.84,"lon":16.653,"alt":324,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kobyl\u00ed","country":"CZ","lat":48.941,"lon":16.91,"alt":221,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Str\u00e1\u017eovice","country":"CZ","lat":49.014,"lon":17.059,"alt":400,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Stran\u00edk","country":"SK","lat":49.236,"lon":18.825,"alt":739,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Donovaly","country":"SK","lat":48.888,"lon":19.23,"alt":1345,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Lendak","country":"SK","lat":49.2372,"lon":20.3389,"alt":896,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Slopovo","country":"SK","lat":48.5948,"lon":19.8437,"alt":839,"landing":null,"tow":false,"winds":[],"id":0},{"name":"AOZ","country":"SK","lat":48.9148,"lon":18.0193,"alt":334,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Baba","country":"SK","lat":49.0445,"lon":18.6719,"alt":1117,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Babky","country":"SK","lat":49.1797,"lon":19.6258,"alt":1551,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Baldovce","country":"SK","lat":48.985,"lon":20.7289,"alt":524,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Baranec","country":"SK","lat":49.1576,"lon":19.7573,"alt":1930,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Baranovo","country":"SK","lat":48.787,"lon":19.1423,"alt":990,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Baske","country":"SK","lat":48.8822,"lon":18.2289,"alt":700,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Biela skala","country":"SK","lat":49.2954,"lon":19.494,"alt":749,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Bukova horka","country":"SK","lat":49.1312,"lon":20.9311,"alt":636,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Bukovec","country":"SK","lat":48.8438,"lon":20.7264,"alt":1074,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Bu\u010de","country":"SK","lat":49.0753,"lon":20.9414,"alt":963,"landing":null,"tow":false,"winds":[],"id":0},{"name":"B\u00f4rov\u00e1","country":"SK","lat":48.766,"lon":18.7709,"alt":540,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Chopok","country":"SK","lat":48.9432,"lon":19.5892,"alt":1977,"landing":null,"tow":false,"winds":[],"id":0},{"name":"C\u00edge\u013e","country":"SK","lat":48.6973,"lon":18.6555,"alt":774,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Dubina","country":"SK","lat":49.0089,"lon":20.3165,"alt":866,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Gajary","country":"SK","lat":48.4637,"lon":16.9568,"alt":154,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Gr\u00f3b\u0148a","country":"SK","lat":48.715,"lon":18.9279,"alt":893,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Holica","country":"SK","lat":49.2036,"lon":19.5816,"alt":1332,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Horn\u00e1 S\u00fa\u010da","country":"SK","lat":48.9568,"lon":17.9927,"alt":558,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Ho\u013e\u00e1zne","country":"SK","lat":48.9273,"lon":18.2828,"alt":868,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Hradisko","country":"SK","lat":48.8076,"lon":17.8332,"alt":310,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Hru\u0161t\u00edn","country":"SK","lat":49.3091,"lon":19.3365,"alt":856,"landing":null,"tow":false,"winds":[],"id":0},{"name":"H\u00e1j","country":"SK","lat":48.6305,"lon":20.8697,"alt":536,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Inovec","country":"SK","lat":48.762,"lon":18.0338,"alt":949,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Jakovec","country":"SK","lat":48.8819,"lon":21.8783,"alt":383,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Jaln\u00e1","country":"SK","lat":48.5807,"lon":18.9531,"alt":382,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Jamn\u00edk","country":"SK","lat":48.9473,"lon":20.67,"alt":514,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Javorina","country":"SK","lat":49.2174,"lon":19.6035,"alt":1252,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Javorinka","country":"SK","lat":48.9466,"lon":18.5283,"alt":939,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kali\u0161tia","country":"SK","lat":48.72,"lon":18.4053,"alt":553,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kamenick\u00fd hrad","country":"SK","lat":49.1953,"lon":20.9756,"alt":639,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kapu\u0161iansk\u00fd hrad","country":"SK","lat":49.0552,"lon":21.3195,"alt":494,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Koh\u00fat","country":"SK","lat":49.119,"lon":21.0194,"alt":537,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Koko\u0161ka","country":"SK","lat":49.047,"lon":19.3218,"alt":691,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kras\u00edn","country":"SK","lat":48.9604,"lon":18.0149,"alt":508,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Krivo\u0161tianka","country":"SK","lat":48.8934,"lon":21.8537,"alt":450,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kr\u00e1lova Ho\u013ea","country":"SK","lat":48.882,"lon":20.1387,"alt":1916,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kr\u00ed\u017ena","country":"SK","lat":48.8766,"lon":19.0788,"alt":1567,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kub\u00ednska ho\u013ea","country":"SK","lat":49.2696,"lon":19.2549,"alt":1332,"landing":null,"tow":false,"winds":[],"id":0},{"name":"K\u013ea\u010dianska Magura","country":"SK","lat":49.1477,"lon":18.9501,"alt":1128,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Lomnick\u00e9 sedlo","country":"SK","lat":49.1846,"lon":20.2325,"alt":1717,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Maginhrad","country":"SK","lat":48.4479,"lon":19.9841,"alt":436,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Magura","country":"SK","lat":49.0975,"lon":19.1094,"alt":1036,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Mal\u00e1 Lu\u010divn\u00e1","country":"SK","lat":49.203,"lon":19.1538,"alt":981,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Man\u00ednec","country":"SK","lat":49.1182,"lon":18.4913,"alt":598,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Mitice","country":"SK","lat":48.8207,"lon":18.1103,"alt":511,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Myjava","country":"SK","lat":48.7674,"lon":17.5254,"alt":376,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Nitra letisko","country":"SK","lat":48.2799,"lon":18.1333,"alt":139,"landing":null,"tow":false,"winds":[],"id":0},{"name":"N\u00e1lepkovo","country":"SK","lat":48.8512,"lon":20.6233,"alt":774,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Ore\u0161any","country":"SK","lat":48.4581,"lon":17.4127,"alt":538,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Ostr\u00fd vrch","country":"SK","lat":48.8012,"lon":17.497,"alt":566,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Peckov\u00e1","country":"SK","lat":48.7694,"lon":17.4478,"alt":553,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Plaveck\u00fd hrad","country":"SK","lat":48.4935,"lon":17.2681,"alt":394,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Podhradie","country":"SK","lat":48.678,"lon":18.6413,"alt":769,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Podkonick\u00e9 Ple\u0161e","country":"SK","lat":48.8159,"lon":19.2426,"alt":951,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Polomka","country":"SK","lat":48.8842,"lon":19.8396,"alt":1265,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Predn\u00fd Cho\u010d","country":"SK","lat":49.118,"lon":19.3297,"alt":1189,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Preskam","country":"SK","lat":48.2017,"lon":17.0024,"alt":262,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Prislop","country":"SK","lat":48.8996,"lon":20.0172,"alt":1403,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Rebro","country":"SK","lat":48.6191,"lon":20.7798,"alt":697,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Rev\u00e1\u0148","country":"SK","lat":48.9647,"lon":18.6332,"alt":1191,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Roha\u010dka","country":"SK","lat":49.0437,"lon":19.5995,"alt":761,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Roztoki","country":"SK","lat":49.1446,"lon":22.3546,"alt":941,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Solo\u0161nica","country":"SK","lat":48.4587,"lon":17.2513,"alt":377,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Spi\u0161sk\u00fd hrad","country":"SK","lat":48.9982,"lon":20.7725,"alt":593,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Star\u00e1 Kopa","country":"SK","lat":48.7258,"lon":19.1916,"alt":719,"landing":null,"tow":false,"winds":[],"id":0},{"name":"S\u013eubica","country":"SK","lat":48.9734,"lon":20.8721,"alt":1126,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Tisovec","country":"SK","lat":48.6973,"lon":19.958,"alt":926,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Tlst\u00e1","country":"SK","lat":48.934,"lon":18.9706,"alt":1368,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Ve\u013ek\u00fd Kriv\u00e1\u0148","country":"SK","lat":49.1879,"lon":19.0303,"alt":1678,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Ve\u013ek\u00fd vrch","country":"SK","lat":48.6477,"lon":18.4547,"alt":387,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Viniansk\u00fd hrad","country":"SK","lat":48.8194,"lon":21.9485,"alt":283,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Vysok\u00e1 - Sta\u0161kov","country":"SK","lat":49.4022,"lon":18.6898,"alt":800,"landing":null,"tow":false,"winds":[],"id":0},{"name":"V\u00ed\u0165az","country":"SK","lat":48.9703,"lon":20.9745,"alt":601,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Zemiansky Diel","country":"SK","lat":49.1779,"lon":19.2286,"alt":750,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Zobor","country":"SK","lat":48.3426,"lon":18.1051,"alt":550,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Z\u00e1hrada","country":"SK","lat":48.645,"lon":18.0556,"alt":428,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Z\u00e1ruby","country":"SK","lat":48.5262,"lon":17.3899,"alt":608,"landing":null,"tow":false,"winds":[],"id":0},{"name":"\u010cierna Kopa","country":"SK","lat":49.1873,"lon":20.7861,"alt":1036,"landing":null,"tow":false,"winds":[],"id":0},{"name":"\u010cihoc","country":"SK","lat":48.7351,"lon":18.424,"alt":792,"landing":null,"tow":false,"winds":[],"id":0},{"name":"\u010eurkovec","country":"SK","lat":49.099,"lon":22.4255,"alt":1147,"landing":null,"tow":false,"winds":[],"id":0},{"name":"\u0160ari\u0161sk\u00e9 \u010cierne","country":"SK","lat":49.3396,"lon":21.3606,"alt":611,"landing":null,"tow":false,"winds":[],"id":0},{"name":"\u0160tos","country":"SK","lat":48.6821,"lon":18.933,"alt":772,"landing":null,"tow":false,"winds":[],"id":0},{"name":"\u0160\u00fatovce","country":"SK","lat":48.8062,"lon":18.5432,"alt":564,"landing":null,"tow":false,"winds":[],"id":0},{"name":"\u017da\u0161kovsk\u00fd \u0160\u00edp","country":"SK","lat":49.1774,"lon":19.1983,"alt":676,"landing":null,"tow":false,"winds":[],"id":0},{"name":"\u017dibrica","country":"SK","lat":48.3659,"lon":18.1479,"alt":516,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Alpe Cavallotti","country":"IT","lat":45.9862,"lon":8.5202,"alt":1195,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Alpe Quaggione","country":"IT","lat":45.9137,"lon":8.3817,"alt":1330,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Alvito/San Donato Valcomino","country":"IT","lat":41.7262,"lon":13.7826,"alt":1130,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Antholz","country":"IT","lat":46.8503,"lon":12.06,"alt":2325,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Aviano","country":"IT","lat":46.0873,"lon":12.5301,"alt":1099,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Bassano","country":"IT","lat":45.8238,"lon":11.7694,"alt":865,"landing":159,"tow":false,"winds":[0,0,0,1,2,1,0,0],"id":9200},{"name":"Bernadia","country":"IT","lat":46.2253,"lon":13.2635,"alt":712,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Bielmonte","country":"IT","lat":45.6603,"lon":8.0756,"alt":1421,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Blum Rovetta","country":"IT","lat":45.9076,"lon":9.9709,"alt":1266,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Bocca della Selva","country":"IT","lat":41.3681,"lon":14.5225,"alt":1173,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Caltrano","country":"IT","lat":45.7796,"lon":11.5024,"alt":733,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Capaccio","country":"IT","lat":40.4491,"lon":15.0495,"alt":232,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Cassino","country":"IT","lat":41.547,"lon":13.8122,"alt":708,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Cavallaria","country":"IT","lat":45.5128,"lon":7.7985,"alt":1388,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Col Rodella","country":"IT","lat":46.4972,"lon":11.7535,"alt":2360,"landing":1415,"tow":false,"winds":[2,1,0,1,2,2,1,1],"id":7243},{"name":"Colli di San Fermo","country":"IT","lat":45.7435,"lon":9.9477,"alt":1302,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Colonei","country":"IT","lat":45.6515,"lon":10.8148,"alt":1355,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Cornizzolo","country":"IT","lat":45.8329,"lon":9.3021,"alt":1038,"landing":null,"tow":false,"winds":[],"id":0},{"name":"C\u00e0 del Monte","country":"IT","lat":44.8184,"lon":9.071,"alt":674,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Feltre","country":"IT","lat":46.0296,"lon":11.8262,"alt":1410,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Gallodoro","country":"IT","lat":37.8956,"lon":15.308,"alt":472,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Ganda","country":"IT","lat":45.7833,"lon":9.8005,"alt":1116,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Gas Monte Baldo","country":"IT","lat":45.6123,"lon":10.7472,"alt":674,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Gemona","country":"IT","lat":46.2743,"lon":13.1754,"alt":1173,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Giumello","country":"IT","lat":46.0453,"lon":9.3563,"alt":1553,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Helm","country":"IT","lat":46.7151,"lon":12.3731,"alt":2199,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Hirzer","country":"IT","lat":46.7354,"lon":11.2517,"alt":2094,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kronplatz","country":"IT","lat":46.7392,"lon":11.9564,"alt":2265,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Laveno","country":"IT","lat":45.922,"lon":8.6741,"alt":1108,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Liretta","country":"IT","lat":44.499,"lon":7.382,"alt":1085,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Malanotte","country":"IT","lat":44.2594,"lon":7.794,"alt":1734,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Massanera","country":"IT","lat":43.7013,"lon":11.5558,"alt":1062,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Meduno","country":"IT","lat":46.2306,"lon":12.8069,"alt":983,"landing":264,"tow":false,"winds":[0,0,0,0,1,2,1,0],"id":19791},{"name":"Monfestino","country":"IT","lat":44.4265,"lon":10.8257,"alt":758,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Monte Caio","country":"IT","lat":44.464,"lon":10.1606,"alt":1469,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Monte Corno","country":"IT","lat":45.7997,"lon":11.5444,"alt":1190,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Monte Cucco","country":"IT","lat":43.357,"lon":12.7491,"alt":1180,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Monte Dolada","country":"IT","lat":46.1919,"lon":12.3523,"alt":1505,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Monte Farno","country":"IT","lat":45.8325,"lon":9.9073,"alt":1316,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Monte Maddalena","country":"IT","lat":45.5485,"lon":10.286,"alt":840,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Monte Serva","country":"IT","lat":46.1844,"lon":12.2283,"alt":1178,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Monte Subasio","country":"IT","lat":43.0561,"lon":12.6674,"alt":1275,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Monte Tovo","country":"IT","lat":45.7525,"lon":8.222,"alt":1252,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Montoso","country":"IT","lat":44.7447,"lon":7.23,"alt":1576,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Norma","country":"IT","lat":41.5913,"lon":12.957,"alt":446,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Orero","country":"IT","lat":44.4019,"lon":9.285,"alt":582,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Panarotta","country":"IT","lat":46.0416,"lon":11.3169,"alt":1493,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Pfalzen","country":"IT","lat":46.8308,"lon":11.8718,"alt":1614,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Piossasco","country":"IT","lat":44.9964,"lon":7.4476,"alt":816,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Pizzo Marinella","country":"IT","lat":38.7545,"lon":16.2057,"alt":338,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Pizzorne","country":"IT","lat":43.9342,"lon":10.5846,"alt":941,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Poggio Bustone","country":"IT","lat":42.5149,"lon":12.8833,"alt":1250,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Praticino","country":"IT","lat":43.6537,"lon":11.6035,"alt":1250,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Revine","country":"IT","lat":46.0023,"lon":12.208,"alt":1114,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Rocca Canavese","country":"IT","lat":45.3273,"lon":7.5726,"alt":910,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Roncola","country":"IT","lat":45.7682,"lon":9.5491,"alt":1042,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Rubbio","country":"IT","lat":45.7935,"lon":11.6634,"alt":869,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Sale Marasino","country":"IT","lat":45.724,"lon":10.146,"alt":1105,"landing":null,"tow":false,"winds":[],"id":0},{"name":"San Giacomo","country":"IT","lat":45.5459,"lon":7.8753,"alt":1251,"landing":null,"tow":false,"winds":[],"id":0},{"name":"San Giuliano Terme","country":"IT","lat":43.7709,"lon":10.4415,"alt":211,"landing":null,"tow":false,"winds":[],"id":0},{"name":"San Michele","country":"IT","lat":41.1651,"lon":14.5416,"alt":983,"landing":null,"tow":false,"winds":[],"id":0},{"name":"San Simeone","country":"IT","lat":46.3298,"lon":13.1018,"alt":1163,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Santa Elisabetta","country":"IT","lat":45.4182,"lon":7.6421,"alt":954,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Sarnano","country":"IT","lat":43.0393,"lon":13.2415,"alt":1170,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Serrone","country":"IT","lat":41.8486,"lon":13.0902,"alt":909,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Sestola","country":"IT","lat":44.2169,"lon":10.7604,"alt":1517,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Somator","country":"IT","lat":45.8764,"lon":10.973,"alt":1252,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Speikboden","country":"IT","lat":46.915,"lon":11.8979,"alt":2385,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Tivoli","country":"IT","lat":41.9415,"lon":12.8068,"alt":510,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Tocco da Casauria","country":"IT","lat":42.1928,"lon":13.9079,"alt":614,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Tre Pizzi","country":"IT","lat":43.2204,"lon":12.9547,"alt":1158,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Trubbio","country":"IT","lat":46.1625,"lon":8.4754,"alt":1784,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Trucetti - Giaveno","country":"IT","lat":45.076,"lon":7.3482,"alt":968,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Uwaldalm Gsies","country":"IT","lat":46.8549,"lon":12.2655,"alt":2182,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Val della Torre","country":"IT","lat":45.1617,"lon":7.4635,"alt":972,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Valcava","country":"IT","lat":45.7796,"lon":9.5098,"alt":1211,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Valdagno","country":"IT","lat":45.6508,"lon":11.2371,"alt":1062,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Vigiljoch","country":"IT","lat":46.6247,"lon":11.1181,"alt":1426,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Abondance","country":"FR","lat":46.3064,"lon":6.771,"alt":1680,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Accous","country":"FR","lat":42.9797,"lon":-0.572,"alt":1208,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Aiguebelette","country":"FR","lat":45.6018,"lon":5.807,"alt":1146,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Aiguines","country":"FR","lat":43.7695,"lon":6.2535,"alt":1089,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Allevard","country":"FR","lat":45.3921,"lon":6.1149,"alt":1553,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Arbas","country":"FR","lat":42.9699,"lon":0.8858,"alt":1125,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Aspres","country":"FR","lat":44.541,"lon":5.7124,"alt":1548,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Aussois","country":"FR","lat":45.2625,"lon":6.7392,"alt":2602,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Baigura","country":"FR","lat":43.2948,"lon":-1.2885,"alt":847,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Banon","country":"FR","lat":44.0498,"lon":5.6351,"alt":1047,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Bergies","country":"FR","lat":44.2039,"lon":5.5108,"alt":1362,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Bisanne","country":"FR","lat":45.7468,"lon":6.5069,"alt":1931,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Bozel","country":"FR","lat":45.4863,"lon":6.6399,"alt":2317,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Ceillac","country":"FR","lat":44.667,"lon":6.7854,"alt":1797,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Chabre","country":"FR","lat":44.2974,"lon":5.7625,"alt":1341,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Chamoux","country":"FR","lat":45.5298,"lon":6.2528,"alt":1189,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Chamrousse","country":"FR","lat":45.1303,"lon":5.8833,"alt":1828,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Chorges","country":"FR","lat":44.5989,"lon":6.2717,"alt":2093,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Cl\u00e9cy - Saint Omer","country":"FR","lat":48.9274,"lon":-0.4678,"alt":228,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Col Vert","country":"FR","lat":45.0444,"lon":5.5996,"alt":1639,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Col d'Izoard","country":"FR","lat":44.8189,"lon":6.73,"alt":2392,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Col de Bleyne","country":"FR","lat":43.8136,"lon":6.8114,"alt":1530,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Col de l'Arpettaz","country":"FR","lat":45.7955,"lon":6.4339,"alt":1586,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Col de la Forclaz","country":"FR","lat":45.8142,"lon":6.2468,"alt":1278,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Col des Aravis","country":"FR","lat":45.8761,"lon":6.4812,"alt":1676,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Col du Banchet","country":"FR","lat":45.5668,"lon":5.7311,"alt":565,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Couraduque","country":"FR","lat":42.9906,"lon":-0.1964,"alt":1374,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Courtet","country":"FR","lat":44.7702,"lon":5.7981,"alt":1353,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Dent de Crolles","country":"FR","lat":45.3088,"lon":5.8546,"alt":2012,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Digne Les Bains - l'Andran","country":"FR","lat":44.1149,"lon":6.214,"alt":1204,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Douelle","country":"FR","lat":44.4638,"lon":1.3722,"alt":301,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Drumont","country":"FR","lat":47.8986,"lon":6.9187,"alt":1178,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Entrevernes","country":"FR","lat":45.7891,"lon":6.1939,"alt":850,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Fort de la Platte","country":"FR","lat":45.6364,"lon":6.745,"alt":1915,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Fumay","country":"FR","lat":49.9875,"lon":4.7208,"alt":376,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Gourdon","country":"FR","lat":43.7254,"lon":6.9472,"alt":1099,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Gr\u00e9oli\u00e8res","country":"FR","lat":43.8004,"lon":6.9562,"alt":1021,"landing":null,"tow":false,"winds":[],"id":0},{"name":"La Clusaz","country":"FR","lat":45.8886,"lon":6.4627,"alt":2031,"landing":null,"tow":false,"winds":[],"id":0},{"name":"La Jasserie","country":"FR","lat":45.3851,"lon":4.5678,"alt":1374,"landing":null,"tow":false,"winds":[],"id":0},{"name":"La Scia","country":"FR","lat":45.3451,"lon":5.846,"alt":1659,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Le Belv\u00e9d\u00e8re","country":"FR","lat":45.0894,"lon":5.5939,"alt":1399,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Le Morclan","country":"FR","lat":46.2767,"lon":6.8577,"alt":1971,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Le Revard","country":"FR","lat":45.6833,"lon":5.9747,"alt":1527,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Les Couteaux","country":"FR","lat":46.2935,"lon":6.4992,"alt":1307,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Les Richards","country":"FR","lat":44.6809,"lon":6.2314,"alt":1549,"landing":null,"tow":false,"winds":[],"id":0},{"name":"L\u00e9tanne","country":"FR","lat":49.5571,"lon":5.0606,"alt":254,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Marlens","country":"FR","lat":45.7773,"lon":6.3396,"alt":963,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Mauroux","country":"FR","lat":42.5104,"lon":1.9888,"alt":2071,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Mieussy","country":"FR","lat":46.1426,"lon":6.5464,"alt":1629,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Millau","country":"FR","lat":44.1103,"lon":3.1023,"alt":836,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Mont Bouquet","country":"FR","lat":44.1319,"lon":4.2854,"alt":631,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Mont Lachat","country":"FR","lat":45.9585,"lon":6.4765,"alt":2017,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Mont Poupet","country":"FR","lat":46.9717,"lon":5.8775,"alt":808,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Montlambert","country":"FR","lat":45.5525,"lon":6.1051,"alt":871,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Morzine","country":"FR","lat":46.1905,"lon":6.7262,"alt":1547,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Moucherotte","country":"FR","lat":45.1502,"lon":5.6372,"alt":1850,"landing":null,"tow":false,"winds":[],"id":0},{"name":"M\u00e9ruz","country":"FR","lat":45.7854,"lon":6.415,"alt":1268,"landing":null,"tow":false,"winds":[],"id":0},{"name":"M\u00e9tabief","country":"FR","lat":46.7503,"lon":6.3438,"alt":1303,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Notre-Dame-de-la-Mer","country":"FR","lat":49.0362,"lon":1.5396,"alt":126,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Oraison","country":"FR","lat":43.8998,"lon":5.9212,"alt":546,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Pic des Mouches","country":"FR","lat":43.5392,"lon":5.6443,"alt":996,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Plaine Joux","country":"FR","lat":45.9495,"lon":6.7396,"alt":1359,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Plan de l'Aigulle","country":"FR","lat":45.9027,"lon":6.8831,"alt":2281,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Plan de la Boutte","country":"FR","lat":45.6494,"lon":6.7672,"alt":1953,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Planfait","country":"FR","lat":45.8533,"lon":6.2229,"alt":946,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Planpraz","country":"FR","lat":45.9369,"lon":6.8514,"alt":2054,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Puy Aillaud","country":"FR","lat":44.8498,"lon":6.4784,"alt":1642,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Puy de D\u00f4me","country":"FR","lat":45.7725,"lon":2.9644,"alt":1371,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Puy de St Sandoux","country":"FR","lat":45.6321,"lon":3.1163,"alt":785,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Rabou","country":"FR","lat":44.568,"lon":6.0193,"alt":1539,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Reinhardsmunster","country":"FR","lat":48.6775,"lon":7.3119,"alt":504,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Revin","country":"FR","lat":49.9481,"lon":4.6248,"alt":359,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Saint Hilaire","country":"FR","lat":45.3104,"lon":5.8908,"alt":958,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Sal\u00e8ve","country":"FR","lat":46.1302,"lon":6.1716,"alt":1271,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Sambuy","country":"FR","lat":45.6984,"lon":6.272,"alt":1815,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Samoens","country":"FR","lat":46.0542,"lon":6.6975,"alt":1599,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Sapenay","country":"FR","lat":45.8217,"lon":5.8654,"alt":854,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Semnoz","country":"FR","lat":45.8048,"lon":6.095,"alt":1449,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Serpaton","country":"FR","lat":44.9121,"lon":5.5914,"alt":1609,"landing":null,"tow":false,"winds":[],"id":0},{"name":"St Marc d'Ouilly","country":"FR","lat":48.8825,"lon":-0.4452,"alt":185,"landing":null,"tow":false,"winds":[],"id":0},{"name":"St. Andr\u00e9","country":"FR","lat":43.9786,"lon":6.4797,"alt":1552,"landing":null,"tow":false,"winds":[],"id":0},{"name":"St. Jean","country":"FR","lat":44.4032,"lon":6.3695,"alt":1874,"landing":null,"tow":false,"winds":[],"id":0},{"name":"St. Vincent Les Forts","country":"FR","lat":44.4439,"lon":6.3727,"alt":1280,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Treh","country":"FR","lat":47.9255,"lon":7.0115,"alt":1221,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Val Louron","country":"FR","lat":42.8077,"lon":0.3776,"alt":1707,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Val Pelouse","country":"FR","lat":45.4198,"lon":6.1701,"alt":1759,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Varan","country":"FR","lat":45.9449,"lon":6.6819,"alt":1638,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Verel","country":"FR","lat":45.6271,"lon":5.9461,"alt":867,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Vero","country":"FR","lat":42.0721,"lon":8.9073,"alt":875,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Vesancy","country":"FR","lat":46.3678,"lon":6.0805,"alt":1188,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Altes Lager","country":"DE","lat":51.9977,"lon":12.9828,"alt":105,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Asslar","country":"DE","lat":50.6047,"lon":8.4414,"alt":243,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Auer Blick","country":"DE","lat":51.1723,"lon":10.1299,"alt":360,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Auerbach","country":"DE","lat":48.3967,"lon":10.6727,"alt":497,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Bar\u00dfel","country":"DE","lat":53.1661,"lon":7.7901,"alt":3,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Beilrode","country":"DE","lat":51.5723,"lon":13.0611,"alt":78,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Blomberg","country":"DE","lat":47.7344,"lon":11.5073,"alt":1213,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Brauneck","country":"DE","lat":47.6633,"lon":11.5235,"alt":1546,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Breitenberg","country":"DE","lat":47.5478,"lon":10.5655,"alt":1571,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Bremm","country":"DE","lat":50.1068,"lon":7.1152,"alt":367,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Brunsberg","country":"DE","lat":51.7474,"lon":9.35,"alt":288,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Buchberg","country":"DE","lat":49.5144,"lon":12.0297,"alt":615,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Buchenberg","country":"DE","lat":47.6067,"lon":10.8111,"alt":1141,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Burgen","country":"DE","lat":49.8758,"lon":7.018,"alt":434,"landing":null,"tow":false,"winds":[],"id":0},{"name":"B\u00f6hming","country":"DE","lat":48.9444,"lon":11.3506,"alt":477,"landing":null,"tow":false,"winds":[],"id":0},{"name":"B\u00f6rry","country":"DE","lat":52.0463,"lon":9.4526,"alt":189,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Coesfeld Gaupel","country":"DE","lat":51.9654,"lon":7.2034,"alt":114,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Cottbus","country":"DE","lat":51.7688,"lon":14.3107,"alt":70,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Dielmissen","country":"DE","lat":51.9812,"lon":9.6254,"alt":282,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Donnersberg","country":"DE","lat":49.6346,"lon":7.9314,"alt":547,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Erlau","country":"DE","lat":49.7429,"lon":8.8225,"alt":360,"landing":null,"tow":false,"winds":[],"id":0},{"name":"F\u00fcrmannalm","country":"DE","lat":47.7935,"lon":12.8389,"alt":832,"landing":null,"tow":false,"winds":[],"id":0},{"name":"F\u00fcrstenberg","country":"DE","lat":47.8915,"lon":8.5657,"alt":873,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Grainet","country":"DE","lat":48.8014,"lon":13.671,"alt":934,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Grifte Airport","country":"DE","lat":51.2187,"lon":9.4437,"alt":200,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Gschasi","country":"DE","lat":48.1861,"lon":8.1286,"alt":904,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Harsberg","country":"DE","lat":51.0745,"lon":10.3719,"alt":376,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Hesselberg","country":"DE","lat":49.0675,"lon":10.529,"alt":667,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Heue","country":"DE","lat":47.6196,"lon":7.9387,"alt":839,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Hochblauen","country":"DE","lat":47.7766,"lon":7.7008,"alt":1203,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Hochfelln","country":"DE","lat":47.7613,"lon":12.5597,"alt":1651,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Hochgern","country":"DE","lat":47.7499,"lon":12.5062,"alt":1594,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Hochgrat","country":"DE","lat":47.4944,"lon":10.0735,"alt":1700,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Hochplatte","country":"DE","lat":47.7675,"lon":12.4212,"alt":1016,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Hochries","country":"DE","lat":47.7471,"lon":12.2484,"alt":1535,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Hoher Bogen","country":"DE","lat":49.2356,"lon":12.9466,"alt":962,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Jenner","country":"DE","lat":47.5799,"lon":13.025,"alt":1682,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Jenzig","country":"DE","lat":50.9401,"lon":11.6244,"alt":336,"landing":null,"tow":false,"winds":[],"id":0},{"name":"J\u00e4gerberg","country":"DE","lat":50.9698,"lon":11.6194,"alt":273,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kammeregg","country":"DE","lat":47.5656,"lon":10.3083,"alt":1079,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kampenwand","country":"DE","lat":47.754,"lon":12.3526,"alt":1446,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kandel","country":"DE","lat":48.0651,"lon":8.0153,"alt":1202,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kella","country":"DE","lat":51.2429,"lon":10.0798,"alt":511,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kleinheppacher Kopf","country":"DE","lat":48.8335,"lon":9.3792,"alt":428,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kl\u00fcsserath","country":"DE","lat":49.8476,"lon":6.8711,"alt":285,"landing":null,"tow":false,"winds":[],"id":0},{"name":"K\u00f6nigstuhl","country":"DE","lat":49.404,"lon":8.7268,"alt":542,"landing":null,"tow":false,"winds":[],"id":0},{"name":"K\u00f6nigszinne","country":"DE","lat":51.9493,"lon":9.487,"alt":314,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Laucha","country":"DE","lat":51.2471,"lon":11.6869,"alt":225,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Lindenfels","country":"DE","lat":49.6907,"lon":8.7689,"alt":373,"landing":null,"tow":false,"winds":[],"id":0},{"name":"L\u00fcdingen","country":"DE","lat":53.0133,"lon":9.4895,"alt":70,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Madenburg","country":"DE","lat":49.1686,"lon":8.0082,"alt":453,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Mei\u00dfner West","country":"DE","lat":51.2458,"lon":9.8462,"alt":519,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Merkur","country":"DE","lat":48.7648,"lon":8.2794,"alt":634,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Messelberg","country":"DE","lat":48.6796,"lon":9.839,"alt":687,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Metzingen","country":"DE","lat":52.673,"lon":10.3731,"alt":81,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Mindersdorf Schleppgel\u00e4nde","country":"DE","lat":47.8986,"lon":9.0789,"alt":576,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Mittag","country":"DE","lat":47.5379,"lon":10.2176,"alt":1357,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Nagelspitze","country":"DE","lat":47.6799,"lon":11.9042,"alt":1562,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Nebelhorn","country":"DE","lat":47.4138,"lon":10.3462,"alt":1917,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Neidlingen","country":"DE","lat":48.5775,"lon":9.5932,"alt":766,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Neuffen","country":"DE","lat":48.5561,"lon":9.4052,"alt":701,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Oberemmendorf","country":"DE","lat":48.9896,"lon":11.4434,"alt":517,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Oppenau","country":"DE","lat":48.4946,"lon":8.228,"alt":832,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Orensberg","country":"DE","lat":49.2405,"lon":8.0263,"alt":555,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Osterfelder","country":"DE","lat":47.4526,"lon":11.0686,"alt":1608,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Porta Westfalica","country":"DE","lat":52.247,"lon":8.8839,"alt":238,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Predigtstuhl","country":"DE","lat":47.6896,"lon":12.8904,"alt":1656,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Rachtig","country":"DE","lat":49.9613,"lon":6.9934,"alt":262,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Rammelsberg","country":"DE","lat":51.8896,"lon":10.4309,"alt":607,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Rampoldplatte","country":"DE","lat":47.7248,"lon":12.0429,"alt":1378,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Rechenberg","country":"DE","lat":47.7256,"lon":12.5018,"alt":1281,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Ruhpolding Unternberg","country":"DE","lat":47.7413,"lon":12.6386,"alt":828,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Schauinsland","country":"DE","lat":47.9099,"lon":7.8894,"alt":1180,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Schernfeld","country":"DE","lat":48.8966,"lon":11.134,"alt":534,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Schneckenkopf","country":"DE","lat":47.7703,"lon":7.9082,"alt":912,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Schneithalde","country":"DE","lat":48.2924,"lon":9.047,"alt":865,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Schrattenbach","country":"DE","lat":47.8484,"lon":10.2977,"alt":838,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Schriesheim","country":"DE","lat":49.4643,"lon":8.6792,"alt":374,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Schweinfurt","country":"DE","lat":50.0107,"lon":10.2489,"alt":200,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Siegritz","country":"DE","lat":49.8553,"lon":11.2143,"alt":597,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Skih\u00fctte Waldstetten","country":"DE","lat":48.7519,"lon":9.8149,"alt":534,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Sommerberg","country":"DE","lat":49.0367,"lon":12.7471,"alt":801,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Spie\u00dfer","country":"DE","lat":47.5255,"lon":10.3887,"alt":1551,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Stapelburg","country":"DE","lat":51.9159,"lon":10.6783,"alt":214,"landing":null,"tow":false,"winds":[],"id":0},{"name":"St\u00fcppel","country":"DE","lat":51.3144,"lon":8.4293,"alt":723,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Sulzberg","country":"DE","lat":47.745,"lon":12.0625,"alt":1115,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Tegelberg","country":"DE","lat":47.5601,"lon":10.7797,"alt":1720,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Teufelsm\u00fchle","country":"DE","lat":48.7583,"lon":8.4061,"alt":850,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Vogelsang","country":"DE","lat":47.6644,"lon":12.0352,"alt":1455,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Wallberg","country":"DE","lat":47.6636,"lon":11.7938,"alt":1634,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Wank","country":"DE","lat":47.5065,"lon":11.1478,"alt":1748,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Wanne Pfullingen","country":"DE","lat":48.4461,"lon":9.2278,"alt":703,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Wasserkuppe","country":"DE","lat":50.4911,"lon":9.9205,"alt":865,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Weiherkopf","country":"DE","lat":47.4614,"lon":10.2148,"alt":1313,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Wenholthausen","country":"DE","lat":51.303,"lon":8.1909,"alt":574,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Wirmighausen","country":"DE","lat":51.3511,"lon":8.83,"alt":452,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Zschochau","country":"DE","lat":51.2027,"lon":13.1929,"alt":200,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Amden","country":"CH","lat":47.1461,"lon":9.1193,"alt":1119,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Amisb\u00fchl","country":"CH","lat":46.7024,"lon":7.8226,"alt":1322,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Arosa Weisshorn","country":"CH","lat":46.7891,"lon":9.638,"alt":2636,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Balderen","country":"CH","lat":47.3226,"lon":8.5008,"alt":730,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Braunwald","country":"CH","lat":46.96,"lon":8.9874,"alt":2056,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Brunni","country":"CH","lat":46.8414,"lon":8.4155,"alt":1965,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Br\u00e4ndlen","country":"CH","lat":46.905,"lon":8.4095,"alt":1232,"landing":null,"tow":false,"winds":[],"id":0},{"name":"B\u00fcelen","country":"CH","lat":46.881,"lon":8.3657,"alt":1094,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Car\u00ec","country":"CH","lat":46.5116,"lon":8.8199,"alt":2280,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Cassons","country":"CH","lat":46.8797,"lon":9.2613,"alt":2656,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Chasseral","country":"CH","lat":47.1267,"lon":7.0471,"alt":1522,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Cimetta","country":"CH","lat":46.2,"lon":8.788,"alt":1623,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Crap Sogn Gion","country":"CH","lat":46.8338,"lon":9.2155,"alt":2191,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Cret du Midi","country":"CH","lat":46.2292,"lon":7.5285,"alt":2320,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Ebenalp","country":"CH","lat":47.2844,"lon":9.4107,"alt":1596,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Fanas","country":"CH","lat":46.9982,"lon":9.6909,"alt":1684,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Fiesch","country":"CH","lat":46.4144,"lon":8.1081,"alt":2152,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Galgenen","country":"CH","lat":47.1562,"lon":8.872,"alt":1081,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Gana","country":"CH","lat":46.1969,"lon":8.908,"alt":1269,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Grandvillard","country":"CH","lat":46.5457,"lon":7.1136,"alt":1390,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Grimer","country":"CH","lat":46.553,"lon":7.6841,"alt":1725,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Grindelwald","country":"CH","lat":46.6575,"lon":8.0551,"alt":2118,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Gummen","country":"CH","lat":46.9025,"lon":8.3659,"alt":1604,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Haldigrat","country":"CH","lat":46.9025,"lon":8.44,"alt":1934,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Hoch Ybrig","country":"CH","lat":46.9998,"lon":8.7999,"alt":1840,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Hohwacht","country":"CH","lat":47.3764,"lon":7.6738,"alt":1042,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Hummel","country":"CH","lat":47.0983,"lon":8.7726,"alt":1329,"landing":null,"tow":false,"winds":[],"id":0},{"name":"H\u00fcsliberg","country":"CH","lat":47.1897,"lon":9.0747,"alt":1009,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Jaman","country":"CH","lat":46.4418,"lon":6.9761,"alt":1755,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kronberg","country":"CH","lat":47.2915,"lon":9.3289,"alt":1653,"landing":null,"tow":false,"winds":[],"id":0},{"name":"La Breya","country":"CH","lat":46.0204,"lon":7.1019,"alt":2190,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Lai Alv","country":"CH","lat":46.7115,"lon":8.7897,"alt":2478,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Le Cernil","country":"CH","lat":47.1733,"lon":7.1382,"alt":1124,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Le Suchet","country":"CH","lat":46.7723,"lon":6.4665,"alt":1583,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Leysin","country":"CH","lat":46.3592,"lon":7.0025,"alt":2032,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Madrisa","country":"CH","lat":46.917,"lon":9.87,"alt":2352,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Marbachegg","country":"CH","lat":46.835,"lon":7.9042,"alt":1469,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Mauborget","country":"CH","lat":46.8542,"lon":6.612,"alt":1171,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Mentschelen","country":"CH","lat":46.7155,"lon":7.5098,"alt":1398,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Metschstand","country":"CH","lat":46.4433,"lon":7.4969,"alt":2080,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Mol\u00e9son","country":"CH","lat":46.5473,"lon":7.0186,"alt":1976,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Mont-Soleil","country":"CH","lat":47.1585,"lon":6.9938,"alt":1157,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Monte Generoso","country":"CH","lat":45.9289,"lon":9.0215,"alt":1617,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Monte Lema","country":"CH","lat":46.04,"lon":8.8317,"alt":1609,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Monte Tamaro","country":"CH","lat":46.1167,"lon":8.894,"alt":1516,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Montlinger Schwamm","country":"CH","lat":47.3109,"lon":9.5101,"alt":1134,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Montoz","country":"CH","lat":47.2076,"lon":7.2166,"alt":1255,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Moosfluh","country":"CH","lat":46.397,"lon":8.0553,"alt":2233,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Mornera","country":"CH","lat":46.2057,"lon":8.9858,"alt":1379,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Motta Naluns","country":"CH","lat":46.8129,"lon":10.2735,"alt":2170,"landing":null,"tow":false,"winds":[],"id":0},{"name":"M\u00e4ggisseren","country":"CH","lat":46.5881,"lon":7.6099,"alt":1717,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Niederbauen","country":"CH","lat":46.947,"lon":8.5361,"alt":1576,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Niederhorn","country":"CH","lat":46.7113,"lon":7.7778,"alt":1938,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Niederwiler Stierenberg","country":"CH","lat":47.2702,"lon":7.5611,"alt":1172,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Niesen","country":"CH","lat":46.6441,"lon":7.6486,"alt":2267,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Ob Lucken","country":"CH","lat":47.7628,"lon":8.5554,"alt":881,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Obere Wengi","country":"CH","lat":47.3259,"lon":7.6274,"alt":950,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Ollon","country":"CH","lat":46.2968,"lon":7.0238,"alt":1148,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Pany","country":"CH","lat":46.9381,"lon":9.7761,"alt":1541,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Pilatus Kulm","country":"CH","lat":46.9794,"lon":8.2553,"alt":2057,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Pizol","country":"CH","lat":46.9795,"lon":9.4361,"alt":2218,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Planplatten","country":"CH","lat":46.7365,"lon":8.2548,"alt":2234,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Pl\u00e9iades","country":"CH","lat":46.4832,"lon":6.9076,"alt":1306,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Raimeux","country":"CH","lat":47.2994,"lon":7.425,"alt":1229,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Riederalp","country":"CH","lat":46.3771,"lon":8.0305,"alt":1902,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Rotenflue","country":"CH","lat":47.0184,"lon":8.7015,"alt":1552,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Ruogig","country":"CH","lat":46.9059,"lon":8.6905,"alt":1851,"landing":null,"tow":false,"winds":[],"id":0},{"name":"R\u00fctiberg","country":"CH","lat":47.0018,"lon":7.6445,"alt":748,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Saint-Cergue","country":"CH","lat":46.4449,"lon":6.176,"alt":999,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Scheidegg","country":"CH","lat":47.3041,"lon":8.9429,"alt":1194,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Schildgrat","country":"CH","lat":46.5569,"lon":7.8731,"alt":2093,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Schw\u00e4ngimatt","country":"CH","lat":47.2892,"lon":7.6746,"alt":1093,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Sonchaux","country":"CH","lat":46.4184,"lon":6.9509,"alt":1407,"landing":null,"tow":false,"winds":[],"id":0},{"name":"St. Anton","country":"CH","lat":47.4108,"lon":9.5426,"alt":1082,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Tschenten","country":"CH","lat":46.4972,"lon":7.5417,"alt":2020,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Verbier","country":"CH","lat":46.0902,"lon":7.2517,"alt":2170,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Vounetz","country":"CH","lat":46.6251,"lon":7.2061,"alt":1602,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Weissenstein","country":"CH","lat":47.2508,"lon":7.5101,"alt":1245,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Wispile","country":"CH","lat":46.4372,"lon":7.2942,"alt":1917,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Zugerberg","country":"CH","lat":47.1481,"lon":8.5357,"alt":941,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Adler Lounge","country":"AT","lat":46.9932,"lon":12.5961,"alt":2389,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Aflenzer B\u00fcrgeralm","country":"AT","lat":47.5782,"lon":15.2243,"alt":1756,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Bezau","country":"AT","lat":47.399,"lon":9.9449,"alt":1693,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Bischling","country":"AT","lat":47.4638,"lon":13.2992,"alt":1815,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Choralpe","country":"AT","lat":47.4187,"lon":12.2435,"alt":1780,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Defereggen","country":"AT","lat":46.9011,"lon":12.1997,"alt":2495,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Diedamskopf","country":"AT","lat":47.3455,"lon":10.0262,"alt":2052,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Elfer","country":"AT","lat":47.0985,"lon":11.3244,"alt":1794,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Emberger Alm","country":"AT","lat":46.7724,"lon":13.1495,"alt":1729,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Feuerkogel","country":"AT","lat":47.8161,"lon":13.721,"alt":1602,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Fulseck","country":"AT","lat":47.2354,"lon":13.1475,"alt":2012,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Gaisberg","country":"AT","lat":47.8049,"lon":13.1137,"alt":1272,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Gampersberger","country":"AT","lat":47.5826,"lon":14.2321,"alt":1073,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Gelderkogel","country":"AT","lat":47.3038,"lon":15.479,"alt":1124,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Gemeindealpe","country":"AT","lat":47.8112,"lon":15.2469,"alt":1612,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Gerlitzen","country":"AT","lat":46.6929,"lon":13.914,"alt":1891,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Goding","country":"AT","lat":46.7783,"lon":14.9206,"alt":1184,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Goldeck","country":"AT","lat":46.7594,"lon":13.4581,"alt":2121,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Golm","country":"AT","lat":47.0626,"lon":9.8379,"alt":2076,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Golzentipp","country":"AT","lat":46.7193,"lon":12.6251,"alt":2018,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Graden","country":"AT","lat":47.1449,"lon":15.0113,"alt":1250,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Greim","country":"AT","lat":47.2278,"lon":14.1611,"alt":1814,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Gr\u00fcnberg","country":"AT","lat":47.8982,"lon":13.8175,"alt":961,"landing":null,"tow":false,"winds":[],"id":0},{"name":"G\u00f6riach","country":"AT","lat":46.8597,"lon":13.3948,"alt":1195,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Hahnenkamm","country":"AT","lat":47.4766,"lon":10.6425,"alt":1844,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Hartkaiser","country":"AT","lat":47.4924,"lon":12.2743,"alt":1508,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Hauser Kaibling","country":"AT","lat":47.3756,"lon":13.7767,"alt":1968,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Hensler","country":"AT","lat":47.2279,"lon":9.7392,"alt":1297,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Hinterstoder","country":"AT","lat":47.6649,"lon":14.1696,"alt":1795,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Hirschwaldstein","country":"AT","lat":47.8863,"lon":14.1638,"alt":996,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Hochjoch","country":"AT","lat":47.0663,"lon":9.9732,"alt":2269,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Hochkar","country":"AT","lat":47.7105,"lon":14.9095,"alt":1761,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Hochstein","country":"AT","lat":46.8185,"lon":12.7071,"alt":1974,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Hohe Salve","country":"AT","lat":47.4641,"lon":12.2026,"alt":1802,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Hohe Wand","country":"AT","lat":47.8294,"lon":16.0412,"alt":922,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Krippenstein","country":"AT","lat":47.5245,"lon":13.6918,"alt":2101,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kronbauer","country":"AT","lat":47.8994,"lon":14.0768,"alt":869,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kulm","country":"AT","lat":47.2284,"lon":15.7624,"alt":909,"landing":null,"tow":false,"winds":[],"id":0},{"name":"K\u00f6ssen","country":"AT","lat":47.632,"lon":12.4317,"alt":1489,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Lindberg","country":"AT","lat":47.1684,"lon":14.3786,"alt":1189,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Loser","country":"AT","lat":47.6627,"lon":13.7888,"alt":1647,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Ludesch","country":"AT","lat":47.1969,"lon":9.7983,"alt":894,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Marsbach","country":"AT","lat":48.4629,"lon":13.8173,"alt":536,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Muckenkogel","country":"AT","lat":47.9853,"lon":15.6009,"alt":1094,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Neunerk\u00f6pfle","country":"AT","lat":47.4827,"lon":10.5418,"alt":1804,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Penken","country":"AT","lat":47.1763,"lon":11.8169,"alt":1978,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Plankenstein","country":"AT","lat":48.0222,"lon":15.2893,"alt":744,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Polster","country":"AT","lat":47.5305,"lon":14.9612,"alt":1801,"landing":null,"tow":false,"winds":[],"id":0},{"name":"P\u00f6ls","country":"AT","lat":47.2407,"lon":14.5923,"alt":1216,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Radsberg","country":"AT","lat":46.5724,"lon":14.403,"alt":802,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Rax","country":"AT","lat":47.7175,"lon":15.7791,"alt":1538,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Rofan","country":"AT","lat":47.444,"lon":11.7636,"alt":1849,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Rottenstein","country":"AT","lat":46.7683,"lon":13.227,"alt":1283,"landing":null,"tow":false,"winds":[],"id":0},{"name":"R\u00fchrer","country":"AT","lat":47.5041,"lon":15.3193,"alt":1154,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Schie\u00dfling","country":"AT","lat":47.5735,"lon":15.2919,"alt":1537,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Schlick2000 - Kreuzjoch","country":"AT","lat":47.1451,"lon":11.3078,"alt":2092,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Schmittenh\u00f6he","country":"AT","lat":47.3291,"lon":12.7368,"alt":1953,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Schnabelberg","country":"AT","lat":47.9389,"lon":14.7371,"alt":900,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Schoberstein","country":"AT","lat":47.905,"lon":14.3253,"alt":1208,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Sch\u00f6ckl","country":"AT","lat":47.201,"lon":15.4758,"alt":1415,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Sch\u00f6njoch","country":"AT","lat":47.0747,"lon":10.589,"alt":2425,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Seegrube","country":"AT","lat":47.3051,"lon":11.3773,"alt":1910,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Sender Kleinerberg","country":"AT","lat":47.7337,"lon":14.3665,"alt":1283,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Siebenh\u00fctten","country":"AT","lat":47.8012,"lon":14.8806,"alt":1301,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Sillian","country":"AT","lat":46.7705,"lon":12.3891,"alt":2315,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Speiereck","country":"AT","lat":47.1207,"lon":13.6411,"alt":2006,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Stoderzinken","country":"AT","lat":47.459,"lon":13.8274,"alt":2030,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Stubnerkogel","country":"AT","lat":47.1138,"lon":13.0993,"alt":2222,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Ternberg","country":"AT","lat":47.9284,"lon":14.3284,"alt":1004,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Trattberg","country":"AT","lat":47.6387,"lon":13.2714,"alt":1609,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Venet","country":"AT","lat":47.1459,"lon":10.6299,"alt":2192,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Virgen","country":"AT","lat":47.0246,"lon":12.4264,"alt":2094,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Wildkogel","country":"AT","lat":47.2792,"lon":12.2807,"alt":2075,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Zettersfeld","country":"AT","lat":46.8751,"lon":12.7879,"alt":2199,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Zillertal","country":"AT","lat":47.219,"lon":11.8248,"alt":2014,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Zw\u00f6lferhorn","country":"AT","lat":47.7428,"lon":13.352,"alt":1499,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Ambro\u017e","country":"SI","lat":46.2818,"lon":14.5249,"alt":1344,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Brestovica","country":"SI","lat":45.8189,"lon":13.625,"alt":262,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Dobrovlje","country":"SI","lat":46.297,"lon":15.0093,"alt":765,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Dobr\u010da","country":"SI","lat":46.3718,"lon":14.2626,"alt":1207,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Dona\u010dka Gora","country":"SI","lat":46.2615,"lon":15.7313,"alt":532,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Dovska Baba","country":"SI","lat":46.4861,"lon":13.9918,"alt":1813,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Goljak","country":"SI","lat":45.5182,"lon":14.397,"alt":1150,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Golte","country":"SI","lat":46.3703,"lon":14.9208,"alt":1066,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Gozd","country":"SI","lat":46.3394,"lon":14.3313,"alt":924,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Javornik","country":"SI","lat":45.8934,"lon":14.0784,"alt":1156,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Jelenk","country":"SI","lat":46.0475,"lon":14.0037,"alt":949,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kamsak","country":"SI","lat":46.358,"lon":15.259,"alt":776,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kanin","country":"SI","lat":46.3512,"lon":13.4887,"alt":1678,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kobala","country":"SI","lat":46.1805,"lon":13.7791,"alt":1061,"landing":158,"tow":false,"winds":[0,0,2,1,1,1,2,0],"id":7183},{"name":"Konji\u0161ka gora","country":"SI","lat":46.3346,"lon":15.3465,"alt":847,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kopitnik","country":"SI","lat":46.1127,"lon":15.1762,"alt":826,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kovk","country":"SI","lat":45.8866,"lon":13.959,"alt":857,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kranjska Gora","country":"SI","lat":46.5037,"lon":13.7958,"alt":1594,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kri\u0161ka Gora","country":"SI","lat":46.3514,"lon":14.3322,"alt":1467,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Krvavec","country":"SI","lat":46.2965,"lon":14.5285,"alt":1667,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kucelj","country":"SI","lat":45.9283,"lon":13.8233,"alt":1210,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Kuk","country":"SI","lat":46.1952,"lon":13.6198,"alt":1233,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Lijak","country":"SI","lat":45.9635,"lon":13.7235,"alt":590,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Lisca","country":"SI","lat":46.0667,"lon":15.2836,"alt":915,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Mali\u010d","country":"SI","lat":46.1822,"lon":15.2058,"alt":839,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Mangart","country":"SI","lat":46.4329,"lon":13.6403,"alt":1934,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Mrzli Vrh","country":"SI","lat":46.2089,"lon":13.5666,"alt":1312,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Mrzlica","country":"SI","lat":46.1899,"lon":15.1008,"alt":1038,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Ozben","country":"SI","lat":46.2496,"lon":13.604,"alt":753,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Pernice","country":"SI","lat":46.6196,"lon":15.108,"alt":859,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Pohorje","country":"SI","lat":46.5163,"lon":15.58,"alt":1026,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Poto\u0161ka gora","country":"SI","lat":46.3119,"lon":14.4542,"alt":1172,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Prsivec","country":"SI","lat":46.2972,"lon":13.8214,"alt":1762,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Rahtel","country":"SI","lat":46.5194,"lon":15.0783,"alt":589,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Ratitovec","country":"SI","lat":46.236,"lon":14.0941,"alt":1625,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Slevica","country":"SI","lat":46.0341,"lon":14.3031,"alt":696,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Slivnica","country":"SI","lat":45.7885,"lon":14.4064,"alt":1078,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Smolnik","country":"SI","lat":46.08,"lon":14.2876,"alt":711,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Smuk","country":"SI","lat":45.6612,"lon":15.1805,"alt":540,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Socerb","country":"SI","lat":45.5993,"lon":13.8671,"alt":410,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Sorica","country":"SI","lat":46.2311,"lon":14.0095,"alt":1469,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Stari vrh","country":"SI","lat":46.1701,"lon":14.1795,"alt":1150,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Stol","country":"SI","lat":46.273,"lon":13.4732,"alt":1420,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Stra\u0161ki hrib - Peter","country":"SI","lat":45.7775,"lon":15.0492,"alt":461,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Strmec","country":"SI","lat":45.8368,"lon":14.2072,"alt":846,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Studor","country":"SI","lat":46.2953,"lon":13.9001,"alt":961,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Sv. Lovrenc","country":"SI","lat":46.0706,"lon":14.299,"alt":811,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Sv. Planina","country":"SI","lat":46.1791,"lon":15.0188,"alt":846,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Vitranc","country":"SI","lat":46.4765,"lon":13.7603,"alt":1563,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Vogar","country":"SI","lat":46.2945,"lon":13.8753,"alt":974,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Vogel","country":"SI","lat":46.2522,"lon":13.8398,"alt":1664,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Vrem\u0161\u010dica","country":"SI","lat":45.6986,"lon":14.026,"alt":790,"landing":null,"tow":false,"winds":[],"id":0},{"name":"Zapodje","country":"SI","lat":46.1181,"lon":14.7963,"alt":915,"landing":null,"tow":false,"winds":[],"id":0},{"name":"\u010caven","country":"SI","lat":45.9282,"lon":13.8585,"alt":1195,"landing":null,"tow":false,"winds":[],"id":0},{"name":"\u017dusem","country":"SI","lat":46.152,"lon":15.4913,"alt":633,"landing":null,"tow":false,"winds":[],"id":0}],"countries":[{"code":"AT","name":"Austria","regions":[{"name":"Vorarlberg","sites":[517,521,533,542,545,556]},{"name":"Tyrol","sites":[519,522,539,540,548,553,559,560,566,570,575,576,585,587,589]},{"name":"East Tyrol & Carinthia","sites":[515,520,523,530,531,532,534,538,547,564,567,579,580,586,588]},{"name":"Salzburg & Salzkammergut","sites":[518,524,525,526,537,550,555,571,582,584,590]},{"name":"Styria","sites":[516,528,535,536,541,552,554,563,562,568,569,574,581]},{"name":"Upper & Lower Austria","sites":[527,529,543,544,546,549,551,557,558,66,561,565,572,573,577,578,583]}]},{"code":"CZ","name":"Czechia","regions":[{"name":"Essentials Czechia","sites":[3,4,9,10,2,1,6,7,0,5,8]},{"name":"St\u0159edoho\u0159\u00ed & Kru\u0161n\u00e9 hory","sites":[13,16,12,17,14,15,1,0,11]},{"name":"Praha sever","sites":[20,18,21,19]},{"name":"Praha jih & Berounsko","sites":[24,28,25,27,26,22,23,29]},{"name":"Krkono\u0161e & okol\u00ed","sites":[42,3,38,33,30,31,37,2,36,41,32,40,44,39,34,43,35]},{"name":"Orlick\u00e9, Krali\u010d\u00e1k & Jesen\u00edky","sites":[50,4,48,47,49,51,45,46]},{"name":"Plze\u0148sko & \u0160umava","sites":[9,55,64,10,62,65,58,56,52,57,60,66,61,63,54,59,53]},{"name":"Tow (winch)","sites":[67,8]},{"name":"Beskydy & B\u00edl\u00e9 Karpaty","sites":[69,75,70,71,73,68,72,5,74]},{"name":"Brno & P\u00e1lava","sites":[76,78,7,77,79]}]},{"code":"FR","name":"France","regions":[{"name":"Haute-Savoie & Mont Blanc","sites":[248,270,271,272,280,285,289,291,294,304,296,299,302,309,310,312,313,321,323,325,334]},{"name":"Savoie, Grenoble & Vercors","sites":[250,252,255,259,260,263,264,273,267,276,281,287,288,290,301,303,311,320,322,324,326,333,335]},{"name":"Southern Alps","sites":[254,257,258,261,262,265,268,275,277,292,314,317,329,330]},{"name":"Provence, Riviera & Corsica","sites":[251,269,283,284,307,308,328,336]},{"name":"Pyrenees","sites":[249,253,256,274,295,332]},{"name":"Massif Central & South","sites":[278,286,297,298,315,316]},{"name":"Jura & Vosges","sites":[279,305,300,318,331,337]},{"name":"Normandy & the north","sites":[266,282,293,306,319,327]}]},{"code":"DE","name":"Germany","regions":[{"name":"Bavarian Alps","sites":[344,345,359,368,369,371,372,374,378,395,402,404,407,408,409,423,426,427,428]},{"name":"Allg\u00e4u","sites":[341,346,350,370,377,394,396,414,420,424,431]},{"name":"Eastern Bavaria & Altm\u00fchltal","sites":[352,349,361,10,373,399,61,411,419]},{"name":"Black Forest & Swabian Jura","sites":[360,363,365,366,367,379,381,390,391,393,397,398,400,410,412,413,418,425,429]},{"name":"Mosel, Palatinate & Hesse","sites":[339,347,351,357,358,382,383,386,388,401,405,415]},{"name":"Central uplands","sites":[340,353,348,356,362,364,376,375,380,384,385,389,403,406,416,417,422,430,432,433]},{"name":"North & East","sites":[338,342,343,354,355,17,387,392,421,434]}]},{"code":"IT","name":"Italy","regions":[{"name":"Dolomites & South Tyrol","sites":[173,184,195,196,197,217,237,243,247]},{"name":"Friuli","sites":[174,176,193,202,231]},{"name":"Veneto, Grappa & Belluno","sites":[175,180,189,205,207,210,223,226,246]},{"name":"Trentino & Garda","sites":[186,192,216,236]},{"name":"Lombardy & the lakes","sites":[170,171,178,185,187,191,194,198,208,209,225,227,241,245]},{"name":"Piedmont, Aosta & Liguria","sites":[177,188,183,199,200,212,213,215,218,224,228,232,242,244]},{"name":"Apennines, Central & South","sites":[172,179,181,182,190,201,203,204,206,211,214,219,220,221,222,229,230,233,234,235,238,239,240]}]},{"code":"SK","name":"Slovakia","regions":[{"name":"Essentials Slovakia","sites":[81,82,6,83,80]},{"name":"Western Slovakia","sites":[84,90,163,99,102,104,107,113,118,129,130,131,133,134,135,136,141,147,5,154,160,161,169,159]},{"name":"Mal\u00e1 & Ve\u013ek\u00e1 Fatra, Orava","sites":[85,86,91,95,103,101,105,111,112,123,117,122,126,127,128,6,140,144,80,167,152,153,156,168,158]},{"name":"Low Tatras & Central","sites":[89,96,97,81,100,109,120,121,125,137,138,139,142,145,83,149,166,151]},{"name":"Tatras & Spi\u0161","sites":[87,88,94,92,93,162,98,110,114,116,82,124,132,150,148,157]},{"name":"Eastern Slovakia","sites":[164,106,108,115,119,143,146,165,155]}]},{"code":"SI","name":"Slovenia","regions":[{"name":"So\u010da & Julian Alps","sites":[603,604,608,612,616,617,619,623,633,636,639,640,641]},{"name":"Gorenjska & Ljubljana","sites":[591,594,596,599,609,610,622,625,626,628,631,632,637]},{"name":"Primorska & Karst","sites":[592,644,597,600,601,607,611,613,627,630,635,642]},{"name":"\u0160tajerska, Dolenjska & East","sites":[593,595,598,602,605,606,614,615,618,620,621,624,629,634,638,643,645]}]},{"code":"CH","name":"Switzerland","regions":[{"name":"Valais","sites":[448,451,465,482,499,510]},{"name":"Bernese Oberland","sites":[436,455,456,485,471,473,474,487,489,496,502,505,509,513]},{"name":"Lake Geneva & Vaud Alps","sites":[463,469,492,497,507]},{"name":"Fribourg & Jura","sites":[445,454,460,467,468,472,475,476,481,488,491,498,503,506,511,512]},{"name":"Central Switzerland","sites":[441,440,442,457,458,459,461,486,494,500,501,514]},{"name":"Eastern Switzerland & Zurich","sites":[435,438,439,449,452,462,464,480,490,495,504,508]},{"name":"Graub\u00fcnden","sites":[437,444,447,450,466,470,484,493]},{"name":"Ticino","sites":[443,446,453,477,478,479,483]}]}],"octants":["N","NE","E","SE","S","SW","W","NW"],"levels":[1000,975,950,925,900,850,800,700,600,500],"endpoint":"https://api.open-meteo.com/v1/forecast","attribution":"Takeoff list from pgweb (meteoweb.pgweb.cz); wind roses from ParaglidingEarth, CC BY-SA","fetched":"2026-10-29","flymet":{"near":[{"slug":"RANA","name":"Rana","km":1.5},{"slug":"USTI-NL","name":"\u00dast\u00ed n.L.","km":11.0},{"slug":"DRZKOV","name":"Drzkov","km":10.7},{"slug":"VRCHLABI","name":"Vrchlab\u00ed","km":7.3},{"slug":"KRALIKY","name":"Kraliky","km":10.0},{"slug":"TRENCIN","name":"Trencin","km":18.1},{"slug":"MARTIN","name":"Martin","km":9.9},{"slug":"BRECLAV","name":"B\u0159eclav","km":19.9},{"slug":"TABOR","name":"T\u00e1bor","km":8.5},{"slug":"KLATOVY","name":"Klatovy","km":8.7},{"slug":"DEGGENDORF","name":"Deggendorf","km":9.6},{"slug":"MOST","name":"Most","km":6.6},{"slug":"USTI-NL","name":"\u00dast\u00ed n.L.","km":5.3},{"slug":"USTI-NL","name":"\u00dast\u00ed n.L.","km":4.6},{"slug":"DECIN","name":"Decin","km":8.8},{"slug":"MOST","name":"Most","km":11.2},{"slug":"STRAZ.N.O","name":"Straz.N.O","km":9.3},{"slug":"STRAZ.N.O","name":"Straz.N.O","km":11.7},{"slug":"ROUDNICE","name":"Roudnice","km":10.2},{"slug":"ROUDNICE","name":"Roudnice","km":5.7},{"slug":"SAZENA","name":"Sazena","km":5.0},{"slug":"RAKOVNIK","name":"Rakovn\u00edk","km":13.0},{"slug":"TOCNA","name":"To\u010dn\u00e1","km":8.5},{"slug":"TOCNA","name":"To\u010dn\u00e1","km":7.6},{"slug":"BUBOVICE","name":"Bubovice","km":8.4},{"slug":"HOROVICE","name":"Horovice","km":14.4},{"slug":"HOROVICE","name":"Horovice","km":12.1},{"slug":"HOROVICE","name":"Horovice","km":9.2},{"slug":"BUBOVICE","name":"Bubovice","km":9.0},{"slug":"BUBOVICE","name":"Bubovice","km":11.4},{"slug":"BEZDEZ","name":"Bezdez","km":10.2},{"slug":"LIBEREC","name":"Liberec","km":4.8},{"slug":"LIBEREC","name":"Liberec","km":6.8},{"slug":"HODKOVICE","name":"Hodkovice","km":0.7},{"slug":"DRZKOV","name":"Drzkov","km":3.2},{"slug":"DVUR_KRALOVE","name":"Dv\u016fr Kr\u00e1lov\u00e9","km":10.9},{"slug":"DRZKOV","name":"Drzkov","km":15.9},{"slug":"M.UPA","name":"M.Upa","km":5.6},{"slug":"M.UPA","name":"M.Upa","km":1.9},{"slug":"M.UPA","name":"M.Upa","km":3.2},{"slug":"M.UPA","name":"M.Upa","km":5.7},{"slug":"BROUMOV","name":"Broumov","km":15.3},{"slug":"BROUMOV","name":"Broumov","km":15.0},{"slug":"HRONOV","name":"Hronov","km":3.0},{"slug":"ZABKOWICE","name":"Zabkowice","km":10.3},{"slug":"VYSOKE-MYTO","name":"Vysok\u00e9 M\u00fdto","km":9.8},{"slug":"KRALIKY","name":"Kraliky","km":12.9},{"slug":"KRALIKY","name":"Kraliky","km":3.2},{"slug":"KRALIKY","name":"Kraliky","km":10.2},{"slug":"SUMPERK","name":"\u0160umperk","km":15.9},{"slug":"RYMAROV","name":"Rymarov","km":13.0},{"slug":"RYMAROV","name":"Rymarov","km":14.0},{"slug":"LETKOV","name":"Letkov","km":1.2},{"slug":"KLATOVY","name":"Klatovy","km":9.5},{"slug":"DOMAZLICE","name":"Domazlice","km":10.4},{"slug":"HOSIN","name":"Hos\u00edn","km":8.0},{"slug":"C.KRUMLOV","name":"C.Krumlov","km":6.2},{"slug":"STRUNKOVICE","name":"Strunkovice","km":11.0},{"slug":"TUZICE","name":"Tuzice","km":11.5},{"slug":"TUZICE","name":"Tuzice","km":11.1},{"slug":"Z.RUDA","name":"Z.Ruda","km":7.7},{"slug":"NYRSKO","name":"Nyrsko","km":10.4},{"slug":"NYRSKO","name":"Nyrsko","km":15.8},{"slug":"VIECHTACH","name":"Viechtach","km":7.0},{"slug":"GRAFENAU","name":"Grafenau","km":20.4},{"slug":"H.PLANA","name":"H.Plana","km":13.9},{"slug":"FRYMBURK","name":"Frymburk","km":10.5},{"slug":"PRIBRAM","name":"P\u0159\u00edbram","km":7.7},{"slug":"HRANICE","name":"Hranice","km":4.3},{"slug":"TRINEC","name":"Trinec","km":7.1},{"slug":"FRYDLANT","name":"Fr\u00fddlant","km":9.2},{"slug":"FRYDLANT","name":"Fr\u00fddlant","km":6.9},{"slug":"ROZNOV.P.R","name":"Roznov.P.R","km":7.6},{"slug":"TRINEC","name":"Trinec","km":26.7},{"slug":"TRINEC","name":"Trinec","km":42.0},{"slug":"TRENCIN","name":"Trencin","km":15.6},{"slug":"LETOVICE","name":"Letovice","km":12.6},{"slug":"BRECLAV","name":"B\u0159eclav","km":18.7},{"slug":"KYJOV","name":"Kyjov","km":16.1},{"slug":"KYJOV","name":"Kyjov","km":5.7},{"slug":"MARTIN","name":"Martin","km":21.0},{"slug":"MARTIN","name":"Martin","km":28.4},null,null,{"slug":"TRENCIN","name":"Trencin","km":4.2},{"slug":"RAJEC","name":"Rajec","km":6.1},{"slug":"MARTIN","name":"Martin","km":50.7},null,{"slug":"MARTIN","name":"Martin","km":59.5},{"slug":"MARTIN","name":"Martin","km":34.0},{"slug":"TRENCIN","name":"Trencin","km":15.1},{"slug":"MARTIN","name":"Martin","km":47.0},null,null,null,{"slug":"PRIEVIDZA","name":"Prievidza","km":13.6},{"slug":"MARTIN","name":"Martin","km":48.5},{"slug":"PRIEVIDZA","name":"Prievidza","km":9.2},null,{"slug":"MISTELBACH","name":"Mistelbach","km":30.8},{"slug":"PRIEVIDZA","name":"Prievidza","km":25.7},{"slug":"MARTIN","name":"Martin","km":48.3},{"slug":"TRENCIN","name":"Trencin","km":9.1},{"slug":"TRENCIN","name":"Trencin","km":19.8},{"slug":"TRENCIN","name":"Trencin","km":15.9},{"slug":"MARTIN","name":"Martin","km":38.9},null,{"slug":"TRENCIN","name":"Trencin","km":12.9},null,{"slug":"PRIEVIDZA","name":"Prievidza","km":33.9},null,{"slug":"MARTIN","name":"Martin","km":50.3},{"slug":"RAJEC","name":"Rajec","km":17.3},{"slug":"PARTIZANSKE","name":"Partizanske","km":12.8},null,null,null,{"slug":"MARTIN","name":"Martin","km":27.1},{"slug":"TRENCIN","name":"Trencin","km":9.2},null,null,{"slug":"MARTIN","name":"Martin","km":23.0},{"slug":"MARTIN","name":"Martin","km":31.6},{"slug":"MARTIN","name":"Martin","km":9.1},null,null,{"slug":"MARTIN","name":"Martin","km":12.0},{"slug":"MARTIN","name":"Martin","km":21.2},{"slug":"RAJEC","name":"Rajec","km":10.1},{"slug":"TRENCIN","name":"Trencin","km":9.0},{"slug":"MYJAVA","name":"Myjava","km":3.1},{"slug":"PARTIZANSKE","name":"Partizanske","km":40.2},null,{"slug":"SENICA","name":"Senica","km":24.2},{"slug":"MYJAVA","name":"Myjava","km":7.2},{"slug":"MYJAVA","name":"Myjava","km":8.6},{"slug":"SENICA","name":"Senica","km":20.6},{"slug":"PRIEVIDZA","name":"Prievidza","km":10.6},{"slug":"MARTIN","name":"Martin","km":35.0},null,{"slug":"MARTIN","name":"Martin","km":28.1},{"slug":"MISTELBACH","name":"Mistelbach","km":51.6},null,null,{"slug":"RAJEC","name":"Rajec","km":13.9},{"slug":"MARTIN","name":"Martin","km":47.3},null,{"slug":"SENICA","name":"Senica","km":24.7},null,{"slug":"MARTIN","name":"Martin","km":41.7},null,null,{"slug":"MARTIN","name":"Martin","km":14.8},{"slug":"MARTIN","name":"Martin","km":14.7},{"slug":"PARTIZANSKE","name":"Partizanske","km":10.2},null,{"slug":"CADCA","name":"Cadca","km":8.3},null,{"slug":"MARTIN","name":"Martin","km":23.7},{"slug":"PARTIZANSKE","name":"Partizanske","km":34.7},{"slug":"PARTIZANSKE","name":"Partizanske","km":19.9},{"slug":"SENICA","name":"Senica","km":16.4},null,{"slug":"PRIEVIDZA","name":"Prievidza","km":12.4},null,null,{"slug":"PRIEVIDZA","name":"Prievidza","km":27.1},{"slug":"PRIEVIDZA","name":"Prievidza","km":5.5},{"slug":"MARTIN","name":"Martin","km":21.8},{"slug":"PARTIZANSKE","name":"Partizanske","km":31.0},null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,{"slug":"CHAM","name":"Cham","km":56.3},null,null,null,null,null,null,null,null,null,null,null,{"slug":"VOLARY","name":"Volary","km":19.3},null,null,null,null,null,null,null,null,null,null,null,{"slug":"NYRSKO","name":"Nyrsko","km":15.5},null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,{"slug":"VIECHTACH","name":"Viechtach","km":10.5},null,null,null,null,null,null,null,null,null,null,null,null,null,null,{"slug":"FREIBERG","name":"Freiberg","km":34.2},null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,{"slug":"HANGING","name":"Hanging","km":15.8},null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],"today":"https://flymet.meteopress.cz/meteogram/{slug}.png","tomorrow":"https://flymet.meteopress.cz/meteogram2/{slug}.png","index":"https://flymet.meteopress.cz/meteogram/"}}</script>
 </article>
 <footer class="site-foot"><a href="https://github.com/ondrejchmelar/parainsights" rel="noreferrer"><svg class="gh" width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>parainsights on GitHub</a>. Airspace © <a href="https://www.openaip.net" rel="noreferrer">openAIP</a> (CC BY-NC 4.0); imagery © Esri, Maxar, Earthstar Geographics; place names © OpenMapTiles, © OpenStreetMap contributors; terrain © <a href="https://mapterhorn.com/attribution" rel="noreferrer">Mapterhorn</a> (Copernicus DEM and national surveys); weather: Open-Meteo. Visits are counted by Cloudflare Web Analytics, without cookies.</footer><script>if (location.hostname === 'ondrejchmelar.github.io') {const s = document.createElement('script'); s.defer = true;s.src = 'https://static.cloudflareinsights.com/beacon.min.js';s.dataset.cfBeacon = '{"token": "fb27179888c0414ca33f514014e088d2"}';document.head.appendChild(s); }</script>
 <dialog class="welcome" id="welcome" aria-labelledby="welcome-title"><form method="dialog" class="w-box"><button class="tool w-close" aria-label="Close"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15"/></svg></button><h2 id="welcome-title">Welcome to parainsights</h2><p class="w-lead">Free tools for paraglider pilots, split into three steps: where to go, what to fly, and how it went.</p><ul class="w-cards"><li class="w-card is-here"><svg class="w-pic" viewBox="0 0 320 140" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
@@ -598,8 +706,13 @@ html:has(dialog.welcome[open]) { overflow: hidden; }
   var MAX_CHOSEN = 6;
   var noSlots = [];
   for (var n = 0; n < MAX_CHOSEN; n++) noSlots.push(null);
+  // `countries` is where the reader flies (codes), asked on a first visit; `step` is the
+  // picker's — 'prefs' for that question, 'pick' for the regions and their takeoffs —
+  // and `region` the one open ('CZ:3'), null for the list of regions on a phone.
+  // `surface` is sparse: the day's forecast only for the takeoffs in those countries.
   var state = { day: 0, hour: 14, slots: noSlots, order: [], site: null,
-                surface: null, profile: null, profiles: {}, search: '',
+                surface: [], profile: null, profiles: {}, search: '',
+                countries: [], step: 'pick', region: null, draft: {},
                 probe: null, probeX: 0 };
 
   var status = document.getElementById('met-status');
@@ -624,28 +737,68 @@ html:has(dialog.welcome[open]) { overflow: hidden; }
   // makes a tool feel like a demo. Wrapped because a page opened from a file:// URL in
   // some browsers throws on even reading localStorage, and a page that fails to load
   // because it could not remember something is worse than one that forgets.
-  var REMEMBER = 'parainsights.meteo.sites';
+  //
+  // A takeoff is remembered by its name and country, not its place in the list: the list
+  // is pgweb's and is regenerated, and an index saved against an older one could point
+  // anywhere. `parainsights.meteo.sites` held indices into the old fifteen (October
+  // 2026), read once by name below so nobody loses their hills to the longer list.
+  var REMEMBER = 'parainsights.meteo.takeoffs';
+  var COUNTRIES = 'parainsights.meteo.countries';
+  var OLD = 'parainsights.meteo.sites';
+  var OLD_NAMES = ['Raná', 'Krupka', 'Kozákov', 'Černá hora', 'Dolní Morava', 'Velký Lopeník',
+                   'Martinské hole', 'Pálava - Děvín', 'Všechov', 'Doubrava', 'Hausstein',
+                   'Bassano', 'Col Rodella', 'Meduno', 'Kobala'];
+  function keyOf(index) { return conf.sites[index].name + '|' + conf.sites[index].country; }
+  function byKey(key) {
+    for (var i = 0; i < conf.sites.length; i++) if (keyOf(i) === key) return i;
+    return null;
+  }
+  function byName(name) {
+    for (var i = 0; i < conf.sites.length; i++) if (conf.sites[i].name === name) return i;
+    return null;
+  }
   function remember() {
     try {
-      window.localStorage.setItem(REMEMBER, JSON.stringify(state.slots));
-      window.localStorage.setItem(REMEMBER + '.order', JSON.stringify(chosen()));
+      window.localStorage.setItem(REMEMBER, JSON.stringify(state.slots.map(function (index) {
+        return index === null ? null : keyOf(index);
+      })));
+      window.localStorage.setItem(REMEMBER + '.order', JSON.stringify(chosen().map(keyOf)));
+      window.localStorage.setItem(COUNTRIES, JSON.stringify(state.countries));
     } catch (error) { /* private mode, file://, or a full quota: forget instead */ }
   }
   function recall() {
     try {
-      var saved = JSON.parse(window.localStorage.getItem(REMEMBER) || 'null');
-      if (!Array.isArray(saved)) return;
-      for (var s = 0; s < MAX_CHOSEN; s++) {
-        var index = saved[s];
-        // Validated, not trusted: the site list is regenerated from ParaglidingEarth and
-        // an index saved against an older one could point anywhere, or nowhere.
-        state.slots[s] = (typeof index === 'number' && conf.sites[index]) ? index : null;
+      var saved = JSON.parse(window.localStorage.getItem(REMEMBER) || 'null'), order = [];
+      if (Array.isArray(saved)) {
+        saved.forEach(function (key, s) {
+          if (s < MAX_CHOSEN) state.slots[s] = typeof key === 'string' ? byKey(key) : null;
+        });
+        order = (JSON.parse(window.localStorage.getItem(REMEMBER + '.order') || '[]') || []).map(byKey);
+      } else {
+        var old = JSON.parse(window.localStorage.getItem(OLD) || 'null');
+        if (Array.isArray(old)) old.forEach(function (index, s) {
+          if (s < MAX_CHOSEN) state.slots[s] = typeof index === 'number' && OLD_NAMES[index] ? byName(OLD_NAMES[index]) : null;
+        });
+        order = (JSON.parse(window.localStorage.getItem(OLD + '.order') || '[]') || []).map(function (index) {
+          return OLD_NAMES[index] ? byName(OLD_NAMES[index]) : null;
+        });
       }
-      var order = JSON.parse(window.localStorage.getItem(REMEMBER + '.order') || '[]');
-      state.order = Array.isArray(order) ? order.filter(function (index) {
-        return typeof index === 'number' && conf.sites[index];
-      }) : [];
+      state.order = order.filter(function (index) { return index !== null; });
       state.site = chosen().length ? chosen()[0] : null;
+      var countries = JSON.parse(window.localStorage.getItem(COUNTRIES) || 'null');
+      var known = conf.countries.map(function (c) { return c.code; });
+      if (Array.isArray(countries)) {
+        state.countries = countries.filter(function (code) { return known.indexOf(code) >= 0; });
+      } else if (chosen().length) {
+        // Someone who chose takeoffs before countries existed: the countries those are
+        // in, rather than a question they never needed to answer.
+        conf.countries.forEach(function (country) {
+          var mine = country.regions.some(function (region) {
+            return region.sites.some(function (index) { return slotOf(index) >= 0; });
+          });
+          if (mine) state.countries.push(country.code);
+        });
+      }
     } catch (error) { /* nothing remembered, which is the normal first visit */ }
   }
 
@@ -679,13 +832,14 @@ html:has(dialog.welcome[open]) { overflow: hidden; }
 
   // ---- fetching ----------------------------------------------------------------------
   //
-  // Two requests, deliberately. Every site in one multi-coordinate call for the ranking —
-  // one round trip however many there are — and the pressure levels
+  // Two requests, deliberately. The takeoffs in the reader's countries in multi-coordinate
+  // calls for the ranking — a hundred at a time, a few round trips for hundreds of
+  // takeoffs (`loadSurface`) — and the pressure levels
   // for one site only when that site is opened. Asking for the profile of every takeoff
   // up front would be tens of megabytes to answer a question about one hill.
-  function surfaceUrl() {
-    var lat = conf.sites.map(function (s) { return s.lat; }).join(',');
-    var lon = conf.sites.map(function (s) { return s.lon; }).join(',');
+  function surfaceUrl(indices) {
+    var lat = indices.map(function (i) { return conf.sites[i].lat; }).join(',');
+    var lon = indices.map(function (i) { return conf.sites[i].lon; }).join(',');
     return conf.endpoint + '?latitude=' + lat + '&longitude=' + lon
       + '&hourly=wind_speed_10m,wind_direction_10m,temperature_2m,cloud_cover,cape'
       + '&forecast_days=4&timezone=Europe%2FPrague&wind_speed_unit=ms'
@@ -749,7 +903,7 @@ html:has(dialog.welcome[open]) { overflow: hidden; }
 
   function drawModel() {
     var box = document.getElementById('met-model');
-    var surface = state.surface && state.surface[0];
+    var surface = state.surface.filter(Boolean)[0];
     var d2 = state.runs && state.runs.dwd_icon_d2;
     var eu = state.runs && state.runs.dwd_icon_eu;
     var name = 'ICON', run = null;
@@ -838,6 +992,40 @@ html:has(dialog.welcome[open]) { overflow: hidden; }
     return times.length - 1;
   }
 
+  // The day's forecast for the takeoffs in the reader's countries and the ones they
+  // chose, a hundred to a request (Open-Meteo's multi-coordinate call), each answered
+  // takeoff drawn as it lands. Asked once per takeoff; the countries can grow later.
+  var SURFACE_CHUNK = 100, surfaceAsked = {};
+  function loadSurface() {
+    var wanted = sitesIn(mine()).concat(chosen()).filter(function (index) {
+      return !surfaceAsked[index];
+    });
+    wanted = wanted.filter(function (index, i) { return wanted.indexOf(index) === i; });
+    if (!wanted.length) { if (!state.failed) say(''); return Promise.resolve(); }
+    wanted.forEach(function (index) { surfaceAsked[index] = true; });
+    var chunks = [];
+    for (var i = 0; i < wanted.length; i += SURFACE_CHUNK) chunks.push(wanted.slice(i, i + SURFACE_CHUNK));
+    return Promise.all(chunks.map(function (chunk) {
+      return get(surfaceUrl(chunk)).then(function (answer) {
+        var series = Array.isArray(answer) ? answer : [answer];
+        chunk.forEach(function (index, k) { state.surface[index] = series[k]; });
+        drawModel();
+        drawList();
+        if (chosen().length) drawCompare();
+      }).catch(function (error) {
+        chunk.forEach(function (index) { delete surfaceAsked[index]; });
+        throw error;
+      });
+    })).then(function () {
+      say('');
+    }).catch(function (error) {
+      state.failed = true;
+      drawSite();
+      say('The forecast could not be fetched (' + error.message + '). '
+          + 'This page has no numbers of its own — it needs a network.');
+    });
+  }
+
   // ---- what the surface forecast says about one takeoff, this hour --------------------
   function surfaceAt(index) {
     var series = state.surface && state.surface[index];
@@ -868,60 +1056,223 @@ html:has(dialog.welcome[open]) { overflow: hidden; }
     return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   }
 
-  function drawList() {
-    var list = document.getElementById('met-list');
-    if (!state.surface) return;
-    var needle = folded(state.search.trim());
-    var rows = conf.sites.map(function (site, i) { return surfaceAt(i); })
-      .filter(Boolean)
-      .filter(function (row) {
-        return !needle || folded(row.site.name).indexOf(needle) >= 0;
+  var CHECK_ICON = '<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10.5l4 4 8-9"/></svg>';
+  var CHEVRON_ICON = RIGHT_ICON.replace('width="18" height="18"', 'width="20" height="20"');
+
+  function countryOf(code) {
+    return conf.countries.filter(function (c) { return c.code === code; })[0] || null;
+  }
+  function mine() {
+    // In the page's order (alphabetical), whatever order they were ticked in.
+    return conf.countries.filter(function (c) { return state.countries.indexOf(c.code) >= 0; });
+  }
+  // Every takeoff in `countries`, each once (a takeoff can be in two regions).
+  function sitesIn(countries) {
+    var seen = {}, out = [];
+    countries.forEach(function (country) {
+      country.regions.forEach(function (region) {
+        region.sites.forEach(function (index) {
+          if (!seen[index]) { seen[index] = true; out.push(index); }
+        });
       });
+    });
+    return out;
+  }
+  function byVerdict(a, b) {
+    var ra = a.row ? RANK[a.row.verdict.key] : 9, rb = b.row ? RANK[b.row.verdict.key] : 9;
+    return ra - rb || conf.sites[a.index].name.localeCompare(conf.sites[b.index].name);
+  }
+
+  // One takeoff's row: the tick, its name, the day's verdict and a line of numbers —
+  // or of where it is, in a search across regions.
+  function siteRow(index, where) {
+    var row = surfaceAt(index), on = slotOf(index) >= 0, site = conf.sites[index];
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'met-site' + (on ? ' is-on' : '');
+    button.dataset.index = index;
+    button.setAttribute('aria-pressed', on ? 'true' : 'false');
+    button.innerHTML =
+      '<span class="tick"></span>'
+      + '<span class="met-site-name"></span>'
+      + (row ? '<span class="met-verdict met-' + row.verdict.key + '"></span>' : '<span></span>')
+      + '<span class="met-site-note"></span>';
+    // The tick is the state, and it is a character rather than a colour: this row is
+    // already carrying a coloured verdict badge, and two colours competing to mean two
+    // different things in 30 px of row is one too many.
+    button.querySelector('.tick').textContent = on ? '✓' : '+';
+    button.querySelector('.met-site-name').textContent = site.name;
+    if (row) button.querySelector('.met-verdict').textContent = row.verdict.text;
+    button.querySelector('.met-site-note').textContent = where
+      || (row ? row.speed.toFixed(1) + ' m/s from ' + compass(row.direction)
+          + ' · ' + site.alt + ' m · ' + Math.round(row.cloud) + '% cloud'
+        : site.alt + ' m · the forecast is on its way');
+    return button;
+  }
+
+  function drawList() {
+    if (state.step === 'prefs') drawPrefs(); else drawPick();
+    var count = document.getElementById('met-count');
+    var picked = chosen();
+    count.textContent = picked.length
+      ? picked.length + ' of ' + MAX_CHOSEN + ' chosen: '
+        + picked.map(function (i) { return conf.sites[i].name; }).join(', ')
+      : 'Choose up to ' + MAX_CHOSEN + ' takeoffs to compare';
+  }
+
+  // ---- 1. where the reader flies --------------------------------------------------
+  //
+  // Most pilots drive to one to three countries, and a list of every takeoff from the
+  // Pyrenees to the Tatras is mostly hills they will never see. So the first question,
+  // on a first visit, is the countries; nothing is ticked for them (the pilot's call).
+  function drawPrefs() {
+    var tiles = document.getElementById('met-tiles');
+    tiles.textContent = '';
+    conf.countries.forEach(function (country) {
+      var on = !!state.draft[country.code];
+      var tile = document.createElement('button');
+      tile.type = 'button';
+      tile.className = 'met-tile' + (on ? ' is-on' : '');
+      tile.dataset.country = country.code;
+      tile.setAttribute('aria-pressed', on ? 'true' : 'false');
+      var n = country.regions.length;
+      tile.innerHTML = '<i class="box" aria-hidden="true">' + CHECK_ICON + '</i><b></b><span></span>';
+      tile.querySelector('b').textContent = country.name;
+      tile.querySelector('span').textContent = sitesIn([country]).length + ' takeoffs · '
+        + n + (n === 1 ? ' region' : ' regions');
+      tiles.appendChild(tile);
+    });
+    var picked = conf.countries.filter(function (c) { return state.draft[c.code]; });
+    var total = sitesIn(picked).length;
+    document.getElementById('met-prefs-count').textContent = picked.length
+      ? picked.length + (picked.length === 1 ? ' country, ' : ' countries, ') + total + ' takeoffs'
+      : 'Pick at least one';
+    document.getElementById('met-prefs-go').disabled = !picked.length;
+  }
+
+  // ---- 2. their regions, then a region's takeoffs ------------------------------------
+  function twoPanes() { return window.matchMedia('(min-width: 720px)').matches; }
+  function drawPick() {
+    var countries = mine();
+    // The countries named, each a link to its regions; the pencil asks the question again.
+    var list = document.getElementById('met-mine-list');
+    list.textContent = '';
+    countries.forEach(function (country, i) {
+      var wrap = document.createElement('span');
+      var link = document.createElement('button');
+      link.type = 'button';
+      link.className = 'lnk';
+      link.dataset.country = country.code;
+      link.textContent = country.name;
+      wrap.appendChild(link);
+      if (i < countries.length - 1) wrap.appendChild(document.createTextNode(','));
+      list.appendChild(wrap);
+    });
+    var all = sitesIn(countries);
+    document.getElementById('met-search').placeholder = 'Search ' + all.length + ' takeoffs';
+
+    // A desktop always has a region open, the first until another is picked.
+    if (state.region && !countryOf(state.region.split(':')[0])) state.region = null;
+    if (state.region && state.countries.indexOf(state.region.split(':')[0]) < 0) state.region = null;
+    if (!state.region && twoPanes() && countries.length) state.region = countries[0].code + ':0';
+
+    var needle = folded(state.search.trim());
+    document.getElementById('met-panes').hidden = !!needle;
+    document.getElementById('met-hits').hidden = !needle;
+    if (needle) drawHits(needle);
+    else { drawRegions(countries); drawSites(); }
+  }
+
+  function drawRegions(countries) {
+    var box = document.getElementById('met-regions');
+    var was = box.scrollTop;
+    box.textContent = '';
+    countries.forEach(function (country) {
+      var head = document.createElement('div');
+      head.className = 'met-country';
+      head.dataset.country = country.code;
+      head.textContent = country.name;
+      box.appendChild(head);
+      country.regions.forEach(function (region, i) {
+        var key = country.code + ':' + i;
+        var fly = region.sites.filter(function (index) {
+          var row = surfaceAt(index);
+          return row && row.verdict.key === 'good';
+        }).length;
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'met-region' + (key === state.region ? ' is-on' : '');
+        button.dataset.region = key;
+        button.innerHTML = '<b></b><span></span><i aria-hidden="true">' + CHEVRON_ICON + '</i>';
+        button.querySelector('b').textContent = region.name;
+        var meta = button.querySelector('span');
+        meta.textContent = region.sites.length + ' takeoffs';
+        if (fly) {
+          var em = document.createElement('em');
+          em.className = 'fly';
+          em.style.fontStyle = 'normal';
+          em.textContent = fly + ' flyable';
+          meta.appendChild(document.createTextNode(' · '));
+          meta.appendChild(em);
+        }
+        box.appendChild(button);
+      });
+    });
+    box.scrollTop = was;
+  }
+
+  function drawSites() {
+    var panes = document.getElementById('met-panes');
+    panes.classList.toggle('is-in', !!state.region);
+    var list = document.getElementById('met-list');
+    list.textContent = '';
+    if (!state.region) return;
+    var parts = state.region.split(':'), country = countryOf(parts[0]);
+    var region = country.regions[Number(parts[1])];
+    document.getElementById('met-region-name').textContent = region.name;
+    document.getElementById('met-region-meta').textContent =
+      country.name + ' · ' + region.sites.length + ' takeoffs, best of the day first';
     // Ranked by the verdict, then by name. The chosen ones are *not* pulled to the top:
     // the list is a ranking of the day and re-sorting it under the reader's own choices
     // would move the row they are about to click.
-    rows.sort(function (a, b) {
-      var by = RANK[a.verdict.key] - RANK[b.verdict.key];
-      return by || a.site.name.localeCompare(b.site.name);
-    });
+    region.sites.map(function (index) { return { index: index, row: surfaceAt(index) }; })
+      .sort(byVerdict)
+      .forEach(function (item) { list.appendChild(siteRow(item.index)); });
+  }
 
-    list.textContent = '';
-    if (!rows.length) {
-      var empty = document.createElement('p');
-      empty.className = 'met-empty';
-      empty.textContent = 'No takeoff matches “' + state.search.trim() + '”.';
-      list.appendChild(empty);
+  // A search covers every takeoff in the reader's countries, and says how many more
+  // match elsewhere rather than hiding that they exist.
+  function drawHits(needle) {
+    var box = document.getElementById('met-hits');
+    box.textContent = '';
+    var where = {};
+    conf.countries.forEach(function (country) {
+      country.regions.forEach(function (region) {
+        region.sites.forEach(function (index) {
+          if (folded(conf.sites[index].name).indexOf(needle) < 0) return;
+          var ours = state.countries.indexOf(country.code) >= 0;
+          var had = where[index];
+          if (!had || (ours && !had.ours)) where[index] = { ours: ours, text: country.name + ' · ' + region.name };
+        });
+      });
+    });
+    var hits = [], outside = 0;
+    Object.keys(where).forEach(function (index) {
+      if (where[index].ours) hits.push({ index: Number(index), row: surfaceAt(Number(index)) });
+      else outside += 1;
+    });
+    hits.sort(byVerdict).forEach(function (item) {
+      box.appendChild(siteRow(item.index, where[item.index].text));
+    });
+    if (!hits.length || outside) {
+      var note = document.createElement('p');
+      note.className = 'met-empty';
+      note.textContent = (hits.length ? '' : 'No takeoff in your countries matches “'
+        + state.search.trim() + '”. ')
+        + (outside ? outside + (outside === 1 ? ' match' : ' matches')
+          + ' in countries you didn’t pick.' : '');
+      box.appendChild(note);
     }
-    rows.forEach(function (row) {
-      var on = slotOf(row.index) >= 0;
-      var button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'met-site' + (on ? ' is-on' : '');
-      button.dataset.index = row.index;
-      button.setAttribute('aria-pressed', on ? 'true' : 'false');
-      button.innerHTML =
-        '<span class="tick"></span>'
-        + '<span class="met-site-name"></span>'
-        + '<span class="met-verdict met-' + row.verdict.key + '"></span>'
-        + '<span class="met-site-note"></span>';
-      // The tick is the state, and it is a character rather than a colour: this row is
-      // already carrying a coloured verdict badge, and two colours competing to mean two
-      // different things in 30 px of row is one too many.
-      button.querySelector('.tick').textContent = on ? '✓' : '+';
-      button.querySelector('.met-site-name').textContent = row.site.name;
-      button.querySelector('.met-verdict').textContent = row.verdict.text;
-      button.querySelector('.met-site-note').textContent =
-        row.speed.toFixed(1) + ' m/s from ' + compass(row.direction)
-        + ' · ' + row.site.alt + ' m · ' + Math.round(row.cloud) + '% cloud';
-      list.appendChild(button);
-    });
-
-    var count = document.getElementById('met-count');
-    var picked = chosen().length;
-    count.textContent = picked
-      ? picked + ' of ' + MAX_CHOSEN + ' chosen'
-        + (picked >= MAX_CHOSEN ? ' — drop one to add another' : '')
-      : 'Choose up to ' + MAX_CHOSEN + ' takeoffs to compare';
   }
 
   function toggle(index) {
@@ -2563,14 +2914,31 @@ html:has(dialog.welcome[open]) { overflow: hidden; }
   // enough that the fallback matters more than the polish, and there it opens inline.
   var search = document.getElementById('met-search');
 
+  function showStep(step) {
+    state.step = step;
+    document.getElementById('met-prefs').hidden = step !== 'prefs';
+    document.getElementById('met-pick').hidden = step !== 'pick';
+    modal.classList.toggle('is-prefs', step === 'prefs');
+    modal.classList.toggle('is-pick', step === 'pick');
+    modal.setAttribute('aria-labelledby', step === 'prefs' ? 'met-prefs-title' : 'met-modal-title');
+    drawList();
+  }
+  function askCountries() {
+    state.draft = {};
+    state.countries.forEach(function (code) { state.draft[code] = true; });
+    state.search = '';
+    search.value = '';
+    showStep('prefs');
+  }
   function openPicker() {
     state.search = '';
     search.value = '';
-    drawList();
-    if (modal.showModal) modal.showModal(); else modal.setAttribute('open', '');
+    if (!state.countries.length) askCountries(); else showStep('pick');
+    if (modal.showModal) { if (!modal.open) modal.showModal(); } else modal.setAttribute('open', '');
     // Not focused on a touchscreen: raising the keyboard covers the list the reader
     // came here to look at, and they can tap the field if they want to type.
-    if (!window.matchMedia('(hover: none)').matches) search.focus();
+    if (state.step === 'pick' && !window.matchMedia('(hover: none)').matches) search.focus();
+    else if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   }
   function closePicker() {
     if (modal.close) modal.close(); else modal.removeAttribute('open');
@@ -2592,11 +2960,83 @@ html:has(dialog.welcome[open]) { overflow: hidden; }
     state.search = search.value;
     drawList();
   });
-  document.getElementById('met-list').addEventListener('click', function (event) {
-    var button = event.target.closest('.met-site');
-    if (!button) return;
-    toggle(Number(button.dataset.index));
+  document.getElementById('met-tiles').addEventListener('click', function (event) {
+    var tile = event.target.closest('.met-tile');
+    if (!tile) return;
+    var code = tile.dataset.country;
+    if (state.draft[code]) delete state.draft[code]; else state.draft[code] = true;
+    drawList();
   });
+  document.getElementById('met-prefs-go').addEventListener('click', function () {
+    state.countries = conf.countries.filter(function (c) { return state.draft[c.code]; })
+      .map(function (c) { return c.code; });
+    state.region = null;
+    remember();
+    showStep('pick');
+    loadSurface();
+  });
+  document.getElementById('met-edit').addEventListener('click', askCountries);
+  // A country named under the search jumps the regions to it — on a desktop opening its
+  // first region too, on a phone back out to the regions first.
+  document.getElementById('met-mine-list').addEventListener('click', function (event) {
+    var link = event.target.closest('[data-country]');
+    if (!link) return;
+    var code = link.dataset.country;
+    state.search = '';
+    search.value = '';
+    state.region = twoPanes() ? code + ':0' : null;
+    drawList();
+    var head = document.querySelector('#met-regions .met-country[data-country="' + code + '"]');
+    if (head) head.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  });
+  document.getElementById('met-regions').addEventListener('click', function (event) {
+    var button = event.target.closest('.met-region');
+    if (!button) return;
+    state.region = button.dataset.region;
+    drawList();
+    document.getElementById('met-sites-pane').scrollTop = 0;
+  });
+  function back() {
+    state.region = null;
+    drawList();
+  }
+  document.getElementById('met-back').addEventListener('click', back);
+  function pickSite(event) {
+    var button = event.target.closest('.met-site');
+    if (button) toggle(Number(button.dataset.index));
+  }
+  document.getElementById('met-list').addEventListener('click', pickSite);
+  document.getElementById('met-hits').addEventListener('click', pickSite);
+
+  // On a phone, a swipe right over a region's takeoffs goes back to the regions: the
+  // list follows the finger and fades, past 80 px it lets go, short of it springs back.
+  // A drag that starts mostly vertical is a scroll and is left alone.
+  (function () {
+    var pane = document.getElementById('met-sites-pane'), x0 = null, y0 = 0, dx = 0, sideways = false;
+    function set(by) {
+      pane.style.transform = by ? 'translateX(' + by + 'px)' : '';
+      pane.style.opacity = by ? String(1 - Math.min(by, 300) / 600) : '';
+    }
+    pane.addEventListener('touchstart', function (event) {
+      if (twoPanes() || event.touches.length !== 1) return;
+      x0 = event.touches[0].clientX; y0 = event.touches[0].clientY; dx = 0; sideways = false;
+      pane.classList.add('is-dragged');
+    }, { passive: true });
+    pane.addEventListener('touchmove', function (event) {
+      if (x0 === null) return;
+      var mx = event.touches[0].clientX - x0, my = event.touches[0].clientY - y0;
+      if (!sideways && Math.abs(my) > Math.abs(mx)) { x0 = null; set(0); pane.classList.remove('is-dragged'); return; }
+      sideways = true;
+      dx = Math.max(0, mx);
+      set(dx);
+    }, { passive: true });
+    pane.addEventListener('touchend', function () {
+      if (x0 === null) return;
+      x0 = null;
+      pane.classList.remove('is-dragged');
+      if (dx > 80) { set(0); back(); } else set(0);
+    });
+  })();
 
   var hourInput = document.getElementById('met-hour-input');
   hourInput.addEventListener('input', function () {
@@ -2643,31 +3083,23 @@ html:has(dialog.welcome[open]) { overflow: hidden; }
   drawChosen();
   drawSite();
   loadRuns();
-  get(surfaceUrl()).then(function (answer) {
-    state.surface = Array.isArray(answer) ? answer : [answer];
-    say('');
-    drawModel();
-    drawList();
-    // Nothing chosen opens the picker, ranked for the day, rather than choosing for the
-    // reader: it used to pick the best-ranked takeoff, a hill the reader may never fly
-    // (the pilot's call, October 2026). After the welcome, if that is up: two dialogs
-    // stacked is one too many.
-    if (!chosen().length) {
-      var welcome = document.getElementById('welcome');
-      if (welcome && welcome.open) {
-        welcome.addEventListener('close', function () {
-          if (!chosen().length) openPicker();
-        }, { once: true });
-      } else openPicker();
-    } else {
+  // Nothing chosen opens the picker, rather than choosing for the reader: it used to pick
+  // the best-ranked takeoff, a hill the reader may never fly (the pilot's call, October
+  // 2026) — on a first visit at "Where do you fly?". After the welcome, if that is up:
+  // two dialogs stacked is one too many.
+  if (!chosen().length) {
+    var welcome = document.getElementById('welcome');
+    if (welcome && welcome.open) {
+      welcome.addEventListener('close', function () {
+        if (!chosen().length) openPicker();
+      }, { once: true });
+    } else openPicker();
+  }
+  loadSurface().then(function () {
+    if (chosen().length) {
       drawCompare();
       loadProfiles();
     }
-  }).catch(function (error) {
-    state.failed = true;
-    drawSite();
-    say('The forecast could not be fetched (' + error.message + '). '
-        + 'This page has no numbers of its own — it needs a network.');
   });
 })();
 </script>

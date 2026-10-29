@@ -98,24 +98,37 @@ in**, on its own 0/1/2 scale. That is what turns a forecast into an answer — 2
 the north-west is a good day at one hill and unflyable at the next one along — and it is
 the whole reason the list comes from there rather than from a list of place names.
 
-**Which takeoffs is a choice, and it is gfs.pgweb.cz's.** The first version carried every
-Czech record ParaglidingEarth has, 159 of them, and a ranking of 159 hills is mostly hills
-nobody drives to, sorted above the ones people do because the wind happened to suit them.
-The list now is pgweb's own **ESSENTIALS** group — Raná, Krupka, Kozákov, Černá hora,
-Dolní Morava, Velký Lopeník, Martinské hole, Pálava, Všechov, Doubrava, Hausstein — plus
-four trips south: Bassano, Col Rodella, Meduno and Kobala. pgweb gives a point and a name;
-ParaglidingEarth gives the wind rose; every pgweb point had exactly one PGE takeoff within
-a kilometre, and `sources.CHOSEN` pins each by its PGE id under pgweb's name, which is the
-one a Czech pilot would search for (search folds accents, so `cerna` finds Černá hora).
+**Which takeoffs is pgweb's choice** (meteoweb.pgweb.cz/termika, where gfs.pgweb.cz now
+redirects). The first version carried every Czech record ParaglidingEarth has, 159 of
+them, and a ranking of 159 hills is mostly hills nobody drives to; the second carried
+pgweb's ESSENTIALS plus four trips south, 15 takeoffs. Since October 2026 it is pgweb's
+whole list (the pilot's call: "more, but not all"): 646 takeoffs in 8 countries — its
+nine Czech regions and Czech and Slovak essentials as pgweb groups them, and its list per
+country for Slovakia, Austria, Italy, Slovenia, Switzerland, Germany and France, each split
+into regions by `sources.REGIONS` (nearest point) and `sources.MOVES` (by name, every list
+read through by hand). A takeoff pgweb lists twice — in Essentials Czechia and its region,
+or under two names 300 m apart — is one takeoff in two regions.
 
-15 takeoffs, 14 with a rose. Martinské hole has none on ParaglidingEarth and is **left
-unjudged** rather than guessed at, and the page says so: inventing a direction for a hill
-nobody recorded is the one error this page must not make.
+pgweb gives a point and a name; ParaglidingEarth gives the wind rose, landing and id,
+from its takeoff within a kilometre (`sources.pair`), taking PGE's more exact point. The
+name stays pgweb's, the one a Czech pilot would search for (search folds accents, so
+`cerna` finds Černá hora). A takeoff with no PGE record nearby has no rose and is **left
+unjudged** rather than guessed at: inventing a direction for a hill nobody recorded is the
+one error this page must not make. No source of flight counts per takeoff could be
+reached (XContest is behind Cloudflare, Leonardo answered nothing for Czech takeoffs), so
+there is no popularity filter beyond pgweb's own choice.
 
-`meteo.cli --refresh-sites` re-fetches the chosen ones and rewrites `meteo/sites.py`,
-provenance and fetch date first, and refuses if a chosen id has gone from PGE rather than
-quietly dropping the hill. Takeoffs do not move, so the file is committed and the build
-needs no network. The flymet station list is the same shape — `--refresh-flymet` rewrites
+The reader picks countries first ("Where do you fly?", on a first visit and behind the
+pencil), then a region, then takeoffs: two panes on a desktop, drilled into on a phone
+(swipe right goes back). Only the chosen countries' takeoffs are fetched from Open-Meteo,
+a hundred to a request.
+
+`meteo.cli --refresh-sites` re-reads pgweb, pairs with ParaglidingEarth and rewrites
+`meteo/sites.py`, provenance and fetch date first; heights neither source gives come from
+Open-Meteo's terrain model. If ParaglidingEarth cannot be reached it refuses, and
+`--keep-roses` writes the list with the roses the committed one had (ParaglidingEarth was
+down for maintenance for days in October 2026). Takeoffs do not move, so the file is
+committed and the build needs no network. The flymet station list is the same shape — `--refresh-flymet` rewrites
 `meteo/flymet.py` — and the two are paired at build time by `render_html.nearest_stations`,
 because neither list moves and the distances are arithmetic no reader's browser should be
 asked to repeat.

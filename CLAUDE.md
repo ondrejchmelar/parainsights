@@ -109,7 +109,7 @@ uv run python -m airspaces.cli --html airspace.html     # the airspace map, in 3
 uv run python -m airspaces.cli --report                # what built, and what did not
 
 uv run python -m meteo.cli --html meteo.html           # the day, against every takeoff
-uv run python -m meteo.cli --refresh-sites             # re-fetch sources.CHOSEN's takeoffs
+uv run python -m meteo.cli --refresh-sites             # pgweb's takeoffs + PGE roses (--keep-roses if PGE is down)
 uv run python -m meteo.cli --refresh-flymet            # re-read flymet's station map
 
 uv run python -m planner.cli --html plan.html          # only the redirect to ../airspace/
@@ -308,8 +308,11 @@ every 3D map is fetched, and so is the map itself.
 Both say so on screen when the fetch fails rather than drawing an empty frame.
 
 **The meteo page compares up to three takeoffs, and three is the palette's number.**
-The list sits in a `<dialog>` — 15 takeoffs now, gfs.pgweb.cz's ESSENTIALS plus four in
-the Alps (`meteo.sources.CHOSEN`); when it was all 159 Czech ones, on the page it was 571 px of layout and
+The list sits in a `<dialog>` — pgweb's whole list since October 2026, 646 takeoffs in
+8 countries split into regions (`meteo.sources`, `docs/meteo.md`); the reader picks
+countries first ("Where do you fly?", localStorage `parainsights.meteo.countries`), then a
+region, then takeoffs, remembered by name and country (`parainsights.meteo.takeoffs`).
+When it was all 159 Czech ones on the page, it was 571 px of layout and
 **166 tab stops** before a keyboard user reached the forecast, which `docs/meteo-ux.md`
 measures before and after. Wind is in **m/s** throughout, asked of Open-Meteo as
 `wind_speed_unit=ms` so nothing converts anything, with the verdict gates converted

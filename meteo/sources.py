@@ -6,9 +6,9 @@ and a weather site cannot know — where the takeoff is, and **which wind direct
 works in**. That second field is what turns a forecast into an answer: 20 km/h from the
 north-west is a good day at one hill and unflyable at the next one along.
 
-*Which* takeoffs is a choice, not a fetch — see `CHOSEN`. Every Czech record was 159
-rows, most of them hills nobody drives to, and a ranking of all of them buried the ones
-that matter under the ones that happened to score.
+*Which* takeoffs is pgweb's choice — see `PGWEB`. Every Czech record was 159 rows, most
+of them hills nobody drives to, and a ranking of all of them buried the ones that matter
+under the ones that happened to score; pgweb's list is the ones pilots there chose.
 
 **The flymet stations.** Scraped, because there is nothing else to read: flymet publishes
 its 186 stations as an HTML image map over a picture of the country, and the only
@@ -39,30 +39,112 @@ ATTRIBUTION = "Takeoffs from ParaglidingEarth, CC BY-SA"
 OCTANTS = ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
 TIMEOUT = 60
 
-# The takeoffs the page carries: gfs.pgweb.cz's own **ESSENTIALS** group — the hills Czech
-# pilots actually drive to, chosen by people who fly them, read 2026-09-23 — and four in
-# the Alps and the Julians that are the usual trips south. Each is pinned to the one
-# ParaglidingEarth record it means, by id: pgweb gives a point and a name, PGE gives the
-# wind rose, and every pgweb point had exactly one PGE takeoff within a kilometre of it.
-# The name is pgweb's, because it is the one a Czech pilot would type into the search.
-# (name, country, ParaglidingEarth id)
-CHOSEN = (
-    ("Raná", "CZ", 10099),
-    ("Krupka", "CZ", 6737),
-    ("Kozákov", "CZ", 7197),
-    ("Černá hora", "CZ", 7188),
-    ("Dolní Morava", "CZ", 21878),      # PGE: Slamník
-    ("Velký Lopeník", "SK", 10270),     # the takeoff is over the border, the hill is not
-    ("Martinské hole", "SK", 22106),    # no wind rose on PGE, so it is left unjudged
-    ("Pálava - Děvín", "CZ", 22931),
-    ("Všechov", "CZ", 10333),
-    ("Doubrava", "CZ", 12436),
-    ("Hausstein", "DE", 8590),
-    ("Bassano", "IT", 9200),            # PGE: Bassano - South (da Bepi)
-    ("Col Rodella", "IT", 7243),
-    ("Meduno", "IT", 19791),
-    ("Kobala", "SI", 7183),
-)
+# The takeoffs the page carries are pgweb's (meteoweb.pgweb.cz/termika, where
+# gfs.pgweb.cz now redirects): its select box lists ~685 takeoffs in groups chosen by
+# people who fly them — ESSENTIALS, nine Czech regions, Slovak essentials, and a list per
+# country for Slovakia, Austria, Italy, Slovenia, Switzerland, Germany and France. That is
+# "more, but not all": ParaglidingEarth alone has thousands. pgweb gives a name and a
+# point; ParaglidingEarth gives the wind rose, paired by distance (`pair`).
+# The pilot's call, October 2026 (it was ESSENTIALS and four trips south, 15 takeoffs).
+PGWEB = "https://meteoweb.pgweb.cz/termika/"
+PGWEB_ATTRIBUTION = "Takeoff list from pgweb (meteoweb.pgweb.cz)"
+
+# Which country each pgweb group belongs to, and what the page calls it. The Czech
+# groups are regions already; the others are a list per country, split below.
+GROUPS = {
+    "ESSENTIALS": ("CZ", "Essentials Czechia"),
+    "Středohoří & Krušné": ("CZ", "Středohoří & Krušné hory"),
+    "Praha sever": ("CZ", "Praha sever"),
+    "Praha jih & Berounsko": ("CZ", "Praha jih & Berounsko"),
+    "Krkonoše & okolí": ("CZ", "Krkonoše & okolí"),
+    "Orlické, Kraličák & Jeseníky": ("CZ", "Orlické, Kraličák & Jeseníky"),
+    "Plzeňsko & Šumava": ("CZ", "Plzeňsko & Šumava"),
+    "vlekání": ("CZ", "Tow (winch)"),
+    "Beskydy & Bíle Karpaty": ("CZ", "Beskydy & Bílé Karpaty"),
+    "Brno": ("CZ", "Brno & Pálava"),
+    "SK ESSENTIALS": ("SK", "Essentials Slovakia"),
+    "SLOVENSKO": ("SK", None),
+    "ITALIE": ("IT", None),
+    "FRANCIE": ("FR", None),
+    "NĚMECKO": ("DE", None),
+    "SWISS": ("CH", None),
+    "RAKOUSKO": ("AT", None),
+    "SLOVENIE": ("SI", None),
+}
+COUNTRY_NAMES = {"AT": "Austria", "CH": "Switzerland", "CZ": "Czechia", "DE": "Germany",
+                 "FR": "France", "IT": "Italy", "SI": "Slovenia", "SK": "Slovakia"}
+
+# A whole country's list is 55-100 takeoffs, too many to scroll, so it is split into
+# regions: each takeoff goes to the nearest of these points (lon, lat), and the ones that
+# lands on the wrong side of a ridge or a border are moved by name in `MOVES` — every
+# list was read through by hand (October 2026). A region with no point is filled by
+# `MOVES` alone. The order here is the order on the page.
+REGIONS = {
+    "SK": [("Western Slovakia", 17.6, 48.6), ("Malá & Veľká Fatra, Orava", 19.0, 49.15),
+           ("Low Tatras & Central", 19.4, 48.75), ("Tatras & Spiš", 20.8, 49.0),
+           ("Eastern Slovakia", 21.0, 48.6)],
+    "AT": [("Vorarlberg", 9.9, 47.3), ("Tyrol", 11.4, 47.3),
+           ("East Tyrol & Carinthia", 13.6, 46.75), ("Salzburg & Salzkammergut", 13.2, 47.6),
+           ("Styria", 15.2, 47.3), ("Upper & Lower Austria", 15.0, 47.9)],
+    "IT": [("Dolomites & South Tyrol", 11.6, 46.6), ("Friuli", 13.0, 46.25),
+           ("Veneto, Grappa & Belluno", 11.8, 45.85), ("Trentino & Garda", 11.0, 46.0),
+           ("Lombardy & the lakes", 9.6, 45.9), ("Piedmont, Aosta & Liguria", 7.6, 45.2),
+           ("Apennines, Central & South", 13.0, 42.5)],
+    "SI": [("Soča & Julian Alps", 13.6, 46.25), ("Gorenjska & Ljubljana", 14.3, 46.25),
+           ("Primorska & Karst", 13.9, 45.75), ("Štajerska, Dolenjska & East", 15.3, 46.3)],
+    "CH": [("Valais", 7.6, 46.2), ("Bernese Oberland", 7.8, 46.65),
+           ("Lake Geneva & Vaud Alps", None, None), ("Fribourg & Jura", 6.9, 46.85),
+           ("Central Switzerland", 8.4, 46.95), ("Eastern Switzerland & Zurich", 9.3, 47.15),
+           ("Graubünden", 9.7, 46.7), ("Ticino", 8.9, 46.2)],
+    "DE": [("Bavarian Alps", 11.4, 47.65), ("Allgäu", 10.3, 47.55),
+           ("Eastern Bavaria & Altmühltal", 13.0, 48.9),
+           ("Black Forest & Swabian Jura", 8.6, 48.3), ("Mosel, Palatinate & Hesse", 7.6, 49.9),
+           ("Central uplands", 10.5, 51.0), ("North & East", 11.5, 52.6)],
+    "FR": [("Haute-Savoie & Mont Blanc", None, None), ("Savoie, Grenoble & Vercors", 6.4, 45.9),
+           ("Southern Alps", 6.3, 44.5), ("Provence, Riviera & Corsica", 6.5, 43.7),
+           ("Pyrenees", 0.0, 42.95), ("Massif Central & South", 3.0, 44.8),
+           ("Jura & Vosges", 6.0, 47.8), ("Normandy & the north", None, None)],
+}
+MOVES = {
+    "SK": {"Eastern Slovakia": ["Kapušianský hrad", "Šarišské Čierne", "Roztoki", "Ďurkovec"],
+           "Low Tatras & Central": ["Králova Hoľa"], "Tatras & Spiš": ["Baranec"]},
+    "AT": {"Tyrol": ["Hahnenkamm", "Neunerköpfle", "Schönjoch", "Venet", "Kössen"],
+           "East Tyrol & Carinthia": ["Defereggen", "Virgen", "Goding"],
+           "Styria": ["Greim", "Hauser Kaibling", "Stoderzinken"],
+           "Upper & Lower Austria": ["Marsbach"]},
+    "IT": {"Apennines, Central & South": ["Monfestino", "Pizzorne", "Sestola", "Monte Caio",
+                                          "San Giuliano Terme"],
+           "Veneto, Grappa & Belluno": ["Valdagno", "Monte Dolada"]},
+    "SI": {"Primorska & Karst": ["Jelenk"], "Štajerska, Dolenjska & East": ["Zapodje"]},
+    "CH": {"Valais": ["Fiesch", "Moosfluh", "Riederalp"],
+           "Bernese Oberland": ["Wispile", "Metschstand", "Planplatten"],
+           "Lake Geneva & Vaud Alps": ["Leysin", "Ollon", "Jaman", "Pléiades", "Sonchaux"],
+           "Fribourg & Jura": ["Grandvillard", "Moléson", "Vounetz", "Chasseral", "Le Cernil",
+                               "Le Suchet", "Mauborget", "Mont-Soleil", "Montoz",
+                               "Niederwiler Stierenberg", "Raimeux", "Saint-Cergue",
+                               "Weissenstein", "Hohwacht", "Obere Wengi", "Schwängimatt"],
+           "Graubünden": ["Lai Alv", "Cassons", "Crap Sogn Gion"],
+           "Eastern Switzerland & Zurich": ["Balderen"]},
+    "DE": {"North & East": ["Coesfeld Gaupel", "Fichtelberg", "Zschochau"],
+           "Central uplands": ["Wenholthausen"]},
+    "FR": {"Haute-Savoie & Mont Blanc": [
+               "Abondance", "Col de l'Arpettaz", "Col de la Forclaz", "Col des Aravis",
+               "Entrevernes", "La Clusaz", "Le Morclan", "Les Couteaux", "Marlens", "Mieussy",
+               "Mont Lachat", "Morzine", "Méruz", "Plaine Joux", "Plan de l'Aigulle",
+               "Planfait", "Planpraz", "Salève", "Samoens", "Semnoz", "Varan"],
+           "Savoie, Grenoble & Vercors": ["Chamrousse", "Col Vert", "Le Belvédère",
+                                         "Moucherotte", "Serpaton"],
+           "Jura & Vosges": ["Métabief", "Vesancy", "Drumont", "Treh", "Reinhardsmunster",
+                             "Mont Poupet"],
+           "Normandy & the north": ["Clécy - Saint Omer", "St Marc d'Ouilly",
+                                    "Notre-Dame-de-la-Mer", "Fumay", "Revin", "Létanne"]},
+}
+
+# A pgweb point and a ParaglidingEarth takeoff are the same place within this distance;
+# two pgweb entries are one takeoff within `SAME_PLACE_M` (pgweb lists a hill in each
+# group it belongs to, sometimes under two names: Osser and Osser - Ostrý).
+PAIR_M = 1000.0
+SAME_PLACE_M = 300.0
 
 
 def fetch(iso: str = "CZ") -> list[dict]:
@@ -121,44 +203,180 @@ def _landing(properties: dict) -> int | None:
     return altitude if altitude > 0 else None
 
 
-def fetch_chosen(chosen=CHOSEN) -> list[dict]:
-    """The `CHOSEN` takeoffs, each from its own country's ParaglidingEarth record.
+def fetch_pgweb() -> list[tuple[str, list[dict]]]:
+    """pgweb's groups, in its order: (group name, [{name, country, alt, lat, lon}]).
 
-    Refuses rather than drops: a chosen takeoff whose record has gone is a list somebody
-    has to look at, not a hill that should quietly vanish from the page.
-    """
-    by_country = {iso: {site["id"]: site for site in fetch(iso)}
-                  for iso in dict.fromkeys(iso for _, iso, _ in chosen)}
-    sites = []
-    for name, iso, pge_id in chosen:
-        record = by_country[iso].get(pge_id)
-        if record is None:
-            raise ValueError(f"ParaglidingEarth no longer has {name} ({iso} #{pge_id})")
-        sites.append(record | {"name": name, "country": iso})
-    return sites
+    Its page hands the whole list to its script as `WeatherApp.init([...])`; an entry at
+    0,0 is a group's heading. A name carries ` [CC]` for a takeoff abroad and `, 1234 m`
+    in the country lists; both come off here."""
+    with urllib.request.urlopen(PGWEB, timeout=TIMEOUT) as response:
+        html = response.read().decode("utf-8")
+    return read_pgweb(html)
 
 
-def write(path: Path, sites: list[dict]) -> None:
-    """Rewrite `sites.py` from a fetch, provenance first."""
+def read_pgweb(html: str) -> list[tuple[str, list[dict]]]:
+    marker = "WeatherApp.init("
+    at = html.index(marker) + len(marker)
+    entries, _ = json.JSONDecoder().raw_decode(html[at:])
+    groups: list[tuple[str, list[dict]]] = []
+    for entry in entries:
+        name = unicodedata.normalize("NFC", entry["name"]).strip()
+        if entry["x"] == 0 and entry["y"] == 0:
+            groups.append((name.strip("* "), []))
+            continue
+        if not groups:
+            raise ValueError(f"pgweb lists {name!r} before any group")
+        found = re.match(r"(.*?)(?: \[(\w\w)\])?(?:, (\d+) m)?$", name)
+        groups[-1][1].append({
+            "name": found.group(1).strip().rstrip("_").strip(),
+            "country": found.group(2),
+            "alt": int(found.group(3)) if found.group(3) else None,
+            "lat": round(float(entry["y"]), 4),
+            "lon": round(float(entry["x"]), 4),
+        })
+    unknown = [group for group, _ in groups if group not in GROUPS]
+    if unknown:
+        raise ValueError(f"pgweb has groups this module does not place: {unknown}")
+    return groups
+
+
+def _folded(text: str) -> str:
+    return unicodedata.normalize("NFD", text).encode("ascii", "ignore").decode().lower()
+
+
+def region_of(country: str, name: str, lat: float, lon: float) -> str:
+    """The region a takeoff in a country-wide pgweb list goes in (`REGIONS`, `MOVES`)."""
+    for region, names in MOVES.get(country, {}).items():
+        if name in names:
+            return region
+    scale = math.cos(math.radians(lat))
+    placed = [(r, x, y) for r, x, y in REGIONS[country] if x is not None]
+    return min(placed, key=lambda r: ((r[1] - lon) * scale) ** 2 + (r[2] - lat) ** 2)[0]
+
+
+def build(groups) -> tuple[list[dict], list[dict]]:
+    """pgweb's groups as the page's two lists: the takeoffs, each once, and the countries,
+    each with its regions holding takeoff indices. Countries alphabetical by name (the
+    pilot's call); regions in pgweb's order for Czechia and `REGIONS` order elsewhere,
+    essentials first."""
+    sites: list[dict] = []
+
+    def place(point: dict, home: str) -> int:
+        for i, site in enumerate(sites):
+            metres = distance_m(site["lat"], site["lon"], point["lat"], point["lon"])
+            if metres < SAME_PLACE_M or (metres < PAIR_M
+                                         and _folded(site["name"]) == _folded(point["name"])):
+                return i
+        sites.append({"name": point["name"], "country": point["country"] or home,
+                      "lat": point["lat"], "lon": point["lon"], "alt": point["alt"],
+                      "landing": None, "tow": False, "winds": [], "id": 0})
+        return len(sites) - 1
+
+    regions: dict[str, dict[str, list[int]]] = {}
+    for group, points in groups:
+        country, label = GROUPS[group]
+        into = regions.setdefault(country, {})
+        if label is not None:
+            into.setdefault(label, [])
+        for point in points:
+            index = place(point, country)
+            if group == "vlekání":
+                sites[index]["tow"] = True
+            name = label or region_of(country, point["name"], point["lat"], point["lon"])
+            if index not in into.setdefault(name, []):
+                into[name].append(index)
+
+    countries = []
+    for code in sorted(regions, key=lambda c: COUNTRY_NAMES[c]):
+        ordered = list(regions[code])
+        if code in REGIONS:
+            wanted = [r for r, _, _ in REGIONS[code]]
+            ordered = ([r for r in ordered if r not in wanted]
+                       + [r for r in wanted if r in regions[code]])
+        countries.append({"code": code, "name": COUNTRY_NAMES[code], "regions": [
+            {"name": r, "sites": sorted(regions[code][r], key=lambda i: _folded(sites[i]["name"]))}
+            for r in ordered if regions[code][r]]})
+    return sites, countries
+
+
+def pair(sites: list[dict], records: dict[str, list[dict]]) -> int:
+    """Give each takeoff the wind rose, altitude, landing and id of the ParaglidingEarth
+    takeoff within `PAIR_M` of it, nearest first, from `records` (country → that
+    country's records, `fetch`). Returns how many were paired; the rest keep no rose and
+    are left unjudged rather than guessed at."""
+    paired = 0
+    for site in sites:
+        best, best_m = None, PAIR_M
+        for record in records.get(site["country"], []):
+            metres = distance_m(site["lat"], site["lon"], record["lat"], record["lon"])
+            if metres < best_m:
+                best, best_m = record, metres
+        if best is None:
+            continue
+        paired += 1
+        # ParaglidingEarth's point is the takeoff itself, to four decimals; pgweb's is
+        # to three (~100 m) and sometimes the hill rather than the launch.
+        site.update(winds=best["winds"], landing=best["landing"], id=best["id"],
+                    tow=site["tow"] or best["tow"], alt=best["alt"] or site["alt"],
+                    lat=best["lat"], lon=best["lon"])
+    return paired
+
+
+def keep_roses(sites: list[dict], previous: list[dict]) -> int:
+    """For a refresh while ParaglidingEarth is down: each takeoff keeps what the
+    committed list had for the same place, so no rose is lost to an outage."""
+    kept = 0
+    for site in sites:
+        for old in previous:
+            if old.get("winds") and distance_m(site["lat"], site["lon"], old["lat"], old["lon"]) < PAIR_M:
+                site.update(winds=old["winds"], landing=old["landing"], id=old["id"],
+                            alt=old["alt"] or site["alt"], lat=old["lat"], lon=old["lon"])
+                kept += 1
+                break
+    return kept
+
+
+ELEVATION = "https://api.open-meteo.com/v1/elevation?latitude={lat}&longitude={lon}"
+
+
+def fill_altitudes(sites: list[dict]) -> int:
+    """The takeoffs neither list gives a height for (pgweb's Czech groups carry none),
+    from Open-Meteo's terrain model (Copernicus, 90 m), a hundred at a time."""
+    missing = [site for site in sites if not site["alt"]]
+    for start in range(0, len(missing), 100):
+        chunk = missing[start:start + 100]
+        url = ELEVATION.format(lat=",".join(str(s["lat"]) for s in chunk),
+                               lon=",".join(str(s["lon"]) for s in chunk))
+        with urllib.request.urlopen(url, timeout=TIMEOUT) as response:
+            heights = json.loads(response.read().decode("utf-8"))["elevation"]
+        for site, height in zip(chunk, heights):
+            site["alt"] = int(round(height))
+    return len(missing)
+
+
+def write(path: Path, sites: list[dict], countries: list[dict], roses: str) -> None:
+    """Rewrite `sites.py`, provenance first."""
     today = dt.date.today().isoformat()
-    countries = ",".join(dict.fromkeys(site["country"] for site in sites))
     lines = [
         '"""Paragliding takeoffs, as committed data.',
         "",
-        f"Generated by `meteo.sources.write` from ParaglidingEarth on {today}, for the",
-        "takeoffs `meteo.sources.CHOSEN` names, in its order:",
-        f"    {ENDPOINT.format(iso='{' + countries + '}')}",
+        f"Generated by `meteo.sources` on {today}: the takeoffs and their regions from",
+        f"pgweb's list ({PGWEB}), each paired with the",
+        "ParaglidingEarth takeoff within a kilometre for its wind rose, landing and id",
+        f"({roses}).",
         "",
         "`landing` is the landing field's altitude in metres, None where none is recorded;",
         "`tow` marks a winch site, where the height to the landing means nothing.",
         "`winds` is ParaglidingEarth's own suitability per octant, N first and clockwise:",
-        "0 unflyable, 1 marginal, 2 good. An empty list means the site records none, and",
+        "0 unflyable, 1 marginal, 2 good. An empty list means no rose was found, and",
         "the page then refuses to judge it against the forecast rather than guessing.",
+        "`COUNTRIES` holds each country's regions as indices into `SITES`; a takeoff can",
+        "be in more than one region (Essentials Czechia, and its own).",
         '"""',
         "",
-        f'SOURCE = "{ENDPOINT.format(iso="{" + countries + "}")}"',
+        f'SOURCE = "{PGWEB}"',
         f'FETCHED = "{today}"',
-        f'ATTRIBUTION = "{ATTRIBUTION}"',
+        f'ATTRIBUTION = "{PGWEB_ATTRIBUTION}; wind roses from ParaglidingEarth, CC BY-SA"',
         'OCTANTS = ("N", "NE", "E", "SE", "S", "SW", "W", "NW")',
         "",
         "SITES = [",
@@ -171,6 +389,12 @@ def write(path: Path, sites: list[dict]) -> None:
             f'"tow": {site["tow"]}, '
             f'"winds": {site["winds"]}, "id": {site["id"]}}},'
         )
+    lines += ["]", "", "COUNTRIES = ["]
+    for country in countries:
+        lines.append(f'    {{"code": {country["code"]!r}, "name": {country["name"]!r}, "regions": [')
+        for region in country["regions"]:
+            lines.append(f'        {{"name": {region["name"]!r}, "sites": {region["sites"]}}},')
+        lines.append("    ]},")
     lines.append("]")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
