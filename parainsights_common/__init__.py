@@ -26,6 +26,7 @@ strip that guessed would be wrong in one of the two places.
 
 from __future__ import annotations
 from pathlib import Path
+from urllib.parse import quote
 
 # key, label, directory under public/. Order is the order a day happens in: what is the
 # weather, where shall I go, what will I fly, and then what did I actually do.
@@ -102,14 +103,44 @@ SITE_HOST = "ondrejchmelar.github.io"
 # Applied before anything is painted. A theme read from storage *after* the first paint
 # is a white flash on a dark page every time the reader opens it, which is worse than
 # not remembering at all — so this is the one script that goes in the head, and it is
-# three lines long for exactly that reason.
+# kept short for exactly that reason. It also picks the tab icon for the theme.
 THEME_BOOT = """
 try {
   var t = localStorage.getItem('parainsights.theme');
   if (t) document.documentElement.dataset.theme = t;
   if (localStorage.getItem('parainsights.text') === 'large') document.documentElement.dataset.text = 'large';
+  var f = document.getElementById('favicon');
+  if (f && (t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches)) f.href = f.dataset.dark;
 } catch (e) {}
 """
+
+# The tab's icon: the welcome's Flights picture cut down to what reads at 16 px — three
+# rings of a climb over one ridge and the glide out of it (October 2026, the pilot's pick
+# of the mocks). A tile of its own in each theme, because a tab strip is light or dark
+# whatever the page is; `THEME_BOOT` and `js/theme.js` swap it with the page's theme.
+# Inline, so a report saved to disk keeps it.
+def _favicon(bg, mtn, c1, c2, c3, glide, dot):
+    svg = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
+           '<clipPath id="t"><rect width="32" height="32" rx="7"/></clipPath><g clip-path="url(#t)">'
+           f'<rect width="32" height="32" fill="{bg}"/>'
+           f'<path d="M0 27 L7 23 L14 26 L22 20 L32 25 V32 H0Z" fill="{mtn}"/>'
+           '<g fill="none" stroke-width="2.6">'
+           f'<ellipse cx="11" cy="20" rx="6" ry="2.3" stroke="{c1}"/>'
+           f'<ellipse cx="12" cy="13.5" rx="6" ry="2.3" stroke="{c2}"/>'
+           f'<ellipse cx="13" cy="7" rx="6" ry="2.3" stroke="{c3}"/></g>'
+           f'<path d="M19.5 7 C23.5 8.5,26.5 12,27.5 16.5" fill="none" stroke="{glide}" '
+           'stroke-width="2.6" stroke-linecap="round"/>'
+           f'<circle cx="27.5" cy="19" r="2.6" fill="{dot}"/></g></svg>')
+    return "data:image/svg+xml," + quote(svg)
+
+
+# The light theme's panel-2, shadow-ink, climb ramp, sink and ink; then the dark theme's,
+# its ground a step lighter than its shadow-ink, which vanished into the tile at 16 px.
+FAVICON_LIGHT = _favicon("#eeece6", "#c3bfb4", "#f0a07a", "#eb6834", "#c8431a", "#1d5fd1", "#161614")
+FAVICON_DARK = _favicon("#272723", "#4a4842", "#b06a4a", "#e8692c", "#f08a55", "#4b8ff0", "#efede8")
+# Goes in the head before `THEME_BOOT`, which reads it by its id.
+FAVICON = (f'<link rel="icon" type="image/svg+xml" id="favicon" href="{FAVICON_LIGHT}" '
+           f'data-light="{FAVICON_LIGHT}" data-dark="{FAVICON_DARK}">')
 
 # The button's behaviour. Deliberately *not* a third state: the button says what it will
 # do next, and "follow the system" is a thing readers set once in their system and never
@@ -377,6 +408,7 @@ def redirect(target: str, title: str, says: str) -> str:
 <meta name="robots" content="noindex">
 <link rel="canonical" href="{target}">
 <meta http-equiv="refresh" content="0; url={target}">
+{FAVICON}
 <script>{THEME_BOOT}
 location.replace('{target}' + location.search + location.hash);</script>
 <style>{TOKENS}

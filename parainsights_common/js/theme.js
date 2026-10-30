@@ -5,6 +5,11 @@
       ? root.dataset.theme === 'dark'
       : window.matchMedia('(prefers-color-scheme: dark)').matches;
   }
+  // The tab's icon follows the page (`common.FAVICON`).
+  function favicon() {
+    var link = document.getElementById('favicon');
+    if (link) link.href = dark() ? link.dataset.dark : link.dataset.light;
+  }
   function label(button) {
     var isDark = dark();
     button.setAttribute('aria-pressed', isDark ? 'true' : 'false');
@@ -21,6 +26,7 @@
         localStorage.setItem('parainsights.theme', root.dataset.theme);
       } catch (e) { /* private mode: the page still switches, it just forgets */ }
       buttons.forEach(label);
+      favicon();
       // The canvases are painted with the tokens read at draw time, so they hold the
       // old theme until something asks them to redraw. Each tool exposes its own.
       if (window.__meteo && window.__meteo.draw) window.__meteo.draw();
@@ -31,6 +37,6 @@
   });
   // The system changing under a reader who has expressed no preference.
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function () {
-    if (!root.dataset.theme) buttons.forEach(label);
+    if (!root.dataset.theme) { buttons.forEach(label); favicon(); }
   });
 })();

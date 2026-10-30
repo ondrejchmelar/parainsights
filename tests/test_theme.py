@@ -175,3 +175,24 @@ def test_the_welcome_shows_once_and_is_remembered():
     # A wheel or swipe past the dialog's end scrolled the page behind it.
     assert answer["locked"] == "hidden" and answer["unlocked"] != "hidden"
     assert answer["again"] is False, "it opened a second time"
+
+
+class TestTheTabIcon:
+    def test_every_page_carries_it_ahead_of_the_boot_script(self):
+        """`THEME_BOOT` finds the icon by its id, so it has to be in the head first."""
+        from airspaces import cli as airspaces_cli
+        from meteo import cli as meteo_cli
+        from tracklog_viewer import render_html
+
+        for module in (meteo_cli, airspaces_cli, render_html):
+            source = __import__("pathlib").Path(module.__file__).read_text(encoding="utf-8")
+            assert "{common.FAVICON}\n<script>{common.THEME_BOOT}" in source, module.__name__
+        assert common.FAVICON in common.root_redirect()
+
+    def test_it_has_a_light_and_a_dark_tile(self):
+        assert common.FAVICON_LIGHT != common.FAVICON_DARK
+        for uri in (common.FAVICON_LIGHT, common.FAVICON_DARK):
+            assert uri.startswith("data:image/svg+xml,")
+            assert "#" not in uri, "an unescaped # ends a data URI"
+        assert 'id="favicon"' in common.FAVICON
+        assert "favicon" in common.THEME_BOOT

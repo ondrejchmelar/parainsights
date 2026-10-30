@@ -37,6 +37,7 @@ def _page(article: str, title: str, *, three_d: bool = False) -> str:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
+{common.FAVICON}
 <script>{common.THEME_BOOT}</script>
 <style>
 {common.TOKENS}

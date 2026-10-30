@@ -518,6 +518,7 @@ def _page(title: str, bodies: list[str], tabs: str = "", extras: "list[Extra]" =
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{escape(title)}</title>
+{common.FAVICON}
 <script>{common.THEME_BOOT}</script>
 <style>{STYLE}{view3d.STYLE}{render_map.STYLE}{map3d.STYLE}{upload_panel.STYLE}{charts_client.STYLE}
 {VIEW_STYLE if extras or site else ""}{"".join(e.style for e in extras)}</style>
