@@ -130,7 +130,6 @@ STYLE = """
 .met-add.is-invite:hover { background:var(--accent); filter:brightness(1.06); }
 @keyframes met-invite { from { box-shadow:0 0 0 0 var(--accent); } to { box-shadow:0 0 0 10px transparent; } }
 @media (prefers-reduced-motion: reduce) { .met-add.is-invite { animation:none; } }
-
 .met-cap { display: none; }
 
 /* The comparison: the page's answer, so its largest text. It is also the palette's
@@ -167,80 +166,6 @@ STYLE = """
 .met-modal-foot { display:flex; justify-content:space-between; align-items:center; gap:10px;
   padding:12px 16px; border-top:1px solid var(--rule); font-size:15px; color:var(--ink-2); }
 .met-list { max-height:56vh; overflow-y:auto; }
-/* The two steps in the one dialog: where the reader flies (`met-prefs`, first visit and
-   the pencil), then that country's regions and their takeoffs (`met-pick`). On a desktop
-   the regions and the takeoffs are two panes; on a phone one at a time, drilled into. */
-.met-modal.is-pick { width:min(940px, 94vw); }
-.met-modal.is-prefs { width:min(640px, 94vw); }
-.met-modal[open] { display:flex; flex-direction:column; }
-.met-step { display:flex; flex-direction:column; min-height:0; flex:1; }
-.met-step[hidden] { display:none; }
-.met-prefs-head { padding:22px 22px 14px; }
-.met-prefs-head h2 { margin:0 0 8px; font-size:24px; }
-.met-prefs-head p { margin:0; color:var(--ink-2); line-height:1.45; }
-.met-tiles { padding:4px 22px 18px; overflow-y:auto; display:grid; gap:10px;
-  grid-template-columns:repeat(2, minmax(0, 1fr)); }
-.met-tile { display:grid; grid-template-columns:auto 1fr; gap:2px 14px; align-items:center; text-align:left;
-  padding:14px 16px; border-radius:14px; border:1px solid var(--edge); background:var(--panel);
-  min-height:72px; color:var(--ink); font:inherit; cursor:pointer; }
-.met-tile:hover { background:var(--panel-2); }
-.met-tile.is-on { border-color:var(--accent); background:var(--panel-2); }
-.met-tile .box { grid-row:1 / span 2; width:24px; height:24px; border-radius:5px; border:2px solid var(--edge);
-  display:flex; align-items:center; justify-content:center; }
-.met-tile.is-on .box { background:var(--accent); border-color:var(--accent); color:var(--on-accent); }
-.met-tile .box svg { display:none; }
-.met-tile.is-on .box svg { display:block; }
-.met-tile > b { font-size:17px; }
-.met-tile > span { grid-column:2; font-size:15px; color:var(--ink-2); }
-.met-modal-foot.is-prefs { padding:14px 22px; }
-.met-mine { display:flex; align-items:center; gap:6px; flex-wrap:wrap; padding:10px 16px;
-  border-bottom:1px solid var(--rule); font-size:15px; color:var(--ink-2); }
-.met-mine .lnk { font-size:16px; }
-.met-edit { width:32px; height:32px; margin:-6px 0; border:0; border-radius:50%; background:transparent;
-  color:var(--ink-2); display:inline-flex; align-items:center; justify-content:center; padding:0; cursor:pointer; }
-.met-edit:hover { background:var(--panel-2); color:var(--ink); }
-.met-panes { flex:1; min-height:0; display:grid; grid-template-columns:300px minmax(0, 1fr); }
-.met-panes > div { overflow-y:auto; min-height:0; }
-.met-regions { border-right:1px solid var(--rule); }
-.met-modal.is-pick .met-list { max-height:none; }
-.met-panes[hidden], .met-list[hidden] { display:none; }
-#met-hits { flex:1; min-height:0; overflow-y:auto; }
-#met-mine-list { display:inline-flex; flex-wrap:wrap; gap:0 6px; }
-.met-country { padding:14px 16px 6px; font-size:15px; font-weight:600; color:var(--ink-2);
-  border-bottom:1px solid var(--rule); background:var(--panel); position:sticky; top:0; z-index:1; }
-.met-region { display:grid; grid-template-columns:1fr auto; gap:2px 12px; width:100%; text-align:left; border:0;
-  border-bottom:1px solid var(--rule); border-radius:0; padding:12px 16px; background:transparent;
-  color:var(--ink); font:inherit; cursor:pointer; }
-.met-region:hover { background:var(--panel-2); }
-.met-region.is-on { background:var(--panel-2); box-shadow:inset 3px 0 0 var(--accent); }
-.met-region > b { font-weight:600; font-size:16px; }
-.met-region > span { grid-column:1; font-size:15px; color:var(--ink-2); }
-.met-region > i { grid-column:2; grid-row:1 / span 2; align-self:center; display:flex; color:var(--ink-2); }
-.met-region .fly { color:var(--good); font-weight:600; }
-.met-sub { display:flex; align-items:center; gap:10px; padding:12px 16px 8px; border-bottom:1px solid var(--rule);
-  background:var(--panel); position:sticky; top:0; z-index:1; }
-.met-sub b { display:block; font-size:17px; }
-.met-sub span { font-size:15px; color:var(--ink-2); }
-.met-back { width:40px; height:40px; flex:none; border-radius:10px; border:1px solid var(--edge);
-  background:transparent; color:var(--ink); display:inline-flex; align-items:center; justify-content:center;
-  cursor:pointer; padding:0; }
-.met-back:hover { background:var(--panel-2); }
-.met-sites-pane { transition:transform .2s ease, opacity .2s ease; }
-.met-sites-pane.is-dragged { transition:none; }
-/* A phone: the dialog takes the screen, the countries one to a row, and the regions and
-   the takeoffs one pane at a time. */
-@media (max-width: 719px) {
-  .met-modal.is-pick, .met-modal.is-prefs { width:calc(100vw - 16px); max-width:none;
-    height:calc(100dvh - 16px); max-height:none; }
-  .met-tiles { grid-template-columns:minmax(0, 1fr); }
-  .met-panes { grid-template-columns:minmax(0, 1fr); }
-  .met-regions { border-right:0; }
-  .met-panes.is-in .met-regions, .met-panes:not(.is-in) .met-sites-pane { display:none; }
-}
-@media (min-width: 720px) {
-  .met-modal.is-pick { height:min(740px, 86vh); }
-  .met-back { display:none; }
-}
 .met-site { display:grid; grid-template-columns: auto 1fr auto; gap:2px 12px; width:100%; text-align:left;
   border:0; border-bottom:1px solid var(--rule); border-radius:0; padding:12px 16px; background:transparent;
   cursor:pointer; color:var(--ink); font: inherit; }
@@ -386,6 +311,17 @@ STYLE = """
 
 
 
+# The takeoffs this page carries: pgweb's ESSENTIALS and four trips south, out of the
+# 646 in `meteo.sites` (pgweb's whole list, which the Planner's map draws). The whole list
+# waits for its picker by country and region (branch `meteo-picker`) until
+# ParaglidingEarth is back to give the new takeoffs their wind roses — the pilot's call,
+# October 2026. Names as in `meteo.sites`, in the page's order.
+ON_THE_PAGE = ("Raná", "Krupka", "Kozákov", "Černá hora", "Dolní Morava", "Velký Lopeník",
+               "Martinské hole", "Pálava - Děvín", "Všechov", "Doubrava", "Hausstein",
+               "Bassano", "Col Rodella", "Meduno", "Kobala")
+SITES = [next(site for site in site_data.SITES if site["name"] == name) for name in ON_THE_PAGE]
+
+
 def nearest_stations(sites=None, stations=None) -> list[dict | None]:
     """The flymet station nearest each takeoff, one entry per site and in the same order.
 
@@ -394,7 +330,7 @@ def nearest_stations(sites=None, stations=None) -> list[dict | None]:
     times in every reader's browser — and it is arithmetic a test can check without a
     browser at all.
     """
-    sites = site_data.SITES if sites is None else sites
+    sites = SITES if sites is None else sites
     stations = flymet_data.STATIONS if stations is None else stations
     out: list[dict | None] = []
     for site in sites:
@@ -414,9 +350,7 @@ def nearest_stations(sites=None, stations=None) -> list[dict | None]:
 def body(uid: str = "meteo") -> str:
     """The view's markup. Everything with a number in it is filled by the script."""
     payload = json.dumps({
-        "sites": site_data.SITES,
-        # Each country's regions, as indices into `sites`; the picker's two levels.
-        "countries": site_data.COUNTRIES,
+        "sites": SITES,
         "octants": list(site_data.OCTANTS),
         "levels": list(LEVELS),
         "endpoint": ENDPOINT,
@@ -439,10 +373,8 @@ def body(uid: str = "meteo") -> str:
         <tr><td>Forecast</td><td><a href="https://open-meteo.com/" rel="noreferrer">Open-Meteo</a>:
           DWD ICON-D2 (2&nbsp;km) as far as it reaches, ICON-EU (7&nbsp;km) after, and the
           boundary layer height from ECMWF IFS, which ICON does not publish</td></tr>
-        <tr><td>Takeoffs</td><td><a href="{site_data.SOURCE}" rel="noreferrer">pgweb</a>'s list,
-          {len(site_data.SITES)} takeoffs in {len(site_data.COUNTRIES)} countries; wind directions
-          from <a href="https://www.paraglidingearth.com/" rel="noreferrer">ParaglidingEarth</a>
-          (CC BY-SA), where it records them</td></tr>
+        <tr><td>Takeoffs</td><td>Chosen after <a href="https://gfs.pgweb.cz/" rel="noreferrer">gfs.pgweb.cz</a>'s
+          essentials. {site_data.ATTRIBUTION}</td></tr>
         <tr><td>Airfield meteograms</td><td>{flymet_data.ATTRIBUTION}, from
           <a href="{flymet_data.SOURCE}" rel="noreferrer">flymet</a>: {len(flymet_data.STATIONS)}
           stations, each takeoff shown its nearest</td></tr>
@@ -515,47 +447,16 @@ def body(uid: str = "meteo") -> str:
   </div>
 
   <dialog class="met-modal" id="met-modal" aria-labelledby="met-modal-title">
-    <!-- 1. Where the reader flies: a first visit's first question, and the pencil's. -->
-    <div class="met-step" id="met-prefs" hidden>
-      <div class="met-prefs-head">
-        <h2 id="met-prefs-title">Where do you fly?</h2>
-        <p>Tick the countries you’d drive to. The takeoff list shows only these, grouped
-          by region. You can change this any time.</p>
-      </div>
-      <div class="met-tiles" id="met-tiles"></div>
-      <div class="met-modal-foot is-prefs">
-        <span id="met-prefs-count"></span>
-        <button type="button" class="btn primary" id="met-prefs-go">Show takeoffs</button>
-      </div>
+    <div class="met-modal-head">
+      <h2 id="met-modal-title">Takeoffs</h2>
+      <input type="search" class="met-search" id="met-search" aria-label="Search takeoffs"
+             placeholder="Search {len(SITES)} takeoffs, best of the day first">
+      <button type="button" class="tool" id="met-close" aria-label="Close">{common.icon(common.ICONS["close"])}</button>
     </div>
-    <!-- 2. Those countries' regions, then a region's takeoffs. -->
-    <div class="met-step" id="met-pick">
-      <div class="met-modal-head">
-        <h2 id="met-modal-title">Takeoffs</h2>
-        <input type="search" class="met-search" id="met-search" aria-label="Search takeoffs"
-               placeholder="Search takeoffs">
-        <button type="button" class="tool" id="met-close" aria-label="Close">{common.icon(common.ICONS["close"])}</button>
-      </div>
-      <div class="met-mine" id="met-mine">
-        <span>Your countries:</span><span id="met-mine-list"></span>
-        <button type="button" class="met-edit" id="met-edit" aria-label="Change countries"
-                title="Change countries">{common.icon(common.ICONS["pencil"])}</button>
-      </div>
-      <div class="met-panes" id="met-panes">
-        <div class="met-regions" id="met-regions"></div>
-        <div class="met-sites-pane" id="met-sites-pane">
-          <div class="met-sub" id="met-sub-head">
-            <button type="button" class="met-back" id="met-back" aria-label="Back to regions">{common.icon('<path d="M12 5.5 7.5 10l4.5 4.5"/>')}</button>
-            <div><b id="met-region-name"></b><span id="met-region-meta"></span></div>
-          </div>
-          <div class="met-list" id="met-list"></div>
-        </div>
-      </div>
-      <div class="met-list" id="met-hits" hidden></div>
-      <div class="met-modal-foot">
-        <span id="met-count"></span>
-        <button type="button" class="btn primary" id="met-done">Done</button>
-      </div>
+    <div class="met-list" id="met-list"></div>
+    <div class="met-modal-foot">
+      <span id="met-count"></span>
+      <button type="button" class="btn primary" id="met-done">Done</button>
     </div>
   </dialog>
   <!-- Where everything on the page comes from, folded at the foot as on the Planner

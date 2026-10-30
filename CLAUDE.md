@@ -316,10 +316,11 @@ every 3D map is fetched, and so is the map itself.
 Both say so on screen when the fetch fails rather than drawing an empty frame.
 
 **The meteo page compares up to three takeoffs, and three is the palette's number.**
-The list sits in a `<dialog>` — pgweb's whole list since October 2026, 646 takeoffs in
-8 countries split into regions (`meteo.sources`, `docs/meteo.md`); the reader picks
-countries first ("Where do you fly?", localStorage `parainsights.meteo.countries`), then a
-region, then takeoffs, remembered by name and country (`parainsights.meteo.takeoffs`).
+The list sits in a `<dialog>` — 15 takeoffs, pgweb's ESSENTIALS plus four in the Alps
+(`render_html.ON_THE_PAGE`), out of the 646 in `meteo.sites` (pgweb's whole list, which the
+Planner's map draws). The whole list with a picker by country and region is built and
+waits on branch `meteo-picker` until ParaglidingEarth is back to give the new takeoffs
+their wind roses (the pilot's call, October 2026: no picker without wind directions).
 When it was all 159 Czech ones on the page, it was 571 px of layout and
 **166 tab stops** before a keyboard user reached the forecast, which `docs/meteo-ux.md`
 measures before and after. Wind is in **m/s** throughout, asked of Open-Meteo as

@@ -203,16 +203,17 @@ class TestPairingATakeoffWithAStation:
         assert render_html.nearest_stations([site], [station]) == [None]
 
     def test_every_takeoff_north_of_the_alps_has_a_station_near_it(self):
-        """flymet covers Czechia and the border: every Czech takeoff gets a meteogram,
+        """flymet covers Czechia and the border: every takeoff there gets a meteogram,
         and the Alpine ones get none rather than a Czech airfield's."""
         found = render_html.nearest_stations()
-        assert len(found) == len(sites.SITES)
-        north = [entry for site, entry in zip(sites.SITES, found) if site["country"] == "CZ"]
-        assert all(north), "a Czech takeoff was left without a station"
+        assert len(found) == len(render_html.SITES)
+        north = [entry for site, entry in zip(render_html.SITES, found)
+                 if site["country"] in ("CZ", "SK", "DE")]
+        assert all(north), "a takeoff north of the Alps was left without a station"
         worst = max(entry["km"] for entry in north)
         assert worst < 30, f"the worst takeoff is now {worst} km from a station"
-        south = [entry for site, entry in zip(sites.SITES, found)
-                 if site["country"] in ("IT", "SI", "FR", "CH")]
+        south = [entry for site, entry in zip(render_html.SITES, found)
+                 if site["country"] in ("IT", "SI")]
         assert south and not any(south), "an Alpine takeoff was paired with a flymet station"
 
 
@@ -222,12 +223,12 @@ class TestThePage:
         blob = re.search(r'<script type="application/json" class="met-data">(.*?)</script>',
                          html, re.S)
         payload = json.loads(blob.group(1))
-        assert len(payload["sites"]) == len(sites.SITES)
+        assert len(payload["sites"]) == len(render_html.SITES)
         assert payload["levels"] == list(render_html.LEVELS)
         assert payload["endpoint"].startswith("https://api.open-meteo.com/")
         # One entry per site and in the same order: the page indexes it by the site's own
         # index, so a shorter or re-sorted list would hand out other takeoffs' airfields.
-        assert len(payload["flymet"]["near"]) == len(sites.SITES)
+        assert len(payload["flymet"]["near"]) == len(render_html.SITES)
         assert payload["flymet"]["today"].startswith("https://")
 
     def test_the_pressure_levels_match_the_viewer_s(self):
@@ -466,7 +467,7 @@ def _local_flymet():
 # empty page: the one the page used to choose by itself on a first visit, before it
 # opened the picker instead — under the stub's wind every takeoff with a rose is "too
 # strong", so it was the first without one.
-_REMEMBERED = [next(i for i, s in enumerate(sites.SITES) if not s["winds"])]
+_REMEMBERED = [next(i for i, s in enumerate(render_html.SITES) if not s["winds"])]
 
 
 def _probe_page(body: str, *, site_count: int = 3, hold: bool = False,
@@ -484,7 +485,7 @@ def _probe_page(body: str, *, site_count: int = 3, hold: bool = False,
             "cloud_cover": [20.0] * 96,
             "cape": [200.0] * 96,
         }
-    }] * len(sites.SITES))
+    }] * len(render_html.SITES))
     stub = """
     <script>
     window.__profile = %s;
@@ -495,26 +496,21 @@ def _probe_page(body: str, *, site_count: int = 3, hold: bool = False,
     window.__meta = %s;
     // `hold`: the day's forecast waits until `__release()`, to see the page before it.
     window.__held = %s;
-    // The surface comes a hundred takeoffs to a request, so a release lets them all go.
-    var released = [];
-    window.__release = function () { released.splice(0).forEach(function (go) { go(); }); };
+    var released = null;
+    window.__release = function () { if (released) released(); };
     (function (remembered) {
-      var key = 'parainsights.meteo.takeoffs';
+      var key = 'parainsights.meteo.sites';
       try {
-        ['parainsights.meteo.takeoffs', 'parainsights.meteo.takeoffs.order',
-         'parainsights.meteo.countries', 'parainsights.meteo.sites',
-         'parainsights.meteo.sites.order'].forEach(function (k) { localStorage.removeItem(k); });
-        // Remembered by name and country; the countries follow from the takeoffs.
         if (remembered) {
           localStorage.setItem(key, JSON.stringify(remembered));
           localStorage.setItem(key + '.order', JSON.stringify(remembered));
-        }
+        } else { localStorage.removeItem(key); localStorage.removeItem(key + '.order'); }
       } catch (error) { /* file:// without storage: a first visit */ }
     })(%s);
     window.fetch = function (url) {
       var surfaceAsk = String(url).indexOf('meta.json') < 0 && String(url).indexOf('geopotential_height') < 0;
       if (window.__held && surfaceAsk) {
-        return new Promise(function (resolve) { released.push(resolve); }).then(function () {
+        return new Promise(function (resolve) { released = resolve; }).then(function () {
           return { ok: true, json: function () { return Promise.resolve(JSON.parse(JSON.stringify(window.__surface))); } };
         });
       }
@@ -527,8 +523,7 @@ def _probe_page(body: str, *, site_count: int = 3, hold: bool = False,
     };
     </script>
     """ % (profile, surface, json.dumps(_FAKE_META), "true" if hold else "false",
-       json.dumps(None if remembered is None else
-                  [sites.SITES[i]["name"] + "|" + sites.SITES[i]["country"] for i in remembered]))
+       json.dumps(remembered))
     page = cli.page(render_html.body(), "Meteo")
     assert _FLYMET_HOST in page, "flymet's host moved; this test rewrites it by hand"
     probe = """
@@ -721,27 +716,13 @@ class TestChoosingTakeoffs:
         var add = document.getElementById('met-add');
         var open = document.getElementById('met-modal').open === true;
         var lit = add.classList.contains('is-invite');
-        var prefs = !document.getElementById('met-prefs').hidden;
-        var tiles = document.querySelectorAll('.met-tile').length;
-        var ticked = document.querySelectorAll('.met-tile.is-on').length;
-        var go = document.getElementById('met-prefs-go').disabled;
-        document.querySelector('.met-tile[data-country="CZ"]').click();
-        document.getElementById('met-prefs-go').click();
-        return new Promise(function (done) { setTimeout(done, 300); }).then(function () {
-          var rows = document.querySelectorAll('#met-list .met-site').length;
-          m.add(0);
-          return { open: open, lit: lit, prefs: prefs, tiles: tiles, ticked: ticked, go: go,
-                   rows: rows, saved: localStorage.getItem('parainsights.meteo.countries'),
-                   litAfter: add.classList.contains('is-invite') };
-        });
+        m.add(0);
+        return { chosen: m.chosen().length, open: open, lit: lit,
+                 rows: document.querySelectorAll('.met-site').length,
+                 litAfter: add.classList.contains('is-invite') };
         """, remembered=None)
         assert answer["open"] is True, "the picker should open by itself"
-        assert answer["prefs"] is True, "a first visit asks where the reader flies"
-        assert answer["tiles"] == len(sites.COUNTRIES) and answer["ticked"] == 0
-        assert answer["go"] is True, "nothing to show until a country is ticked"
-        assert answer["saved"] == '["CZ"]'
-        czech = next(c for c in sites.COUNTRIES if c["code"] == "CZ")
-        assert answer["rows"] == len(czech["regions"][0]["sites"]), "its first region opens"
+        assert answer["rows"] == len(render_html.SITES)
         assert answer["lit"] is True
         assert answer["litAfter"] is False, "+ stays lit after a takeoff is chosen"
 
@@ -773,35 +754,7 @@ class TestChoosingTakeoffs:
         assert answer["openBefore"] is False, "the picker is open before it is asked for"
         assert answer["openAfter"] is True
         assert answer["inDialog"] is True
-        # The remembered takeoff's countries, the first of them alphabetically, and its
-        # first region open: on a desktop the takeoffs pane always shows one.
-        first = sites.COUNTRIES[[c["code"] for c in sites.COUNTRIES].index("CZ")]
-        assert answer["rows"] == len(first["regions"][0]["sites"])
-
-    def test_the_pencil_asks_again_with_the_countries_already_ticked(self):
-        """Changing countries starts from the ones the reader has, and a country named
-        under the search opens that country's regions."""
-        answer = _probe_page("""
-        var m = window.__meteo;
-        m.open();
-        document.getElementById('met-edit').click();
-        var prefs = !document.getElementById('met-prefs').hidden;
-        var ticked = Array.prototype.map.call(document.querySelectorAll('.met-tile.is-on'),
-          function (t) { return t.dataset.country; });
-        document.querySelector('.met-tile[data-country="AT"]').click();
-        document.getElementById('met-prefs-go').click();
-        var named = Array.prototype.map.call(document.querySelectorAll('#met-mine-list .lnk'),
-          function (l) { return l.textContent; });
-        document.querySelector('#met-mine-list [data-country="SK"]').click();
-        var open = document.querySelector('.met-region.is-on').dataset.region;
-        return { prefs: prefs, ticked: ticked, named: named, open: open,
-                 saved: localStorage.getItem('parainsights.meteo.countries') };
-        """)
-        assert answer["prefs"] is True
-        assert sorted(answer["ticked"]) == ["CZ", "SK"], "the remembered takeoff's countries"
-        assert answer["named"] == ["Austria", "Czechia", "Slovakia"], "alphabetical"
-        assert answer["saved"] == '["AT","CZ","SK"]'
-        assert answer["open"] == "SK:0"
+        assert answer["rows"] == len(render_html.SITES), "the dialog should hold the whole list"
 
     def test_searching_narrows_the_list(self):
         answer = _probe_page("""
@@ -811,19 +764,16 @@ class TestChoosingTakeoffs:
         var search = document.getElementById('met-search');
         search.value = 'rana';
         search.dispatchEvent(new Event('input', { bubbles: true }));
-        // A search shows its hits in their own list, in place of the regions.
         var narrowed = Array.prototype.map.call(
-          document.querySelectorAll('#met-hits .met-site-name'), function (n) { return n.textContent; });
-        var panes = document.getElementById('met-panes').hidden;
+          document.querySelectorAll('.met-site-name'), function (n) { return n.textContent; });
         search.value = 'zzzznothing';
         search.dispatchEvent(new Event('input', { bubbles: true }));
-        return { all: all, narrowed: narrowed, panes: panes,
-                 empty: document.querySelectorAll('#met-hits .met-empty').length };
+        return { all: all, narrowed: narrowed,
+                 empty: document.querySelectorAll('.met-empty').length };
         """)
-        assert answer["all"] > 0
+        assert answer["all"] == len(render_html.SITES)
         # Typed without the accent, and it still finds Raná.
         assert answer["narrowed"] == ["Raná"], "searching for a real takeoff found nothing"
-        assert answer["panes"] is True
         assert answer["empty"] == 1, "a search with no hits must say so"
 
     def test_six_takeoffs_can_be_compared_and_a_seventh_is_refused(self):

@@ -19,13 +19,8 @@
   var MAX_CHOSEN = __MAX_CHOSEN__;
   var noSlots = [];
   for (var n = 0; n < MAX_CHOSEN; n++) noSlots.push(null);
-  // `countries` is where the reader flies (codes), asked on a first visit; `step` is the
-  // picker's — 'prefs' for that question, 'pick' for the regions and their takeoffs —
-  // and `region` the one open ('CZ:3'), null for the list of regions on a phone.
-  // `surface` is sparse: the day's forecast only for the takeoffs in those countries.
   var state = { day: 0, hour: 14, slots: noSlots, order: [], site: null,
-                surface: [], profile: null, profiles: {}, search: '',
-                countries: [], step: 'pick', region: null, draft: {},
+                surface: null, profile: null, profiles: {}, search: '',
                 probe: null, probeX: 0 };
 
   var status = document.getElementById('met-status');
@@ -50,68 +45,28 @@
   // makes a tool feel like a demo. Wrapped because a page opened from a file:// URL in
   // some browsers throws on even reading localStorage, and a page that fails to load
   // because it could not remember something is worse than one that forgets.
-  //
-  // A takeoff is remembered by its name and country, not its place in the list: the list
-  // is pgweb's and is regenerated, and an index saved against an older one could point
-  // anywhere. `parainsights.meteo.sites` held indices into the old fifteen (October
-  // 2026), read once by name below so nobody loses their hills to the longer list.
-  var REMEMBER = 'parainsights.meteo.takeoffs';
-  var COUNTRIES = 'parainsights.meteo.countries';
-  var OLD = 'parainsights.meteo.sites';
-  var OLD_NAMES = ['Raná', 'Krupka', 'Kozákov', 'Černá hora', 'Dolní Morava', 'Velký Lopeník',
-                   'Martinské hole', 'Pálava - Děvín', 'Všechov', 'Doubrava', 'Hausstein',
-                   'Bassano', 'Col Rodella', 'Meduno', 'Kobala'];
-  function keyOf(index) { return conf.sites[index].name + '|' + conf.sites[index].country; }
-  function byKey(key) {
-    for (var i = 0; i < conf.sites.length; i++) if (keyOf(i) === key) return i;
-    return null;
-  }
-  function byName(name) {
-    for (var i = 0; i < conf.sites.length; i++) if (conf.sites[i].name === name) return i;
-    return null;
-  }
+  var REMEMBER = 'parainsights.meteo.sites';
   function remember() {
     try {
-      window.localStorage.setItem(REMEMBER, JSON.stringify(state.slots.map(function (index) {
-        return index === null ? null : keyOf(index);
-      })));
-      window.localStorage.setItem(REMEMBER + '.order', JSON.stringify(chosen().map(keyOf)));
-      window.localStorage.setItem(COUNTRIES, JSON.stringify(state.countries));
+      window.localStorage.setItem(REMEMBER, JSON.stringify(state.slots));
+      window.localStorage.setItem(REMEMBER + '.order', JSON.stringify(chosen()));
     } catch (error) { /* private mode, file://, or a full quota: forget instead */ }
   }
   function recall() {
     try {
-      var saved = JSON.parse(window.localStorage.getItem(REMEMBER) || 'null'), order = [];
-      if (Array.isArray(saved)) {
-        saved.forEach(function (key, s) {
-          if (s < MAX_CHOSEN) state.slots[s] = typeof key === 'string' ? byKey(key) : null;
-        });
-        order = (JSON.parse(window.localStorage.getItem(REMEMBER + '.order') || '[]') || []).map(byKey);
-      } else {
-        var old = JSON.parse(window.localStorage.getItem(OLD) || 'null');
-        if (Array.isArray(old)) old.forEach(function (index, s) {
-          if (s < MAX_CHOSEN) state.slots[s] = typeof index === 'number' && OLD_NAMES[index] ? byName(OLD_NAMES[index]) : null;
-        });
-        order = (JSON.parse(window.localStorage.getItem(OLD + '.order') || '[]') || []).map(function (index) {
-          return OLD_NAMES[index] ? byName(OLD_NAMES[index]) : null;
-        });
+      var saved = JSON.parse(window.localStorage.getItem(REMEMBER) || 'null');
+      if (!Array.isArray(saved)) return;
+      for (var s = 0; s < MAX_CHOSEN; s++) {
+        var index = saved[s];
+        // Validated, not trusted: the site list is regenerated from ParaglidingEarth and
+        // an index saved against an older one could point anywhere, or nowhere.
+        state.slots[s] = (typeof index === 'number' && conf.sites[index]) ? index : null;
       }
-      state.order = order.filter(function (index) { return index !== null; });
+      var order = JSON.parse(window.localStorage.getItem(REMEMBER + '.order') || '[]');
+      state.order = Array.isArray(order) ? order.filter(function (index) {
+        return typeof index === 'number' && conf.sites[index];
+      }) : [];
       state.site = chosen().length ? chosen()[0] : null;
-      var countries = JSON.parse(window.localStorage.getItem(COUNTRIES) || 'null');
-      var known = conf.countries.map(function (c) { return c.code; });
-      if (Array.isArray(countries)) {
-        state.countries = countries.filter(function (code) { return known.indexOf(code) >= 0; });
-      } else if (chosen().length) {
-        // Someone who chose takeoffs before countries existed: the countries those are
-        // in, rather than a question they never needed to answer.
-        conf.countries.forEach(function (country) {
-          var mine = country.regions.some(function (region) {
-            return region.sites.some(function (index) { return slotOf(index) >= 0; });
-          });
-          if (mine) state.countries.push(country.code);
-        });
-      }
     } catch (error) { /* nothing remembered, which is the normal first visit */ }
   }
 
@@ -145,14 +100,13 @@
 
   // ---- fetching ----------------------------------------------------------------------
   //
-  // Two requests, deliberately. The takeoffs in the reader's countries in multi-coordinate
-  // calls for the ranking — a hundred at a time, a few round trips for hundreds of
-  // takeoffs (`loadSurface`) — and the pressure levels
+  // Two requests, deliberately. Every site in one multi-coordinate call for the ranking —
+  // one round trip however many there are — and the pressure levels
   // for one site only when that site is opened. Asking for the profile of every takeoff
   // up front would be tens of megabytes to answer a question about one hill.
-  function surfaceUrl(indices) {
-    var lat = indices.map(function (i) { return conf.sites[i].lat; }).join(',');
-    var lon = indices.map(function (i) { return conf.sites[i].lon; }).join(',');
+  function surfaceUrl() {
+    var lat = conf.sites.map(function (s) { return s.lat; }).join(',');
+    var lon = conf.sites.map(function (s) { return s.lon; }).join(',');
     return conf.endpoint + '?latitude=' + lat + '&longitude=' + lon
       + '&hourly=wind_speed_10m,wind_direction_10m,temperature_2m,cloud_cover,cape'
       + '&forecast_days=4&timezone=Europe%2FPrague&wind_speed_unit=ms'
@@ -216,7 +170,7 @@
 
   function drawModel() {
     var box = document.getElementById('met-model');
-    var surface = state.surface.filter(Boolean)[0];
+    var surface = state.surface && state.surface[0];
     var d2 = state.runs && state.runs.dwd_icon_d2;
     var eu = state.runs && state.runs.dwd_icon_eu;
     var name = 'ICON', run = null;
@@ -305,40 +259,6 @@
     return times.length - 1;
   }
 
-  // The day's forecast for the takeoffs in the reader's countries and the ones they
-  // chose, a hundred to a request (Open-Meteo's multi-coordinate call), each answered
-  // takeoff drawn as it lands. Asked once per takeoff; the countries can grow later.
-  var SURFACE_CHUNK = 100, surfaceAsked = {};
-  function loadSurface() {
-    var wanted = sitesIn(mine()).concat(chosen()).filter(function (index) {
-      return !surfaceAsked[index];
-    });
-    wanted = wanted.filter(function (index, i) { return wanted.indexOf(index) === i; });
-    if (!wanted.length) { if (!state.failed) say(''); return Promise.resolve(); }
-    wanted.forEach(function (index) { surfaceAsked[index] = true; });
-    var chunks = [];
-    for (var i = 0; i < wanted.length; i += SURFACE_CHUNK) chunks.push(wanted.slice(i, i + SURFACE_CHUNK));
-    return Promise.all(chunks.map(function (chunk) {
-      return get(surfaceUrl(chunk)).then(function (answer) {
-        var series = Array.isArray(answer) ? answer : [answer];
-        chunk.forEach(function (index, k) { state.surface[index] = series[k]; });
-        drawModel();
-        drawList();
-        if (chosen().length) drawCompare();
-      }).catch(function (error) {
-        chunk.forEach(function (index) { delete surfaceAsked[index]; });
-        throw error;
-      });
-    })).then(function () {
-      say('');
-    }).catch(function (error) {
-      state.failed = true;
-      drawSite();
-      say('The forecast could not be fetched (' + error.message + '). '
-          + 'This page has no numbers of its own — it needs a network.');
-    });
-  }
-
   // ---- what the surface forecast says about one takeoff, this hour --------------------
   function surfaceAt(index) {
     var series = state.surface && state.surface[index];
@@ -369,223 +289,60 @@
     return text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   }
 
-  var CHECK_ICON = '<svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10.5l4 4 8-9"/></svg>';
-  var CHEVRON_ICON = RIGHT_ICON.replace('width="18" height="18"', 'width="20" height="20"');
-
-  function countryOf(code) {
-    return conf.countries.filter(function (c) { return c.code === code; })[0] || null;
-  }
-  function mine() {
-    // In the page's order (alphabetical), whatever order they were ticked in.
-    return conf.countries.filter(function (c) { return state.countries.indexOf(c.code) >= 0; });
-  }
-  // Every takeoff in `countries`, each once (a takeoff can be in two regions).
-  function sitesIn(countries) {
-    var seen = {}, out = [];
-    countries.forEach(function (country) {
-      country.regions.forEach(function (region) {
-        region.sites.forEach(function (index) {
-          if (!seen[index]) { seen[index] = true; out.push(index); }
-        });
-      });
-    });
-    return out;
-  }
-  function byVerdict(a, b) {
-    var ra = a.row ? RANK[a.row.verdict.key] : 9, rb = b.row ? RANK[b.row.verdict.key] : 9;
-    return ra - rb || conf.sites[a.index].name.localeCompare(conf.sites[b.index].name);
-  }
-
-  // One takeoff's row: the tick, its name, the day's verdict and a line of numbers —
-  // or of where it is, in a search across regions.
-  function siteRow(index, where) {
-    var row = surfaceAt(index), on = slotOf(index) >= 0, site = conf.sites[index];
-    var button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'met-site' + (on ? ' is-on' : '');
-    button.dataset.index = index;
-    button.setAttribute('aria-pressed', on ? 'true' : 'false');
-    button.innerHTML =
-      '<span class="tick"></span>'
-      + '<span class="met-site-name"></span>'
-      + (row ? '<span class="met-verdict met-' + row.verdict.key + '"></span>' : '<span></span>')
-      + '<span class="met-site-note"></span>';
-    // The tick is the state, and it is a character rather than a colour: this row is
-    // already carrying a coloured verdict badge, and two colours competing to mean two
-    // different things in 30 px of row is one too many.
-    button.querySelector('.tick').textContent = on ? '✓' : '+';
-    button.querySelector('.met-site-name').textContent = site.name;
-    if (row) button.querySelector('.met-verdict').textContent = row.verdict.text;
-    button.querySelector('.met-site-note').textContent = where
-      || (row ? row.speed.toFixed(1) + ' m/s from ' + compass(row.direction)
-          + ' · ' + site.alt + ' m · ' + Math.round(row.cloud) + '% cloud'
-        : site.alt + ' m · the forecast is on its way');
-    return button;
-  }
-
   function drawList() {
-    if (state.step === 'prefs') drawPrefs(); else drawPick();
-    var count = document.getElementById('met-count');
-    var picked = chosen();
-    count.textContent = picked.length
-      ? picked.length + ' of ' + MAX_CHOSEN + ' chosen: '
-        + picked.map(function (i) { return conf.sites[i].name; }).join(', ')
-      : 'Choose up to ' + MAX_CHOSEN + ' takeoffs to compare';
-  }
-
-  // ---- 1. where the reader flies --------------------------------------------------
-  //
-  // Most pilots drive to one to three countries, and a list of every takeoff from the
-  // Pyrenees to the Tatras is mostly hills they will never see. So the first question,
-  // on a first visit, is the countries; nothing is ticked for them (the pilot's call).
-  function drawPrefs() {
-    var tiles = document.getElementById('met-tiles');
-    tiles.textContent = '';
-    conf.countries.forEach(function (country) {
-      var on = !!state.draft[country.code];
-      var tile = document.createElement('button');
-      tile.type = 'button';
-      tile.className = 'met-tile' + (on ? ' is-on' : '');
-      tile.dataset.country = country.code;
-      tile.setAttribute('aria-pressed', on ? 'true' : 'false');
-      var n = country.regions.length;
-      tile.innerHTML = '<i class="box" aria-hidden="true">' + CHECK_ICON + '</i><b></b><span></span>';
-      tile.querySelector('b').textContent = country.name;
-      tile.querySelector('span').textContent = sitesIn([country]).length + ' takeoffs · '
-        + n + (n === 1 ? ' region' : ' regions');
-      tiles.appendChild(tile);
-    });
-    var picked = conf.countries.filter(function (c) { return state.draft[c.code]; });
-    var total = sitesIn(picked).length;
-    document.getElementById('met-prefs-count').textContent = picked.length
-      ? picked.length + (picked.length === 1 ? ' country, ' : ' countries, ') + total + ' takeoffs'
-      : 'Pick at least one';
-    document.getElementById('met-prefs-go').disabled = !picked.length;
-  }
-
-  // ---- 2. their regions, then a region's takeoffs ------------------------------------
-  function twoPanes() { return window.matchMedia('(min-width: 720px)').matches; }
-  function drawPick() {
-    var countries = mine();
-    // The countries named, each a link to its regions; the pencil asks the question again.
-    var list = document.getElementById('met-mine-list');
-    list.textContent = '';
-    countries.forEach(function (country, i) {
-      var wrap = document.createElement('span');
-      var link = document.createElement('button');
-      link.type = 'button';
-      link.className = 'lnk';
-      link.dataset.country = country.code;
-      link.textContent = country.name;
-      wrap.appendChild(link);
-      if (i < countries.length - 1) wrap.appendChild(document.createTextNode(','));
-      list.appendChild(wrap);
-    });
-    var all = sitesIn(countries);
-    document.getElementById('met-search').placeholder = 'Search ' + all.length + ' takeoffs';
-
-    // A desktop always has a region open, the first until another is picked.
-    if (state.region && !countryOf(state.region.split(':')[0])) state.region = null;
-    if (state.region && state.countries.indexOf(state.region.split(':')[0]) < 0) state.region = null;
-    if (!state.region && twoPanes() && countries.length) state.region = countries[0].code + ':0';
-
-    var needle = folded(state.search.trim());
-    document.getElementById('met-panes').hidden = !!needle;
-    document.getElementById('met-hits').hidden = !needle;
-    if (needle) drawHits(needle);
-    else { drawRegions(countries); drawSites(); }
-  }
-
-  function drawRegions(countries) {
-    var box = document.getElementById('met-regions');
-    var was = box.scrollTop;
-    box.textContent = '';
-    countries.forEach(function (country) {
-      var head = document.createElement('div');
-      head.className = 'met-country';
-      head.dataset.country = country.code;
-      head.textContent = country.name;
-      box.appendChild(head);
-      country.regions.forEach(function (region, i) {
-        var key = country.code + ':' + i;
-        var fly = region.sites.filter(function (index) {
-          var row = surfaceAt(index);
-          return row && row.verdict.key === 'good';
-        }).length;
-        var button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'met-region' + (key === state.region ? ' is-on' : '');
-        button.dataset.region = key;
-        button.innerHTML = '<b></b><span></span><i aria-hidden="true">' + CHEVRON_ICON + '</i>';
-        button.querySelector('b').textContent = region.name;
-        var meta = button.querySelector('span');
-        meta.textContent = region.sites.length + ' takeoffs';
-        if (fly) {
-          var em = document.createElement('em');
-          em.className = 'fly';
-          em.style.fontStyle = 'normal';
-          em.textContent = fly + ' flyable';
-          meta.appendChild(document.createTextNode(' · '));
-          meta.appendChild(em);
-        }
-        box.appendChild(button);
-      });
-    });
-    box.scrollTop = was;
-  }
-
-  function drawSites() {
-    var panes = document.getElementById('met-panes');
-    panes.classList.toggle('is-in', !!state.region);
     var list = document.getElementById('met-list');
-    list.textContent = '';
-    if (!state.region) return;
-    var parts = state.region.split(':'), country = countryOf(parts[0]);
-    var region = country.regions[Number(parts[1])];
-    document.getElementById('met-region-name').textContent = region.name;
-    document.getElementById('met-region-meta').textContent =
-      country.name + ' · ' + region.sites.length + ' takeoffs, best of the day first';
+    if (!state.surface) return;
+    var needle = folded(state.search.trim());
+    var rows = conf.sites.map(function (site, i) { return surfaceAt(i); })
+      .filter(Boolean)
+      .filter(function (row) {
+        return !needle || folded(row.site.name).indexOf(needle) >= 0;
+      });
     // Ranked by the verdict, then by name. The chosen ones are *not* pulled to the top:
     // the list is a ranking of the day and re-sorting it under the reader's own choices
     // would move the row they are about to click.
-    region.sites.map(function (index) { return { index: index, row: surfaceAt(index) }; })
-      .sort(byVerdict)
-      .forEach(function (item) { list.appendChild(siteRow(item.index)); });
-  }
+    rows.sort(function (a, b) {
+      var by = RANK[a.verdict.key] - RANK[b.verdict.key];
+      return by || a.site.name.localeCompare(b.site.name);
+    });
 
-  // A search covers every takeoff in the reader's countries, and says how many more
-  // match elsewhere rather than hiding that they exist.
-  function drawHits(needle) {
-    var box = document.getElementById('met-hits');
-    box.textContent = '';
-    var where = {};
-    conf.countries.forEach(function (country) {
-      country.regions.forEach(function (region) {
-        region.sites.forEach(function (index) {
-          if (folded(conf.sites[index].name).indexOf(needle) < 0) return;
-          var ours = state.countries.indexOf(country.code) >= 0;
-          var had = where[index];
-          if (!had || (ours && !had.ours)) where[index] = { ours: ours, text: country.name + ' · ' + region.name };
-        });
-      });
-    });
-    var hits = [], outside = 0;
-    Object.keys(where).forEach(function (index) {
-      if (where[index].ours) hits.push({ index: Number(index), row: surfaceAt(Number(index)) });
-      else outside += 1;
-    });
-    hits.sort(byVerdict).forEach(function (item) {
-      box.appendChild(siteRow(item.index, where[item.index].text));
-    });
-    if (!hits.length || outside) {
-      var note = document.createElement('p');
-      note.className = 'met-empty';
-      note.textContent = (hits.length ? '' : 'No takeoff in your countries matches “'
-        + state.search.trim() + '”. ')
-        + (outside ? outside + (outside === 1 ? ' match' : ' matches')
-          + ' in countries you didn’t pick.' : '');
-      box.appendChild(note);
+    list.textContent = '';
+    if (!rows.length) {
+      var empty = document.createElement('p');
+      empty.className = 'met-empty';
+      empty.textContent = 'No takeoff matches “' + state.search.trim() + '”.';
+      list.appendChild(empty);
     }
+    rows.forEach(function (row) {
+      var on = slotOf(row.index) >= 0;
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'met-site' + (on ? ' is-on' : '');
+      button.dataset.index = row.index;
+      button.setAttribute('aria-pressed', on ? 'true' : 'false');
+      button.innerHTML =
+        '<span class="tick"></span>'
+        + '<span class="met-site-name"></span>'
+        + '<span class="met-verdict met-' + row.verdict.key + '"></span>'
+        + '<span class="met-site-note"></span>';
+      // The tick is the state, and it is a character rather than a colour: this row is
+      // already carrying a coloured verdict badge, and two colours competing to mean two
+      // different things in 30 px of row is one too many.
+      button.querySelector('.tick').textContent = on ? '✓' : '+';
+      button.querySelector('.met-site-name').textContent = row.site.name;
+      button.querySelector('.met-verdict').textContent = row.verdict.text;
+      button.querySelector('.met-site-note').textContent =
+        row.speed.toFixed(1) + ' m/s from ' + compass(row.direction)
+        + ' · ' + row.site.alt + ' m · ' + Math.round(row.cloud) + '% cloud';
+      list.appendChild(button);
+    });
+
+    var count = document.getElementById('met-count');
+    var picked = chosen().length;
+    count.textContent = picked
+      ? picked + ' of ' + MAX_CHOSEN + ' chosen'
+        + (picked >= MAX_CHOSEN ? ' — drop one to add another' : '')
+      : 'Choose up to ' + MAX_CHOSEN + ' takeoffs to compare';
   }
 
   function toggle(index) {
@@ -2227,31 +1984,14 @@
   // enough that the fallback matters more than the polish, and there it opens inline.
   var search = document.getElementById('met-search');
 
-  function showStep(step) {
-    state.step = step;
-    document.getElementById('met-prefs').hidden = step !== 'prefs';
-    document.getElementById('met-pick').hidden = step !== 'pick';
-    modal.classList.toggle('is-prefs', step === 'prefs');
-    modal.classList.toggle('is-pick', step === 'pick');
-    modal.setAttribute('aria-labelledby', step === 'prefs' ? 'met-prefs-title' : 'met-modal-title');
-    drawList();
-  }
-  function askCountries() {
-    state.draft = {};
-    state.countries.forEach(function (code) { state.draft[code] = true; });
-    state.search = '';
-    search.value = '';
-    showStep('prefs');
-  }
   function openPicker() {
     state.search = '';
     search.value = '';
-    if (!state.countries.length) askCountries(); else showStep('pick');
-    if (modal.showModal) { if (!modal.open) modal.showModal(); } else modal.setAttribute('open', '');
+    drawList();
+    if (modal.showModal) modal.showModal(); else modal.setAttribute('open', '');
     // Not focused on a touchscreen: raising the keyboard covers the list the reader
     // came here to look at, and they can tap the field if they want to type.
-    if (state.step === 'pick' && !window.matchMedia('(hover: none)').matches) search.focus();
-    else if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    if (!window.matchMedia('(hover: none)').matches) search.focus();
   }
   function closePicker() {
     if (modal.close) modal.close(); else modal.removeAttribute('open');
@@ -2273,83 +2013,11 @@
     state.search = search.value;
     drawList();
   });
-  document.getElementById('met-tiles').addEventListener('click', function (event) {
-    var tile = event.target.closest('.met-tile');
-    if (!tile) return;
-    var code = tile.dataset.country;
-    if (state.draft[code]) delete state.draft[code]; else state.draft[code] = true;
-    drawList();
-  });
-  document.getElementById('met-prefs-go').addEventListener('click', function () {
-    state.countries = conf.countries.filter(function (c) { return state.draft[c.code]; })
-      .map(function (c) { return c.code; });
-    state.region = null;
-    remember();
-    showStep('pick');
-    loadSurface();
-  });
-  document.getElementById('met-edit').addEventListener('click', askCountries);
-  // A country named under the search jumps the regions to it — on a desktop opening its
-  // first region too, on a phone back out to the regions first.
-  document.getElementById('met-mine-list').addEventListener('click', function (event) {
-    var link = event.target.closest('[data-country]');
-    if (!link) return;
-    var code = link.dataset.country;
-    state.search = '';
-    search.value = '';
-    state.region = twoPanes() ? code + ':0' : null;
-    drawList();
-    var head = document.querySelector('#met-regions .met-country[data-country="' + code + '"]');
-    if (head) head.scrollIntoView({ block: 'start', behavior: 'smooth' });
-  });
-  document.getElementById('met-regions').addEventListener('click', function (event) {
-    var button = event.target.closest('.met-region');
-    if (!button) return;
-    state.region = button.dataset.region;
-    drawList();
-    document.getElementById('met-sites-pane').scrollTop = 0;
-  });
-  function back() {
-    state.region = null;
-    drawList();
-  }
-  document.getElementById('met-back').addEventListener('click', back);
-  function pickSite(event) {
+  document.getElementById('met-list').addEventListener('click', function (event) {
     var button = event.target.closest('.met-site');
-    if (button) toggle(Number(button.dataset.index));
-  }
-  document.getElementById('met-list').addEventListener('click', pickSite);
-  document.getElementById('met-hits').addEventListener('click', pickSite);
-
-  // On a phone, a swipe right over a region's takeoffs goes back to the regions: the
-  // list follows the finger and fades, past 80 px it lets go, short of it springs back.
-  // A drag that starts mostly vertical is a scroll and is left alone.
-  (function () {
-    var pane = document.getElementById('met-sites-pane'), x0 = null, y0 = 0, dx = 0, sideways = false;
-    function set(by) {
-      pane.style.transform = by ? 'translateX(' + by + 'px)' : '';
-      pane.style.opacity = by ? String(1 - Math.min(by, 300) / 600) : '';
-    }
-    pane.addEventListener('touchstart', function (event) {
-      if (twoPanes() || event.touches.length !== 1) return;
-      x0 = event.touches[0].clientX; y0 = event.touches[0].clientY; dx = 0; sideways = false;
-      pane.classList.add('is-dragged');
-    }, { passive: true });
-    pane.addEventListener('touchmove', function (event) {
-      if (x0 === null) return;
-      var mx = event.touches[0].clientX - x0, my = event.touches[0].clientY - y0;
-      if (!sideways && Math.abs(my) > Math.abs(mx)) { x0 = null; set(0); pane.classList.remove('is-dragged'); return; }
-      sideways = true;
-      dx = Math.max(0, mx);
-      set(dx);
-    }, { passive: true });
-    pane.addEventListener('touchend', function () {
-      if (x0 === null) return;
-      x0 = null;
-      pane.classList.remove('is-dragged');
-      if (dx > 80) { set(0); back(); } else set(0);
-    });
-  })();
+    if (!button) return;
+    toggle(Number(button.dataset.index));
+  });
 
   var hourInput = document.getElementById('met-hour-input');
   hourInput.addEventListener('input', function () {
@@ -2396,22 +2064,30 @@
   drawChosen();
   drawSite();
   loadRuns();
-  // Nothing chosen opens the picker, rather than choosing for the reader: it used to pick
-  // the best-ranked takeoff, a hill the reader may never fly (the pilot's call, October
-  // 2026) — on a first visit at "Where do you fly?". After the welcome, if that is up:
-  // two dialogs stacked is one too many.
-  if (!chosen().length) {
-    var welcome = document.getElementById('welcome');
-    if (welcome && welcome.open) {
-      welcome.addEventListener('close', function () {
-        if (!chosen().length) openPicker();
-      }, { once: true });
-    } else openPicker();
-  }
-  loadSurface().then(function () {
-    if (chosen().length) {
+  get(surfaceUrl()).then(function (answer) {
+    state.surface = Array.isArray(answer) ? answer : [answer];
+    say('');
+    drawModel();
+    drawList();
+    // Nothing chosen opens the picker, ranked for the day, rather than choosing for the
+    // reader: it used to pick the best-ranked takeoff, a hill the reader may never fly
+    // (the pilot's call, October 2026). After the welcome, if that is up: two dialogs
+    // stacked is one too many.
+    if (!chosen().length) {
+      var welcome = document.getElementById('welcome');
+      if (welcome && welcome.open) {
+        welcome.addEventListener('close', function () {
+          if (!chosen().length) openPicker();
+        }, { once: true });
+      } else openPicker();
+    } else {
       drawCompare();
       loadProfiles();
     }
+  }).catch(function (error) {
+    state.failed = true;
+    drawSite();
+    say('The forecast could not be fetched (' + error.message + '). '
+        + 'This page has no numbers of its own — it needs a network.');
   });
 })();

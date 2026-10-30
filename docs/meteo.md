@@ -118,10 +118,12 @@ one error this page must not make. No source of flight counts per takeoff could 
 reached (XContest is behind Cloudflare, Leonardo answered nothing for Czech takeoffs), so
 there is no popularity filter beyond pgweb's own choice.
 
-The reader picks countries first ("Where do you fly?", on a first visit and behind the
-pencil), then a region, then takeoffs: two panes on a desktop, drilled into on a phone
-(swipe right goes back). Only the chosen countries' takeoffs are fetched from Open-Meteo,
-a hundred to a request.
+**The meteo page still carries 15 of them** — ESSENTIALS and Bassano, Col Rodella, Meduno
+and Kobala (`render_html.ON_THE_PAGE`); the Planner's map draws all 646. The page for the
+whole list — countries first ("Where do you fly?"), then a region, then takeoffs, two
+panes on a desktop and drilled into on a phone, only the chosen countries fetched — is on
+branch `meteo-picker`, waiting for ParaglidingEarth to come back so the new takeoffs have
+wind roses: a picker of 630 "No rose" takeoffs answers nothing (the pilot's call).
 
 `meteo.cli --refresh-sites` re-reads pgweb, pairs with ParaglidingEarth and rewrites
 `meteo/sites.py`, provenance and fetch date first; heights neither source gives come from
