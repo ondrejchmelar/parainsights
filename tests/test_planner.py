@@ -324,6 +324,21 @@ def test_the_planner_scores_with_the_reports_own_constants():
     assert "28%" in page and "20%" in page, "the page states the rules it scores by"
 
 
+def test_the_map_carries_the_meteo_pages_takeoffs():
+    """The takeoffs on the map are the meteo page's list, every one with a name, a point
+    and a height, so the two pages can never disagree about where a takeoff is."""
+    from meteo import sites
+
+    results = planner_html.results()
+    blob = re.search(r'<script type="application/json" id="plan-takeoffs">(.*?)</script>', results, re.S)
+    assert blob, "the takeoffs are missing from the planner's markup"
+    takeoffs = json.loads(blob.group(1))
+    assert len(takeoffs) == len(sites.SITES)
+    for (name, lon, lat, alt), site in zip(takeoffs, sites.SITES):
+        assert (name, lon, lat, alt) == (site["name"], site["lon"], site["lat"], site["alt"])
+    assert "showTakeoffs(entry.map)" in planner_html.SCRIPT
+
+
 # ---- what the line crosses -----------------------------------------------------------
 #
 # The feature the whole page is arranged around. The turnpoints are dropped by lon/lat

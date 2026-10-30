@@ -221,6 +221,13 @@ fetch waits until the view is first opened. A build can therefore no longer lose
 terrain, so `--require-terrain` is accepted and does nothing. `public/planner/` is a
 redirect (`planner/cli.py`), and `common.PAGES` has three entries.
 
+**The meteo page's takeoffs are on the planner's map** (October 2026, `plan-takeoffs`,
+`showTakeoffs` in `planner.js`): a green dot each, the name and height in pale green from
+zoom 9, drawn by MapLibre on the terrain from the planner's own script (so the report,
+which shares `parainsights_map`, needs no rebuild). The points are pgweb's, or
+ParaglidingEarth's where a rose was paired; `meteo/sites.py` is watched by `stale.sh`
+for the planner page.
+
 **The planner's map opens at true scale** (October 2026, the pilot's call), as the report
 does; ×5 and ×15 are under the layers button. It opened at ×5 when it drew all of
 Czechia's airspace: at true scale over 500 km of country a 300 m traffic circuit projects

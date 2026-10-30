@@ -398,6 +398,7 @@ def results() -> str:
       <div class="plan-xct-dlg-body" id="plan-xct-body"></div>
     </dialog>
     <script type="application/json" id="plan-coverage">{_coverage()}</script>
+    <script type="application/json" id="plan-takeoffs">{_takeoffs()}</script>
   </section>"""
 
 
@@ -427,6 +428,16 @@ def _with_tools(scene_panel: str) -> str:
     if '<div class="view3d' not in scene_panel:
         return scene_panel + tools
     return scene_panel.replace('<div class="view3d', tools + '<div class="view3d', 1)
+
+
+def _takeoffs() -> str:
+    """The meteo page's takeoffs, for the map: [name, lon, lat, height]. pgweb's list
+    (`meteo.sites`), 646 of them; where ParaglidingEarth has the launch its point is that,
+    elsewhere pgweb's, within tens of metres of the launch at most of the ones checked."""
+    from meteo import sites
+
+    return json.dumps([[site["name"], site["lon"], site["lat"], site["alt"]]
+                       for site in sites.SITES], ensure_ascii=False, separators=(",", ":"))
 
 
 def _coverage() -> str:

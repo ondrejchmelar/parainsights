@@ -915,8 +915,42 @@
     });
     entry.setRoute(course(), points);
     if (entry.setShapes) entry.setShapes(faiShapes());
+    showTakeoffs(entry.map);
     showNear();
     lightSun();
+  }
+
+  // The takeoffs, the meteo page's list (`plan-takeoffs`): a green dot on the ground and,
+  // closer in, the name with the height under it, as the map's peaks carry theirs. Drawn
+  // by MapLibre so they lie on the terrain and give way to each other as place names do.
+  // Green, not the white of places or the warm cream of peaks, so the three read apart.
+  var takeoffs = JSON.parse((document.getElementById('plan-takeoffs') || {}).textContent || '[]');
+  function showTakeoffs(map) {
+    if (!map || !map.addSource || !takeoffs.length) return;
+    function add() {
+      if (map.getSource('takeoffs')) return;
+      map.addSource('takeoffs', { type: 'geojson', data: { type: 'FeatureCollection',
+        features: takeoffs.map(function (t) {
+          return { type: 'Feature', geometry: { type: 'Point', coordinates: [t[1], t[2]] },
+                   properties: { name: t[0], alt: t[3] ? t[3] + ' m' : '' } };
+        }) } });
+      map.addLayer({ id: 'takeoff-dots', type: 'circle', source: 'takeoffs', minzoom: 6,
+        paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 6, 3, 10, 5, 14, 6],
+                 'circle-color': '#2fb36a', 'circle-stroke-color': '#0b1a10',
+                 'circle-stroke-width': 1.5, 'circle-pitch-alignment': 'map' } });
+      map.addLayer({ id: 'takeoff-labels', type: 'symbol', source: 'takeoffs', minzoom: 9,
+        layout: { 'text-field': ['format', ['get', 'name'], {}, '\n', {},
+                                 ['get', 'alt'], { 'font-scale': 0.85 }],
+                  'text-font': ['literal', ['Noto Sans Bold']],
+                  'text-size': ['interpolate', ['linear'], ['zoom'], 9, 12.5, 12, 14.5, 16, 16],
+                  'text-anchor': 'top', 'text-offset': [0, 0.6], 'text-padding': 6 },
+        paint: { 'text-color': '#b8f0cf', 'text-halo-color': 'rgba(12,14,18,0.85)',
+                 'text-halo-width': 1.4, 'text-halo-blur': 0.4 } });
+    }
+    if (map.isStyleLoaded && map.isStyleLoaded()) add();
+    else map.once('style.load', add);
+    // A rebuilt style (the map's own context-loss revival) has lost them; put them back.
+    map.on('styledata', function () { if (map.isStyleLoaded() && !map.getSource('takeoffs')) add(); });
   }
 
   // The takeoff time, a day and a time slid through it: the sun over the task (or the
