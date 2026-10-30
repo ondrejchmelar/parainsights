@@ -6756,7 +6756,9 @@ function initView3d(root, cursorTrack, preset) {
   // the takeoff: a task starts at a launch, and a click a few pixels off the dot is meant
   // for it. Measured on screen, against the dots MapLibre drew, so it is as forgiving at
   // every zoom and a hidden dot (under a label or off the map) is never snapped to.
-  var SNAP_PX = 14;
+  // A click on a takeoff's name snaps too: the name is what a reader aims at, and it sits
+  // under the dot, further off than any pixel radius should reach.
+  var SNAP_PX = 20;
   function snap(at) {
     var entry = mergedEntry(), map = entry && entry.map;
     if (!map || !map.getLayer || !map.getLayer('takeoff-dots')) return at;
@@ -6767,7 +6769,22 @@ function initView3d(root, cursorTrack, preset) {
       var d = (q.x - p.x) * (q.x - p.x) + (q.y - p.y) * (q.y - p.y);
       if (d <= bestD) { bestD = d; best = [c[0], c[1]]; }
     });
+    if (!best && map.getLayer('takeoff-labels')) {
+      var named = map.queryRenderedFeatures([p.x, p.y], { layers: ['takeoff-labels'] })[0];
+      if (named) best = named.geometry.coordinates.slice(0, 2);
+    }
     return best || at;
+  }
+  // The takeoff a turnpoint stands on, by name, or null: a snapped point is the takeoff's
+  // own coordinate (to the five decimals points are kept at).
+  function takeoffOn(p) {
+    for (var i = 0; i < takeoffs.length; i++) {
+      if (Math.abs(takeoffs[i][1] - p[0]) < 2e-5 && Math.abs(takeoffs[i][2] - p[1]) < 2e-5) return takeoffs[i][0];
+    }
+    return null;
+  }
+  function pointName(i) {
+    return takeoffOn(points[i]) || 'TP' + (i + 1);
   }
 
   // The takeoff time, a day and a time slid through it: the sun over the task (or the
@@ -6918,8 +6935,11 @@ function initView3d(root, cursorTrack, preset) {
 
     (answer.sides || answer.legs).forEach(function (metres, i) {
       var span = document.createElement('span');
+      // A leg from a takeoff says so: the start of a task is usually one, and it is how
+      // the reader sees a turnpoint went onto it.
+      var start = !answer.sides && i === 0 && takeoffOn(points[0]);
       span.textContent = (answer.sides ? 'side ' : 'leg ') + (i + 1) + ': '
-        + (metres / 1000).toFixed(1) + ' km';
+        + (metres / 1000).toFixed(1) + ' km' + (start ? ' from ' + start : '');
       legs.appendChild(span);
     });
     if (answer.closing !== null && answer.closing !== undefined) {
@@ -7003,8 +7023,8 @@ function initView3d(root, cursorTrack, preset) {
       var values = [p[0] * 1e5, p[1] * 1e5, alt];
       if (radius) values.push(i === walk.length - 1 && walk.length > points.length ? goal : radius);
       // Named as the map numbers them; a closed course returns to turnpoint 1.
-      var n = i < points.length ? i + 1 : 1;
-      return { n: 'TP' + n, z: polyline(values) };
+      // A turnpoint on a takeoff carries its name, as XCTrack shows it in the task.
+      return { n: pointName(i < points.length ? i : 0), z: polyline(values) };
     });
     return radius ? { taskType: 'CLASSIC', version: 2, t: t } : { T: 'W', V: 2, t: t };
   }

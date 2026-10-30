@@ -340,6 +340,9 @@ def test_the_map_carries_the_meteo_pages_takeoffs():
     # A click while drawing, and a dragged turnpoint let go, snap onto a takeoff's dot.
     assert "addPoint(snap(at))" in planner_html.SCRIPT
     assert "if (done) at = snap(at);" in planner_html.SCRIPT
+    # ...and a click on a takeoff's name, and a snapped turnpoint is named for XCTrack.
+    assert "layers: ['takeoff-labels']" in planner_html.SCRIPT
+    assert "n: pointName(" in planner_html.SCRIPT
 
 
 # ---- what the line crosses -----------------------------------------------------------
