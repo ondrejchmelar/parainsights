@@ -226,7 +226,8 @@ redirect (`planner/cli.py`), and `common.PAGES` has three entries.
 zoom 9, drawn by MapLibre on the terrain from the planner's own script (so the report,
 which shares `parainsights_map`, needs no rebuild). The points are pgweb's, or
 ParaglidingEarth's where a rose was paired; `meteo/sites.py` is watched by `stale.sh`
-for the planner page.
+for the planner page. A turnpoint dropped, or a dragged one let go, within 14 px of a
+takeoff's dot goes onto the takeoff (`snap`, against the dots MapLibre drew).
 
 **The planner's map opens at true scale** (October 2026, the pilot's call), as the report
 does; ×5 and ×15 are under the layers button. It opened at ×5 when it drew all of

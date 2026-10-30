@@ -895,7 +895,7 @@
     entry.__planner = true;
     entry.onClick(function (at) {
       if (holder.dataset.drawing !== 'on') { openColumn(at); return; }
-      addPoint(at);
+      addPoint(snap(at));
     });
     // All in view follows the map; the column's panel goes back into a rebuilt map.
     if (entry.map && entry.map.on) entry.map.on('moveend', function () {
@@ -909,6 +909,7 @@
       if (!points[index]) return;
       if (!dragged) { remember(); dragged = true; }
       if (done) dragged = false;
+      if (done) at = snap(at);
       points[index] = [Math.round(at[0] * 100000) / 100000, Math.round(at[1] * 100000) / 100000];
       if (done) { if (moved) cancelAnimationFrame(moved); moved = null; redraw(); return; }
       if (!moved) moved = requestAnimationFrame(function () { moved = null; redraw(); });
@@ -951,6 +952,24 @@
     else map.once('style.load', add);
     // A rebuilt style (the map's own context-loss revival) has lost them; put them back.
     map.on('styledata', function () { if (map.isStyleLoaded() && !map.getSource('takeoffs')) add(); });
+  }
+
+  // A turnpoint dropped, or let go, within `SNAP_PX` of a takeoff's dot on screen goes on
+  // the takeoff: a task starts at a launch, and a click a few pixels off the dot is meant
+  // for it. Measured on screen, against the dots MapLibre drew, so it is as forgiving at
+  // every zoom and a hidden dot (under a label or off the map) is never snapped to.
+  var SNAP_PX = 14;
+  function snap(at) {
+    var entry = mergedEntry(), map = entry && entry.map;
+    if (!map || !map.getLayer || !map.getLayer('takeoff-dots')) return at;
+    var p = map.project(at), best = null, bestD = SNAP_PX * SNAP_PX;
+    map.queryRenderedFeatures([[p.x - SNAP_PX, p.y - SNAP_PX], [p.x + SNAP_PX, p.y + SNAP_PX]],
+                              { layers: ['takeoff-dots'] }).forEach(function (f) {
+      var c = f.geometry.coordinates, q = map.project(c);
+      var d = (q.x - p.x) * (q.x - p.x) + (q.y - p.y) * (q.y - p.y);
+      if (d <= bestD) { bestD = d; best = [c[0], c[1]]; }
+    });
+    return best || at;
   }
 
   // The takeoff time, a day and a time slid through it: the sun over the task (or the

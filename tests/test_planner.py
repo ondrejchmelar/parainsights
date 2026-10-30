@@ -337,6 +337,9 @@ def test_the_map_carries_the_meteo_pages_takeoffs():
     for (name, lon, lat, alt), site in zip(takeoffs, sites.SITES):
         assert (name, lon, lat, alt) == (site["name"], site["lon"], site["lat"], site["alt"])
     assert "showTakeoffs(entry.map)" in planner_html.SCRIPT
+    # A click while drawing, and a dragged turnpoint let go, snap onto a takeoff's dot.
+    assert "addPoint(snap(at))" in planner_html.SCRIPT
+    assert "if (done) at = snap(at);" in planner_html.SCRIPT
 
 
 # ---- what the line crosses -----------------------------------------------------------
