@@ -7,8 +7,10 @@
   }
   // The tab's icon follows the page (`common.FAVICON`).
   function favicon() {
-    var link = document.getElementById('favicon');
-    if (link) link.href = dark() ? link.dataset.dark : link.dataset.light;
+    var isDark = dark();
+    document.querySelectorAll('link[data-dark]').forEach(function (link) {
+      link.href = isDark ? link.dataset.dark : link.dataset.light;
+    });
   }
   function label(button) {
     var isDark = dark();

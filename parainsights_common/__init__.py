@@ -26,6 +26,7 @@ strip that guessed would be wrong in one of the two places.
 
 from __future__ import annotations
 from pathlib import Path
+from base64 import b64encode
 from urllib.parse import quote
 
 # key, label, directory under public/. Order is the order a day happens in: what is the
@@ -109,8 +110,8 @@ try {
   var t = localStorage.getItem('parainsights.theme');
   if (t) document.documentElement.dataset.theme = t;
   if (localStorage.getItem('parainsights.text') === 'large') document.documentElement.dataset.text = 'large';
-  var f = document.getElementById('favicon');
-  if (f && (t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches)) f.href = f.dataset.dark;
+  if (t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches)
+    document.querySelectorAll('link[data-dark]').forEach(function (f) { f.href = f.dataset.dark; });
 } catch (e) {}
 """
 
@@ -118,8 +119,9 @@ try {
 # rings of a climb over one ridge and the glide out of it (October 2026, the pilot's pick
 # of the mocks). A tile of its own in each theme, because a tab strip is light or dark
 # whatever the page is; `THEME_BOOT` and `js/theme.js` swap it with the page's theme.
-# Inline, so a report saved to disk keeps it.
-def _favicon(bg, mtn, c1, c2, c3, glide, dot):
+# Inline, so a report saved to disk keeps it. Firefox on Android draws no SVG icon, so a
+# PNG of each goes beside it (`icons.py` renders them).
+def favicon_svg(bg, mtn, c1, c2, c3, glide, dot):
     svg = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">'
            '<clipPath id="t"><rect width="32" height="32" rx="7"/></clipPath><g clip-path="url(#t)">'
            f'<rect width="32" height="32" fill="{bg}"/>'
@@ -131,16 +133,31 @@ def _favicon(bg, mtn, c1, c2, c3, glide, dot):
            f'<path d="M19.5 7 C23.5 8.5,26.5 12,27.5 16.5" fill="none" stroke="{glide}" '
            'stroke-width="2.6" stroke-linecap="round"/>'
            f'<circle cx="27.5" cy="19" r="2.6" fill="{dot}"/></g></svg>')
-    return "data:image/svg+xml," + quote(svg)
+    return svg
 
 
 # The light theme's panel-2, shadow-ink, climb ramp, sink and ink; then the dark theme's,
 # its ground a step lighter than its shadow-ink, which vanished into the tile at 16 px.
-FAVICON_LIGHT = _favicon("#eeece6", "#c3bfb4", "#f0a07a", "#eb6834", "#c8431a", "#1d5fd1", "#161614")
-FAVICON_DARK = _favicon("#272723", "#4a4842", "#b06a4a", "#e8692c", "#f08a55", "#4b8ff0", "#efede8")
-# Goes in the head before `THEME_BOOT`, which reads it by its id.
-FAVICON = (f'<link rel="icon" type="image/svg+xml" id="favicon" href="{FAVICON_LIGHT}" '
-           f'data-light="{FAVICON_LIGHT}" data-dark="{FAVICON_DARK}">')
+FAVICON_COLOURS = {
+    "light": ("#eeece6", "#c3bfb4", "#f0a07a", "#eb6834", "#c8431a", "#1d5fd1", "#161614"),
+    "dark": ("#272723", "#4a4842", "#b06a4a", "#e8692c", "#f08a55", "#4b8ff0", "#efede8"),
+}
+_ICONS = Path(__file__).parent / "icons"
+
+
+def _icon_links() -> str:
+    svg = {k: "data:image/svg+xml," + quote(favicon_svg(*c)) for k, c in FAVICON_COLOURS.items()}
+    png = {k: "data:image/png;base64," + b64encode((_ICONS / f"favicon-{k}.png").read_bytes()).decode()
+           for k in FAVICON_COLOURS}
+    # The PNG first: a browser that draws SVG takes the last icon it can draw.
+    return (f'<link rel="icon" type="image/png" sizes="64x64" href="{png["light"]}" '
+            f'data-light="{png["light"]}" data-dark="{png["dark"]}">'
+            f'<link rel="icon" type="image/svg+xml" sizes="any" href="{svg["light"]}" '
+            f'data-light="{svg["light"]}" data-dark="{svg["dark"]}">')
+
+
+# Goes in the head before `THEME_BOOT`, which swaps every `link[data-dark]`.
+FAVICON = _icon_links()
 
 # The button's behaviour. Deliberately *not* a third state: the button says what it will
 # do next, and "follow the system" is a thing readers set once in their system and never

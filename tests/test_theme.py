@@ -189,10 +189,19 @@ class TestTheTabIcon:
             assert "{common.FAVICON}\n<script>{common.THEME_BOOT}" in source, module.__name__
         assert common.FAVICON in common.root_redirect()
 
-    def test_it_has_a_light_and_a_dark_tile(self):
-        assert common.FAVICON_LIGHT != common.FAVICON_DARK
-        for uri in (common.FAVICON_LIGHT, common.FAVICON_DARK):
-            assert uri.startswith("data:image/svg+xml,")
-            assert "#" not in uri, "an unescaped # ends a data URI"
-        assert 'id="favicon"' in common.FAVICON
-        assert "favicon" in common.THEME_BOOT
+    def test_it_has_a_light_and_a_dark_tile_as_svg_and_as_png(self):
+        """Firefox on Android draws no SVG icon; it got none at all (October 2026)."""
+        import re
+
+        links = re.findall(r"<link [^>]*>", common.FAVICON)
+        assert [re.search(r'type="([^"]+)"', link)[1] for link in links] == [
+            "image/png", "image/svg+xml"]
+        for link in links:
+            light = re.search(r'data-light="([^"]+)"', link)[1]
+            dark = re.search(r'data-dark="([^"]+)"', link)[1]
+            assert light != dark
+            assert f'href="{light}"' in link
+            for uri in (light, dark):
+                assert uri.startswith("data:image/")
+                assert "#" not in uri, "an unescaped # ends a data URI"
+        assert "link[data-dark]" in common.THEME_BOOT
