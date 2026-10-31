@@ -1231,6 +1231,17 @@ because a chart service that dies takes every graph with it.
   tiles. If that still bites: an optional light mode for weak hardware (`tileSize: 256`
   for shade and imagery under terrain, `pixelRatio` ≤ 1.5, `fadeDuration: 0`, or a
   replay frame cap) — a quality trade-off, never the default.
+  **The replay on a phone** (measured 2026-10-31: the flights page at 412×915, 2.625×, on
+  the same HD 620 through Chrome's GPU, follow on): 8.6 → 13.2 fps with the CPU throttled
+  4×, 29 → 50 fps unthrottled, nothing drawn differently. Under 3D terrain MapLibre draws
+  background, raster, hillshade, fill and line layers into a texture per ground tile and
+  reuses it while the tiles under it stay the same — but frees its pool between *runs* of
+  such layers, so a second run (the empty measuring line, after the place names) made
+  every frame redraw every tile. Empty overlays are hidden (`drawOverlay`); a line drawn
+  after the names brings the redraw back while it shows. And `getMinMaxElevation`, asked
+  per tile per source per frame, reads only the DEM tile (`quickTerrain`) rather than
+  `getTerrainData`, which built a matrix each call. Harness: Chrome over CDP with
+  `Emulation.setCPUThrottlingRate`, frames counted by `requestAnimationFrame`.
 - **Every feature for an uploaded track, and JavaScript as the one runtime language for
   the viewer — done** (October 2026; Pyodide was considered and rejected). In four steps,
   each checked before the next: (1) the analysis ported to `js/` and held to the Python
