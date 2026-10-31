@@ -2672,11 +2672,17 @@ function initView3d(root, cursorTrack, preset) {
         var empty = { type: 'FeatureCollection', features: [] };
         sources.shapes = { type: 'geojson', data: empty };
         sources.measure = { type: 'geojson', data: empty };
+        // Both hidden while empty (`drawOverlay`). Under the 3D terrain MapLibre draws these
+        // kinds of layer into a texture per ground tile and keeps it from frame to frame —
+        // but only while they form one unbroken run: the measuring line, after the names,
+        // started a second run, and the two took each other's textures, so every frame
+        // drew every tile's photograph and shading again. Hidden, an empty layer is no run.
+        var none = { visibility: 'none' };
         above.push(
-          { id: 'shapes-fill', type: 'fill', source: 'shapes',
+          { id: 'shapes-fill', type: 'fill', source: 'shapes', layout: none,
             paint: { 'fill-color': ['coalesce', ['get', 'colour'], '#3b4cc0'],
                      'fill-opacity': ['coalesce', ['get', 'opacity'], 0.4] } },
-          { id: 'shapes-edge', type: 'line', source: 'shapes',
+          { id: 'shapes-edge', type: 'line', source: 'shapes', layout: none,
             paint: { 'line-color': ['coalesce', ['get', 'colour'], '#3b4cc0'], 'line-width': 2 } });
         // The names, all from OpenFreeMap's OpenStreetMap tiles, everywhere on Earth
         // (October 2026: towns only until then, villages only from zoom 11). Places,
@@ -2748,10 +2754,10 @@ function initView3d(root, cursorTrack, preset) {
         });
         above.push(
           { id: 'measure-line', type: 'line', source: 'measure', filter: ['==', ['geometry-type'], 'LineString'],
-            layout: { 'line-cap': 'round', 'line-join': 'round' },
+            layout: { visibility: 'none', 'line-cap': 'round', 'line-join': 'round' },
             paint: { 'line-color': '#ffffff', 'line-width': 2.5, 'line-dasharray': [2, 1.5] } },
           { id: 'measure-dots', type: 'circle', source: 'measure', filter: ['==', ['geometry-type'], 'Point'],
-            paint: { 'circle-radius': 4.5, 'circle-color': '#ffffff',
+            layout: none, paint: { 'circle-radius': 4.5, 'circle-color': '#ffffff',
                      'circle-stroke-color': 'rgba(12,14,18,0.9)', 'circle-stroke-width': 1.5 } });
         return {
           version: 8, sources: sources, glyphs: GLYPHS,
@@ -2798,8 +2804,28 @@ function initView3d(root, cursorTrack, preset) {
         g.fillStyle = '#fff3d6'; g.fill();
         map.addImage('peak', g.getImageData(0, 0, size, size), { pixelRatio: px });
       });
+      // MapLibre asks every ground tile for its lowest and highest point, for every source,
+      // on every frame the camera moves — and answers through `getTerrainData`, which also
+      // builds the tile's shader matrix afresh each time (its cache is keyed one way and
+      // read another). Only the DEM tile is needed for the two heights, so this asks for
+      // just that: the same answer in half the time (8.6% of a replay's main thread to
+      // 3.9%, on a throttled CPU). Private, as `_elevationFreeze` is; 4.7.1 is pinned.
+      function quickTerrain() {
+        var proto = map.terrain && Object.getPrototypeOf(map.terrain);
+        if (!proto || proto.m3quick || !map.terrain.sourceCache ||
+            typeof map.terrain.sourceCache.getSourceTile !== 'function') return;
+        proto.m3quick = true;
+        proto.getMinMaxElevation = function (tileID) {
+          var tile = this.sourceCache.getSourceTile(tileID, true);
+          return tile && tile.dem
+            ? { minElevation: tile.dem.min * this.exaggeration, maxElevation: tile.dem.max * this.exaggeration }
+            : { minElevation: null, maxElevation: null };
+        };
+      }
+      map.on('terrain', quickTerrain);
       map.once('style.load', function () {
         styleReady = true;
+        quickTerrain();
         // The names in the language of the country under the map's centre (`labelName`),
         // looked again after every move: a flight can cross a border.
         var nameLang;
@@ -2860,10 +2886,7 @@ function initView3d(root, cursorTrack, preset) {
         // Again once the tiles are in: measured before they were, the tallest peak in
         // view was a lower one and the edges kept peaks they should not.
         map.on('idle', labelRegion);
-        if (pendingShapes.length) {
-          var shapes = map.getSource('shapes');
-          if (shapes) shapes.setData({ type: 'FeatureCollection', features: pendingShapes });
-        }
+        if (pendingShapes.length) drawOverlay('shapes', pendingShapes);
         if (vertical !== 1) map.setTerrain({ source: 'dem', exaggeration: vertical });
         // A task, and the track's shadow and wall, stand on the map's terrain (`planZ`,
         // `onGround`), finer as tiles arrive: once they settle, and after a zoom, they are
@@ -4715,7 +4738,15 @@ function initView3d(root, cursorTrack, preset) {
       function km(metres) { return metres < 10000 ? (metres / 1000).toFixed(2) : (metres / 1000).toFixed(1); }
       function drawOverlay(id, features) {
         var source = map.getSource(id);
-        if (source) source.setData({ type: 'FeatureCollection', features: features });
+        if (!source) return;
+        source.setData({ type: 'FeatureCollection', features: features });
+        // Shown only while there is something to draw (see `style`).
+        var shown = features.length ? 'visible' : 'none';
+        (id === 'shapes' ? ['shapes-fill', 'shapes-edge'] : ['measure-line', 'measure-dots']).forEach(function (layer) {
+          if (map.getLayer(layer) && map.getLayoutProperty(layer, 'visibility') !== shown) {
+            map.setLayoutProperty(layer, 'visibility', shown);
+          }
+        });
       }
       function showMeasure() {
         var features = measurePoints.map(function (p) {
