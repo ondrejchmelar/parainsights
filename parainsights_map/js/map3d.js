@@ -363,6 +363,25 @@
 
   // `restore` is a snapshot from a view being rebuilt after its context was lost: the
   // camera and every setting come back as the reader left them.
+  // The first of the browser's languages that names a country `view.focusFor` has: its
+  // region (`de-AT` is Austria), else the language's own country (`cs` is Czechia).
+  // `en-US` names none, and the next language is asked.
+  function localFocus(view) {
+    var by = view.focusFor, langs = view.focusLanguages || {};
+    if (!by) return null;
+    var list = (navigator.languages && navigator.languages.length) ? navigator.languages
+      : [navigator.language || ''];
+    for (var i = 0; i < list.length; i++) {
+      var parts = String(list[i]).split(/[-_]/), code = null;
+      for (var j = 1; j < parts.length; j++) {
+        if (/^[A-Za-z]{2}$/.test(parts[j])) { code = parts[j].toUpperCase(); break; }
+      }
+      if (code && by[code]) return by[code];
+      var own = langs[parts[0].toLowerCase()];
+      if (own && by[own]) return by[own];
+    }
+    return null;
+  }
   window.__mountMerged = function (host, handle, restore) {
     var panel = host.querySelector('.view3d-panel');
     var scene = handle.built.scene, cursorTrack = handle.built.cursorTrack;
@@ -837,9 +856,10 @@
 
       var dem = scene.terrain || {};
       // What to open on: the flight; else the part of the ground the scene names
-      // (`view.focus` — the airspace map opens on Czechia, not on the Alps beside it);
-      // else the whole ground.
-      var focus = (scene.view && scene.view.focus) || dem;
+      // (`view.focus`, or `view.focusFor` the reader's country — the planner opens on
+      // the country the browser's languages say, never asking for a location); else the
+      // whole ground.
+      var focus = (scene.view && (localFocus(scene.view) || scene.view.focus)) || dem;
       var west = tr.lon.length ? Math.min.apply(null, tr.lon) : focus.west;
       var east = tr.lon.length ? Math.max.apply(null, tr.lon) : focus.east;
       var south = tr.lat.length ? Math.min.apply(null, tr.lat) : focus.south;

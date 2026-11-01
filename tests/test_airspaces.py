@@ -1266,9 +1266,12 @@ def test_the_map_fetches_its_ground_in_the_page():
     assert (terrain["west"], terrain["east"], terrain["south"], terrain["north"]) == \
         airspace_scene.PLAN_BOX
     assert terrain["rows"] * terrain["cols"] <= airspace_scene.PLAN_NODES
-    # It opens on the airspace, not on the whole of the planner's box.
-    focus = airspace_scene.remote([])["view"]["focus"]
-    assert airspace_scene.PLAN_BOX[0] < focus["west"] < focus["east"] < airspace_scene.PLAN_BOX[1]
+    # It opens on the reader's country, else the Alps, never the whole of the box.
+    view = airspace_scene.remote([])["view"]
+    for focus in [view["focus"], *view["focusFor"].values()]:
+        assert airspace_scene.PLAN_BOX[0] <= focus["west"] < focus["east"] <= airspace_scene.PLAN_BOX[1]
+        assert airspace_scene.PLAN_BOX[2] <= focus["south"] < focus["north"] <= airspace_scene.PLAN_BOX[3]
+    assert set(view["focusLanguages"].values()) <= set(view["focusFor"])
     source = __import__("pathlib").Path(cli.__file__).read_text(encoding="utf-8")
     assert "airspace_scene.remote(" in source
 

@@ -216,7 +216,7 @@ on tomorrow at 12:00 — lights the ground and turns the rose's sun as a flight'
 4.7's hillshade takes a direction and no altitude, so the shading says which slopes face
 the sun, not how low it stands. The ground is the
 planner's wider box (`scene.PLAN_BOX`, Czechia and the Alps, 120 000 nodes) fetched by
-the page (`scene.remote`), opening framed on Czechia (`view.focus`); in the report the
+the page (`scene.remote`), opening framed on the reader's country, guessed from the browser's languages (`view.focusFor`, `scene.COUNTRY_VIEWS`; English and the rest on the Alps, `view.focus`); in the report the
 fetch waits until the view is first opened. A build can therefore no longer lose the
 terrain, so `--require-terrain` is accepted and does nothing. `public/planner/` is a
 redirect (`planner/cli.py`), and `common.PAGES` has three entries.

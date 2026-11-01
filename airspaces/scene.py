@@ -275,6 +275,28 @@ PLAN_BOX = (5.5, 20.5, 45.0, 51.3)     # west, east, south, north
 PLAN_COLUMNS = 560
 PLAN_NODES = 120000
 
+# Where the map opens for a reader from each country the box covers (west, east, south,
+# north): the country, or the part of it inside `PLAN_BOX` — Germany's south, Poland's
+# and Hungary's west, Italy's north. France is its Alps, where it flies, not Lorraine.
+COUNTRY_VIEWS = {
+    "AT": (9.5, 17.2, 46.4, 49.0),
+    "CH": (5.95, 10.5, 45.8, 47.8),
+    "LI": (9.2, 10.0, 46.9, 47.4),
+    "DE": (5.9, 15.0, 47.3, 51.3),
+    "SK": (16.8, 20.5, 47.7, 49.6),
+    "PL": (14.1, 20.5, 49.0, 51.3),
+    "SI": (13.4, 16.6, 45.4, 46.9),
+    "IT": (6.6, 13.9, 45.0, 47.1),
+    "FR": (5.5, 7.2, 45.0, 46.5),
+    "HU": (16.1, 20.5, 45.7, 48.6),
+    "HR": (13.5, 19.4, 45.0, 46.6),
+}
+# Everyone else, English included: the Alps, the box's own mountains.
+ALPS_VIEW = (5.5, 16.5, 45.0, 48.0)
+# A language tag with no country (`de`, not `de-AT`) read as its country.
+LANGUAGE_COUNTRY = {"cs": "CZ", "sk": "SK", "pl": "PL", "de": "DE", "it": "IT", "fr": "FR",
+                    "sl": "SI", "hu": "HU", "hr": "HR", "gsw": "CH", "rm": "CH"}
+
 
 def remote(airspaces) -> dict:
     """The map's payload with the ground left for the page to fetch. Cannot fail at
@@ -284,10 +306,16 @@ def remote(airspaces) -> dict:
     payload = build(airspaces, terrain=None, tiles=True)
     payload["terrain"] = viewer_terrain.remote(*PLAN_BOX, cols=PLAN_COLUMNS,
                                                max_points=PLAN_NODES)
-    # Open on the airspace, not on the whole box: the Alps are there to plan over, and
-    # the map is first of all the Czech airspace map.
+    # Open on the reader's own country, guessed in the page from the browser's languages
+    # (`view.focusFor`, never the location), not on the whole box; anyone else — English
+    # with no country here — on the Alps (`view.focus`). Czechia is its airspace's box.
     west, east, south, north = bounds(airspaces)
-    payload["view"]["focus"] = {"west": west, "east": east, "south": south, "north": north}
+    focus = {code: dict(zip(("west", "east", "south", "north"), box))
+             for code, box in COUNTRY_VIEWS.items()}
+    focus["CZ"] = {"west": west, "east": east, "south": south, "north": north}
+    payload["view"]["focus"] = dict(zip(("west", "east", "south", "north"), ALPS_VIEW))
+    payload["view"]["focusFor"] = focus
+    payload["view"]["focusLanguages"] = LANGUAGE_COUNTRY
     return payload
 
 
