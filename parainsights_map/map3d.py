@@ -25,7 +25,9 @@ from pathlib import Path
 STYLE = """
 .merged-view .ml-map:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 /* The compass, the sun and the wind: one floating panel at the top right, in the page's
-   type. On a phone the compass alone — the sentence would cover a third of the map. */
+   type. On a phone the compass alone — the sentence would cover a third of the map — and
+   the replay's height and climb in a pill of their own beside the rail, under the compass,
+   since the top row of buttons fills the width beside it. */
 .merged-view .m3-rose { position: absolute; top: 10px; right: 10px; z-index: 3; display: flex;
   flex-direction: row-reverse; align-items: center; gap: 10px; padding: 4px 4px 4px 14px;
   background: var(--float); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
@@ -41,7 +43,12 @@ STYLE = """
 .merged-view .m3-rose p:empty { display: none; }
 @media (max-width: 640px) {
   .merged-view .m3-rose { padding: 4px; }
-  .merged-view .m3-rose p { display: none; }
+  .merged-view .m3-rose .m3-rose-text { display: none; }
+  .merged-view .m3-now { position: absolute; top: calc(100% + 8px); right: calc(var(--mh) + 8px);
+    display: flex; align-items: center; height: var(--mh); box-sizing: border-box; padding: 0 12px;
+    white-space: nowrap; background: var(--float); -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px); border: 1px solid var(--float-edge); border-radius: 12px;
+    box-shadow: var(--float-shadow); }
 }
 .merged-view .m3-bottom { position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 3;
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px; pointer-events: none; }
