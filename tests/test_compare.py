@@ -38,8 +38,10 @@ def page(tmp_path_factory):
 
 
 def _tap(browser, selector):
+    # Into view first: the showcase cards sit under the start's band, below the fold.
     x, y = browser.js(
-        "(() => { var r = document.querySelector(%s).getBoundingClientRect();"
+        "(() => { var e = document.querySelector(%s); e.scrollIntoView({ block: 'center' });"
+        " var r = e.getBoundingClientRect();"
         " return [r.left + r.width / 2, r.top + r.height / 2]; })()" % json.dumps(selector))
     browser.click(x, y)
     browser.frame()
@@ -48,11 +50,30 @@ def _tap(browser, selector):
     browser.wait("!document.querySelector('.tab-compare.is-busy')")
 
 
+def test_the_page_opens_on_the_start_and_a_card_opens_a_flight(page):
+    """No flight is open at first: the start shows, the strip does not — "Your track"
+    alone would lead only to the drop beside it. A showcase card opens its flight and
+    brings the strip with that flight's tab."""
+    state = page.js("""({
+      strip: document.getElementById('flight-tabs').getClientRects().length > 0,
+      start: !document.getElementById('quicklook').hidden,
+      open: Array.from(document.querySelectorAll('article[data-flight-report]')).filter(a => !a.hidden).map(a => a.dataset.flightReport),
+      cards: Array.from(document.querySelectorAll('[data-showcase-open]')).map(c => c.dataset.showcaseOpen) })""")
+    assert state == {"strip": False, "start": True, "open": ["own"], "cards": ["f0", "f1"]}, state
+    _tap(page, '[data-showcase-open="f0"]')
+    state = page.js("""({
+      strip: document.getElementById('flight-tabs').getClientRects().length > 0,
+      tabs: Array.from(document.querySelectorAll('.tab[data-flight-tab]:not([hidden])')).map(t => t.dataset.flightTab),
+      open: Array.from(document.querySelectorAll('article[data-flight-report]')).filter(a => !a.hidden).map(a => a.dataset.flightReport) })""")
+    assert state == {"strip": True, "tabs": ["own", "f0"], "open": ["f0"]}, state
+
+
 def test_tapping_compare_adds_the_flight_and_never_removes_it(page):
     assert page.js("matchMedia('(hover: none)').matches"), "the touch layout is under test"
-    _tap(page, '[data-flight-tab="f0"] .tab-open')
+    _tap(page, '[data-showcase-open="f0"]')
     _tap(page, '[data-compare-toggle="f0"]')
-    _tap(page, '[data-flight-tab="f1"] .tab-open')
+    _tap(page, '[data-flight-tab="own"] .tab-open')
+    _tap(page, '[data-showcase-open="f1"]')
     _tap(page, '[data-compare-toggle="f1"]')
     state = page.js("""({
       tabs: Array.from(document.querySelectorAll('[data-flight-tab]')).map(t => t.dataset.flightTab),
@@ -84,10 +105,17 @@ def test_a_second_tap_while_busy_does_not_undo_the_first(page):
 
 
 def test_removing_a_compared_flight_leaves_the_comparison(page):
+    """A showcase flight's × puts it away, not out of the document: its card opens it
+    again. It leaves the comparison all the same."""
     _tap(page, '[data-flight-tab="f0"] .tab-open')
     _tap(page, '[data-flight-tab="f0"] .tab-close')
-    page.wait("document.querySelectorAll('[data-flight-report=\"f0\"]').length === 0", timeout=10)
+    page.wait("document.querySelector('[data-flight-tab=\"f0\"]').hidden", timeout=10)
+    assert page.js("document.querySelector('[data-flight-report=\"f0\"]').hidden")
+    assert page.js("document.querySelector('[data-compare-toggle=\"f0\"]').getAttribute('aria-pressed')") == "false"
     assert not page.js("document.documentElement.classList.contains('is-comparing')")
+    _tap(page, '[data-flight-tab="own"] .tab-open')
+    _tap(page, '[data-showcase-open="f0"]')
+    assert not page.js("document.querySelector('[data-flight-report=\"f0\"]').hidden")
 
 
 def test_the_side_view_tooltip_is_shown_in_full_screen(page):

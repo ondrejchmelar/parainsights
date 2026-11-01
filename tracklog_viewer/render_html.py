@@ -187,6 +187,9 @@ svg.chart { overflow: visible; }
 
 /* Flight tabs ------------------------------------------------------------------ */
 .tabs { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 0; }
+/* A showcase flight has a tab only once it is opened, and the strip shows only once a
+   flight is: on the start it would be "Your track" alone, beside the drop it leads to. */
+.tabs[hidden], .tab[hidden] { display: none; }
 /* A tab is a wrapper, not a button, because it holds three: open, compare and remove. A
    button inside a button is invalid and browsers drop the inner one. */
 .tab { flex: 0 1 auto; min-width: 230px; position: relative; display: flex; align-items: center;
@@ -424,11 +427,12 @@ VIEW_STYLE = """
 """
 
 
-def _flights_view(tabs: str, bodies: list[str], extras: "list[Extra]") -> str:
+def _flights_view(tabs: str, bodies: list[str], extras: "list[Extra]",
+                  showcase: list[str] = ()) -> str:
     """The flight report, wrapped in a view section only when there is a view to switch
     to. Every report before extras existed had no wrapper, and adding one unconditionally
     would change the DOM of all of them to no purpose."""
-    inner = f'{tabs}\n{"".join(bodies)}\n{upload_panel.panel()}'
+    inner = f'{tabs}\n{"".join(bodies)}\n{upload_panel.panel(showcase)}'
     if not extras:
         return inner
     return f'<section data-view="flights">\n{inner}\n</section>'
@@ -502,7 +506,7 @@ def _view_nav(extras: "list[Extra]", site: bool = False) -> str:
 
 
 def _page(title: str, bodies: list[str], tabs: str = "", extras: "list[Extra]" = (),
-          site: bool = False) -> str:
+          site: bool = False, showcase: list[str] = ()) -> str:
     """Wrap one or more flight bodies into a complete document.
 
     The doctype is not decoration. Without it the page is in **quirks mode**, where
@@ -524,7 +528,7 @@ def _page(title: str, bodies: list[str], tabs: str = "", extras: "list[Extra]" =
 {VIEW_STYLE if extras or site else ""}{"".join(e.style for e in extras)}</style>
 <div class="wrap">
 {_view_nav(extras, site)}
-{_flights_view(tabs, bodies, extras)}
+{_flights_view(tabs, bodies, extras, showcase)}
 {"".join(f'<section data-view="{e.uid}" hidden>{e.body}</section>' for e in extras)}
 {common.footer()}
 {common.welcome("flights") if site else ""}
@@ -558,10 +562,14 @@ def js_bundle() -> str:
                      for name in JS_MODULES).replace("</script", "<\\/script")
 
 
-def _tab(uid: str, date: str, meta: str, stat: str = "", *, on: bool = False) -> str:
-    """One flight tab: open it, add it to the comparison, or remove it from the document."""
+def _tab(uid: str, date: str, meta: str, stat: str = "", *, on: bool = False,
+         showcase: bool = False) -> str:
+    """One flight tab: open it, add it to the comparison, or remove it from the document.
+    A showcase flight's starts hidden, and its × hides it again rather than removing the
+    flight: its card on the start opens it once more."""
     return (
-        f'<span class="tab{" is-on" if on else ""}" data-flight-tab="{uid}">'
+        f'<span class="tab{" is-on" if on else ""}" data-flight-tab="{uid}"'
+        + (' data-showcase hidden' if showcase else '') + '>'
         f'<button type="button" class="tab-open" aria-pressed="{"true" if on else "false"}">'
         f'<span class="tab-date">{date}</span>'
         f'<span class="tab-meta">{meta}</span>'

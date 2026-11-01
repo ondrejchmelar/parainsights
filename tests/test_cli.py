@@ -42,7 +42,8 @@ def test_the_page_is_written_by_the_uploads_javascript(tmp_path, capsys):
     text = page.read_text()
     articles = _articles(text)
     assert sorted(articles) == ["f0", "f1"]
-    assert "hidden" not in articles["f0"].split(">", 1)[0] and "hidden" in articles["f1"].split(">", 1)[0]
+    # The page opens on the start, every flight hidden until its card opens it.
+    assert all("hidden" in articles[uid].split(">", 1)[0] for uid in ("f0", "f1"))
     # The label override reached the article and the tab, not only one of them.
     assert "Ana Bell" in articles["f0"] and "Ridge" in articles["f0"]
     tabs = re.search(r'<nav class="tabs".*?</nav>', text, re.S).group(0)

@@ -18,7 +18,7 @@ from urllib.parse import urlsplit
 
 from parainsights_map import terrain as terrain_module
 
-from . import certification, js_build, render_html, sources
+from . import certification, js_build, render_html, sources, upload_panel
 
 # Where a pilot's pre-flight plans are remembered, by date and site, when there is no
 # sidecar beside the tracklog.
@@ -127,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
             # The page fetches the heights itself, as for every 3D map on this site.
             "sceneTerrain": ground.to_remote() if ground is not None else None,
             "meteo": report["weather"], "era5": report["era5"], "when": report["when"],
-            "options": {"uid": f"f{index}", "hidden": index > 0, "label": report["label"],
+            "options": {"uid": f"f{index}", "hidden": True, "label": report["label"],
                         # The flight's map loads the airspace under its ground when it is
                         # opened, from the layer files beside the Planner (`openaip.py`).
                         "airspaceRemote": (args.airspace + "layers/")
@@ -144,17 +144,25 @@ def main(argv: list[str] | None = None) -> int:
     for article in made:
         print(f"{article['label']}  {article['meta']}  {article['stat']}")
 
+    # The page opens on no flight: the start (`upload_panel.panel`) offers the reader's own
+    # and these, each one's tab appearing when it is opened.
     tabs = (
-        '<nav class="tabs" id="flight-tabs" role="group" aria-label="Choose a flight">'
+        '<nav class="tabs" id="flight-tabs" role="group" aria-label="Choose a flight" hidden>'
         + render_html.ADD_TAB
         + "".join(render_html._tab(m["uid"], render_html.escape(m["label"]),
                                    render_html.escape(m["meta"]),
                                    render_html.escape(m["stat"]).replace(" · ", " &middot; "),
-                                   on=i == 0)
-                  for i, m in enumerate(made))
+                                   showcase=True)
+                  for m in made)
         + "</nav>"
     )
-    page = render_html._page(made[0]["title"], [m["html"] for m in made], tabs, extras, site=published)
+    showcase = [upload_panel.showcase_card(
+                    m["uid"], m["label"],
+                    " · ".join(part for part in (m["date"], m["pilot"], m["glider"]) if part),
+                    m["stat"])
+                for m in made]
+    page = render_html._page("Flights", [m["html"] for m in made], tabs, extras,
+                             site=published, showcase=showcase)
     if args.airspace is not None:
         # Where an uploaded flight's map finds the airspace layers (`js/upload.js`).
         page = page.replace("<meta charset=\"utf-8\">", "<meta charset=\"utf-8\">\n"

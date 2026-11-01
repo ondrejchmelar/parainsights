@@ -874,9 +874,17 @@ var flightTabs = (function () {
   var strip = document.getElementById('flight-tabs');
   var firstTitle = document.title;
 
+  // The strip shows once a flight is open, or one is loading: on the start it would be
+  // "Your track" alone, beside the drop it leads to.
+  function sync() {
+    if (strip) strip.hidden = !strip.querySelector('.tab:not(.tab-add):not([hidden])');
+  }
+
   function show(key) {
     document.querySelectorAll('.tab[data-flight-tab]').forEach(function (tab) {
       var on = tab.dataset.flightTab === key;
+      // A showcase flight's tab appears when it is first opened, from its card.
+      if (on) tab.hidden = false;
       tab.classList.toggle('is-on', on);
       var open = tab.querySelector('.tab-open');
       if (open) open.setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -886,35 +894,54 @@ var flightTabs = (function () {
       report.hidden = report.dataset.flightReport !== key;
       if (!report.hidden && report.dataset.title) titled = report.dataset.title;
     });
-    // The tab's flight names the page (a browser tab, a bookmark, the history); the drop
-    // panel, with no flight yet, says what it is for.
-    document.title = titled || (key === 'own' ? 'Your track — parainsights' : firstTitle);
+    // The tab's flight names the page (a browser tab, a bookmark, the history); the start,
+    // with no flight, keeps the page's own name.
+    document.title = titled || firstTitle;
+    sync();
     window.scrollTo({ top: 0, behavior: 'auto' });
+  }
+
+  // A showcase flight is put away rather than removed: its card on the start opens it
+  // again, so its article, map and all stay in the document. It leaves the comparison
+  // as a removed flight does, though: hidden, it is no longer one the reader chose.
+  function putAway(tab) {
+    var compare = tab.querySelector('.tab-compare.is-on');
+    if (compare) compare.click();
+    tab.hidden = true;
+    tab.classList.remove('is-on');
   }
 
   function remove(key) {
     var tab = strip.querySelector('.tab[data-flight-tab="' + key + '"]');
     var report = document.querySelector('[data-flight-report="' + key + '"]');
     var wasOn = tab && tab.classList.contains('is-on');
-    if (tab) tab.parentNode.removeChild(tab);
-    if (report) {
-      // Drop the 3D map and handle this article owned: the handle holds a DEM grid, so
-      // leaving it in the registry keeps a removed flight's memory, and a WebGL context
-      // is scarcer still — a page gets about sixteen — so it is handed back rather than
-      // left for the collector.
-      report.querySelectorAll('.renderer-host').forEach(function (host) {
-        if (host.__map) { host.__map.api.dispose(); host.__map = null; }
-      });
-      report.querySelectorAll('.view3d').forEach(function (box) {
-        if (window.__view3dAll) delete window.__view3dAll[box.id];
-        if (window.__mergedAll) delete window.__mergedAll[box.id];
-      });
-      report.parentNode.removeChild(report);
+    if (tab && tab.hasAttribute('data-showcase')) {
+      putAway(tab);
+      if (report) report.hidden = true;
+    } else {
+      if (tab) tab.parentNode.removeChild(tab);
+      if (report) discard(report);
     }
+    sync();
     if (!wasOn) return;
-    // Fall back to the first flight still in the document, or to the drop panel.
-    var next = strip.querySelector('.tab[data-flight-tab]:not(.tab-add)');
+    // Fall back to the first flight still open, or to the start.
+    var next = strip.querySelector('.tab[data-flight-tab]:not(.tab-add):not([hidden])');
     show(next ? next.dataset.flightTab : 'own');
+  }
+
+  // Drop the 3D map and handle this article owned: the handle holds a DEM grid, so
+  // leaving it in the registry keeps a removed flight's memory, and a WebGL context
+  // is scarcer still — a page gets about sixteen — so it is handed back rather than
+  // left for the collector.
+  function discard(report) {
+    report.querySelectorAll('.renderer-host').forEach(function (host) {
+      if (host.__map) { host.__map.api.dispose(); host.__map = null; }
+    });
+    report.querySelectorAll('.view3d').forEach(function (box) {
+      if (window.__view3dAll) delete window.__view3dAll[box.id];
+      if (window.__mergedAll) delete window.__mergedAll[box.id];
+    });
+    report.parentNode.removeChild(report);
   }
 
   if (strip) {
@@ -924,7 +951,15 @@ var flightTabs = (function () {
       if (event.target.closest('.tab-close')) remove(tab.dataset.flightTab);
       else show(tab.dataset.flightTab);
     });
+    // An upload's loading card and its tab arrive from `upload_panel.js`; the strip shows
+    // for them as for a flight opened here.
+    new MutationObserver(sync).observe(strip, { childList: true });
   }
+  // The showcase cards on the start.
+  document.addEventListener('click', function (event) {
+    var card = event.target.closest && event.target.closest('[data-showcase-open]');
+    if (card) show(card.getAttribute('data-showcase-open'));
+  });
   return { show: show, remove: remove, strip: strip };
 })();
 window.__flightTabs = flightTabs;

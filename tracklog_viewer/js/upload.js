@@ -111,7 +111,9 @@
       meta: [summary.date, firstName(summary.pilot)].filter(Boolean).join(' · '),
       stat: [route ? (route.distance / 1000).toFixed(0) + ' km' : '', shapeOf(route, analysis),
              format && format !== 'IGC' ? 'from ' + format : ''].filter(Boolean).join(' · '),
-      title: summary.date + ' · ' + (summary.site || 'flight') + ' — flight review'
+      title: summary.date + ' · ' + (summary.site || 'flight') + ' — flight review',
+      // The showcase card on the start, which has room for the whole name and the wing.
+      date: summary.date || '', pilot: summary.pilot || '', glider: summary.glider || ''
     };
   }
 

@@ -638,6 +638,16 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
 - **Uploading your own track is the first tab, not the last.** The bundled flights are a
   showcase. The reader's own file is the product, so the `+ your track` tab leads and a
   note under the tabs says the analysis happens in the page.
+  **The page opens on no flight** (November 2026): opened on a showcase flight the
+  reader had not chosen, it did not say their own was the point. The start
+  (`upload_panel.panel`) puts the drop where the map would be, on a blurred photograph
+  (`assets/start-ground.jpg`, inlined), with the showcase as cards — under the band on a
+  desktop, inside it on a phone (the pilot's pick of two mocks for each). A showcase
+  flight's tab is rendered `hidden` and appears when its card opens it; its × puts it
+  away again (tab and article hidden, out of the comparison) rather than removing it, so
+  the card still works. An upload's × still removes. The strip itself shows only while a
+  flight is open or loading (`sync` in `page/report.js`): on the start it would be
+  "Your track" alone. No map loads until a flight is opened.
 - **Comparing is opt-in, per tab** (the ⇆ beside the ×), bundled and uploaded flights
   alike: each picked flight's headline figures say where they stand among the picked
   ones, recounted when a flight is added or removed. On touch the ×'s 44 px tap area grows

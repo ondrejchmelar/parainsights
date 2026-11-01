@@ -61,5 +61,5 @@ def inspect(jobs: list[dict], *, now: float) -> list[dict]:
 
 def render(jobs: list[dict], *, certification_table: dict | None, now: float) -> list[dict]:
     """Each job is {path, name, terrain, sceneTerrain, meteo, when, options}; each answer
-    is {html, uid, label, meta, stat, title}."""
+    is {html, uid, label, meta, stat, title, date, pilot, glider}."""
     return _run("render", jobs, certification=certification_table, now=now)
