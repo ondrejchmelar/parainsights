@@ -41,7 +41,14 @@ def page(tmp_path_factory):
         browser.wait(f"!!{ARTICLE}.querySelector('.side-view .hit') && !!{ARTICLE}.__replayNow")
         # The handle is asked for once the flight is on screen (an IntersectionObserver,
         # `whenShown`), which can land after the charts: a click before it reaches no map.
-        browser.wait("window.__handed === true")
+        # An observer reports only on a rendered frame, and headless Chrome under load
+        # renders none for a page with no map to repaint: a screenshot forces one.
+        for _ in range(60):
+            if browser.js("window.__handed === true"):
+                break
+            browser.screenshot()
+        else:
+            raise TimeoutError("the flight never asked for its map's handle")
         browser.js("new Promise(r => setTimeout(() => r(1), 0))")
         yield browser
     finally:
