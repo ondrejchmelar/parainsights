@@ -874,6 +874,8 @@
         center: [(west + east) / 2, (south + north) / 2], zoom: 10, pitch: openPitch, bearing: 0,
         maxPitch: 85, attributionControl: false, keyboard: true
       });
+      var opened = false;
+      map.once('load', function () { opened = true; });
       // 'style.load', not 'load': 'load' waits for the first complete frame, every tile
       // included, which on a slow connection is long after a reader has pressed things.
       // The peaks' ▲ (`peak-labels`), drawn here rather than from a sprite sheet.
@@ -1345,9 +1347,17 @@
               s = Math.min(s, o.lat[i]); n = Math.max(n, o.lat[i]);
             }
           });
-          map.fitBounds([[w, s], [e, n]],
-                        { padding: { top: 70, bottom: 110, left: 50, right: 90 },
-                          pitch: map.getPitch(), bearing: map.getBearing(), duration: 600 });
+          var frame = function () {
+            map.fitBounds([[w, s], [e, n]],
+                          { padding: { top: 70, bottom: 110, left: 50, right: 90 },
+                            pitch: map.getPitch(), bearing: map.getBearing(), duration: 600 });
+          };
+          // Not before the map's first load: eased before any DEM tile is in, MapLibre
+          // 4.7.1 throws in `_updateElevation`, its render loop stays locked and the map
+          // never draws (the Col d'Izoard group card opened blank). A framing overtaken
+          // by another before then is dropped.
+          if (opened) frame();
+          else map.once('load', function () { if (framedFor === key) frame(); });
         }
         framedFor = key;
         refresh();
