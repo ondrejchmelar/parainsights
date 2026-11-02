@@ -681,7 +681,8 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   top left (this flight bold; how each is aligned in time is in its tooltip), and each
   row near enough to draw is a switch: a press hides that flight on this map, its own
   row included, and a second shows it (October 2026); hidden is not gone, so the
-  replay's span and the framing still hold it. The map carries no
+  replay's span and the framing still hold it. Its head ("4 flights ▾") folds the list
+  to that one line (November 2026, the pilot's ask: four names covered a phone's map). The map carries no
   credits control: every source is named in the page's footer (October 2026).
   Every flight is drawn alike in the replay: its track, its climbs and a dot at "now" —
   this one too — and no white leading stretch while comparing; each flight is one colour
@@ -1464,7 +1465,7 @@ Still wanted:
     --terrain --meteo --airspace ../planner/ \
     --label '' --label '' --label 'Antoine Girard|PK Hunza|OZONE Zeolite 2' \
     --label '' --label "|Col d'Izoard" \
-    --label "Baptiste Lambert|Col d'Izoard|OZONE Enzo 3" --label "|Col d'Izoard" \
+    --label "Baptiste Lambert|Col d'Izoard|OZONE Enzo 3" --label "Hugo Hadaš|Col d'Izoard" \
     --compare-group 4-7 --html public/flights/index.html
   ```
   — one `--label` per flight, in order, empty where the file already says it, and

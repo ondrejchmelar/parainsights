@@ -908,6 +908,15 @@ def test_a_row_of_the_compared_legend_hides_and_shows_its_flight(browser):
     assert browser.js(f"{own}.classList.contains('is-off')")
     browser.js(f"{own}.click(); 1")
     assert "track" in browser.js(ids)
+    # Its head folds the list to one line and back; folding hides no flight.
+    head = "document.querySelector('.merged-view .m3-others-head button')"
+    assert browser.js(f"{head}.textContent") == "3 flights"
+    browser.js(f"{head}.click(); 1")
+    assert browser.js(f"{row % 'NEAR'}.offsetHeight") == 0
+    assert browser.js(f"{head}.getAttribute('aria-expanded')") == "false"
+    assert "other-0" in browser.js(ids) and "track" in browser.js(ids)
+    browser.js(f"{head}.click(); 1")
+    assert browser.js(f"{row % 'NEAR'}.offsetHeight") > 0
     browser.js(f"({ENTRY}).setOthers(null); 1")
 
 

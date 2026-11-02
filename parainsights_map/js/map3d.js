@@ -1374,7 +1374,14 @@
                             String(key).replace(/[<&"]/g, '') + '"' : '') +
             '><i style="background:' + colour + '"></i>' + name.replace(/[<&]/g, '') + '</li>';
         }
-        othersList.innerHTML = (ownColour ? row(OWN, ownName, ownColour, 'is-own', 'This flight') : '') +
+        // A head that folds the list away (and back): four pilots' names cover a phone's
+        // map, and the tracks keep their colours with the list folded.
+        var count = others.length + (ownColour ? 1 : 0);
+        othersList.classList.toggle('is-shut', legendShut);
+        othersList.innerHTML = '<li class="m3-others-head"><button type="button" aria-expanded="' + !legendShut +
+          '" title="' + (legendShut ? 'Show the pilots' : 'Fold the list away') + '">' + count + ' flights' +
+          ICON.chevron + '</button></li>' +
+          (ownColour ? row(OWN, ownName, ownColour, 'is-own', 'This flight') : '') +
           others.map(function (o) {
             // Another day is aligned by launch without saying so on the line: the tooltip
             // has it, and the line has no room for it beside the (i).
@@ -1384,7 +1391,15 @@
           }).join('');
         othersList.hidden = !others.length;
       }
+      var legendShut = false;
       function toggleFlight(event) {
+        if (event.target.closest && event.target.closest('.m3-others-head')) {
+          var focused = document.activeElement && othersList.contains(document.activeElement);
+          legendShut = !legendShut;
+          showLegend();
+          if (focused) othersList.querySelector('.m3-others-head button').focus();
+          return;
+        }
         var li = event.target.closest && event.target.closest('li[data-flight]');
         if (!li || !othersList.contains(li)) return;
         var key = li.getAttribute('data-flight');
