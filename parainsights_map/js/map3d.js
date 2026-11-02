@@ -2212,8 +2212,11 @@
         if (replay && !replay.hidden) showNow();
       }
       // While the replay is open: the side and top views' cursor at its "now"
-      // (`__cursorAtTime`, `render_html`), and the height at "now" top right — this
-      // flight's with its climb, and each compared glider's in its colour.
+      // (`__cursorAtTime`, `render_html`), and the height at "now" — this flight's with its
+      // climb, and each compared glider's in its colour. A report's side view carries it,
+      // beside its "now" bar (`__replayNow`, `page/report.js`): top right of the map it
+      // fought the top row of buttons for room on a phone, and four gliders' lines did
+      // not fit under the compass. A map with no side view keeps it top right.
       var nowText = view.querySelector('.m3-now');
       function heightAt(t) {
         var i = Math.min(Math.max(firstAt(tr.t, t), 1), tr.t.length - 1), j = i - 1;
@@ -2224,26 +2227,30 @@
         var article = panel.closest('[data-flight-report]');
         var flying = cutoff >= 0 && cutoff <= duration;
         if (flying && article && article.__cursorAtTime) article.__cursorAtTime(cutoff);
-        var lines = [];
+        // In this flight's comparison colour when comparing, as every other mark of it is.
+        var rows = [];
         if (flying && !ownOff()) {
-          var climb = (heightAt(cutoff + 10) - heightAt(cutoff - 10)) / 20;
-          // In this flight's comparison colour when comparing, as every other mark of it is.
-          lines.push('<span' + (ownColour ? ' style="color:' + ownColour + '"' : '') + '><b>' +
-                     Math.round(heightAt(cutoff)).toLocaleString('en-US') + ' m</b> · ' +
-                     (climb >= 0 ? '+' : '') + climb.toFixed(1) + ' m/s</span>');
+          rows.push({ colour: ownColour, alt: heightAt(cutoff),
+                      climb: (heightAt(cutoff + 10) - heightAt(cutoff - 10)) / 20 });
         }
         others.forEach(function (o) {
           var at = cutoff - o.offset;
           if (off(o) || at < o.t[0] || at > o.t[o.t.length - 1]) return;
-          var rate = (positionOf(o, at + 10)[2] - positionOf(o, at - 10)[2]) / 20;
-          lines.push('<span style="color:' + o.colour + '"><b>' +
-                     Math.round(positionOf(o, at)[2]).toLocaleString('en-US') + ' m</b> · ' +
-                     (rate >= 0 ? '+' : '') + rate.toFixed(1) + ' m/s</span>');
+          rows.push({ colour: o.colour, alt: positionOf(o, at)[2],
+                      climb: (positionOf(o, at + 10)[2] - positionOf(o, at - 10)[2]) / 20 });
         });
-        nowText.innerHTML = lines.join('<br>');
-        nowText.hidden = !lines.length;
+        if (article && article.__replayNow) {
+          article.__replayNow({ clock: clockAt(cutoff), rows: rows });
+          rows = [];
+        }
+        nowText.innerHTML = rows.map(function (r) {
+          return '<span' + (r.colour ? ' style="color:' + r.colour + '"' : '') + '><b>' +
+                 Math.round(r.alt).toLocaleString('en-US') + ' m</b> · ' +
+                 (r.climb >= 0 ? '+' : '') + r.climb.toFixed(1) + ' m/s</span>';
+        }).join('<br>');
+        nowText.hidden = !rows.length;
         // It lives under the rose; a flight with no sun or wind has no rose to show, only this.
-        if (lines.length) {
+        if (rows.length) {
           rose.hidden = false;
           if (!sun && !wind) rose.querySelector('svg').style.display = 'none';
         } else if (!sun && !wind) rose.hidden = true;
@@ -2261,6 +2268,15 @@
       // length and slides back to end there (moving only the left handle to the moment
       // left a window of nothing, no trail into it). A moment inside the window leaves
       // the reader's choice alone.
+      // A moment picked on the side view while the replay is open (`page/report.js`): the
+      // replay's "now" goes there, playing or paused, and the camera with it. Earlier than
+      // the window, the window keeps its length and slides back to end there.
+      handle.seekTime = function (seconds) {
+        if (!hasTime || !replay || replay.hidden || !fromInput) return;
+        var t = Math.min(Math.max(seconds, spanStart), spanEnd);
+        if (t < from) from = Math.max(t - (cutoff - from), spanStart);
+        setTime(t);
+      };
       handle.revealTime = function (seconds) {
         if (!hasTime || !replay || replay.hidden || !fromInput) return;
         if (seconds >= from && seconds <= cutoff) return;

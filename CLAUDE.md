@@ -706,9 +706,19 @@ Read `docs/plan.md` for the full list. The ones most likely to be re-litigated:
   the article — the check once asked it the other way round, and the tooltip stayed in
   the page body, behind the full screen (`test_compare`).
   **The replay drives the charts**: its "now" moves the side and top views' cursor
-  (`article.__cursorAtTime`, quiet: no tooltip, not echoed back to the map), and the map
-  shows the height at "now" top right (`.m3-now`: this flight's with its climb, each
-  compared glider's in its colour). Flown the same day (starts within 12 h,
+  (`article.__cursorAtTime`, quiet: no tooltip, not echoed back to the map), and the side
+  view carries the height at "now" in a tag beside its bar (`__replayNow`, `drawTag` in
+  `page/report.js`: the clock, this flight's height with its climb, each compared
+  glider's on a line of its own with a dot in its colour; flipped left past the middle).
+  It was top right of the map (`.m3-now`, still there for a map with no side view): on a
+  phone it fought the top row of buttons, and four gliders did not fit (November 2026,
+  the pilot's pick of five mocks). **While the replay is open the charts are its
+  scrubber**: a click, a tap or a drag moves the replay's "now" there (`seekTime` in
+  `map3d`), playing or paused, and so do "show me" and a table row; hover on the side
+  view draws only a faint line (`.replay-hover`); no tooltip and no pin, and opening the
+  replay lets go of one. The chart's own cursor fought the replay's — a tooltip at one
+  moment, the bar and the map at another, and letting go took the replay's dot off the
+  side view (`tests/test_replay_side_view.py`). Flown the same day (starts within 12 h,
   `scene.start` is the first fix in UTC seconds) the replay runs on one clock — a dot
   where each glider was at the same moment, its trail inside the same window; otherwise
   by time since launch, and the legend says so. A flight more than 150 km from this map's

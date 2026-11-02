@@ -166,6 +166,17 @@ svg.chart { overflow: visible; }
 .chart .crosshair { stroke: var(--ink-2); stroke-width: 1; stroke-dasharray: 3 3; }
 .chart .replay-dim { fill: var(--panel); opacity: 0.7; pointer-events: none; }
 .chart .replay-now { stroke: var(--ink); stroke-width: 1.5; opacity: 0.85; pointer-events: none; }
+.chart .replay-hover { stroke: var(--ink); stroke-width: 1; opacity: 0.4; stroke-dasharray: 3 3; pointer-events: none; }
+/* The replay's "now" in words, beside its bar on the side view (`drawTag`, page/report.js). */
+.side-view .chart-host { position: relative; }
+.replay-tag { position: absolute; top: 4px; z-index: 2; transform: translateX(8px); pointer-events: none;
+  padding: 5px 10px; border-radius: 10px; background: var(--float); border: 1px solid var(--float-edge);
+  box-shadow: var(--float-shadow); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  font-size: 15px; line-height: 1.35; color: var(--ink); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.replay-tag.is-flipped { transform: translateX(calc(-100% - 8px)); }
+.replay-tag b { font-weight: 600; }
+.replay-tag .replay-clock { color: var(--ink-2); }
+.replay-tag i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; }
 .chart-wind .wind-dot { fill: var(--panel); stroke: var(--sink); stroke-width: 2; }
 .chart-wind .wind-arrow { stroke: var(--sink); stroke-width: 1.6; }
 .chart-wind .wind-number { fill: var(--ink); text-anchor: middle; dominant-baseline: central; font-size: 13px; }

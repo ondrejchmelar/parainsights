@@ -628,6 +628,11 @@ function initFlight(root) {
   // Pin, and bring the moment into view in the 3D panel as well — a pinned point the
   // reader cannot see on the map answers half the question they asked.
   function pinAt(index, view) {
+    // With the replay open a moment asked for ("show me", a table row) is the replay's.
+    if (replaying() && terrainView && terrainView.seekTime && data.t && data.t[index] !== undefined) {
+      terrainView.seekTime(data.t[index]);
+      return;
+    }
     if (!markAt(index, view)) return;
     pinned = index;
     root.classList.add('is-pinned');
@@ -641,6 +646,13 @@ function initFlight(root) {
     armPin();
   }
 
+  // While the replay is open the charts are its scrubber, not a second cursor: a click,
+  // a tap or a drag moves the replay's "now" there (`seekTime` in `map3d`), and hover on
+  // the side view only draws a faint line where a click would go. Their own cursor,
+  // tooltip and pin fought the replay's — the tooltip named one moment while the bar and
+  // the map showed another, and letting go took the replay's dot off the side view.
+  function replaying() { return range !== null; }
+
   function bindView(view) {
     if (view.hit.__cursorBound) return;
     view.hit.__cursorBound = true;
@@ -649,9 +661,15 @@ function initFlight(root) {
       place(nearestIndex(view, point), view, point);
       armPin();
     }
-    view.hit.addEventListener('mousemove', show);
-    view.hit.addEventListener('mouseleave', restore);
+    view.hit.addEventListener('mousemove', function (event) {
+      if (!replaying()) { show(event); return; }
+      if (event.buttons & 1) seekAt(view, event); else previewAt(view, event);
+    });
+    view.hit.addEventListener('mouseleave', function () {
+      if (replaying()) previewAt(view, null); else restore();
+    });
     view.hit.addEventListener('click', function (event) {
+      if (replaying()) { seekAt(view, event); return; }
       var point = svgPoint(view, event);
       var index = nearestIndex(view, point);
       // Clicking the pinned point again is how the reader lets go without hunting for a
@@ -659,7 +677,9 @@ function initFlight(root) {
       if (pinned === index) release(); else pinAt(index, view);
     });
     view.hit.addEventListener('touchmove', function (event) {
-      if (event.touches.length) { show(event.touches[0]); event.preventDefault(); }
+      if (!event.touches.length) return;
+      if (replaying()) seekAt(view, event.touches[0]); else show(event.touches[0]);
+      event.preventDefault();
     }, { passive: false });
   }
 
@@ -700,19 +720,85 @@ function initFlight(root) {
   // window clamped to this flight's last fix dimmed everything after its landing while
   // the others were still in the air.
   var range = null;
+  // Along the side view's axis, both ways: by time, not by this flight's samples (above).
+  function axisOf(view) {
+    var n = Math.min(view.px.length, data.t ? data.t.length : 0);
+    if (n < 2) return null;
+    var t0 = data.t[0], t1 = data.t[n - 1], x0 = view.px[0], x1 = view.px[n - 1];
+    var box = +view.hit.getAttribute('x'), w = +view.hit.getAttribute('width');
+    return {
+      x: function (t) {
+        var x = t1 > t0 ? x0 + (t - t0) / (t1 - t0) * (x1 - x0) : x0;
+        return Math.min(Math.max(x, box), box + w);
+      },
+      t: function (x) { return x1 > x0 ? t0 + (x - x0) / (x1 - x0) * (t1 - t0) : t0; }
+    };
+  }
+  function seekAt(view, event) {
+    if (!terrainView || !terrainView.seekTime) return;
+    var point = svgPoint(view, event), axis = view.mode === 'x' ? axisOf(view) : null;
+    previewAt(view, null);
+    // The top view has no time axis: the fix nearest the pointer.
+    if (axis) terrainView.seekTime(axis.t(point.x));
+    else if (data.t) terrainView.seekTime(data.t[nearestIndex(view, point)]);
+  }
+  function previewAt(view, event) {
+    var line = view.svg.querySelector('.replay-hover');
+    if (!line) return;
+    if (!event) { line.style.display = 'none'; return; }
+    var x = Math.min(Math.max(svgPoint(view, event).x, +view.hit.getAttribute('x')),
+                     +view.hit.getAttribute('x') + +view.hit.getAttribute('width'));
+    line.setAttribute('x1', x);
+    line.setAttribute('x2', x);
+    line.style.display = '';
+  }
+
+  // The replay's "now" in words, beside its bar (`__replayNow`, from `showNow` in `map3d`):
+  // the clock, then each glider in the air — its height and climb, a dot in its colour
+  // when comparing. On the side of the bar with room, flipped once the bar is past the
+  // middle. Placed in percent of the chart, so the replay reads no layout on any frame.
+  var nowRows = null;
+  function drawTag(view, right) {
+    var host = view.svg.parentNode, tag = host.querySelector('.replay-tag');
+    if (!range || !nowRows) { if (tag) tag.remove(); return; }
+    if (!tag) {
+      tag = document.createElement('div');
+      tag.className = 'replay-tag';
+      tag.setAttribute('aria-live', 'off');
+      host.appendChild(tag);
+    }
+    var many = nowRows.rows.length > 1 || nowRows.rows.some(function (r) { return r.colour; });
+    var lines = nowRows.rows.map(function (r) {
+      return '<div>' + (many && r.colour ? '<i style="background:' + r.colour + '"></i>' : '') +
+        '<b>' + Math.round(r.alt).toLocaleString('en-US') + ' m</b> · ' +
+        (r.climb >= 0 ? '+' : '') + r.climb.toFixed(1) + ' m/s</div>';
+    });
+    // One glider: the clock on its line. Several: the clock over them.
+    var clock = '<span class="replay-clock">' + nowRows.clock + '</span>';
+    var html = lines.length === 1 && !many ? lines[0].replace('<div>', '<div>' + clock + ' · ')
+      : '<div>' + clock + '</div>' + lines.join('');
+    if (html !== tag.__html) { tag.innerHTML = html; tag.__html = html; }
+    var share = right / view.svg.viewBox.baseVal.width;
+    tag.style.left = (share * 100).toFixed(2) + '%';
+    tag.classList.toggle('is-flipped', share > 0.5);
+  }
+  root.__replayNow = function (now) {
+    nowRows = now;
+    views.forEach(function (view) {
+      if (view.mode !== 'x') return;
+      var axis = axisOf(view);
+      if (axis && range) drawTag(view, axis.x(range[1]));
+    });
+  };
+
   function drawRange() {
     views.forEach(function (view) {
       if (view.mode !== 'x') return;
       var shade = view.svg.querySelector('.replay-range');
-      var n = Math.min(view.px.length, data.t ? data.t.length : 0);
-      if (!range || n < 2) { if (shade) shade.remove(); return; }
-      var t0 = data.t[0], t1 = data.t[n - 1];
-      var x0 = view.px[0], x1 = view.px[n - 1];
+      var axis = axisOf(view);
+      if (!range || !axis) { if (shade) shade.remove(); drawTag(view, 0); return; }
       var box = +view.hit.getAttribute('x'), w = +view.hit.getAttribute('width');
-      function xAt(t) {
-        var x = t1 > t0 ? x0 + (t - t0) / (t1 - t0) * (x1 - x0) : x0;
-        return Math.min(Math.max(x, box), box + w);
-      }
+      var xAt = axis.x;
       var left = xAt(range[0]), right = xAt(range[1]);
       var y = view.hit.getAttribute('y'), h = view.hit.getAttribute('height');
       if (!shade) {
@@ -731,6 +817,12 @@ function initFlight(root) {
         bar.setAttribute('y1', y);
         bar.setAttribute('y2', +y + +h);
         shade.appendChild(bar);
+        var hover = document.createElementNS(NS, 'line');
+        hover.setAttribute('class', 'replay-hover');
+        hover.setAttribute('y1', y);
+        hover.setAttribute('y2', +y + +h);
+        hover.style.display = 'none';
+        shade.appendChild(hover);
         view.svg.insertBefore(shade, view.cursor || view.hit);
       }
       var dims = shade.querySelectorAll('.replay-dim'), dim = !!range[2];
@@ -741,10 +833,15 @@ function initFlight(root) {
       var now = shade.querySelector('.replay-now');
       now.setAttribute('x1', right);
       now.setAttribute('x2', right);
+      drawTag(view, right);
     });
   }
   root.__rangeAtTime = function (span) {
+    // Opening the replay lets go of a pinned point: from here the side view picks the
+    // replay's moment, and a pin left standing would name another.
+    if (span && !range) release();
     range = span ? [span[0], span[1], !!span[2]] : null;
+    if (!range) nowRows = null;
     drawRange();
   };
 
