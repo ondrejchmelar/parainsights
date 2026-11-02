@@ -2285,10 +2285,10 @@
         if (!hasTime || !replay || replay.hidden || !fromInput) return;
         var t = Math.min(Math.max(seconds, spanStart), spanEnd);
         if (t < from) from = Math.max(t - (cutoff - from), spanStart);
-        // A seek is a cut: the gliders are already somewhere else, so the follow camera
-        // faces the new direction of flight at once. Eased from the old one, it swung
-        // round for seconds after the picture had jumped.
-        if (following) snapCourse = true;
+        // The gliders jump; the follow camera does not. It glides from where it was
+        // looking, over the time its heading takes to turn: the picture jumped at once
+        // and the heading eased after it, a jump and then a swing (`seekFrom`).
+        if (following) seekPending = true;
         setTime(t);
       };
       handle.revealTime = function (seconds) {
@@ -2446,7 +2446,9 @@
       }
       var following = false, followFrame = null, followLast = 0, fitBias = 0;
       // Where the reader has turned the view off the direction of flight, with the arrows.
-      var yawOffset = 0, camCourse = null, camOffset = 0, snapCourse = false;
+      var yawOffset = 0, camCourse = null, camOffset = 0;
+      // After a seek: how far the camera's point is still from where it is going, eased away.
+      var seekPending = false, seekFrom = null, lastLook = null;
       // The reader's turn stays within half a circle (the pilot's call): past 180° it is the
       // same view the other way round, and kept growing it wound up into a turn the camera
       // then had to unwind. The shown offset moves with it, so wrapping does not spin.
@@ -2527,7 +2529,6 @@
         // The direction of flight is this flight's: while it is hidden the camera holds its
         // heading instead of turning with a glider the reader cannot see.
         if (others.length && ownOff() && camCourse !== null) target = camCourse;
-        if (snapCourse) { camCourse = target; snapCourse = false; }
         if (group.length > 1 || (group.length === 1 && group[0] !== p)) {
           var c = { lon: 0, lat: 0, alt: 0 };
           group.forEach(function (q) { c.lon += q.lon / group.length; c.lat += q.lat / group.length; c.alt += q.alt / group.length; });
@@ -2572,6 +2573,19 @@
           else if (worst < 0.75 && fitBias < 0) { fitBias = Math.min(fitBias + 0.6 * dt, 0); fitting = true; }
           p = c;
         }
+        if (seekPending && lastLook) seekFrom = { lon: lastLook.lon - p.lon, lat: lastLook.lat - p.lat, alt: lastLook.alt - p.alt };
+        seekPending = false;
+        var easing = false;
+        if (seekFrom) {
+          var kSeek = Math.exp(-dt / 0.7);
+          seekFrom = { lon: seekFrom.lon * kSeek, lat: seekFrom.lat * kSeek, alt: seekFrom.alt * kSeek };
+          if (Math.abs(seekFrom.lon) + Math.abs(seekFrom.lat) < 2e-6) seekFrom = null;
+          else {
+            p = { lon: p.lon + seekFrom.lon, lat: p.lat + seekFrom.lat, alt: p.alt + seekFrom.alt };
+            easing = true;
+          }
+        }
+        lastLook = p;
         var dTurn = turn(camCourse, target), dZoom = Math.min(cam.zoom, fitZoom) - zoom, dPitch = cam.pitch - pitch;
         // And never faster than 90° a second: where the flight really turns back, the
         // smoothed heading still swings half round in a few minutes of flight, which at
@@ -2609,7 +2623,7 @@
         map.jumpTo({ center: [p.lon + ahead * Math.sin(heading) / (111320 * Math.cos(p.lat * Math.PI / 180)),
                               p.lat + ahead * Math.cos(heading) / 111320],
                      bearing: bearing, zoom: zoom, pitch: pitch });
-        if (playing || fitting || Math.abs(dTurn) > 0.05 || Math.abs(dOffset) > 0.05 ||
+        if (playing || fitting || easing || Math.abs(dTurn) > 0.05 || Math.abs(dOffset) > 0.05 ||
             Math.abs(dZoom) > 0.01 || Math.abs(dPitch) > 0.05) {
           kickFollow();
         } else followLast = 0;
@@ -2681,6 +2695,7 @@
         // glider and a view along the ground; a reader already closer keeps their zoom.
         if (on) {
           yawOffset = 0; camOffset = 0; camCourse = null;
+          seekPending = false; seekFrom = null; lastLook = null;
           fitBias = 0;
           cam = { zoom: Math.max(map.getZoom(), 12.5), pitch: Math.max(map.getPitch(), 60) };
           kickFollow();
