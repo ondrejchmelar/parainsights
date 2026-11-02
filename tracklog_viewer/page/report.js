@@ -82,6 +82,19 @@
     });
   }, true);
 
+  // A showcase group's card compares its flights at once, without a click on each ⇆:
+  // one redraw rather than one per flight.
+  window.__compareOnly = function (uids) {
+    chosen = {};
+    uids.forEach(function (uid) { chosen[uid] = true; });
+    document.querySelectorAll('[data-compare-toggle]').forEach(function (button) {
+      var on = !!chosen[button.getAttribute('data-compare-toggle')];
+      button.setAttribute('aria-pressed', on ? 'true' : 'false');
+      button.classList.toggle('is-on', on);
+    });
+    settle();
+  };
+
   // Counted from the flights still in the document: a removed flight leaves the
   // comparison, and the others' lines say "of 2" again rather than "of 3".
   function settle() {
@@ -1056,6 +1069,17 @@ var flightTabs = (function () {
   document.addEventListener('click', function (event) {
     var card = event.target.closest && event.target.closest('[data-showcase-open]');
     if (card) show(card.getAttribute('data-showcase-open'));
+    // A group: every flight's tab, all of them compared, the first one open.
+    var group = event.target.closest && event.target.closest('[data-showcase-group]');
+    if (group) {
+      var uids = group.getAttribute('data-showcase-group').split(' ');
+      uids.forEach(function (uid) {
+        var tab = strip && strip.querySelector('.tab[data-flight-tab="' + uid + '"]');
+        if (tab) tab.hidden = false;
+      });
+      show(uids[0]);
+      if (window.__compareOnly) window.__compareOnly(uids);
+    }
   });
   return { show: show, remove: remove, strip: strip };
 })();

@@ -65,6 +65,11 @@ def main(argv: list[str] | None = None) -> int:
              "page: '../planner/' for the published page, public/flights/index.html, whose "
              "strip then links to it. With no HREF the Planner is embedded as a view.",
     )
+    parser.add_argument(
+        "--compare-group", action="append", default=[], metavar="FIRST-LAST",
+        help="flights FIRST to LAST (counted from 1, in the order given) are one showcase "
+             "card that opens them all, compared: flights from one day, flown together.",
+    )
     args = parser.parse_args(argv)
 
     now = time.time()
@@ -72,6 +77,11 @@ def main(argv: list[str] | None = None) -> int:
         paths = [sources.local_path(source) for source in args.flight]
     except sources.SourceError as error:
         print(f"parainsights: {error}", file=sys.stderr)
+        return 2
+    try:
+        groups = [_group(spec, len(paths)) for spec in args.compare_group]
+    except ValueError as error:
+        print(f"parainsights: --compare-group {error}", file=sys.stderr)
         return 2
     names = [Path(urlsplit(str(s)).path or str(s)).name or str(s) for s in args.flight]
     labels = [args.label[i] if i < len(args.label) else "" for i in range(len(paths))]
@@ -156,11 +166,19 @@ def main(argv: list[str] | None = None) -> int:
                   for m in made)
         + "</nav>"
     )
-    showcase = [upload_panel.showcase_card(
+    # A group is one card, before the single flights: its flights have no card of their own.
+    grouped = {index for group in groups for index in group}
+    showcase = [upload_panel.group_card(
+                    [made[i]["uid"] for i in group], made[group[0]]["label"],
+                    " · ".join(part for part in (made[group[0]]["date"],
+                                                 f"{len(group)} pilots compared") if part),
+                    ", ".join(made[i]["pilot"] or made[i]["label"] for i in group))
+                for group in groups]
+    showcase += [upload_panel.showcase_card(
                     m["uid"], m["label"],
                     " · ".join(part for part in (m["date"], m["pilot"], m["glider"]) if part),
                     m["stat"])
-                for m in made]
+                 for index, m in enumerate(made) if index not in grouped]
     page = render_html._page("Flights", [m["html"] for m in made], tabs, extras,
                              site=published, showcase=showcase)
     if args.airspace is not None:
@@ -177,6 +195,18 @@ def main(argv: list[str] | None = None) -> int:
                        encoding="utf-8")
     print(f"wrote {gliders}")
     return 0
+
+
+def _group(spec: str, count: int) -> list[int]:
+    """`--compare-group 4-7`: the flights' indices from 0, two at least, all given."""
+    first, sep, last = spec.partition("-")
+    try:
+        first, last = int(first), int(last if sep else first)
+    except ValueError:
+        raise ValueError(f"{spec!r}: expected FIRST-LAST, such as 4-7") from None
+    if not 1 <= first < last <= count:
+        raise ValueError(f"{spec!r}: two or more of the {count} flights given")
+    return list(range(first - 1, last))
 
 
 def _weather(url: str) -> dict | None:

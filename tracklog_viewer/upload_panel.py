@@ -112,6 +112,16 @@ def showcase_card(uid: str, site: str, meta: str, stat: str) -> str:
             f'<span class="showcase-go">{GO_ICON}</span></button>')
 
 
+def group_card(uids: list[str], site: str, meta: str, stat: str) -> str:
+    """Several showcase flights as one card: a press opens them all, compared."""
+    return (f'<button type="button" class="showcase-card" '
+            f'data-showcase-group="{" ".join(uids)}">'
+            f'<span class="showcase-site">{escape(site)}</span>'
+            f'<span class="showcase-meta">{escape(meta)}</span>'
+            f'<span class="showcase-stat">{escape(stat)}</span>'
+            f'<span class="showcase-go">{GO_ICON}</span></button>')
+
+
 def panel(showcase: list[str] = ()) -> str:
     """The start: the drop where the map will be, and the showcase flights (`showcase_card`).
     The `+ your track` tab comes back to it."""
