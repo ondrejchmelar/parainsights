@@ -166,19 +166,20 @@ def main(argv: list[str] | None = None) -> int:
                   for m in made)
         + "</nav>"
     )
-    # A group is one card, before the single flights: its flights have no card of their own.
+    # The single flights first, then each group as one card after them: a group's flights
+    # have no card of their own.
     grouped = {index for group in groups for index in group}
-    showcase = [upload_panel.group_card(
-                    [made[i]["uid"] for i in group], made[group[0]]["label"],
-                    " · ".join(part for part in (made[group[0]]["date"],
-                                                 f"{len(group)} pilots compared") if part),
-                    ", ".join(made[i]["pilot"] or made[i]["label"] for i in group))
-                for group in groups]
-    showcase += [upload_panel.showcase_card(
+    showcase = [upload_panel.showcase_card(
                     m["uid"], m["label"],
                     " · ".join(part for part in (m["date"], m["pilot"], m["glider"]) if part),
                     m["stat"])
-                 for index, m in enumerate(made) if index not in grouped]
+                for index, m in enumerate(made) if index not in grouped]
+    showcase += [upload_panel.group_card(
+                     [made[i]["uid"] for i in group], made[group[0]]["label"],
+                     " · ".join(part for part in (made[group[0]]["date"],
+                                                  f"{len(group)} pilots compared") if part),
+                     ", ".join(made[i]["pilot"] or made[i]["label"] for i in group))
+                 for group in groups]
     page = render_html._page("Flights", [m["html"] for m in made], tabs, extras,
                              site=published, showcase=showcase)
     if args.airspace is not None:
