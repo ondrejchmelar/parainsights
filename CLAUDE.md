@@ -1457,20 +1457,22 @@ Still wanted:
     ~/Downloads/2018-09-28-XCT-OND-01.igc \
     ~/Downloads/2022-05-07-XCT-KVR-01.igc \
     ~/Downloads/flight-2026-06-16-04-46-04.igc \
-    ~/Downloads/2026-08-08-XCT-OPR-01.igc \
-    ~/Downloads/2026-08-08-XCT-EPO-01.igc \
     ~/Downloads/2026-08-08-XTR-39C4D3090414-01.IGC \
+    ~/Downloads/2026-08-08-XCT-EPO-01.igc \
     ~/Downloads/2026-08-08-XCT-XXX-01.igc \
+    ~/Downloads/2026-08-08-XCT-OPR-01.igc \
     --terrain --meteo --airspace ../planner/ \
     --label '' --label '' --label 'Antoine Girard|PK Hunza|OZONE Zeolite 2' \
-    --label '' --label "|Col d'Izoard" \
     --label "Baptiste Lambert|Col d'Izoard|OZONE Enzo 3" --label "|Col d'Izoard" \
+    --label "Hugo Hadaš|Col d'Izoard" --label '' \
     --compare-group 4-7 --html public/flights/index.html
   ```
   — one `--label` per flight, in order, empty where the file already says it, and
   `--airspace` is where the OpenAir download sits *relative to the report*.
   `--compare-group 4-7` makes flights 4 to 7 (four pilots from Col d'Izoard on one day)
-  one showcase card, after the single flights, that opens them all compared. Without
+  one showcase card, after the single flights, that opens them all compared. The group's
+  flights are in order of the pilot's first name, and the card opens the first, so
+  Baptiste Lambert's is the one it opens on (the pilot's call, November 2026). Without
   `--terrain` the airspace view silently falls back to the flat SVG map. The current copy
   is 2.51 MB, down from 3.12 MB before the side and top views moved into the page.
 - Historical weather is surface-only: the ERA5 archive returns nulls on every pressure
