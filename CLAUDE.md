@@ -1464,7 +1464,7 @@ Still wanted:
     --terrain --meteo --airspace ../planner/ \
     --label '' --label '' --label 'Antoine Girard|PK Hunza|OZONE Zeolite 2' \
     --label "Baptiste Lambert|Col d'Izoard|OZONE Enzo 3" --label "|Col d'Izoard" \
-    --label "|Col d'Izoard" --label '' \
+    --label "Hugo Hadaš|Col d'Izoard" --label '' \
     --compare-group 4-7 --html public/flights/index.html
   ```
   — one `--label` per flight, in order, empty where the file already says it, and
