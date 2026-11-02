@@ -180,6 +180,14 @@ STYLE = """
 .merged-view .m3-others li.is-off { color: var(--ink-2); text-decoration: line-through; }
 .merged-view .m3-others li.is-off i { opacity: .35; }
 @media (pointer: coarse) { .merged-view .m3-others li[data-flight] { padding: 5px 0; } }
+/* Its head folds the list to one line. */
+.merged-view .m3-others-head button { display: flex; align-items: center; gap: 4px; width: 100%; min-height: 32px;
+  padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: 15px; cursor: pointer; }
+.merged-view .m3-others-head button:hover { color: var(--ink); }
+.merged-view .m3-others-head svg { width: 18px; height: 18px; transition: transform .15s; }
+.merged-view .m3-others.is-shut .m3-others-head svg { transform: rotate(-90deg); }
+.merged-view .m3-others.is-shut li:not(.m3-others-head) { display: none; }
+@media (pointer: coarse) { .merged-view .m3-others-head button { min-height: 44px; } }
 .merged-view .m3-status { position: absolute; left: 12px; top: 56px; z-index: 3; margin: 0;
   font-size: 15px; color: var(--ink-2); }
 """
