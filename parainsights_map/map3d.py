@@ -181,13 +181,15 @@ STYLE = """
 .merged-view .m3-others li.is-off i { opacity: .35; }
 @media (pointer: coarse) { .merged-view .m3-others li[data-flight] { padding: 5px 0; } }
 /* Its head folds the list to one line. */
-.merged-view .m3-others-head button { display: flex; align-items: center; gap: 4px; width: 100%; min-height: 32px;
+.merged-view .m3-others-head button { display: flex; align-items: center; justify-content: flex-start;
+  text-align: left; gap: 4px; width: 100%; min-height: 32px;
   padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: 15px; cursor: pointer; }
 .merged-view .m3-others-head button:hover { color: var(--ink); }
 .merged-view .m3-others-head svg { width: 18px; height: 18px; transition: transform .15s; }
 .merged-view .m3-others.is-shut .m3-others-head svg { transform: rotate(-90deg); }
 .merged-view .m3-others.is-shut li:not(.m3-others-head) { display: none; }
-@media (pointer: coarse) { .merged-view .m3-others-head button { min-height: 44px; } }
+/* On touch the head keeps its 44 px but eats the panel's padding, so folded it is one line high. */
+@media (pointer: coarse) { .merged-view .m3-others-head button { min-height: 44px; margin: -6px 0; } }
 .merged-view .m3-status { position: absolute; left: 12px; top: 56px; z-index: 3; margin: 0;
   font-size: 15px; color: var(--ink-2); }
 """
