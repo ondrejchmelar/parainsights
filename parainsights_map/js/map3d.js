@@ -2511,6 +2511,18 @@
           if (at < o.t[0] || at > o.t[o.t.length - 1]) return;
           group.push(steadyOf(o, at));
         });
+        // No glider shown is in the air (the shown ones have landed, or not launched, and
+        // the rest are switched off): frame the shown ones where they are, on the ground,
+        // rather than falling back on this flight — which may be one the reader hid.
+        if (others.length && !group.length) {
+          if (!ownOff()) group.push(steadyAt(cutoff));
+          others.forEach(function (o) {
+            if (!off(o)) group.push(steadyOf(o, cutoff - o.offset));
+          });
+        }
+        // The direction of flight is this flight's: while it is hidden the camera holds its
+        // heading instead of turning with a glider the reader cannot see.
+        if (others.length && ownOff() && camCourse !== null) target = camCourse;
         if (group.length > 1 || (group.length === 1 && group[0] !== p)) {
           var c = { lon: 0, lat: 0, alt: 0 };
           group.forEach(function (q) { c.lon += q.lon / group.length; c.lat += q.lat / group.length; c.alt += q.alt / group.length; });

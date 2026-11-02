@@ -756,6 +756,39 @@ def test_follow_keeps_every_compared_glider_in_the_picture(browser):
     browser.js(f"({ENTRY}).setFollow(false); ({ENTRY}).setOthers(null); 1")
 
 
+def test_follow_leaves_a_hidden_flight_to_frame_the_shown_ones_landed(browser):
+    """This flight switched off in the legend and the one shown already landed: the follow
+    camera goes to where the shown one landed, not on with the flight the reader hid."""
+    _reset(browser)
+    browser.js(f"""(() => {{
+      var tr = __handle.built.scene.track, start = __handle.built.scene.start || 1700000000;
+      __handle.built.scene.start = start;
+      var n = tr.t.filter(t => t <= 900).length;
+      var landed = {{ lon: tr.lon.slice(0, n).map(x => x + 0.15), lat: tr.lat.slice(0, n),
+                      alt: tr.alt.slice(0, n), t: tr.t.slice(0, n) }};
+      window.__landed = landed;
+      ({ENTRY}).setOthers({{ own: {{ name: 'THIS', colour: '#e0893a' }},
+                             others: [{{ name: 'LANDED', colour: '#3aa8d0', track: landed, start: start }}] }});
+      return 1; }})()""")
+    browser.js("""(() => { var v = document.querySelector('.merged-view');
+      v.querySelector('.m3-others li[data-flight="#this"]').click();
+      if (v.querySelector('.m3-replay').hidden) v.querySelector('[data-m3=replay]').click();
+      var play = v.querySelector('[data-m3=play]'); if (play.classList.contains('is-on')) play.click();
+      (%s).setTime(1800); (%s).setFollow(true); return 1; })()""" % (ENTRY, ENTRY))
+    # Nearer the shown glider's landing than the hidden one's "now": they are 11 km apart.
+    where = f"""(() => {{
+      var c = ({MAP}).getCenter(), tr = __handle.built.scene.track, i = tr.t.indexOf(1800);
+      var l = __landed, k = l.lon.length - 1;
+      return [Math.hypot(c.lng - l.lon[k], c.lat - l.lat[k]), Math.hypot(c.lng - tr.lon[i], c.lat - tr.lat[i])]; }})()"""
+    try:
+        browser.wait(f"(d => d[0] < d[1])({where}) && ({ENTRY}).following()", timeout=60)
+    except TimeoutError:
+        pass                                    # the assert below says where it was
+    to_landed, to_hidden = browser.js(where)
+    assert to_landed < to_hidden, (to_landed, to_hidden)
+    browser.js(f"({ENTRY}).setFollow(false); ({ENTRY}).setOthers(null); 1")
+
+
 def test_the_track_s_shadow_and_wall_switch_on_and_off_apart(browser):
     """The layers panel's Track row: Shadow lays the track on the ground, Wall hangs a
     see-through curtain from it down to there, each on its own; the wall is glass, so
