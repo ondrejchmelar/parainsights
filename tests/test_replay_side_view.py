@@ -33,11 +33,23 @@ def page(tmp_path_factory):
         browser.wait("!!document.querySelector('[data-showcase-open=\"f0\"]')")
         # Asked for when the flight is first shown, so set before the card opens it.
         browser.js("""(() => { var noop = function () {};
-          window.initView3dWhenReady = () => Promise.resolve({ setCursor: noop, clearCursor: noop,
-            revealCursor: noop, seekTime: t => { window.__sought = t; } });
+          window.initView3dWhenReady = () => { window.__handed = true;
+            return Promise.resolve({ setCursor: noop, clearCursor: noop,
+              revealCursor: noop, seekTime: t => { window.__sought = t; } }); };
           window.__openMap = noop; return 1; })()""")
         browser.js("document.querySelector('[data-showcase-open=\"f0\"]').click(); 1")
         browser.wait(f"!!{ARTICLE}.querySelector('.side-view .hit') && !!{ARTICLE}.__replayNow")
+        # The handle is asked for once the flight is on screen (an IntersectionObserver,
+        # `whenShown`), which can land after the charts: a click before it reaches no map.
+        # An observer reports only on a rendered frame, and headless Chrome under load
+        # renders none for a page with no map to repaint: a screenshot forces one.
+        for _ in range(60):
+            if browser.js("window.__handed === true"):
+                break
+            browser.screenshot()
+        else:
+            raise TimeoutError("the flight never asked for its map's handle")
+        browser.js("new Promise(r => setTimeout(() => r(1), 0))")
         yield browser
     finally:
         browser.close()
