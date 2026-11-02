@@ -2285,6 +2285,10 @@
         if (!hasTime || !replay || replay.hidden || !fromInput) return;
         var t = Math.min(Math.max(seconds, spanStart), spanEnd);
         if (t < from) from = Math.max(t - (cutoff - from), spanStart);
+        // A seek is a cut: the gliders are already somewhere else, so the follow camera
+        // faces the new direction of flight at once. Eased from the old one, it swung
+        // round for seconds after the picture had jumped.
+        if (following) snapCourse = true;
         setTime(t);
       };
       handle.revealTime = function (seconds) {
@@ -2442,7 +2446,7 @@
       }
       var following = false, followFrame = null, followLast = 0, fitBias = 0;
       // Where the reader has turned the view off the direction of flight, with the arrows.
-      var yawOffset = 0, camCourse = null, camOffset = 0;
+      var yawOffset = 0, camCourse = null, camOffset = 0, snapCourse = false;
       // The reader's turn stays within half a circle (the pilot's call): past 180° it is the
       // same view the other way round, and kept growing it wound up into a turn the camera
       // then had to unwind. The shown offset moves with it, so wrapping does not spin.
@@ -2523,6 +2527,7 @@
         // The direction of flight is this flight's: while it is hidden the camera holds its
         // heading instead of turning with a glider the reader cannot see.
         if (others.length && ownOff() && camCourse !== null) target = camCourse;
+        if (snapCourse) { camCourse = target; snapCourse = false; }
         if (group.length > 1 || (group.length === 1 && group[0] !== p)) {
           var c = { lon: 0, lat: 0, alt: 0 };
           group.forEach(function (q) { c.lon += q.lon / group.length; c.lat += q.lat / group.length; c.alt += q.alt / group.length; });
