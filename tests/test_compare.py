@@ -31,7 +31,11 @@ def page(tmp_path_factory):
     assert cli.main([str(a), str(b), "--html", str(folder / "page.html")]) == 0
     browser = Browser(folder)
     try:
-        browser.wait("document.querySelectorAll('[data-compare-toggle]').length === 2")
+        # The whole document, not only the tabs: the tabs come first and the start
+        # (#quicklook) last, after both articles, so a wait on the tabs alone could
+        # return mid-parse, and the first test found no start (CI, 3 November 2026).
+        browser.wait("document.readyState === 'complete'"
+                     " && document.querySelectorAll('[data-compare-toggle]').length === 2")
         yield browser
     finally:
         browser.close()
