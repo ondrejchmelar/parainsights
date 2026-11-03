@@ -836,6 +836,16 @@ code { font-family: ui-monospace, "DejaVu Sans Mono", monospace; font-size: 0.92
 .merged-view .m3-others li.is-off { color: var(--ink-2); text-decoration: line-through; }
 .merged-view .m3-others li.is-off i { opacity: .35; }
 @media (pointer: coarse) { .merged-view .m3-others li[data-flight] { padding: 5px 0; } }
+/* Its head folds the list to one line. */
+.merged-view .m3-others-head button { display: flex; align-items: center; justify-content: flex-start;
+  text-align: left; gap: 4px; width: 100%; min-height: 32px;
+  padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: 15px; cursor: pointer; }
+.merged-view .m3-others-head button:hover { color: var(--ink); }
+.merged-view .m3-others-head svg { width: 18px; height: 18px; transition: transform .15s; }
+.merged-view .m3-others.is-shut .m3-others-head svg { transform: rotate(-90deg); }
+.merged-view .m3-others.is-shut li:not(.m3-others-head) { display: none; }
+/* On touch the head keeps its 44 px but eats the panel's padding, so folded it is one line high. */
+@media (pointer: coarse) { .merged-view .m3-others-head button { min-height: 44px; margin: -6px 0; } }
 .merged-view .m3-status { position: absolute; left: 12px; top: 56px; z-index: 3; margin: 0;
   font-size: 15px; color: var(--ink-2); }
 
@@ -4019,7 +4029,14 @@ function initView3d(root, cursorTrack, preset) {
                             String(key).replace(/[<&"]/g, '') + '"' : '') +
             '><i style="background:' + colour + '"></i>' + name.replace(/[<&]/g, '') + '</li>';
         }
-        othersList.innerHTML = (ownColour ? row(OWN, ownName, ownColour, 'is-own', 'This flight') : '') +
+        // A head that folds the list away (and back): four pilots' names cover a phone's
+        // map, and the tracks keep their colours with the list folded.
+        var count = others.length + (ownColour ? 1 : 0);
+        othersList.classList.toggle('is-shut', legendShut);
+        othersList.innerHTML = '<li class="m3-others-head"><button type="button" aria-expanded="' + !legendShut +
+          '" title="' + (legendShut ? 'Show the pilots' : 'Fold the list away') + '">' + count + ' flights' +
+          ICON.chevron + '</button></li>' +
+          (ownColour ? row(OWN, ownName, ownColour, 'is-own', 'This flight') : '') +
           others.map(function (o) {
             // Another day is aligned by launch without saying so on the line: the tooltip
             // has it, and the line has no room for it beside the (i).
@@ -4029,7 +4046,15 @@ function initView3d(root, cursorTrack, preset) {
           }).join('');
         othersList.hidden = !others.length;
       }
+      var legendShut = false;
       function toggleFlight(event) {
+        if (event.target.closest && event.target.closest('.m3-others-head')) {
+          var focused = document.activeElement && othersList.contains(document.activeElement);
+          legendShut = !legendShut;
+          showLegend();
+          if (focused) othersList.querySelector('.m3-others-head button').focus();
+          return;
+        }
         var li = event.target.closest && event.target.closest('li[data-flight]');
         if (!li || !othersList.contains(li)) return;
         var key = li.getAttribute('data-flight');
