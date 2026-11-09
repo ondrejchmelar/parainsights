@@ -544,7 +544,7 @@ SCRIPT3D = (Path(__file__).parent / "js/map.js").read_text(encoding="utf-8")
 
 def body(overlay, base, base_version: str, uid: str = "airspace",
          downloads: list[dict] = (), href_prefix: str = "",
-         scene: dict | None = None) -> str:
+         scene: dict | None = None, airfields: list = ()) -> str:
     """The airspace article, ready to drop into the report.
 
     Carries no `data-flight-report` and is not hidden: in the report it sits inside a
@@ -555,6 +555,7 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
     `downloads` are `build.downloads`: the aerodrome zones and the circuits, two files.
     `href_prefix` is where they live *relative to the page*, which is not where the page
     is once this article is embedded in a report one directory up.
+    `airfields` are what the planner's search finds by name (`planner.render_html.airfields`).
     """
     airspaces = list(base) + overlay.circuit_airspaces
     rings = [a.points for a in airspaces if a.points] + [basemap.BORDER]
@@ -597,7 +598,7 @@ def body(overlay, base, base_version: str, uid: str = "airspace",
     if scene is not None:
         from planner import render_html as planner_html
 
-        plan_bar, plan_results = planner_html.strip(), planner_html.results()
+        plan_bar, plan_results = planner_html.strip(), planner_html.results(airfields)
         map_bar = planner_html.map_bar() + planner_html.task_menu()
         plan_attr = " data-planner"
         plan_lede = (" <strong>Plan a task on the same map:</strong> press <em>Draw</em> "

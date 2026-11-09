@@ -147,6 +147,46 @@ STYLE = """
 .plan-column-list .plan-when { font-size:12px; padding:0 7px; }
 .plan-column-pin { width:14px; height:14px; border-radius:50%; background:var(--accent); border:2px solid #fff;
   box-shadow:0 0 0 2px rgba(0,0,0,.4); }
+/* The Task menu and the search are one element for the map to move into its top row
+   (`.m3-corner-extra`), and two items in that row. */
+.plan-corner { display:contents; }
+.plan-corner[hidden] { display:none; }
+/* The search: a field as tall as the buttons beside it, and what it found under it. */
+.plan-find { position:relative; width:290px; }
+.plan-find-box { display:flex; align-items:center; gap:8px; height:var(--mh); box-sizing:border-box;
+  padding:0 10px; border-radius:10px; background:var(--float); -webkit-backdrop-filter:blur(10px);
+  backdrop-filter:blur(10px); border:1px solid var(--float-edge); box-shadow:var(--float-shadow);
+  color:var(--ink-2); cursor:text; }
+.plan-find-box:focus-within { outline:2px solid var(--accent); outline-offset:2px; }
+.plan-find-box svg { flex:none; }
+.plan-find-box input { flex:1; min-width:0; height:100%; margin:0; padding:0; border:0; outline:0;
+  background:transparent; color:var(--ink); font:500 15px/1 "Noto Sans", ui-sans-serif, system-ui, sans-serif; }
+.plan-find-box input::placeholder { color:var(--ink-2); opacity:1; }
+.plan-find-box input::-webkit-search-cancel-button { cursor:pointer; }
+.plan-find-list { position:absolute; top:calc(var(--mh) + 8px); left:0; right:0; z-index:6; margin:0;
+  padding:6px; list-style:none; box-sizing:border-box; max-height:min(420px, 60vh); overflow:auto;
+  border-radius:12px; background:var(--float); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
+  border:1px solid var(--float-edge); box-shadow:var(--float-shadow);
+  font:500 15px/1.25 "Noto Sans", ui-sans-serif, system-ui, sans-serif; color:var(--ink); }
+.plan-find-list[hidden] { display:none; }
+/* Where the search flew to: a ring in the accent, unlike the column's filled pin. */
+.plan-find-pin { width:18px; height:18px; box-sizing:border-box; border-radius:50%; border:4px solid var(--accent);
+  background:rgba(255,255,255,.9); box-shadow:0 0 0 2px rgba(0,0,0,.45); }
+.plan-find-list li[role="option"] { display:grid; grid-template-columns:12px 1fr; gap:2px 10px; align-items:baseline;
+  padding:8px 10px; border-radius:8px; cursor:pointer; }
+.plan-find-list li[aria-selected="true"], .plan-find-list li[role="option"]:hover { background:var(--float-2); }
+.plan-find-list i { width:10px; height:10px; border-radius:50%; align-self:center; }
+.plan-find-list .is-takeoff i { background:#2fb36a; box-shadow:0 0 0 1.5px #0b1a10; }
+.plan-find-list .is-airfield i { background:var(--ink); border-radius:2px; transform:rotate(45deg) scale(.85); }
+.plan-find-list .is-place i { background:transparent; box-shadow:inset 0 0 0 2px var(--ink-2); }
+.plan-find-list b { font-weight:600; }
+.plan-find-list small { grid-column:2; font-size:13px; font-weight:400; color:var(--ink-2); }
+.plan-find-list .plan-find-note { padding:8px 10px; font-size:13px; color:var(--ink-2); }
+@media (max-width: 640px) {
+  /* A row of its own under the buttons, as wide as the space left of the compass. */
+  .merged-view .plan-find { flex-basis:100%; width:auto; max-width:calc(100vw - 96px); }
+  .plan-find-box input { font-size:16px; }  /* under 16 px iOS zooms the page on focus */
+}
 .merged-view .plan-rules-seg { display:flex; }
 .merged-view .plan-rules-seg button { flex:1; }
 /* The takeoff: its day and the time, then the slider the whole width under them, so a
@@ -261,7 +301,8 @@ def task_menu() -> str:
                 f'<input type="checkbox" role="switch" id="{id_}"{" checked" if checked else ""}></label>')
 
     return (
-        '<div class="m3-corner-extra plan-task" hidden>'
+        '<div class="m3-corner-extra plan-corner" hidden>'
+        '<div class="plan-task">'
         '<div class="view3d-seg"><button type="button" id="plan-task-open" class="plan-task-open" '
         'aria-expanded="false" aria-haspopup="true" aria-controls="plan-task-menu" '
         'title="How the task is scored, and when it is flown">'
@@ -298,6 +339,30 @@ def task_menu() -> str:
         '<p class="plan-task-note">Lights the ground and sets the wind rose for this hour, '
         'in your device\u2019s timezone.</p>'
         "</div></div>"
+        + find()
+        + "</div>"
+    )
+
+
+SEARCH_ICON = '<circle cx="8.5" cy="8.5" r="5.5"/><path d="M12.5 12.5 17 17"/>'
+
+
+def find() -> str:
+    """The search, in the map's top row after the Task menu: takeoffs and Czech
+    airfields from the page itself, towns and the rest from Photon (`find` in
+    planner.js). On a phone it takes a row of its own under the buttons."""
+    import parainsights_common as common
+
+    return (
+        '<div class="plan-find" role="search">'
+        f'<label class="plan-find-box">{common.icon(SEARCH_ICON)}'
+        '<span class="sr">Find a takeoff, airfield or town</span>'
+        '<input type="search" id="plan-find" placeholder="Takeoff, airfield or town" '
+        'autocomplete="off" spellcheck="false" enterkeyhint="search" role="combobox" '
+        'aria-autocomplete="list" aria-expanded="false" aria-controls="plan-find-list"></label>'
+        '<ul class="plan-find-list" id="plan-find-list" role="listbox" '
+        'aria-label="Places found" hidden></ul>'
+        "</div>"
     )
 
 
@@ -364,8 +429,9 @@ def strip() -> str:
             '</div></div>')
 
 
-def results() -> str:
-    """Under the strip: to and from XCTrack, and what the task crosses."""
+def results(airfields: list = ()) -> str:
+    """Under the strip: to and from XCTrack, and what the task crosses. `airfields` go
+    to the search (`airfields`), as the takeoffs do."""
     import parainsights_common as common
 
     return f"""<section class="plan-section" aria-label="The task in detail">
@@ -399,10 +465,11 @@ def results() -> str:
     </dialog>
     <script type="application/json" id="plan-coverage">{_coverage()}</script>
     <script type="application/json" id="plan-takeoffs">{_takeoffs()}</script>
+    <script type="application/json" id="plan-airfields">{json.dumps(list(airfields), ensure_ascii=False, separators=(",", ":"))}</script>
   </section>"""
 
 
-def body(uid: str = "planner", *, scene_panel: str = "") -> str:
+def body(uid: str = "planner", *, scene_panel: str = "", airfields: list = ()) -> str:
     """The planner on its own over a given panel — the shape the airspace article puts
     together, kept for a caller that has no airspace overlay to build (the tests)."""
     from airspaces import render_html as airspace_html
@@ -416,7 +483,7 @@ def body(uid: str = "planner", *, scene_panel: str = "") -> str:
   </div>
   {strip()}
   </div>
-  {results()}
+  {results(airfields)}
 </article>"""
 
 
@@ -438,6 +505,34 @@ def _takeoffs() -> str:
 
     return json.dumps([[site["name"], site["lon"], site["lat"], site["alt"]]
                        for site in sites.SITES], ensure_ascii=False, separators=(",", ":"))
+
+
+# What OurAirports appends to a Czech field's name, which the search would only make
+# the reader type past: "Hořovice Airfield", "Letiště Orlová", "Bobrová Ultralight Airfield".
+_FIELD_WORDS = re.compile(r"^Letiště\s+|\s+(Ultralight\s+)?(Airfield|Airstrip|Airport|Aerodrome)$", re.I)
+
+
+def airfields(csv_text: str, country: str = "CZ") -> list:
+    """The country's airfields from OurAirports's `airports` table, for the search:
+    [code, name, lon, lat, elevation m]. Heliports and closed fields are left out. The
+    code is the ICAO one, or the six-letter ident an SLZ strip goes by (LKCAST), else
+    empty: OurAirports's own `CZ-0126` is no name a pilot knows."""
+    import csv
+    import io
+
+    out = []
+    for row in csv.DictReader(io.StringIO(csv_text)):
+        if row.get("iso_country") != country or not row.get("latitude_deg"):
+            continue
+        if row["type"] not in ("small_airport", "medium_airport", "large_airport"):
+            continue
+        code = next((c for c in (row["icao_code"], row["gps_code"], row["local_code"], row["ident"])
+                     if c and c.startswith("LK")), "")
+        elevation = round(float(row["elevation_ft"]) * 0.3048) if row["elevation_ft"] else None
+        out.append([code, _FIELD_WORDS.sub("", row["name"]).strip(),
+                    round(float(row["longitude_deg"]), 5), round(float(row["latitude_deg"]), 5),
+                    elevation])
+    return sorted(out, key=lambda field: field[1])
 
 
 def _coverage() -> str:

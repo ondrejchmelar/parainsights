@@ -59,13 +59,13 @@ def _band(name, west, east, south, north, floor="GND", ceiling="FL 95", klass="C
     return space
 
 
-def _page(spaces=(), terrain=None) -> str:
+def _page(spaces=(), terrain=None, airfields=()) -> str:
     from airspaces import scene as airspace_scene
 
     payload = airspace_scene.build(list(spaces), terrain=terrain or _terrain(),
                                    tiles=False)
     panel = view3d.panel(payload, "planner")
-    return airspaces_cli._page(planner_html.body(scene_panel=panel), "Plan a task",
+    return airspaces_cli._page(planner_html.body(scene_panel=panel, airfields=airfields), "Plan a task",
                                three_d=True)
 
 
@@ -88,10 +88,10 @@ window.addEventListener('load', function () {
 """
 
 
-def _run(body: str, spaces=(), terrain=None) -> dict:
+def _run(body: str, spaces=(), terrain=None, airfields=()) -> dict:
     with tempfile.TemporaryDirectory() as folder:
         page = Path(folder) / "planner.html"
-        page.write_text(_page(spaces, terrain) + PROBE % body, encoding="utf-8")
+        page.write_text(_page(spaces, terrain, airfields) + PROBE % body, encoding="utf-8")
         out = subprocess.run(
             [CHROME, *CHROME_FLAGS, page.as_uri()],
             capture_output=True, text=True, timeout=180,
@@ -343,6 +343,44 @@ def test_the_map_carries_the_meteo_pages_takeoffs():
     # ...and a click on a takeoff's name, and a snapped turnpoint is named for XCTrack.
     assert "layers: ['takeoff-labels']" in planner_html.SCRIPT
     assert "n: pointName(" in planner_html.SCRIPT
+
+
+_AIRPORTS_CSV = """\
+"id","ident","type","name","latitude_deg","longitude_deg","elevation_ft","continent","iso_country","iso_region","municipality","scheduled_service","icao_code","iata_code","gps_code","local_code","home_link","wikipedia_link","keywords"
+1,"LKHV","small_airport","Hořovice Airfield",49.848,13.89361,1214,"EU","CZ","CZ-20","Hořovice","no","LKHV",,"LKHV","LKHV",,,
+2,"CZ-0175","small_airport","Bobrová Ultralight Airfield",49.4955,16.10199,1844,"EU","CZ","CZ-63","Bobrová","no",,,,"LKBOBR",,,
+3,"CZ-0172","small_airport","Letiště Orlová",49.84,18.42,,"EU","CZ","CZ-80",,"no",,,,,,,
+4,"CZ-0001","heliport","Some Heliport",50.0,14.0,900,"EU","CZ","CZ-10",,"no",,,,,,,
+5,"LKXX","closed","Old Field",50.0,15.0,900,"EU","CZ","CZ-10",,"no",,,,,,,
+6,"LOWI","large_airport","Innsbruck Airport",47.26,11.34,1906,"EU","AT","AT-7",,"yes","LOWI",,,,,,
+"""
+
+
+def test_the_search_carries_the_countrys_airfields_by_the_name_a_pilot_uses():
+    """OurAirports's Czech fields, without heliports, closed fields or the words it
+    appends to a name, each under the code a pilot knows it by (or none)."""
+    assert planner_html.airfields(_AIRPORTS_CSV) == [
+        ["LKBOBR", "Bobrová", 16.10199, 49.4955, 562],
+        ["LKHV", "Hořovice", 13.89361, 49.848, 370],
+        ["", "Orlová", 18.42, 49.84, None],
+    ]
+
+
+@needs_chrome
+def test_the_search_finds_takeoffs_and_airfields_without_their_accents():
+    """Typed as a reader types — no accents, part of a word, a code — the field lists
+    what is on the page, best match first; towns are Photon's and not asked here."""
+    answer = _run(_MAP + """
+      var names = function (text) { return window.__plannerFind(text).map(function (item) {
+        return item.kind + ':' + item.name; }); };
+      return { lysa: names('lysa h'), code: names('lkhv'), word: names('bobr'),
+               nothing: names('zzzz'), markup: !!document.getElementById('plan-find') };
+    """, airfields=planner_html.airfields(_AIRPORTS_CSV))
+    assert answer["markup"]
+    assert "takeoff:Lysá hora" in answer["lysa"]
+    assert answer["code"] == ["airfield:Hořovice"]
+    assert answer["word"][0] == "airfield:Bobrová"
+    assert answer["nothing"] == []
 
 
 # ---- what the line crosses -----------------------------------------------------------

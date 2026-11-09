@@ -134,7 +134,13 @@ def main(argv=None) -> int:
         args.html.parent.mkdir(parents=True, exist_ok=True)
         for f in files:
             (args.html.parent / f["name"]).write_text(f["text"], encoding="utf-8", newline="")
-        article = render_html.body(overlay, base, base_version, downloads=files, scene=payload)
+        from planner import render_html as planner_html
+
+        # The planner's search finds Czech airfields by name and code; OurAirports's list,
+        # already fetched (and cached) for the runways.
+        airfields = planner_html.airfields(sources.ourairports("airports"))
+        article = render_html.body(overlay, base, base_version, downloads=files, scene=payload,
+                                   airfields=airfields)
         args.html.write_text(_page(article, "Planner",
                                    three_d=payload is not None), encoding="utf-8")
         print(f"{args.html}: {len(base)} openAIP airspaces + {overlay.circuit_count} circuits")

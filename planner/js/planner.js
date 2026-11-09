@@ -989,6 +989,208 @@
     return takeoffOn(points[i]) || 'TP' + (i + 1);
   }
 
+  // ---- the search ----------------------------------------------------------------------
+  //
+  // One field in the map's top row (`planner.render_html.find`) that flies the map to a
+  // takeoff, an airfield or a town. The takeoffs and the Czech airfields are on the page
+  // (`plan-takeoffs`, `plan-airfields`) and are matched as the reader types, accents
+  // optional — "lysa" finds Lysá hora, "lkhv" Hořovice. Anything else goes to Photon
+  // (photon.komoot.io, OpenStreetMap's data, keyless, made for search as you type —
+  // Nominatim's policy forbids that), asked for once the typing pauses, nearest the
+  // map's middle first. What is picked gets a pin until the field is cleared.
+  var airfields = JSON.parse((document.getElementById('plan-airfields') || {}).textContent || '[]');
+  var PHOTON = 'https://photon.komoot.io/api/';
+  // What of OpenStreetMap is worth flying to from a planner, and how close to come.
+  var PLACE_ZOOM = { city: 10.5, town: 11.5, municipality: 12, village: 12.5, hamlet: 13, suburb: 12.5, locality: 13,
+                     isolated_dwelling: 13.5, peak: 13, volcano: 12, saddle: 13.5, mountain_pass: 13.5,
+                     aerodrome: 13, airstrip: 13.5, ridge: 12, valley: 12, lake: 12, reservoir: 12 };
+  var PLACE_WORD = { city: 'City', town: 'Town', municipality: 'Municipality', village: 'Village', hamlet: 'Hamlet', suburb: 'Suburb',
+                     locality: 'Locality', isolated_dwelling: 'Place', peak: 'Peak', volcano: 'Peak',
+                     saddle: 'Saddle', mountain_pass: 'Pass', aerodrome: 'Airfield', airstrip: 'Airstrip',
+                     ridge: 'Ridge', valley: 'Valley', lake: 'Lake', reservoir: 'Lake' };
+  var findInput = document.getElementById('plan-find');
+  var findList = document.getElementById('plan-find-list');
+  function plain(text) {
+    return String(text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ').trim();
+  }
+  var findable = takeoffs.map(function (t) {
+    return { kind: 'takeoff', name: t[0], lon: t[1], lat: t[2], words: plain(t[0]),
+             sub: 'Takeoff' + (t[3] ? ' · ' + t[3] + ' m' : ''), zoom: 13 };
+  }).concat(airfields.map(function (a) {
+    return { kind: 'airfield', name: a[1], lon: a[2], lat: a[3], words: plain(a[1]), code: plain(a[0]),
+             sub: ['Airfield', a[0], a[4] !== null && a[4] !== undefined ? a[4] + ' m' : '']
+               .filter(Boolean).join(' · '), zoom: 13 };
+  }));
+  // 0 the name starts with it (or the code does), 1 a word does, 2 it is inside a word;
+  // null not at all. Every word typed has to be found, so "spicak ce" narrows.
+  function rank(item, query) {
+    if (item.code && item.code.indexOf(query) === 0) return 0;
+    if (item.words.indexOf(query) === 0) return 0;
+    var worst = 0, words = ' ' + item.words;
+    for (var parts = query.split(' '), i = 0; i < parts.length; i++) {
+      if (words.indexOf(' ' + parts[i]) >= 0) worst = Math.max(worst, 1);
+      else if (item.words.indexOf(parts[i]) >= 0) worst = 2;
+      else return null;
+    }
+    return worst;
+  }
+  function centre() {
+    var entry = mergedEntry(), map = entry && entry.map;
+    var c = map && map.getCenter ? map.getCenter() : null;
+    return c ? [c.lng, c.lat] : null;
+  }
+  function away(item, from) {
+    return from ? distance(from, [item.lon, item.lat]) : 0;
+  }
+  function onPage(query) {
+    var from = centre();
+    return findable.map(function (item) { return { item: item, rank: rank(item, query) }; })
+      .filter(function (hit) { return hit.rank !== null; })
+      .sort(function (a, b) { return a.rank - b.rank || away(a.item, from) - away(b.item, from); })
+      .slice(0, 7).map(function (hit) { return hit.item; });
+  }
+  var asked = {}, pending = null, typing = null, found = [], active = -1, findPin = null;
+  function fromPhoton(query) {
+    if (asked[query]) return Promise.resolve(asked[query]);
+    var entry = mergedEntry(), map = entry && entry.map, from = centre();
+    var url = PHOTON + '?limit=10&q=' + encodeURIComponent(query)
+      + (from ? '&lat=' + from[1].toFixed(3) + '&lon=' + from[0].toFixed(3)
+         + '&zoom=' + Math.round(map.getZoom()) + '&location_bias_scale=0.5' : '');
+    if (pending) pending.abort();
+    pending = window.AbortController ? new AbortController() : null;
+    return fetch(url, pending ? { signal: pending.signal } : {})
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (answer) {
+        var places = (answer.features || []).filter(function (f) {
+          var p = f.properties || {};
+          return PLACE_ZOOM[p.osm_value] && p.name && f.geometry && f.geometry.type === 'Point';
+        }).map(function (f) {
+          var p = f.properties, c = f.geometry.coordinates;
+          var where = [p.county || p.state, p.country].filter(function (part, i, all) {
+            return part && part !== p.name && all.indexOf(part) === i;
+          });
+          return { kind: 'place', name: p.name, lon: c[0], lat: c[1], zoom: PLACE_ZOOM[p.osm_value],
+                   extent: p.osm_value === 'city' ? p.extent : null,
+                   sub: [PLACE_WORD[p.osm_value]].concat(where).join(' · ') };
+        }).filter(function (place, i, all) {
+          // OpenStreetMap often has a village as a node and again as its boundary.
+          return !all.slice(0, i).some(function (o) { return o.name === place.name && o.sub === place.sub; });
+        });
+        asked[query] = places;
+        return places;
+      });
+  }
+  function showFound(note) {
+    findList.innerHTML = '';
+    found.forEach(function (item, i) {
+      var row = document.createElement('li');
+      row.id = 'plan-find-' + i;
+      row.className = 'is-' + item.kind;
+      row.setAttribute('role', 'option');
+      row.setAttribute('aria-selected', i === active ? 'true' : 'false');
+      var name = document.createElement('b'), sub = document.createElement('small');
+      name.textContent = item.name;
+      sub.textContent = item.sub;
+      row.appendChild(document.createElement('i'));
+      row.appendChild(name);
+      row.appendChild(sub);
+      // A press, not a click: the field's blur would otherwise close the list first.
+      row.addEventListener('pointerdown', function (event) { event.preventDefault(); pick(item); });
+      findList.appendChild(row);
+    });
+    if (note) {
+      var line = document.createElement('li');
+      line.className = 'plan-find-note';
+      line.textContent = note;
+      findList.appendChild(line);
+    }
+    var open = !!(found.length || note);
+    findList.hidden = !open;
+    findInput.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (active >= 0) findInput.setAttribute('aria-activedescendant', 'plan-find-' + active);
+    else findInput.removeAttribute('aria-activedescendant');
+  }
+  function search() {
+    var query = plain(findInput.value);
+    clearTimeout(typing);
+    active = -1;
+    if (query.length < 2) { found = []; showFound(); return; }
+    var local = onPage(query);
+    found = local;
+    if (query.length < 3) { showFound(); return; }
+    showFound(local.length ? '' : 'Searching…');
+    typing = setTimeout(function () {
+      fromPhoton(query).then(function (places) {
+        if (plain(findInput.value) !== query) return;
+        // A town Photon also knows as an airfield or takeoff here is listed once, ours.
+        places = places.filter(function (place) {
+          return !local.some(function (item) { return distance([item.lon, item.lat], [place.lon, place.lat]) < 1500; });
+        }).slice(0, 6);
+        found = local.concat(places);
+        showFound(found.length ? '' : 'Nothing found');
+      }, function (error) {
+        if (error && error.name === 'AbortError') return;
+        if (plain(findInput.value) === query) showFound(local.length ? '' : 'Town search is not answering');
+      });
+    }, 250);
+  }
+  function pick(item) {
+    var entry = mergedEntry(), map = entry && entry.map;
+    findInput.value = item.name;
+    found = []; active = -1;
+    showFound();
+    if (matchMedia('(pointer: coarse)').matches) findInput.blur();
+    if (!map) return;
+    if (item.extent && map.fitBounds) {
+      // Photon's box is [west, north, east, south].
+      map.fitBounds([[item.extent[0], item.extent[3]], [item.extent[2], item.extent[1]]],
+                    { padding: 60, maxZoom: item.zoom, duration: 1600 });
+    } else {
+      map.flyTo({ center: [item.lon, item.lat], zoom: Math.max(item.zoom, Math.min(map.getZoom(), 14)),
+                  duration: 1600, essential: true });
+    }
+    if (window.maplibregl && maplibregl.Marker) {
+      if (!findPin) {
+        var dot = document.createElement('div');
+        dot.className = 'plan-find-pin';
+        findPin = new maplibregl.Marker({ element: dot });
+      }
+      findPin.setLngLat([item.lon, item.lat]).addTo(map);
+    }
+  }
+  if (findInput && findList) {
+    findInput.addEventListener('input', function () {
+      if (!findInput.value && findPin) findPin.remove();
+      search();
+    });
+    findInput.addEventListener('focus', function () { if (findInput.value) search(); });
+    findInput.addEventListener('blur', function () { found = []; showFound(); });
+    findInput.addEventListener('keydown', function (event) {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        if (!found.length) return;
+        event.preventDefault();
+        active = (active + (event.key === 'ArrowDown' ? 1 : found.length - 1 + (active < 0 ? 1 : 0))) % found.length;
+        showFound();
+        var row = document.getElementById('plan-find-' + active);
+        if (row) row.scrollIntoView({ block: 'nearest' });
+      } else if (event.key === 'Enter') {
+        event.preventDefault();
+        if (found.length) pick(found[Math.max(active, 0)]);
+      } else if (event.key === 'Escape') {
+        // The first closes the list, the second empties the field; the map's own keys
+        // (and the column's Escape) never see either.
+        event.stopPropagation();
+        if (!findList.hidden) { found = []; showFound(); }
+        else { findInput.value = ''; if (findPin) findPin.remove(); }
+      }
+      // The map's keyboard (arrows pan, + zooms) is for the map, not for typing.
+      event.stopPropagation();
+    });
+    // For the tests: what the field would list for a query, from the page alone.
+    window.__plannerFind = function (text) { return onPage(plain(text)); };
+  }
+
   // The takeoff time, a day and a time slid through it: the sun over the task (or the
   // map's middle, before there is one) at that moment, handed to the map as the table a
   // flight's map is lit from (`TV.sun`), and the forecast wind at about 1500 m (850 hPa,

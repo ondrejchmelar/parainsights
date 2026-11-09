@@ -231,6 +231,17 @@ takeoff's dot or on its name goes onto the takeoff (`snap`, against what MapLibr
 and is then named for it: the first leg "from Lysá hora", the XCTrack turnpoint "Lysá
 hora" (`takeoffOn` — not `takeoffAt`, which is the takeoff *time*).
 
+**The planner's search** (November 2026, `find` in `planner.render_html` and `planner.js`):
+a field in the map's top row after Task — its own row under the buttons on a phone — that
+flies the map to a takeoff, a Czech airfield or a town, and leaves a pin there until the
+field is cleared. The takeoffs (`plan-takeoffs`) and OurAirports's Czech airfields
+(`plan-airfields`, `planner.render_html.airfields`, passed in by `airspaces.cli`; no
+heliports or closed fields, under their ICAO or SLZ code) are matched in the page as the
+reader types, accents optional; towns, peaks and foreign airfields come from Photon
+(photon.komoot.io: OpenStreetMap, keyless, CORS-open, built for search as you type, which
+Nominatim's policy forbids), asked 250 ms after the typing stops, biased to the map's
+middle, listed under the page's own matches.
+
 **The planner's map opens at true scale** (October 2026, the pilot's call), as the report
 does; ×5 and ×15 are under the layers button. It opened at ×5 when it drew all of
 Czechia's airspace: at true scale over 500 km of country a 300 m traffic circuit projects
